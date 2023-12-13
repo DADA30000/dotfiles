@@ -1,0 +1,8 @@
+#!/usr/bin/env zsh
+usage=$(nvidia-smi | grep % | cut -b 72,73 | sed 's/ //g')
+temp=$(nvidia-smi | grep % | cut -b 9,10)
+text="<span color='#02a62d'> $usage% 󰢮 </span>"
+tooltip="GPU Usage: $usage%\rGPU Temp: $temp°C"
+cat <<EOF
+{"text":"$text","tooltip":"$tooltip",}
+EOF
