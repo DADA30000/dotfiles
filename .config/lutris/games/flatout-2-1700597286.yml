@@ -1,0 +1,9 @@
+game:
+  args: ''
+  exe: /home/l0lk3k/Games/flatout-2/drive_c/Games/FlatOut 2/FlatOut2.exe
+  prefix: /home/l0lk3k/Games/flatout-2
+system:
+  gamemode: true
+  gamescope: true
+  locale: ''
+wine: {}

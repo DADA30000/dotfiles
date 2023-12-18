@@ -1,0 +1,31 @@
+game:
+  exe: /home/l0lk3k/Games/ak-xolotl/drive_c/AK-xolotl/ak-xolotl.exe
+  prefix: /home/l0lk3k/Games/ak-xolotl
+game_slug: ak-xolotl
+name: AK-xolotl
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: /tmp/AK-xolotl v1.1.12045.0.10/ak-xolotl.exe
+      prefix: /home/l0lk3k/Games/ak-xolotl
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: ak-xolotl-setup
+system:
+  env:
+    LC_ALL: ''
+variables: {}
+version: Setup file
+wine: {}
+year: null

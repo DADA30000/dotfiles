@@ -18,6 +18,10 @@
     "group/scripts",
     "group/hardware"
   ],
+  "wlr/taskbar": {
+    "on-click": "~/.config/waybar/bin/taskbar.sh {title}",
+    "on-click-right": "minimize-raise"
+    },
   "cava": {
     "framerate": 60,
     "format-icons": ["▁", "▂", "▃", "▄", "▅", "▆", "▆", "▇", "█"],
@@ -27,7 +31,10 @@
     "sleep_timer": 300
     },
   "hyprland/window": {
-    "format": "<span font='9' rise='-4444'> {} </span>"
+    "format": " {} ",
+    "rewrite": {
+	    "(.*) Mozilla Firefox ": " Mozilla Firefox "
+    }
     },
   "hyprland/workspaces": {
     "format": "{icon}",
@@ -87,7 +94,6 @@
       "custom/vpn",
       "network",
       "memory",
-      "disk",
       "cpu",
       "temperature",
       "custom/gpu"

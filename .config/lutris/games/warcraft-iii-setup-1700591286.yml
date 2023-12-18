@@ -1,0 +1,46 @@
+game:
+  args: -opengl
+  exe: /home/l0lk3k/Games/warcraft-iii/drive_c/Program Files (x86)/R.G. Catalyst/Warcraft
+    III/Frozen Throne.exe
+  prefix: /home/l0lk3k/Games/warcraft-iii
+game_slug: warcraft-iii
+name: Warcraft III
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: "/home/l0lk3k/\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0438/Warcraft\
+        \ III/setup.exe"
+      prefix: /home/l0lk3k/Games/warcraft-iii
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-22-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: warcraft-iii-setup
+system:
+  env:
+    LC_ALL: ''
+  gamemode: true
+  locale: ''
+variables: {}
+version: Setup file
+wine:
+  Desktop: false
+  battleye: true
+  dgvoodoo2: true
+  dxvk: true
+  eac: true
+  esync: true
+  fsr: true
+  fsync: true
+  version: wine-ge-8-24-x86_64
+  vkd3d: true
+year: null

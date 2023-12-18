@@ -46,6 +46,23 @@ tooltip {
 
   /* border: 1px solid alpha(shade(@active, 0.6),0.6); */
 }
+#window {
+	background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
+	background-size: 400% 400%;
+	animation: gradient 5s linear infinite;
+}
+
+@keyframes gradient {
+	0% {
+		background-position: 100% 0%;
+	}
+	100% {
+		background-position: 15% 100%;
+	}
+}
+#waybar.empty #window {
+  background: none;
+}
 #cava {
   padding: 0px 4px 0px 10px;
 }

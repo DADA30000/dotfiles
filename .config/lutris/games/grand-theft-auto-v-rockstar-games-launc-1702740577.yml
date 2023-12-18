@@ -1,0 +1,61 @@
+game:
+  arch: win64
+  exe: drive_c/Program Files/Rockstar Games/Launcher/Launcher.exe
+  prefix: /home/l0lk3k/Games/grand-theft-auto-v
+game_slug: grand-theft-auto-v
+name: Grand Theft Auto V
+requires: null
+script:
+  files:
+  - launcher: https://gamedownloads.rockstargames.com/public/installer/Rockstar-Games-Launcher.exe
+  game:
+    arch: win64
+    exe: drive_c/Program Files/Rockstar Games/Launcher/Launcher.exe
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      prefix: /home/l0lk3k/Games/grand-theft-auto-v
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  - task:
+      app: corefonts arial vcrun2019 win10
+      arch: win64
+      prefix: /home/l0lk3k/Games/grand-theft-auto-v
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  - task:
+      arch: win64
+      env:
+        DXVK_HUD: compiler
+        SteamGameId: '271590'
+        __GL_SHADER_DISK_CACHE: '1'
+        __GL_SHADER_DISK_CACHE_PATH: /home/l0lk3k/Games/grand-theft-auto-v
+      exclude_processes: RockstarService.exe Launcher.exe LauncherPatcher.exe
+      executable: /home/l0lk3k/.cache/lutris/installer/grand-theft-auto-v/launcher/Rockstar-Games-Launcher.exe
+      prefix: /home/l0lk3k/Games/grand-theft-auto-v
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  - task:
+      arch: win64
+      prefix: /home/l0lk3k/Games/grand-theft-auto-v
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  system:
+    env:
+      DXVK_HUD: compiler
+      SteamGameId: 271590
+      __GL_SHADER_DISK_CACHE: 1
+      __GL_SHADER_DISK_CACHE_PATH: $GAMEDIR
+  wine:
+    overrides:
+      winedbg.exe: d
+slug: grand-theft-auto-v-rockstar-games-launc
+system:
+  env:
+    DXVK_HUD: compiler
+    SteamGameId: '271590'
+    __GL_SHADER_DISK_CACHE: '1'
+    __GL_SHADER_DISK_CACHE_PATH: /home/l0lk3k/Games/grand-theft-auto-v
+variables: {}
+version: Rockstar Games Launcher
+wine:
+  overrides:
+    winedbg.exe: d
+year: 2013

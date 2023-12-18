@@ -1,0 +1,31 @@
+game:
+  exe: /home/l0lk3k/Games/farming-simulator-22/drive_c/Farming Simulator 2022/FarmingSimulator2022.exe
+  prefix: /home/l0lk3k/Games/farming-simulator-22
+game_slug: farming-simulator-22
+name: Farming Simulator 22
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: /home/l0lk3k/Downloads/Farming Simulator 22 v1.13.1.0 by Pioneer/setup.exe
+      prefix: /home/l0lk3k/Games/farming-simulator-22
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: farming-simulator-22-setup
+system:
+  env:
+    LC_ALL: ''
+variables: {}
+version: Setup file
+wine: {}
+year: null

@@ -1,0 +1,16 @@
+game:
+  appid: '322330'
+game_slug: dont-starve-together
+name: Don't Starve Together
+requires: null
+script:
+  game:
+    appid: 322330
+service: steam
+service_id: '322330'
+slug: dont-starve-together-steam
+steam: {}
+system: {}
+variables: {}
+version: steam
+year: 2016

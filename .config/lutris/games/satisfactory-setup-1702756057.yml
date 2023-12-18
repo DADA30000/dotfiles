@@ -1,0 +1,34 @@
+game:
+  args: ''
+  exe: /home/l0lk3k/Games/satisfactory/drive_c/Satisfactory/Factory Game.bat
+  prefix: /home/l0lk3k/Games/satisfactory
+game_slug: satisfactory
+name: Satisfactory
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: "/home/l0lk3k/\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0438/Satisfactory\
+        \ v0.8.3.3 b273254 by Pioneer/setup.exe"
+      prefix: /home/l0lk3k/Games/satisfactory
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: satisfactory-setup
+system:
+  env:
+    LC_ALL: ''
+  locale: ''
+variables: {}
+version: Setup file
+wine: {}
+year: null

@@ -1,0 +1,35 @@
+game:
+  args: -d3d11
+  exe: /home/l0lk3k/Games/the-invincible/drive_c/Program Files (x86)/The Invincible/TheInvincible/Binaries/Win64/TheInvincible-Win64-Shipping.exe
+  prefix: /home/l0lk3k/Games/the-invincible
+game_slug: the-invincible
+name: The Invincible
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: "/home/l0lk3k/\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0438/The\
+        \ Invincible by Igruha/setup.exe"
+      prefix: /home/l0lk3k/Games/the-invincible
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-22-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: the-invincible-setup
+system:
+  env:
+    LC_ALL: ''
+  gamescope: true
+  locale: ''
+variables: {}
+version: Setup file
+wine: {}
+year: null

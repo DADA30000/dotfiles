@@ -1,0 +1,40 @@
+game:
+  exe: drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe
+  prefix: /home/l0lk3k/Games/ubisoft-connect
+game_slug: ubisoft-connect
+name: Ubisoft Connect
+requires: null
+script:
+  files:
+  - uplay: https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe
+  game:
+    exe: drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      prefix: /home/l0lk3k/Games/ubisoft-connect
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-24-x86_64/bin/wine
+  - task:
+      app: d3dcompiler_43
+      arch: win64
+      prefix: /home/l0lk3k/Games/ubisoft-connect
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-24-x86_64/bin/wine
+  - write_file:
+      content: "overlay:\n  enabled: false\n  forceunhookgame: false\n  fps_enabled:\
+        \ false\n  warning_enabled: false\nuser:\n  closebehavior: CloseBehavior_Close"
+      file: $GAMEDIR/drive_c/users/$USER/Local Settings/Application Data/Ubisoft Game
+        Launcher/settings.yml
+  - task:
+      arch: win64
+      args: /S
+      env: {}
+      executable: /home/l0lk3k/.cache/lutris/installer/ubisoft-connect/uplay/UbisoftConnectInstaller.exe
+      prefix: /home/l0lk3k/Games/ubisoft-connect
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-24-x86_64/bin/wine
+slug: ubisoft-connect-latest
+system: {}
+variables: {}
+version: Latest
+wine: {}
+year: 2020

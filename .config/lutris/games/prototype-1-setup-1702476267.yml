@@ -1,0 +1,33 @@
+game:
+  exe: /home/l0lk3k/Games/prototype-1/drive_c/Program Files (x86)/Prototype/prototypef.exe
+  prefix: /home/l0lk3k/Games/prototype-1
+game_slug: prototype-1
+name: prototype 1
+requires: null
+script:
+  files:
+  - setupfile: N/A:Select the setup file
+  game:
+    exe: _xXx_AUTO_WIN32_xXx_
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      env:
+        LC_ALL: ''
+      executable: "/home/l0lk3k/\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0438/Prototype\
+        \ by Igruha/setup.exe"
+      prefix: /home/l0lk3k/Games/prototype-1
+      wine_path: /home/l0lk3k/.local/share/lutris/runners/wine/wine-ge-8-25-x86_64/bin/wine
+  system:
+    env:
+      LC_ALL: ''
+slug: prototype-1-setup
+system:
+  env:
+    LC_ALL: ''
+variables: {}
+version: Setup file
+wine:
+  dgvoodoo2: true
+year: null
