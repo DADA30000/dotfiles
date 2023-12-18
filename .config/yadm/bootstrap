@@ -1,0 +1,4 @@
+#!/bin/bash
+exec paru -S waybar-cava hyprland-git kitty zsh swaync-git swaylock-effects-git network-manager-applet discord lutris ttf-jetbrains-mono-nerd neofetch neovide neovim vim spotify-launcher spotify-adblock-git spicetify-cli spicetify-themes-git btop kvantum firejail cava flameshot-git nemo nwg-look qbittorrent-dark-git pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse tofi wofi pavucontrol wlogout mpvpaper-git mpv authy steam prismlauncher-qt5-bin prismlauncher-themes-git file-roller selectdefaultapplication-git timeshift telegram-desktop sunshine-bin sddm-git cronie wireplumber ufw zsh-completions zsh-autosuggestions wl-clipboard
+exec systemctl --user enable pipewire-pulse pipewire wireplumber
+exec sudo systemctl enable cronie sddm
