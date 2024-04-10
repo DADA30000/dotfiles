@@ -6,4 +6,5 @@ if [ -f ./check ]; then
   git add . --all
   git commit -m "another update"
   git push -u
+  ( cd ~/.mozilla; ./update.sh )
 fi

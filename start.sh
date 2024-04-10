@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
+  git clone https://github.com/DADA30000/mozilla.git ~/.mozilla
   sudo rm /etc/nixos/configuration.nix
   sudo rm /etc/nixos/flake.nix
   sudo rm /etc/nixos/flake.lock
