@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=200% Mixed Juice!
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/335190
+Icon=steam_icon_335190
+Terminal=false
+Type=Application
+Categories=Game;

@@ -1,0 +1,208 @@
+top - 15:53:20 up 3 days,  2:03,  1 user,  load average: 2,30, 1,80, 1,88
+Tasks: 201 total,   2 running, 175 sleeping,   0 stopped,  24 zombie
+%Cpu(s):  1,8 us, 97,2 sy,  0,0 ni,  0,0 id,  0,0 wa,  0,9 hi,  0,0 si,  0,0 st 
+MiB Mem :  23927,3 total,  13508,6 free,   3162,8 used,   7729,1 buff/cache     
+MiB Swap:  19073,0 total,  18541,7 free,    531,3 used.  20764,5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+4080124 l0lk3k    19  -1       0      0      0 Z  69,2   0,0  11:00.44 electron
+4079960 l0lk3k    19  -1       0      0      0 Z  61,5   0,0  70:21.19 electron
+4079962 l0lk3k    20   0       0      0      0 Z  46,2   0,0 173:06.71 gpu-scr+
+      1 root      20   0   23116   9668   6656 S  38,5   0,0   0:27.29 systemd
+3920769 l0lk3k     9 -11       0      0      0 Z  38,5   0,0   1:54.07 wireplu+
+4079964 l0lk3k    20   0       0      0      0 Z  30,8   0,0   0:00.30 nm-appl+
+4080058 l0lk3k    20   0  113652  27612  17444 R  30,8   0,1   1:03.51 Xwayland
+3921061 l0lk3k    20   0       0      0      0 Z  23,1   0,0   0:00.07 gvfsd-f+
+4080213 l0lk3k    19  -1       0      0      0 Z  23,1   0,0 120:21.17 electron
+3920686 root      20   0   35712   8868   7332 S  15,4   0,0   0:00.30 systemd+
+3921006 l0lk3k    20   0       0      0      0 Z  15,4   0,0   0:01.09 xdg-doc+
+4080155 l0lk3k    20   0       0      0      0 Z  15,4   0,0   2:44.24 electron
+     26 root      20   0       0      0      0 S   7,7   0,0   0:09.37 ksoftir+
+    337 root     -51   0       0      0      0 S   7,7   0,0   0:13.96 irq/44-+
+ 842870 l0lk3k    20   0   27540   7424   4864 D   7,7   0,0   0:00.01 lspci
+3920809 polkitd   20   0  384696  10416   7260 S   7,7   0,0   0:03.41 polkitd
+3921043 l0lk3k    20   0       0      0      0 Z   7,7   0,0   0:00.07 at-spi-+
+3921044 l0lk3k    20   0       0      0      0 Z   7,7   0,0   0:00.08 gvfsd
+3958488 root      20   0  470060  18824   8240 S   7,7   0,1   0:26.93 udisksd
+4080227 l0lk3k    19  -1       0      0      0 Z   7,7   0,0   0:00.03 electron
+4137350 l0lk3k    20   0       0      0      0 Z   7,7   0,0   0:00.05 gvfsd-n+
+4137362 l0lk3k    20   0       0      0      0 Z   7,7   0,0   0:00.94 gvfsd-d+
+      2 root      20   0       0      0      0 S   0,0   0,0   0:00.15 kthreadd
+      3 root      20   0       0      0      0 S   0,0   0,0   0:00.00 pool_wo+
+      4 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+      5 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+      6 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+      7 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     10 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     13 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     14 root      20   0       0      0      0 I   0,0   0,0   0:00.00 rcu_tas+
+     15 root      20   0       0      0      0 I   0,0   0,0   0:00.00 rcu_tas+
+     16 root      20   0       0      0      0 I   0,0   0,0   0:00.00 rcu_tas+
+     17 root      20   0       0      0      0 S   0,0   0,0   0:07.97 ksoftir+
+     18 root      -2   0       0      0      0 I   0,0   0,0   6:16.38 rcu_pre+
+     19 root      -2   0       0      0      0 S   0,0   0,0   0:00.01 rcub/0
+     20 root      rt   0       0      0      0 S   0,0   0,0   0:00.93 migrati+
+     21 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     22 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/0
+     23 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/2
+     24 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     25 root      rt   0       0      0      0 S   0,0   0,0   0:05.32 migrati+
+     28 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     29 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/4
+     30 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     31 root      rt   0       0      0      0 S   0,0   0,0   0:01.30 migrati+
+     32 root      20   0       0      0      0 S   0,0   0,0   0:03.58 ksoftir+
+     34 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     35 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/6
+     36 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     37 root      rt   0       0      0      0 S   0,0   0,0   0:01.27 migrati+
+     38 root      20   0       0      0      0 S   0,0   0,0   0:03.05 ksoftir+
+     40 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     41 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/1
+     42 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     43 root      rt   0       0      0      0 S   0,0   0,0   0:01.25 migrati+
+     44 root      20   0       0      0      0 S   0,0   0,0   0:04.29 ksoftir+
+     46 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     47 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/3
+     48 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     49 root      rt   0       0      0      0 S   0,0   0,0   0:01.35 migrati+
+     50 root      20   0       0      0      0 S   0,0   0,0   0:03.58 ksoftir+
+     52 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     53 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/5
+     54 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     55 root      rt   0       0      0      0 S   0,0   0,0   0:01.29 migrati+
+     56 root      20   0       0      0      0 S   0,0   0,0   0:02.88 ksoftir+
+     58 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     59 root      20   0       0      0      0 S   0,0   0,0   0:00.00 cpuhp/7
+     60 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 idle_in+
+     61 root      rt   0       0      0      0 S   0,0   0,0   0:01.27 migrati+
+     62 root      20   0       0      0      0 S   0,0   0,0   0:02.62 ksoftir+
+     64 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     65 root      20   0       0      0      0 S   0,0   0,0   0:00.00 kdevtmp+
+     66 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     67 root      20   0       0      0      0 S   0,0   0,0   0:00.00 kauditd
+     69 root      20   0       0      0      0 S   0,0   0,0   0:00.45 khungta+
+     70 root      20   0       0      0      0 S   0,0   0,0   0:00.00 oom_rea+
+     72 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     73 root      20   0       0      0      0 S   0,0   0,0   0:02.70 kcompac+
+     74 root      25   5       0      0      0 S   0,0   0,0   0:00.00 ksmd
+     75 root      39  19       0      0      0 S   0,0   0,0   0:18.44 khugepa+
+     76 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     77 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     78 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     80 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     81 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     82 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     83 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     84 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 watchdo+
+     85 root       0 -20       0      0      0 I   0,0   0,0   0:02.08 kworker+
+     86 root     -51   0       0      0      0 S   0,0   0,0   0:00.00 irq/27-+
+     87 root      20   0       0      0      0 S   0,0   0,0   1:52.86 kswapd0
+     88 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     94 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     95 root      20   0       0      0      0 S   0,0   0,0   0:00.00 scsi_eh+
+     96 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     97 root      20   0       0      0      0 S   0,0   0,0   0:00.00 scsi_eh+
+     98 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+     99 root      20   0       0      0      0 S   0,0   0,0   0:00.00 scsi_eh+
+    100 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    101 root      20   0       0      0      0 S   0,0   0,0   0:00.00 scsi_eh+
+    102 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    116 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    117 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    122 root       0 -20       0      0      0 I   0,0   0,0   0:03.34 kworker+
+    125 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    127 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    128 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    130 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    131 root       0 -20       0      0      0 I   0,0   0,0   0:02.49 kworker+
+    132 root       0 -20       0      0      0 I   0,0   0,0   0:02.68 kworker+
+    133 root       0 -20       0      0      0 I   0,0   0,0   0:06.81 kworker+
+    146 root       0 -20       0      0      0 I   0,0   0,0   0:01.51 kworker+
+    147 root       0 -20       0      0      0 I   0,0   0,0   0:02.57 kworker+
+    148 root       0 -20       0      0      0 I   0,0   0,0   0:01.81 kworker+
+    152 root      20   0       0      0      0 S   0,0   0,0   0:22.86 jbd2/sd+
+    153 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    155 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    275 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nv_queue
+    276 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nv_queue
+    277 root      20   0       0      0      0 S   0,0   0,0   0:00.00 scsi_eh+
+    278 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    279 root      20   0       0      0      0 S   0,0   0,0   0:20.87 usb-sto+
+    280 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    327 root      20   0       0      0      0 S   0,0   0,0   8:09.44 nvidia-+
+    328 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nvidia-+
+    338 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nvidia
+    339 root      20   0       0      0      0 S   0,0   0,0   0:13.46 nv_queue
+    340 root      20   0       0      0      0 S   0,0   0,0   0:05.62 UVM glo+
+    341 root      20   0       0      0      0 S   0,0   0,0   0:00.00 UVM def+
+    343 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    344 root      20   0       0      0      0 S   0,0   0,0   0:02.61 jbd2/sd+
+    345 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+    390 root      20   0       0      0      0 S   0,0   0,0   0:04.32 UVM Too+
+   3226 root       0 -20       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 699547 root      20   0       0      0      0 I   0,0   0,0   0:01.17 kworker+
+ 745644 root      20   0       0      0      0 I   0,0   0,0   0:00.17 kworker+
+ 747511 root      20   0       0      0      0 I   0,0   0,0   0:00.76 kworker+
+ 759962 root      20   0       0      0      0 I   0,0   0,0   0:00.88 kworker+
+ 783320 root      20   0       0      0      0 D   0,0   0,0   0:00.07 kworker+
+ 788381 root      20   0       0      0      0 I   0,0   0,0   0:00.06 kworker+
+ 792360 root      20   0       0      0      0 I   0,0   0,0   0:00.43 kworker+
+ 792965 root      20   0       0      0      0 I   0,0   0,0   0:00.05 kworker+
+ 801285 root      20   0       0      0      0 I   0,0   0,0   0:00.02 kworker+
+ 803861 root      20   0       0      0      0 I   0,0   0,0   0:00.03 kworker+
+ 807912 root      20   0       0      0      0 I   0,0   0,0   0:00.03 kworker+
+ 813022 root      20   0       0      0      0 I   0,0   0,0   0:00.02 kworker+
+ 823301 root      20   0       0      0      0 I   0,0   0,0   0:00.01 kworker+
+ 823669 root      20   0       0      0      0 I   0,0   0,0   0:00.01 kworker+
+ 826576 root      20   0       0      0      0 I   0,0   0,0   0:00.01 kworker+
+ 826584 root      20   0       0      0      0 I   0,0   0,0   0:00.03 kworker+
+ 826937 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 826947 root      20   0       0      0      0 I   0,0   0,0   0:00.16 kworker+
+ 827326 root      20   0       0      0      0 I   0,0   0,0   0:00.02 kworker+
+ 829936 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 832463 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 835323 root      20   0       0      0      0 D   0,0   0,0   0:01.01 kworker+
+ 841479 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 842849 l0lk3k    20   0    7516   3672   3288 S   0,0   0,0   0:00.00 updateW+
+ 842851 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 842854 l0lk3k    20   0   12284   5632   3584 R   0,0   0,0   0:00.00 top
+ 842860 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 842867 l0lk3k    20   0    7516   3584   3200 S   0,0   0,0   0:00.00 sh
+ 842869 root      20   0       0      0      0 I   0,0   0,0   0:00.00 kworker+
+ 842871 l0lk3k    20   0    6576   2432   2176 S   0,0   0,0   0:00.00 grep
+ 842874 root      20   0   35716   4580   2816 S   0,0   0,0   0:00.00 (udev-w+
+3477654 root      -2   0       0      0      0 S   0,0   0,0   0:00.00 psimon
+3920679 root      20   0   27500   5184   5088 S   0,0   0,0   0:00.05 cupsd
+3920681 root      20   0    5984   1628   1628 S   0,0   0,0   0:00.00 agetty
+3920683 root      20   0   11232   6144   5888 S   0,0   0,0   0:03.14 sshd
+3920684 root      20   0  156680  74252  73728 D   0,0   0,3   0:08.70 systemd+
+3920685 systemd+  20   0   25420  11520   9728 S   0,0   0,0   0:12.75 systemd+
+3920688 root      20   0   18220   8112   6912 S   0,0   0,0   0:00.77 systemd+
+3920689 zerotie+  20   0  522352  16684   5760 S   0,0   0,1   0:56.45 zerotie+
+3920692 dbus      20   0    9256   3628   3292 S   0,0   0,0   0:00.89 dbus-br+
+3920702 root      -2   0       0      0      0 S   0,0   0,0   0:00.00 psimon
+3920724 dbus      20   0    5576   3328   2172 S   0,0   0,0   0:03.95 dbus-br+
+3920753 l0lk3k    20   0   21324  10112   8448 S   0,0   0,0   0:00.39 systemd
+3920765 l0lk3k    20   0  911864  22864  17792 S   0,0   0,1   0:01.38 mpd
+3920777 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.02 dbus-br+
+3920795 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:01.30 dbus-br+
+3920802 rtkit     21   1   23080   7288   3052 S   0,0   0,0   0:01.22 rtkit-d+
+3921013 root      20   0       0      0      0 Z   0,0   0,0   0:00.00 fusermo+
+3921052 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.00 dbus-br+
+3930236 root      20   0  315684  11040   7168 S   0,0   0,0   0:00.18 upowerd
+4079877 root      20   0    7984   4808   4424 S   0,0   0,0   0:00.02 login
+4079885 l0lk3k    20   0  731564 217452  45016 S   0,0   0,9 136:28.61 Hyprland
+4079907 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nvidia-+
+4080026 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.07 electron
+4080027 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.12 electron
+4080206 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nvidia-+
+4080208 root      20   0       0      0      0 S   0,0   0,0   0:00.00 vidmem +
+4080209 root      20   0       0      0      0 S   0,0   0,0   0:00.00 UVM GPU+
+4080210 root      20   0       0      0      0 S   0,0   0,0   0:00.00 UVM GPU+
+4080218 root      20   0       0      0      0 S   0,0   0,0   0:00.19 nvidia-+
+4080236 l0lk3k    20   0       0      0      0 Z   0,0   0,0  10:51.65 gsr-kms+
+4080245 root      20   0       0      0      0 S   0,0   0,0   0:00.00 nvidia-+
+4080555 l0lk3k    20   0       0      0      0 Z   0,0   0,0  24:02.47 electron
+4119205 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.09 gvfsd-m+
+4136625 l0lk3k    20   0       0      0      0 Z   0,0   0,0   0:00.06 gvfsd-t+

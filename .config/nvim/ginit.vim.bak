@@ -1,0 +1,6 @@
+Plug 'nvim-tree/nvim-web-devicons' " optional
+Plug 'nvim-tree/nvim-tree.lua'
+map! <S-Insert> <C-R>+
+let g:neovide_transparency = 0.4
+colorscheme tokyodark
+lua require('config')

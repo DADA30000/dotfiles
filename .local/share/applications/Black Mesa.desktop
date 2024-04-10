@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Black Mesa
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/362890
+Icon=steam_icon_362890
+Terminal=false
+Type=Application
+Categories=Game;

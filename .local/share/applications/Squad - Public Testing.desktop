@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Squad - Public Testing
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/774941
+Icon=steam_icon_774941
+Terminal=false
+Type=Application
+Categories=Game;

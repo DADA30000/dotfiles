@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Fallout 76
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/1151340
+Icon=steam_icon_1151340
+Terminal=false
+Type=Application
+Categories=Game;

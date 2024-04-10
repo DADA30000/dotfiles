@@ -1,0 +1,24 @@
+{
+    "label" : "lock",
+    "action" : "sleep 1;swaylock --config ~/.config/swaylock/config",
+    "text" : "Lock",
+    "keybind" : "l"
+}
+{
+    "label" : "logout",
+    "action" : "pkill firefox; hyprctl dispatch exit",
+    "text" : "Logout",
+    "keybind" : "e"
+}
+{
+    "label" : "shutdown",
+    "action" : "pkill firefox; systemctl poweroff",
+    "text" : "Shutdown",
+    "keybind" : "s"
+}
+{
+    "label" : "reboot",
+    "action" : "pkill firefox; systemctl reboot",
+    "text" : "Reboot",
+    "keybind" : "r"
+}

@@ -1,0 +1,252 @@
+@import "./colors.css";
+* {
+  background: rgba(0,0,0,0.01);
+  font-family: "JetBrainsMono NF";
+  font-size: 13px;
+  font-weight: 600;
+  color: #DDDDDD;
+}
+#custom-notification {
+  font-size: 16px
+}
+#waybar {
+  /* background: alpha(shade(@background, 1), 1); */
+  background: transparent;
+}
+#custom-cog {
+  font-size: 16px;
+}
+#custom-nixos {
+  font-size: 20px;
+  /* background: alpha(@background, 0.8); */
+  border-radius: 0px;
+  padding: 0px 0px 0px 0px;
+  margin-left: 8px;
+  margin-top: 2px;
+}
+
+#scroll,
+#cava,
+#clock,
+#hardware,
+#scripts,
+#window,
+#workspaces,
+#custom-notification,
+#custom-weather,
+#batteries,
+#tray {
+  /* background: alpha(@background, 0.8); */
+  border-radius: 8px;
+
+  /* border: 1px solid alpha(shade(@active, 0.6),0.6); */
+}
+
+/* #window {
+	background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
+	background-size: 400% 400%;
+	animation: gradient 5s linear infinite;
+} */
+#window {
+    font-size: 14px;
+    opacity: 100;
+    transition: opacity 1s ease-in-out
+}
+window#waybar.empty #window {
+    opacity: 0;
+}
+
+@keyframes gradient {
+	0% {
+		background-position: 100% 0%;
+	}
+	100% {
+		background-position: 15% 100%;
+	}
+}
+#cava {
+  padding: 5px 10px 0px 10px;
+  color: #4575DA;
+}
+#custom-notification {
+  padding: 0px 10px 0px 8px;
+}
+#tray {
+  padding: 0px 8px 0px 8px;
+}
+#workspaces {
+  border-radius: 8px;
+  margin: 6px 0;
+}
+#custom-shutdown {
+  font-size: 18px;
+}
+#custom-lock:hover {
+  font-size: 26px;
+}
+#custom-lock {
+  font-size: 18px;
+  padding-top: 2px;
+}
+#custom-logout {
+  font-size: 18px;
+  padding-top: 2px;
+}
+#custom-reboot {
+  font-size: 22px;
+  padding-bottom: 1px;
+}
+#workspaces button {
+  border-radius: 15px;
+  padding: 0 8px;
+  padding-left: 10px;
+  transition-property: padding, background-color;
+  transition-duration: 200ms;
+  animation: gradient 5s linear infinite;
+}
+#workspaces button:hover {
+  background-color: rgba(255,255,255,0.2);
+  transition-property: background-color, padding;
+}
+#workspaces button.active {
+  padding: 0 20px;
+  padding-left: 22px;
+  background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
+  background-size: 400% 400%;
+  animation: gradient 5s linear infinite;
+}
+
+#cpu,
+#clock,
+#network,
+#custom-vpn,
+#custom-cputemp,
+#custom-colorpicker,
+#submap,
+#idle_inhibitor,
+#custom-updates,
+#gamemode,
+#custom-camera,
+#custom-notifications,
+#custom-recorder,
+#custom-batterysaver,
+#bluetooth,
+#disk,
+#memory,
+#pulseaudio,
+#pulseaudio.mic,
+#backlight {
+  padding: 0px 6px 0px 6px;
+}
+
+#custom-github {
+  padding-right: 6px;
+}
+
+/* subhighlight */
+#gamemode,
+#submap,
+#custom-recorder,
+#custom-vpn,
+#custom-github,
+#custom-updates,
+#bluetooth.connected {
+  background: shade(alpha(@foreground, 0.1), 0.8);
+  border-radius: 8px;
+}
+
+#language {
+  color: #7aa2f7;
+  margin-top: 3px;
+}
+
+#idle_inhibitor,
+#pulseaudio,
+#pulseaudio.mic {
+  color: #7aa2f7;
+}
+
+#backlight {
+  color: #fab387;
+}
+
+#memory {
+  color: shade(#cca0e4, 0.8);
+}
+
+#disk {
+  color: shade(#7aa2f7, 0.8);
+}
+
+#custom-recorder {
+  color: #d78787;
+}
+
+#cpu {
+  color: shade(#a6e3a1, 0.8);
+}
+
+#custom-batterysaver.powersave,
+#custom-batterysaver.power {
+  color: #a6e3a1;
+}
+#custom-batterysaver.default,
+#custom-batterysaver.normal {
+  color: #7aa2f7;
+}
+#custom-batterysaver.performance {
+  color: #d78787;
+}
+
+#network {
+  color: #a6e3a1;
+}
+
+#network.disabled,
+#network.disconnected {
+  color: #d78787;
+}
+@keyframes blink {
+  to {
+    background-color: alpha(red, 0.6);
+    color: @foreground;
+  }
+}
+@keyframes blink-blue {
+  to {
+    background-color: alpha(#7aa2f7, 0.6);
+    color: @foreground;
+  }
+}
+
+#battery.warning:not(.charging),
+#battery.critical:not(.charging) {
+  animation-name: blink;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+#bluetooth.discoverable,
+#bluetooth.discovering,
+#bluetooth.pairable {
+  animation-name: blink-blue;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* Override */
+
+#batteries {
+  margin-right: 0px;
+  border-radius: 8px 0px 0px 8px;
+}
+
+/* #clock {
+  margin-left: 0px;
+  border-radius: 0px 8px 8px 0px;
+  background: alpha(@background, 0.6);
+} */

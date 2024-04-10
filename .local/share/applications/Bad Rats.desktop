@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Bad Rats
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/34900
+Icon=steam_icon_34900
+Terminal=false
+Type=Application
+Categories=Game;

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Photoshop CC
+Type=Application
+StartupNotify=true
+Comment=Photoshop CC v21 for Linux
+Icon=/usr/share/icons/hicolor/256x256/apps/photoshop-cc.png
+StartupWMClass=photoshop.exe
+Path=/home/l0lk3k/Photoshop
+Exec=env WINEPREFIX="/home/l0lk3k/Photoshop/PhotoshopCC" wine64 /home/l0lk3k/Photoshop/PhotoshopCC/Photoshop-CC/Photoshop.exe

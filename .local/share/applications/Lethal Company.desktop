@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Lethal Company
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/1966720
+Icon=steam_icon_1966720
+Terminal=false
+Type=Application
+Categories=Game;
