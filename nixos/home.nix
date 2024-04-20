@@ -1,4 +1,4 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, inputs, libs, ... }:
 {
   home.username = "l0lk3k";
   home.homeDirectory = "/home/${config.home.username}";
@@ -10,6 +10,7 @@
     ./kitty.nix
     ./btop.nix
     ./cava.nix
+    ./hyprland.nix
   ];
   home.packages = with pkgs; [
     realvnc-vnc-viewer
@@ -27,6 +28,7 @@
     espeak
     bottles
     steam-run
+    vesktop
   ];
   gtk = {
     enable = true;

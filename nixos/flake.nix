@@ -19,11 +19,20 @@
     };
   };
 
-  outputs = {self, nixpkgs, ...} @ inputs: {
+  outputs = {self, nixpkgs, home-manager, ...} @ inputs: {
     nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
       specialArgs = { inherit inputs; }; # this is the important part
       modules = [
         ./configuration.nix
+	home-manager.nixosModules.home-manager
+          {
+            home-manager = {
+	      extraSpecialArgs = { inherit inputs; }; 
+              useGlobalPkgs = true;
+              users.l0lk3k = import ./home.nix; # DON'T FORGET TO CHANGE USERNAME HERE <<<<<<<<<<<<<<<<
+              useUserPackages = true;
+            };
+          }
       ];
     };
   };

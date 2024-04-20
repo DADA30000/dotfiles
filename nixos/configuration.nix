@@ -7,24 +7,56 @@ let
 in
 {
   nix.settings = {
-    substituters = ["https://hyprland.cachix.org" "https://nix-gaming.cachix.org"];
-    trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4="];
+    substituters = ["https://hyprland.cachix.org" "https://nix-gaming.cachix.org" "https://nixpkgs-unfree.cachix.org" ];
+    trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4=" "nixpkgs-unfree.cachix.org-1:hqvoInulhbV4nJ9yJOEr+4wxhDV4xq2d1DK7S6Nj6rs=" ];
     experimental-features = [ "nix-command" "flakes" ];
+  };
+  services.nextcloud = {
+    enable = true;
+    configureRedis = true;
+    config.adminpassFile = "/password";
+    https = true;
+    hostName = "nc.akff-sanic.ru";
+    package = pkgs.nextcloud28;
   };
   services.nginx = {
   enable = true;
-  appendHttpConfig = ''
-      server {
-        server_name akff-sanic.ru;
-        root /fileserver;
-        listen 80;
-        autoindex on;
-	add_before_body /.theme/header.html;
-        add_after_body /.theme/footer.html;
-        autoindex_exact_size off;
-      }
-    '';
+    virtualHosts = {
+      ${config.services.nextcloud.hostName} = {
+        forceSSL = true;
+	enableACME = true;
+      };
+      "akff-sanic.ru" = {
+        forceSSL = true;
+	enableACME = true;
+	root = "/fileserver";
+	extraConfig = ''
+	  autoindex on;
+	  add_before_body /.theme/header.html;
+          add_after_body /.theme/footer.html; 
+	  autoindex_exact_size off;
+	'';
+      };
+      "ip.akff-sanic.ru" = {
+        forceSSL = true;
+	enableACME = true;
+	root = "/fileserver";
+	extraConfig = ''
+	  autoindex on;
+	  add_before_body /.theme/header.html;
+          add_after_body /.theme/footer.html; 
+	  autoindex_exact_size off;
+	'';
+      };
+    };
   };
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "vadimhack.ru@gmail.com";
+    certs = { 
+      ${config.services.nextcloud.hostName}.email = "vadimhack.ru@gmail.com"; 
+    };
+  }; 
   fileSystems = {
     "/".options = [ "compress-force=zstd" ];
     "/home".options = [ "compress-force=zstd" ];
@@ -33,7 +65,12 @@ in
   fileSystems."/home/${vars.myUser}/Games" =
   { device = "/dev/disk/by-label/Games";
     fsType = "btrfs";
-    options = [ "compress-force=zstd" ];
+    options = [ "compress-force=zstd" "subvol=games" "async"];
+  };
+  fileSystems."/var/lib/nextcloud" = 
+  { device = "/dev/disk/by-label/Games";
+    fsType = "btrfs";
+    options = [ "compress-force=zstd" "subvol=nextcloud" ];
   };
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -58,7 +95,7 @@ in
     expat
     xorg.libxcb
     libxkbcommon 
-
+    SDL2
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
   virtualisation.libvirtd.enable = true;
@@ -236,7 +273,6 @@ in
      cliphist
      networkmanager_dmenu
      libnotify
-     gpu-screen-recorder
      swappy
      steam
      screen
@@ -247,7 +283,6 @@ in
      inputs.hyprlock.packages.${pkgs.system}.hyprlock
      inputs.nps.packages.${pkgs.system}.nps
      inputs.ags.packages.${pkgs.system}.ags
-     inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo
      wlogout
      xdg-user-dirs
      mpv
@@ -255,7 +290,7 @@ in
      polkit_gnome
      mpd
      neovide
-     qbittorrent
+     fragments
      unrar
      chafa     
      pkgs.catppuccin-cursors.mochaBlue
@@ -268,6 +303,8 @@ in
      mlocate
      imv
      qemu
+     gdb
+     lldb
      (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
      qemu-system-x86_64 \
        -bios ${pkgs.OVMF.fd}/FV/OVMF.fd \
@@ -276,7 +313,9 @@ in
      (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
      cinnamon.nemo-fileroller
      libreoffice-fresh
+     zip
    ];
+   services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {
     "AAA" = lib.getExe (
       pkgs.writeShellApplication {

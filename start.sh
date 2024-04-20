@@ -6,6 +6,8 @@ if [ -f ./check ]; then
   sudo rm /etc/nixos/flake.lock
   sudo cp ./nixos/* /etc/nixos
   mkdir ~/.config
+  sudo touch /password
+  ( echo "Введите пароль Nextcloud"; read; sudo chmod 777 /password; echo $REPLY >> /password; sudo chown nextcloud:nextcloud /password; sudo chmod 400 /password )
   stow .
   git remote add origin https://github.com/DADA30000/dotfiles.git
   git config --global credential.helper store
@@ -13,7 +15,6 @@ if [ -f ./check ]; then
   nix-channel --update
   sudo nixos-rebuild switch
   mkdir ~/.mpd
-  home-manager switch
   systemctl --user enable mpd
   xdg-user-dirs-update
 fi

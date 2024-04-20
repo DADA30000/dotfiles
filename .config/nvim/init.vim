@@ -6,5 +6,5 @@ if exists("g:neovide")
     " let g:neovide_padding_right = 10
     " let g:neovide_padding_left = 10
 endif
-let g:neovide_transparency = 0.4
-lua require('config')
+let g:neovide_transparency = 0.2
+
