@@ -1,18 +1,17 @@
 @import "./colors.css";
 * {
-  font-family: "Noto Sans", "JetBrainsMono NF";
+  background: rgba(0,0,0,0.01);
+  font-family: "JetBrainsMono NF";
   font-size: 13px;
   font-weight: 600;
   color: #DDDDDD;
-  min-height: 0px;
-  min-width: 0px;
 }
 #custom-notification {
   font-size: 16px
 }
 #waybar {
   /* background: alpha(shade(@background, 1), 1); */
-  background: rgba(0,0,0,0.3);
+  background: transparent;
 }
 #custom-cog {
   font-size: 16px;
@@ -21,8 +20,9 @@
   font-size: 20px;
   /* background: alpha(@background, 0.8); */
   border-radius: 0px;
-  padding: 1px 0px 0px 0px;
+  padding: 0px 0px 0px 0px;
   margin-left: 8px;
+  margin-top: 2px;
 }
 
 #scroll,
@@ -31,15 +31,7 @@
 #hardware,
 #scripts,
 #window,
-#cpu,
-#custom-gpu,
-#network,
-#pulseaudio,
-#pulseaudio-mic,
-#custom-lock,
-#custom-reboot,
-#custom-logout,
-#custom-shutdown,
+#workspaces,
 #custom-notification,
 #custom-weather,
 #batteries,
@@ -83,81 +75,45 @@ window#waybar.empty #window {
   padding: 0px 8px 0px 8px;
 }
 #workspaces {
-  border-radius: 50px;
+  border-radius: 8px;
+  margin: 6px 0;
 }
 #custom-shutdown {
-  padding: 0 13px 0 8px;
-  margin-left: 4px;
   font-size: 18px;
 }
-#custom-notification,
-#cpu,
-#network,
-#custom-gpu,
-#pulseaudio,
-#pulseaudio-mic,
-#custom-logout,
-#custom-reboot,
-#custom-shutdown,
-#custom-lock {
-  margin-top: 2px;
-  margin-bottom: 2px;
-  transition: background-color 200ms;
-}
-#custom-notification {
-  margin-left: 6px;
-}
-#custom-notification:hover,
-#cpu:hover,
-#network:hover,
-#custom-gpu:hover,
-#pulseaudio:hover,
-#pulseaudio-mic:hover,
-#custom-logout:hover,
-#custom-reboot:hover,
-#custom-shutdown:hover,
 #custom-lock:hover {
-  transition: background-color 200ms;
-  background-color: rgba(255,255,255,0.2);
+  font-size: 26px;
 }
 #custom-lock {
   font-size: 18px;
-  padding: 0 13px 0 8px;
+  padding-top: 2px;
 }
 #custom-logout {
   font-size: 18px;
-  padding: 0 10px 0 10px;
+  padding-top: 2px;
 }
 #custom-reboot {
-  padding: 0 12px 0 8px;
-  font-size: 18px;
-}
-#workspaces button label {
-  font-size: 0px;
-}
-#workspaces button.empty {
-  background-color: #333;
-}
-#workspaces button.urgent {
-  background-color: #3275a8;
+  font-size: 22px;
+  padding-bottom: 1px;
 }
 #workspaces button {
-  transition: padding-left ease-in-out 200ms;
-  transition: padding-right ease-in-out 200ms;
-  padding: 0 5px;
-  margin: 10px 2px;
-  background-color: #555;
   border-radius: 15px;
+  padding: 0 8px;
+  padding-left: 10px;
+  transition-property: padding, background-color;
+  transition-duration: 200ms;
+  animation: gradient 5s linear infinite;
 }
 #workspaces button:hover {
   background-color: rgba(255,255,255,0.2);
+  transition-property: background-color, padding;
 }
 #workspaces button.active {
-  transition: padding-right ease-in-out 200ms;
-  transition: padding-left ease-in-out 200ms;
-  padding: 5px 13px;
-  background-color: #ddd;
-
+  padding: 0 20px;
+  padding-left: 22px;
+  background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
+  background-size: 400% 400%;
+  animation: gradient 5s linear infinite;
 }
 
 #cpu,
@@ -180,7 +136,7 @@ window#waybar.empty #window {
 #pulseaudio,
 #pulseaudio.mic,
 #backlight {
-  padding: 0px 6px 0px 3px;
+  padding: 0px 6px 0px 6px;
 }
 
 #custom-github {

@@ -1,21 +1,15 @@
 {
   "layer": "top",
   "position": "top",
-  "height": 35,
   "modules-left": [
     "group/powermenu",
-    "clock",
-    "custom/weather",
-    "hyprland/workspaces",
-    "custom/notification",
+    "group/stuff"
   ],
   "modules-center": [
     "hyprland/window"
   ],
   "modules-right": [
-    "cava",
     "tray",
-    "hyprland/language",
     "group/scroll",
     "group/hardware"
   ],
@@ -60,23 +54,32 @@
       "custom/lock"
     ]
   },
+  "group/stuff": {
+    "orientation": "horizontal",
+    "modules": [
+      "clock",
+      "custom/weather",
+      "hyprland/workspaces",
+      "custom/notification"
+    ]
+  },
   "custom/shutdown": {
-    "format": "<span color='#ff5e5e'>  </span>",
+    "format": "<span color='#ff5e5e'></span>",
     "on-click": "systemctl poweroff",
     "tooltip": false
   },
   "custom/reboot": {
-    "format": "<span color='#79b4fc'> 󰜉 </span>",
+    "format": "<span color='#79b4fc'>󰑓</span>",
     "on-click": "systemctl reboot",
     "tooltip": false
   },
   "custom/logout": {
-    "format": "<span color='#63c773'> 󰍃 </span>",
+    "format": "<span color='#63c773'>󰍃</span>",
     "on-click": "pkill -u $USER &! sleep 2 &! pkill -u $USER --signal 9 &!",
     "tooltip": false
   },
   "custom/lock": {
-    "format": "<span color='#787878'>  </span>",
+    "format": "<span color='#787878'></span>",
     "on-click": "hyprlock",
     "tooltip": false
   },
@@ -97,9 +100,9 @@
         "10": []
       },
     "format-icons": {
-      "active": " ",
-      "default": " ",
-      "empty": " ",
+      "active": "",
+      "default": "",
+      "empty": "",
     }
   },
   "tray": {
@@ -151,7 +154,7 @@
   },
   "pulseaudio#mic": {
     "format": "{format_source}",
-    "format-source": "{volume}% ",
+    "format-source": "{volume}%  ",
     "format-source-muted": "",
     "on-click": "pactl set-source-mute 0 toggle",
     "on-scroll-down": "pactl set-source-volume 0 -5%",
@@ -160,17 +163,17 @@
   "pulseaudio": {
     "format": "{volume}% {icon}",
     "format-bluetooth": "{volume}% {icon}",
-    "format-muted": "󰝟",
+    "format-muted": "󰝟 ",
     "format-icons": {
-      "headphones": "",
-      "handsfree": "",
-      "headset": "",
-      "phone": "",
-      "portable": "",
-      "car": "",
+      "headphones": "  ",
+      "handsfree": "  ",
+      "headset": "  ",
+      "phone": "  ",
+      "portable": "  ",
+      "car": "  ",
       "default": [
-        "",
-        ""
+        "  ",
+        "  "
       ]
     },
     "on-click": "pgrep -x myxer && killall -q myxer || myxer",
@@ -189,7 +192,7 @@
   "network": {
     "interval": 2,
     "format-wifi": "   {bandwidthDownBits}",
-    "format-ethernet": " 󰈀 {bandwidthDownBits}",
+    "format-ethernet": " 󰈀  {bandwidthDownBits}",
     "format-disconnected": "󰈂",
     "format-linked": "",
     "tooltip-format": "{ipaddr}",
@@ -264,13 +267,13 @@
   },
   "cpu": {
     "interval": 1,
-    "format": "{usage}% ",
+    "format": "{usage}%  ",
     "on-click": "kitty btop"
   },
   "temperature": {
     "interval": 1,
     "hwmon-path": ["/sys/class/hwmon/hwmon0/temp1_input","/sys/class/hwmon/hwmon1/temp1_input","/sys/class/hwmon/hwmon2/temp1_input","/sys/class/hwmon/hwmon3/temp1_input"],
-    "format": "<span color='#7AA2F7'> {temperatureC}°C </span>",
+    "format": "<span color='#7AA2F7'> {temperatureC}°C  </span>",
     "tooltip-format":"Core Temp: {temperatureC}°C "
   },
   "custom/weather": {

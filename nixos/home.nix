@@ -13,8 +13,8 @@
     ./hyprland.nix
   ];
   home.packages = with pkgs; [
-    realvnc-vnc-viewer
     fzf
+    remmina
     hyprpaper
     python311
     dmenu-wayland

@@ -21,7 +21,9 @@
     }
     export PATH="$PATH:$HOME/.local/bin"
     printf '\n%.0s' {1..100}
-    fastfetch --logo-color-1 'blue' --logo-color-2 'blue'
+    if ! [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
+      fastfetch --logo-color-1 'blue' --logo-color-2 'blue'
+    fi
     [[ ! -f /etc/nixos/p10k-config/.p10k.zsh ]] || source /etc/nixos/p10k-config/.p10k.zsh
     if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
      Hyprland >/dev/null 2>&1

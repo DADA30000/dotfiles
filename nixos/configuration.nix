@@ -19,6 +19,7 @@ in
     hostName = "nc.akff-sanic.ru";
     package = pkgs.nextcloud28;
   };
+  systemd.user.units.ulauncher.enable = false;
   services.nginx = {
   enable = true;
     virtualHosts = {
@@ -139,7 +140,7 @@ in
     services.xserver.videoDrivers = ["nvidia"];
     hardware.nvidia = {
       modesetting.enable = true;
-      powerManagement.enable = false;
+      powerManagement.enable = true;
       powerManagement.finegrained = false;
       open = false;
       nvidiaSettings = true;
@@ -247,7 +248,7 @@ in
      inputs.nix-gaming.packages.${pkgs.system}.osu-lazer-bin
      libsForQt5.qtstyleplugin-kvantum
      qt6Packages.qtstyleplugin-kvantum 
-     waybar
+     inputs.waybar.packages.${pkgs.system}.waybar
      tofi
      stow
      inotify-tools
@@ -283,6 +284,7 @@ in
      inputs.hyprlock.packages.${pkgs.system}.hyprlock
      inputs.nps.packages.${pkgs.system}.nps
      inputs.ags.packages.${pkgs.system}.ags
+     ulauncher #inputs.ulauncher.packages.${pkgs.system}.ulauncher6
      wlogout
      xdg-user-dirs
      mpv
@@ -314,6 +316,8 @@ in
      cinnamon.nemo-fileroller
      libreoffice-fresh
      zip
+     graalvm-ce
+     myxer
    ];
    services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {

@@ -9,7 +9,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-gaming.url = "github:fufexan/nix-gaming";
+    waybar.url = "github:Alexays/Waybar";
     hyprlock.url = "github:hyprwm/Hyprlock";
+    ulauncher.url = "github:Ulauncher/Ulauncher";
     pollymc.url = "github:fn2006/PollyMC";
     nps.url = "github:OleMussmann/Nix-Package-Search";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";

@@ -62,13 +62,13 @@ windowrule = opacity 0.99 override 0.99 override, ^(floorp)$
 windowrule = opacity 0.99 override 0.99 override, ^(mercury-default)$
 windowrule = opacity 0.99 override 0.99 override, ^(filezilla)$
 exec-once = ulimit -c 0
-exec-once = /nix/store/$(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}')/libexec/polkit-gnome-authentication-agent-1
+exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}') | cut -d ' ' -f 1)/libexec/polkit-gnome-authentication-agent-1
 # exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
-exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
+exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & ~/.config/hypr/ulauncher.sh & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 #exec-once = gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
 exec-once = nm-applet
-exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+# exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = wl-paste --type text --watch cliphist store #Stores only text data
 exec-once = wl-paste --type image --watch cliphist store #Stores only image data
 # exec = killall mpvpaper; mpvpaper -p -o "no-audio loop" HDMI-A-1 wallpapers/wall2.mp4
@@ -201,7 +201,7 @@ bind = $mainMod, C, killactive,
 bind = $mainMod, M, exec, wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,
 bind = $mainMod, E, exec, nemo
 bind = $mainMod, V, togglefloating,
-bindr = $mainMod, $mainMod_L, exec, pkill tofi || $(exec $(tofi-drun)) #wofi --show drun --allow-images -D key_expand=Tab
+bindr = $mainMod, $mainMod_L, exec, ulauncher-toggle #pkill ulauncher || $(exec $(ulauncher)) #wofi --show drun --allow-images -D key_expand=Tab
 bindr = $mainMod_CTRL, $mainMod_L, exec, pkill tofi || $(tofi-run) #wofi --show run
 bind = $mainMod, P, pseudo, # dwindle
 bind = $mainMod, J, togglesplit, # dwindle
