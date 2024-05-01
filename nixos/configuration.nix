@@ -318,6 +318,9 @@ in
      zip
      graalvm-ce
      myxer
+     (pkgs.callPackage ./ani-cli-ru.nix { })
+     gpu-screen-recorder-gtk
+     gpu-screen-recorder
    ];
    services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {

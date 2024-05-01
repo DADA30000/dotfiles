@@ -108,11 +108,11 @@
             "format": "{1} {2}",
             "keyColor": "blue"
         },
-        {
-            "type": "packages",
-            "key": "├─󰏖",
-            "keyColor": "blue"
-        },
+        //{
+        //    "type": "packages",
+        //    "key": "├─󰏖",
+        //    "keyColor": "blue"
+        //},
         {
             "type": "uptime",
             "key": "├─󰅐",
