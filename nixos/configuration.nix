@@ -99,6 +99,7 @@ in
     SDL2
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
+  virtualisation.waydroid.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   nix.settings.keep-outputs = true;
