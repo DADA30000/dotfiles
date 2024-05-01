@@ -66,7 +66,7 @@ exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d
 # exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
 exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & ~/.config/hypr/ulauncher.sh & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-exec-once = gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
+exec-once = sleep 5; gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
 exec-once = nm-applet
 # exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = wl-paste --type text --watch cliphist store #Stores only text data

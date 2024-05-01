@@ -322,6 +322,8 @@ in
      (pkgs.callPackage ./ani-cli-ru.nix { })
      gpu-screen-recorder-gtk
      gpu-screen-recorder
+     keepassxc
+     rclone
    ];
    services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {

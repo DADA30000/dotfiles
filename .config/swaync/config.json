@@ -1,6 +1,6 @@
 {
   "$schema": "/etc/xdg/swaync/configSchema.json",
-  "positionX": "left",
+  "positionX": "center",
   "positionY": "top",
   "layer": "overlay",
   "control-center-layer": "top",
@@ -20,8 +20,8 @@
   "timeout-critical": 0,
   "fit-to-screen": false,
   "relative-timestamps": true,
-  "control-center-width": 500,
-  "control-center-height": 600,
+  "control-center-width": 1920,
+  "control-center-height": 1000,
   "notification-window-width": 350,
   "keyboard-shortcuts": true,
   "image-visibility": "when-available",
