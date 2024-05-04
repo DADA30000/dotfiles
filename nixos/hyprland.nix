@@ -39,6 +39,7 @@ bind=ALT,R,submap,passthrough
 submap=passthrough
 bind=,escape,submap,reset
 submap=reset
+monitor=Unknown-1,disabled
 monitor=HDMI-A-1,1920x1080@60,0x0,1
 windowrule=animation [popin] ([default]), ^(wlogout)$
 windowrulev2 = immediate, class:^(org.freedesktop.Xwayland)$

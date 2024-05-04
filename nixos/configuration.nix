@@ -66,12 +66,12 @@ in
   fileSystems."/home/${vars.myUser}/Games" =
   { device = "/dev/disk/by-label/Games";
     fsType = "btrfs";
-    options = [ "compress-force=zstd" "subvol=games" "async"];
+    options = [ "compress-force=zstd" "subvol=games" "nofail"];
   };
   fileSystems."/var/lib/nextcloud" = 
   { device = "/dev/disk/by-label/Games";
     fsType = "btrfs";
-    options = [ "compress-force=zstd" "subvol=nextcloud" ];
+    options = [ "compress-force=zstd" "subvol=nextcloud" "nofail" ];
   };
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -97,6 +97,8 @@ in
     xorg.libxcb
     libxkbcommon 
     SDL2
+    gdk-pixbuf
+    alsaLib
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
   virtualisation.waydroid.enable = true;
@@ -171,6 +173,33 @@ in
     "amd_iommu=on" 
     "iommu=pt"
   ];
+  xdg.mime.defaultApplications = {
+    "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
+    "application/x-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip2-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip1-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-tzo" = "org.gnome.FileRoller.desktop";
+    "application/x-xz"= "org.gnome.FileRoller.desktop";
+    "application/x-lzma-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/zstd" = "org.gnome.FileRoller.desktop";
+    "application/x-7z-compressed" = "org.gnome.FileRoller.desktop";
+    "application/x-zstd-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-lzma" = "org.gnome.FileRoller.desktop";
+    "application/x-lz4" = "org.gnome.FileRoller.desktop";
+    "application/x-xz-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-lz4-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-archive" = "org.gnome.FileRoller.desktop";
+    "application/x-cpio" = "org.gnome.FileRoller.desktop";
+    "application/x-lzop" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip1" = "org.gnome.FileRoller.desktop";
+    "application/x-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip2" = "org.gnome.FileRoller.desktop";
+    "application/gzip" = "org.gnome.FileRoller.desktop";
+    "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-tarz "= "org.gnome.FileRoller.desktop";
+    "application/zip" = "org.gnome.FileRoller.desktop";
+    "inode/directory" = "nemo.desktop";
+  };
   services.locate = {
         enable = true;
         package = pkgs.mlocate;
@@ -216,7 +245,12 @@ in
       hinting.autohint = true;
     };
   };
-  boot.loader.systemd-boot.enable = true;
+  boot.loader.grub = {
+    enable = true;
+    efiSupport = true;
+    device = "nodev";
+    theme = "/boot/grub/themes/hyperfluent";
+  };
   boot.loader.efi.canTouchEfiVariables = true;
    networking.hostName = "nixos"; # Define your hostname.
    networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
@@ -232,7 +266,7 @@ in
   services.printing.enable = true;
    users.users.${vars.myUser} = {
      isNormalUser = true;
-     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" ]; # Enable ‘sudo’ for the user.
+     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" ]; # Enable ‘sudo’ for the user.
      packages = with pkgs; [
        tree
      ];
@@ -304,8 +338,8 @@ in
      gtksourceview
      ytfzf
      mlocate
-     imv
      qemu
+     imv
      gdb
      lldb
      (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
@@ -324,7 +358,10 @@ in
      gpu-screen-recorder
      keepassxc
      rclone
+     (pkgs.nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
+     android-tools
    ];
+   programs.adb.enable = true;
    services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {
     "AAA" = lib.getExe (

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Euro Truck Simulator 2
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/227300
+Icon=steam_icon_227300
+Terminal=false
+Type=Application
+Categories=Game;

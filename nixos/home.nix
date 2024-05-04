@@ -30,6 +30,12 @@
     steam-run
     vesktop
   ];
+  programs.imv = {
+    enable = true;
+    settings = {
+      options.upscaling_method = "nearest_neighbour";
+    };
+  };
   gtk = {
     enable = true;
     gtk3.extraConfig.gtk-decoration-layout = "menu:";
