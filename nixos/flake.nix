@@ -1,6 +1,7 @@
 {
   inputs = {
-    hyprland.url = "github:hyprwm/Hyprland";
+    #hyprland.url = "github:hyprwm/Hyprland";
+    hyprland.url = "git+https://github.com/hyprwm/Hyprland?submodules=1";
     tempest.url = "github:lavafroth/tempest";
     ags.url = "github:Aylur/ags";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -9,7 +10,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-gaming.url = "github:fufexan/nix-gaming";
-    waybar.url = "github:Alexays/Waybar";
     hyprlock.url = "github:hyprwm/Hyprlock";
     ulauncher.url = "github:Ulauncher/Ulauncher";
     pollymc.url = "github:fn2006/PollyMC";

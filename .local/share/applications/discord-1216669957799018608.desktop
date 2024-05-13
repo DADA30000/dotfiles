@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Game 1216669957799018608
-Exec=/nix/store/k2iq0argcr8zr7ailj292i4na4bcgm1m-osu-lazer-bin-2024.412.1/lib/osu/osu! %u
+Exec=/nix/store/vl5si4q1v1lq6mh8y8hx0vhqvc2hr6zg-osu-lazer-bin-2024.412.1/lib/osu/osu! %u
 Type=Application
 NoDisplay=true
 Categories=Discord;Games;

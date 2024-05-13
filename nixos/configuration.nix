@@ -17,7 +17,7 @@ in
     config.adminpassFile = "/password";
     https = true;
     hostName = "nc.akff-sanic.ru";
-    package = pkgs.nextcloud28;
+    package = pkgs.nextcloud29;
   };
   systemd.user.units.ulauncher.enable = false;
   services.nginx = {
@@ -101,7 +101,7 @@ in
     alsaLib
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
-  virtualisation.waydroid.enable = true;
+  virtualisation.waydroid.enable = false;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   nix.settings.keep-outputs = true;
@@ -130,8 +130,8 @@ in
       modesetting.enable = true;
       powerManagement.enable = false;
       powerManagement.finegrained = false;
-      open = false;
-      nvidiaSettings = true;
+      open = true;
+      nvidiaSettings = false;
       };
     };
   nvidia.configuration = {
@@ -145,8 +145,8 @@ in
       modesetting.enable = true;
       powerManagement.enable = true;
       powerManagement.finegrained = false;
-      open = false;
-      nvidiaSettings = true;
+      open = true;
+      nvidiaSettings = false;
       package = config.boot.kernelPackages.nvidiaPackages.beta;
       };
     };
@@ -283,7 +283,7 @@ in
      inputs.nix-gaming.packages.${pkgs.system}.osu-lazer-bin
      libsForQt5.qtstyleplugin-kvantum
      qt6Packages.qtstyleplugin-kvantum 
-     inputs.waybar.packages.${pkgs.system}.waybar
+     waybar
      tofi
      stow
      inotify-tools
@@ -349,20 +349,21 @@ in
      '')
      (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
      cinnamon.nemo-fileroller
-     libreoffice-fresh
      zip
      graalvm-ce
      myxer
      (pkgs.callPackage ./ani-cli-ru.nix { })
-     gpu-screen-recorder-gtk
      gpu-screen-recorder
      keepassxc
      rclone
      (pkgs.nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
      android-tools
+     virtiofsd
+     virtio-win
+     glfw-wayland-minecraft
    ];
    programs.adb.enable = true;
-   services.flatpak.enable = true;
+   services.flatpak.enable = false;
    virtualisation.libvirtd.hooks.qemu = {
     "AAA" = lib.getExe (
       pkgs.writeShellApplication {

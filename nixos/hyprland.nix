@@ -2,7 +2,7 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
+    #plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
     package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     extraConfig = ''
 env = GTK_THEME,Materia-dark
@@ -210,7 +210,7 @@ bind = $mainMod, J, togglesplit, # dwindle
 bind = $mainMod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send "GPU-Screen-Recorder" "Повтор успешно сохранён"
 bind = $mainMod, F, exec, hyprctl dispatch fullscreen
 bind = $mainMod_CTRL, F, fakefullscreen
-bind = $mainMod, Space, hyprexpo:expo, toggle
+#bind = $mainMod, Space, hyprexpo:expo, toggle
 bind = $mainMod_ALT, mouse_down, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 + 1}')"    
 bind = $mainMod_ALT, mouse_up, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 - 1}')"
 bind = $mainMod_CTRL, mouse_down, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 + 100}')" 
