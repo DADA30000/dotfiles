@@ -1,7 +1,7 @@
 # Edit this configuration file to define what should be installed on
 # your system. Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
-{ config, lib, inputs, pkgs, ... }:
+{ config, lib, inputs, pkgs, options, ... }:
 let
   vars = { myUser = "l0lk3k"; };
 in
@@ -11,6 +11,7 @@ in
     trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4=" "nixpkgs-unfree.cachix.org-1:hqvoInulhbV4nJ9yJOEr+4wxhDV4xq2d1DK7S6Nj6rs=" ];
     experimental-features = [ "nix-command" "flakes" ];
   };
+  boot.initrd.systemd.enable = true;
   services.nextcloud = {
     enable = true;
     configureRedis = true;
@@ -20,6 +21,7 @@ in
     package = pkgs.nextcloud29;
   };
   systemd.user.units.ulauncher.enable = false;
+  systemd.services.NetworkManager-wait-online.enable = false;
   services.nginx = {
   enable = true;
     virtualHosts = {
@@ -110,44 +112,35 @@ in
   nix.settings.auto-optimise-store = true;
   boot.kernelPackages = pkgs.linuxPackages_latest; 
   boot.tmp.useTmpfs = true;
+  hardware.opengl = {
+    enable = true;
+    driSupport = true;
+    driSupport32Bit = true;
+  };
+  services.xserver.videoDrivers = ["nvidia"];
+  hardware.nvidia = {
+    modesetting.enable = true;
+    powerManagement.enable = true;
+    powerManagement.finegrained = false;
+    open = true;
+    nvidiaSettings = false;
+    package = config.boot.kernelPackages.nvidiaPackages.beta;
+  };
   specialisation = {
-  nvidia535.configuration = {
-    hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-        version = "535.154.05";
-        sha256_64bit = "sha256-fpUGXKprgt6SYRDxSCemGXLrEsIA6GOinp+0eGbqqJg=";
-        sha256_aarch64 = "sha256-G0/GiObf/BZMkzzET8HQjdIcvCSqB1uhsinro2HLK9k=";
-        openSha256 = "sha256-wvRdHguGLxS0mR06P5Qi++pDJBCF8pJ8hr4T8O6TJIo=";
-        settingsSha256 = "sha256-9wqoDEWY4I7weWW05F4igj1Gj9wjHsREFMztfEmqm10=";
-        persistencedSha256 = "sha256-d0Q3Lk80JqkS1B54Mahu2yY/WocOqFFbZVBh+ToGhaE=";
+    non-nvidia.configuration = {
+      hardware.opengl = {
+        enable = lib.mkForce options.hardware.opengl.enable.default;
+	driSupport = lib.mkForce options.hardware.opengl.driSupport.default;
+	driSupport32Bit = lib.mkForce options.hardware.opengl.driSupport32Bit.default;
       };
-    hardware.opengl = {
-    enable = true;
-    driSupport = true;
-    driSupport32Bit = true;
-      };
-    services.xserver.videoDrivers = ["nvidia"];
-    hardware.nvidia = {
-      modesetting.enable = true;
-      powerManagement.enable = false;
-      powerManagement.finegrained = false;
-      open = true;
-      nvidiaSettings = false;
-      };
-    };
-  nvidia.configuration = {
-    hardware.opengl = {
-    enable = true;
-    driSupport = true;
-    driSupport32Bit = true;
-      };
-    services.xserver.videoDrivers = ["nvidia"];
-    hardware.nvidia = {
-      modesetting.enable = true;
-      powerManagement.enable = true;
-      powerManagement.finegrained = false;
-      open = true;
-      nvidiaSettings = false;
-      package = config.boot.kernelPackages.nvidiaPackages.beta;
+      services.xserver.videoDrivers = lib.mkForce options.services.xserver.videoDrivers.default;
+      hardware.nvidia = {
+        modesetting.enable = lib.mkForce options.hardware.nvidia.modesetting.enable.default;
+	powerManagement.enable = lib.mkForce options.hardware.nvidia.powerManagement.enable.default;
+	powerManagement.finegrained = lib.mkForce options.hardware.nvidia.powerManagement.finegrained.default;
+	open = lib.mkForce options.hardware.nvidia.open.default;
+	nvidiaSettings = lib.mkForce options.hardware.nvidia.nvidiaSettings.default;
+	package = lib.mkForce options.hardware.nvidia.package.default;
       };
     };
   };
@@ -210,9 +203,9 @@ in
   services.pipewire = {
     enable = true;
     alsa.enable = true;
-    alsa.support32Bit = true;
+    alsa.support32Bit = false;
     pulse.enable = true;
-    jack.enable = true;
+    jack.enable = false;
   };
   security.polkit.enable = true;
   programs.zsh.enable = true;
@@ -257,7 +250,7 @@ in
    time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   console = {
-     font = "cyr-sun16";
+     font = null;
      useXkbConfig = true; # use xkb.options in tty.
    };
   services.xserver.xkb.layout = "us,ru";
@@ -353,6 +346,7 @@ in
      graalvm-ce
      myxer
      (pkgs.callPackage ./ani-cli-ru.nix { })
+     gpu-screen-recorder-gtk
      gpu-screen-recorder
      keepassxc
      rclone

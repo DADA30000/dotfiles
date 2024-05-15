@@ -82,9 +82,6 @@ window#waybar.empty #window {
 #tray {
   padding: 0px 8px 0px 8px;
 }
-#workspaces {
-  border-radius: 50px;
-}
 #custom-shutdown {
   padding: 0 13px 0 8px;
   margin-left: 4px;
@@ -132,32 +129,67 @@ window#waybar.empty #window {
   padding: 0 12px 0 8px;
   font-size: 18px;
 }
-#workspaces button label {
-  font-size: 0px;
+@keyframes workspacesanim {
+    0% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 20px, @accent 20px);
+    }
+    10% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 18px, @accent 18px);
+    }
+    20% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 16px, @accent 16px);
+    }
+    30% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 14px, @accent 14px);
+    }
+    40% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 12px, @accent 12px);
+    }
+    50% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 10px, @accent 10px);
+    }
+    60% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 8px, @accent 8px);
+    }
+    70% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 6px, @accent 6px);
+    }
+    80% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 4px, @accent 4px);
+    }
+    90% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 2px, @accent 2px);
+    }
+    100% {
+        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 0px, @accent 0px);
+    }
 }
-#workspaces button.empty {
-  background-color: #333;
+#workspaces button label {
+  font-family: "JetBrainsMono NF Thin";
 }
 #workspaces button.urgent {
   background-color: #3275a8;
 }
+#workspaces button:nth-child(1) {
+  border-radius: 10px 0 0 10px;
+}
+#workspaces button:nth-child(10) {
+  border-radius: 0 10px 10px 0;
+}
 #workspaces button {
-  transition: padding-left ease-in-out 200ms;
-  transition: padding-right ease-in-out 200ms;
-  padding: 0 5px;
-  margin: 10px 2px;
-  background-color: #555;
-  border-radius: 15px;
+  padding: 0px 10px;
+  margin: 4px 0px;
+  background-color: rgba(48,48,48,0.5);
+  border-radius: 0;
 }
 #workspaces button:hover {
-  background-color: rgba(255,255,255,0.2);
+  background-color: rgba(255,255,255,0.25);
 }
 #workspaces button.active {
-  transition: padding-right ease-in-out 200ms;
-  transition: padding-left ease-in-out 200ms;
-  padding: 5px 13px;
-  background-color: #ddd;
-
+  animation-name: workspacesanim;
+  animation-fill-mode: both;
+  animation-duration: 300ms;
+  animation-direction: normal;
 }
 
 #cpu,

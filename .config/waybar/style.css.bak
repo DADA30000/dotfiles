@@ -1,17 +1,18 @@
 @import "./colors.css";
 * {
-  background: rgba(0,0,0,0.01);
-  font-family: "JetBrainsMono NF";
+  font-family: "Noto Sans", "JetBrainsMono NF";
   font-size: 13px;
   font-weight: 600;
   color: #DDDDDD;
+  min-height: 0px;
+  min-width: 0px;
 }
 #custom-notification {
   font-size: 16px
 }
 #waybar {
   /* background: alpha(shade(@background, 1), 1); */
-  background: transparent;
+  background: rgba(0,0,0,0.3);
 }
 #custom-cog {
   font-size: 16px;
@@ -20,9 +21,8 @@
   font-size: 20px;
   /* background: alpha(@background, 0.8); */
   border-radius: 0px;
-  padding: 0px 0px 0px 0px;
+  padding: 1px 0px 0px 0px;
   margin-left: 8px;
-  margin-top: 2px;
 }
 
 #scroll,
@@ -31,7 +31,15 @@
 #hardware,
 #scripts,
 #window,
-#workspaces,
+#cpu,
+#custom-gpu,
+#network,
+#pulseaudio,
+#pulseaudio-mic,
+#custom-lock,
+#custom-reboot,
+#custom-logout,
+#custom-shutdown,
 #custom-notification,
 #custom-weather,
 #batteries,
@@ -74,46 +82,128 @@ window#waybar.empty #window {
 #tray {
   padding: 0px 8px 0px 8px;
 }
-#workspaces {
-  border-radius: 8px;
-  margin: 6px 0;
-}
 #custom-shutdown {
+  padding: 0 13px 0 8px;
+  margin-left: 4px;
   font-size: 18px;
 }
+#custom-notification,
+#cpu,
+#network,
+#custom-gpu,
+#pulseaudio,
+#pulseaudio-mic,
+#custom-logout,
+#custom-reboot,
+#custom-shutdown,
+#custom-lock {
+  margin-top: 2px;
+  margin-bottom: 2px;
+  transition: background-color 200ms;
+}
+#custom-notification {
+  margin-left: 6px;
+}
+#custom-notification:hover,
+#cpu:hover,
+#network:hover,
+#custom-gpu:hover,
+#pulseaudio:hover,
+#pulseaudio-mic:hover,
+#custom-logout:hover,
+#custom-reboot:hover,
+#custom-shutdown:hover,
 #custom-lock:hover {
-  font-size: 26px;
+  transition: background-color 200ms;
+  background-color: rgba(255,255,255,0.2);
 }
 #custom-lock {
   font-size: 18px;
-  padding-top: 2px;
+  padding: 0 13px 0 8px;
 }
 #custom-logout {
   font-size: 18px;
-  padding-top: 2px;
+  padding: 0 10px 0 10px;
 }
 #custom-reboot {
-  font-size: 22px;
-  padding-bottom: 1px;
+  padding: 0 12px 0 8px;
+  font-size: 18px;
+}
+@keyframes workspacesanim {
+    0% {
+        background: linear-gradient(to bottom, #333 20px, @accent 20px);
+    }
+    10% {
+        background: linear-gradient(to bottom, #333 18px, @accent 18px);
+    }
+    20% {
+        background: linear-gradient(to bottom, #333 16px, @accent 16px);
+    }
+    30% {
+        background: linear-gradient(to bottom, #333 14px, @accent 14px);
+    }
+    40% {
+        background: linear-gradient(to bottom, #333 12px, @accent 12px);
+    }
+    50% {
+        background: linear-gradient(to bottom, #333 10px, @accent 10px);
+    }
+    60% {
+        background: linear-gradient(to bottom, #333 8px, @accent 8px);
+    }
+    70% {
+        background: linear-gradient(to bottom, #333 6px, @accent 6px);
+    }
+    80% {
+        background: linear-gradient(to bottom, #333 4px, @accent 4px);
+    }
+    90% {
+        background: linear-gradient(to bottom, #333 2px, @accent 2px);
+    }
+    100% {
+        background: linear-gradient(to bottom, #333 0px, @accent 0px);
+    }
+}
+@keyframes workspaceshover {
+	0% {
+        background: linear-gradient(to bottom, #333 20px, @accent 20px);
+    }
+    50% {
+        background: linear-gradient(to bottom, #333 19px, @accent 19px);
+    }
+    100% {
+        background: linear-gradient(to bottom, #333 18px, @accent 18px);
+    }
+}
+#workspaces button label {
+  font-family: "JetBrainsMono NF Thin";
+}
+#workspaces button.urgent {
+  background-color: #3275a8;
+}
+#workspaces button:nth-child(1) {
+  border-radius: 10px 0 0 10px;
+}
+#workspaces button:nth-child(10) {
+  border-radius: 0 10px 10px 0;
 }
 #workspaces button {
-  border-radius: 15px;
-  padding: 0 8px;
-  padding-left: 10px;
-  transition-property: padding, background-color;
-  transition-duration: 200ms;
-  animation: gradient 5s linear infinite;
+  padding: 0px 10px;
+  margin: 4px 0px;
+  background-color: #333;
+  border-radius: 0;
 }
 #workspaces button:hover {
-  background-color: rgba(255,255,255,0.2);
-  transition-property: background-color, padding;
+  animation-duration: 500ms;
+  animation-fill-mode: both;
+  animation-name: workspaceshover;
 }
 #workspaces button.active {
-  padding: 0 20px;
-  padding-left: 22px;
-  background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
-  background-size: 400% 400%;
-  animation: gradient 5s linear infinite;
+  animation-name: workspacesanim;
+  animation-duration: 300ms;
+  animation-direction: alternate;
+  background-color: @accent;
+
 }
 
 #cpu,
@@ -136,7 +226,7 @@ window#waybar.empty #window {
 #pulseaudio,
 #pulseaudio.mic,
 #backlight {
-  padding: 0px 6px 0px 6px;
+  padding: 0px 6px 0px 3px;
 }
 
 #custom-github {
