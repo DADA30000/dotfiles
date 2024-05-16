@@ -165,7 +165,7 @@ window#waybar.empty #window {
     }
 }
 #workspaces button label {
-  font-family: "JetBrainsMono NF Thin";
+  /* font-family: "JetBrainsMono NF Thin"; */
 }
 #workspaces button.urgent {
   background-color: #3275a8;
