@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Content Warning
+Comment=Play this game on Steam
+Exec=steam steam://rungameid/2881650
+Icon=steam_icon_2881650
+Terminal=false
+Type=Application
+Categories=Game;

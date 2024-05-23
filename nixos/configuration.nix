@@ -101,6 +101,7 @@ in
     SDL2
     gdk-pixbuf
     alsaLib
+    fuse
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
   virtualisation.waydroid.enable = false;
@@ -122,9 +123,17 @@ in
     modesetting.enable = true;
     powerManagement.enable = true;
     powerManagement.finegrained = false;
-    open = true;
+    open = false;
     nvidiaSettings = false;
-    package = config.boot.kernelPackages.nvidiaPackages.beta;
+    package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+      version = "555.42.02";
+      sha256_64bit = "sha256-k7cI3ZDlKp4mT46jMkLaIrc2YUx1lh1wj/J4SVSHWyk=";
+      sha256_aarch64 = lib.fakeSha256;
+      openSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
+      settingsSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
+      persistencedSha256 = lib.fakeSha256;
+    };
+    #package = config.boot.kernelPackages.nvidiaPackages.beta;
   };
   specialisation = {
     non-nvidia.configuration = {
@@ -221,10 +230,10 @@ in
       ./home.nix
     ];
   };
-  programs.hyprland = {
-    enable = true;
-    package = inputs.hyprland.packages.${pkgs.system}.hyprland;
-  };
+  #programs.hyprland = {
+  #  enable = true;
+  #  package = inputs.hyprland.packages.${pkgs.system}.hyprland;
+  #};
   fonts = {
     enableDefaultPackages = true;
     packages = with pkgs; [
@@ -264,7 +273,8 @@ in
        tree
      ];
    };
-
+   services.xserver.enable = true;
+   services.xserver.displayManager.startx.enable = true;
    environment.variables = {
        "QT_STYLE_OVERRIDE"="kvantum";
      };
@@ -273,7 +283,7 @@ in
      neovim
      git
      zerotierone
-     inputs.nix-gaming.packages.${pkgs.system}.osu-lazer-bin
+     osu-lazer-bin
      libsForQt5.qtstyleplugin-kvantum
      qt6Packages.qtstyleplugin-kvantum 
      waybar
@@ -311,7 +321,6 @@ in
      inputs.pollymc.packages.${pkgs.system}.pollymc
      inputs.hyprlock.packages.${pkgs.system}.hyprlock
      inputs.nps.packages.${pkgs.system}.nps
-     inputs.ags.packages.${pkgs.system}.ags
      ulauncher #inputs.ulauncher.packages.${pkgs.system}.ulauncher6
      wlogout
      xdg-user-dirs
@@ -340,7 +349,7 @@ in
        -bios ${pkgs.OVMF.fd}/FV/OVMF.fd \
        "$@"
      '')
-     (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
+     (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
      cinnamon.nemo-fileroller
      zip
      graalvm-ce
@@ -356,6 +365,9 @@ in
      virtio-win
      glfw-wayland-minecraft
    ];
+   xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
+   xdg.portal.config.common.default = "*";
+   programs.firefox.nativeMessagingHosts.ff2mpv = true;
    programs.adb.enable = true;
    services.flatpak.enable = false;
    virtualisation.libvirtd.hooks.qemu = {
