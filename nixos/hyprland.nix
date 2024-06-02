@@ -64,7 +64,7 @@ windowrule = opacity 0.99 override 0.99 override, ^(filezilla)$
 exec-once = ulimit -c 0
 exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}') | cut -d ' ' -f 1)/libexec/polkit-gnome-authentication-agent-1
 # exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
-exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & ~/.config/hypr/ulauncher.sh & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
+exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 exec-once = sleep 10; gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
 exec-once = keepassxc
@@ -100,7 +100,6 @@ input {
 }
 
 general {
-    allow_tearing = true
     gaps_in = 5
     gaps_out = 5
     border_size = 0
@@ -144,6 +143,7 @@ animations {
     bezier = woosh, 0.445, 0.05, 0, 1
 #    animation = borderangle, 1, 40, linear, loop
     animation = windowsMove, 1, 5, default # 7
+    animation = layers, 1, 2, woosh, slide
     animation = windowsIn, 1, 2, woosh, slide # 3
     animation = windows, 1, 7, default, slide # 7
     animation = windowsOut, 1, 5, woosh, slide # 7
@@ -202,8 +202,8 @@ bind = $mainMod, C, killactive,
 bind = $mainMod, M, exec, wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,
 bind = $mainMod, E, exec, nemo
 bind = $mainMod, V, togglefloating,
-bindr = $mainMod, $mainMod_L, exec, ulauncher-toggle #pkill ulauncher || $(exec $(ulauncher)) #wofi --show drun --allow-images -D key_expand=Tab
-bindr = $mainMod_CTRL, $mainMod_L, exec, pkill tofi || $(tofi-run) #wofi --show run
+bindr = $mainMod, $mainMod_L, exec, pkill wofi || $(wofi --show drun --allow-images -D key_expand=Tab)  #ulauncher-toggle #pkill ulauncher || $(exec $(ulauncher))
+bindr = $mainMod_CTRL, $mainMod_L, exec, pkill wofi || $(wofi --show run) #pkill tofi || $(tofi-run) #
 bind = $mainMod, P, pseudo, # dwindle
 bind = $mainMod, J, togglesplit, # dwindle
 bind = $mainMod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send "GPU-Screen-Recorder" "Повтор успешно сохранён"
@@ -255,12 +255,14 @@ layerrule = blur, notifications
 layerrule = blur, gtk-layer-shell
 layerrule = blur, logout_dialog
 layerrule = blur, launcher
+layerrule = blur, wofi
+layerrule = noanim, selection
 plugin {
     hyprexpo {
         columns = 3
         gap_size = 5
         bg_col = rgb(111111)
-        workspace_method = center first # [center/first] [workspace] e.g. first 1 or center m+1
+        workspace_method = first 1 # [center/first] [workspace] e.g. first 1 or center m+1
 
         enable_gesture = true # laptop touchpad, 4 fingers
         gesture_distance = 300 # how far is the "max"

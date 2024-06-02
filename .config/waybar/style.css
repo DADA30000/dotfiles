@@ -11,8 +11,22 @@
   font-size: 16px
 }
 #waybar {
-  /* background: alpha(shade(@background, 1), 1); */
-  background: rgba(0,0,0,0.3);
+  background: none;
+}
+.modules-left {
+  background: rgba(0,0,0,0.2);
+  border-radius: 0 0 15px 0;
+  padding: 0 10px 0 0;
+}
+.modules-center {
+  background: rgba(0,0,0,0.2);
+  border-radius: 0 0 15px 15px;
+  padding: 0 20px;
+}
+.modules-right {
+  background: rgba(0,0,0,0.2);
+  border-radius: 0 0 0 15px;
+  padding: 0 0 0 10px;
 }
 #custom-cog {
   font-size: 16px;
@@ -63,7 +77,9 @@
 window#waybar.empty #window {
     opacity: 0;
 }
-
+window#waybar.empty .modules-center {
+    background: none;
+}
 @keyframes gradient {
 	0% {
 		background-position: 100% 0%;
@@ -131,41 +147,42 @@ window#waybar.empty #window {
 }
 @keyframes workspacesanim {
     0% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 20px, @accent 20px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 20px, @accent 20px);
     }
     10% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 18px, @accent 18px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 18px, @accent 18px);
     }
     20% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 16px, @accent 16px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 16px, @accent 16px);
     }
     30% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 14px, @accent 14px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 14px, @accent 14px);
     }
     40% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 12px, @accent 12px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 12px, @accent 12px);
     }
     50% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 10px, @accent 10px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 10px, @accent 10px);
     }
     60% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 8px, @accent 8px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 8px, @accent 8px);
     }
     70% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 6px, @accent 6px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 6px, @accent 6px);
     }
     80% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 4px, @accent 4px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 4px, @accent 4px);
     }
     90% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 2px, @accent 2px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 2px, @accent 2px);
     }
     100% {
-        background: linear-gradient(to bottom, rgba(48,48,48,0.5) 0px, @accent 0px);
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 0px, @accent 0px);
     }
 }
 #workspaces button label {
   /* font-family: "JetBrainsMono NF Thin"; */
+  font-size: 16px;
 }
 #workspaces button.urgent {
   background-color: #3275a8;
@@ -177,9 +194,8 @@ window#waybar.empty #window {
   border-radius: 0 10px 10px 0;
 }
 #workspaces button {
-  padding: 0px 10px;
+  padding: 0px 10px 0 5px;
   margin: 4px 0px;
-  background-color: rgba(48,48,48,0.5);
   border-radius: 0;
 }
 #workspaces button:hover {

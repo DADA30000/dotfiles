@@ -89,7 +89,11 @@
     "all-outputs": true,
     "persistent-workspaces": {
       "*": 10
-      }
+      },
+    "format-icons": {
+      "empty": "",
+      "default": ""
+    }
   },
   "tray": {
     "spacing": 8,

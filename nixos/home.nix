@@ -39,6 +39,7 @@
   gtk = {
     enable = true;
     gtk3.extraConfig.gtk-decoration-layout = "menu:";
+    gtk4.extraConfig.gtk-hint-font-metrics = 1;
     cursorTheme.name = "Bibata-Modern-Classic";
     iconTheme.name = "Nordzy";
     theme.name = "Materia-dark";

@@ -20,7 +20,6 @@ in
     hostName = "nc.akff-sanic.ru";
     package = pkgs.nextcloud29;
   };
-  systemd.user.units.ulauncher.enable = false;
   systemd.services.NetworkManager-wait-online.enable = false;
   services.nginx = {
   enable = true;
@@ -123,7 +122,7 @@ in
     modesetting.enable = true;
     powerManagement.enable = true;
     powerManagement.finegrained = false;
-    open = false;
+    #open = false;
     nvidiaSettings = false;
     package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
       version = "555.42.02";
@@ -273,8 +272,6 @@ in
        tree
      ];
    };
-   services.xserver.enable = true;
-   services.xserver.displayManager.startx.enable = true;
    environment.variables = {
        "QT_STYLE_OVERRIDE"="kvantum";
      };
@@ -282,7 +279,6 @@ in
      wget
      neovim
      git
-     zerotierone
      osu-lazer-bin
      libsForQt5.qtstyleplugin-kvantum
      qt6Packages.qtstyleplugin-kvantum 
@@ -301,11 +297,6 @@ in
      pulseaudio
      nwg-look
      gnome.file-roller
-     oh-my-zsh
-     zsh-powerlevel10k
-     zsh-syntax-highlighting
-     zsh-completions
-     clolcat
      nordzy-icon-theme
      appimage-run
      lutris
@@ -321,7 +312,6 @@ in
      inputs.pollymc.packages.${pkgs.system}.pollymc
      inputs.hyprlock.packages.${pkgs.system}.hyprlock
      inputs.nps.packages.${pkgs.system}.nps
-     ulauncher #inputs.ulauncher.packages.${pkgs.system}.ulauncher6
      wlogout
      xdg-user-dirs
      mpv
@@ -332,18 +322,13 @@ in
      fragments
      unrar
      chafa     
-     pkgs.catppuccin-cursors.mochaBlue
-     google-cursor
      pavucontrol
      brightnessctl
-     ydotool
-     gtksourceview
      ytfzf
      mlocate
      qemu
      imv
-     gdb
-     lldb
+     wofi
      (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
      qemu-system-x86_64 \
        -bios ${pkgs.OVMF.fd}/FV/OVMF.fd \
@@ -352,7 +337,7 @@ in
      (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
      cinnamon.nemo-fileroller
      zip
-     graalvm-ce
+     jdk21
      myxer
      (pkgs.callPackage ./ani-cli-ru.nix { })
      gpu-screen-recorder-gtk
