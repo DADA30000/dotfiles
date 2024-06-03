@@ -4,6 +4,7 @@
     #hyprland.url = "git+https://github.com/hyprwm/Hyprland/?submodules=1";
     #tempest.url = "github:lavafroth/tempest";
     #ags.url = "github:Aylur/ags";
+    spicetify-nix.url = "github:the-argus/spicetify-nix";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -11,7 +12,7 @@
     };
     #nix-gaming.url = "github:fufexan/nix-gaming";
     hyprlock.url = "github:hyprwm/Hyprlock";
-    ulauncher.url = "github:Ulauncher/Ulauncher";
+    #ulauncher.url = "github:Ulauncher/Ulauncher";
     pollymc.url = "github:fn2006/PollyMC";
     nps.url = "github:OleMussmann/Nix-Package-Search";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";

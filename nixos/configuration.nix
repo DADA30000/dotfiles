@@ -4,6 +4,7 @@
 { config, lib, inputs, pkgs, options, ... }:
 let
   vars = { myUser = "l0lk3k"; };
+  spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
 in
 {
   nix.settings = {
@@ -222,12 +223,47 @@ in
   imports =
     [
       ./hardware-configuration.nix
+      inputs.spicetify-nix.nixosModule
       inputs.home-manager.nixosModules.home-manager
     ];
   home-manager.users.${vars.myUser} = {
     imports = [
       ./home.nix
     ];
+  };
+  programs.spicetify =
+    let
+      hazy = pkgs.fetchgit {
+        url = "https://github.com/Astromations/Hazy";
+	rev = "0d45831a31b0c72e1d3ab8be501479e196a709d7";
+        sha256 = "sha256-0t7/25hRfvyJ8K+nTzgMl8RabTBxtMIjQvDECzYvwg8=";
+      };
+      adblock = pkgs.fetchgit {
+        url = "https://github.com/rxri/spicetify-extensions";
+	rev = "96c03d40518f6527db9b4122cb628d88f36f47d0";
+	sha256 = "sha256-JR2fda2IGpIbhHy7zK4A5LLT5yVjowZWTvNWPhjYHxE=";
+      };
+    in
+    {
+    enable = true;
+      theme = {
+        name = "Hazy";
+        src = hazy;
+        requiredExtensions = [
+          # define extensions that will be installed with this theme
+          {
+	    filename = "adblock.js";
+	    src = "${adblock}/adblock";
+	  }
+        ];
+        appendName = false; # theme is located at "${src}/Dribbblish" not just "${src}"
+
+        # changes to make to config-xpui.ini for this theme:
+        injectCss = true;
+        replaceColors = true;
+        overwriteAssets = true;
+        sidebarConfig = true;
+      };
   };
   #programs.hyprland = {
   #  enable = true;
@@ -348,8 +384,9 @@ in
      android-tools
      virtiofsd
      virtio-win
-     glfw-wayland-minecraft
+     networkmanagerapplet
    ];
+   programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
    xdg.portal.config.common.default = "*";
    programs.firefox.nativeMessagingHosts.ff2mpv = true;
