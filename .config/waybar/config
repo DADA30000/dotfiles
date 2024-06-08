@@ -1,8 +1,1 @@
-[
-  {
-  "output": [ "HDMI-A-1" ],
-    "include": [
-      "~/.config/waybar/bars/main.json",
-    ],
-  }
-]
+/nix/store/l4f696iyp4z1h93bqfzbr5sf09hmi5q8-home-manager-files/.config/waybar/config

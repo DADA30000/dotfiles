@@ -7,5 +7,5 @@ if [ -f ./check ]; then
   git commit -m "another update"
   git push -u
   ( cd ~/.mozilla; ./update.sh )
-  rclone sync -v ./stuff/stuff.kdbx nextcloud: ; rclone sync -v /fileserver/Music google:Music
+  #rclone sync -v /fileserver/Music google:Music
 fi

@@ -11,6 +11,7 @@
     ./btop.nix
     ./cava.nix
     ./hyprland.nix
+    ./waybar.nix
   ];
   home.packages = with pkgs; [
     fzf
@@ -35,6 +36,10 @@
     settings = {
       options.upscaling_method = "nearest_neighbour";
     };
+  };
+  programs.obs-studio = {
+    enable = true;
+    plugins = [ pkgs.obs-studio-plugins.obs-ndi ];
   };
   gtk = {
     enable = true;

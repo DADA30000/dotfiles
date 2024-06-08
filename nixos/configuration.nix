@@ -12,6 +12,7 @@ in
     trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4=" "nixpkgs-unfree.cachix.org-1:hqvoInulhbV4nJ9yJOEr+4wxhDV4xq2d1DK7S6Nj6rs=" ];
     experimental-features = [ "nix-command" "flakes" ];
   };
+  boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
   boot.initrd.systemd.enable = true;
   services.nextcloud = {
     enable = true;
@@ -21,6 +22,9 @@ in
     hostName = "nc.akff-sanic.ru";
     package = pkgs.nextcloud29;
   };
+  nixpkgs.config.permittedInsecurePackages = [
+    "freeimage-unstable-2021-11-01"
+  ];
   systemd.services.NetworkManager-wait-online.enable = false;
   services.nginx = {
   enable = true;
@@ -125,34 +129,37 @@ in
     powerManagement.finegrained = false;
     #open = false;
     nvidiaSettings = false;
-    package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-      version = "555.42.02";
-      sha256_64bit = "sha256-k7cI3ZDlKp4mT46jMkLaIrc2YUx1lh1wj/J4SVSHWyk=";
-      sha256_aarch64 = lib.fakeSha256;
-      openSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
-      settingsSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
-      persistencedSha256 = lib.fakeSha256;
-    };
-    #package = config.boot.kernelPackages.nvidiaPackages.beta;
+    #package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+    #  version = "555.42.02";
+    #  sha256_64bit = "sha256-k7cI3ZDlKp4mT46jMkLaIrc2YUx1lh1wj/J4SVSHWyk=";
+    #  sha256_aarch64 = lib.fakeSha256;
+    #  openSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
+    #  settingsSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
+    #  persistencedSha256 = lib.fakeSha256;
+    #};
+    package = config.boot.kernelPackages.nvidiaPackages.beta;
   };
-  specialisation = {
-    non-nvidia.configuration = {
-      hardware.opengl = {
-        enable = lib.mkForce options.hardware.opengl.enable.default;
-	driSupport = lib.mkForce options.hardware.opengl.driSupport.default;
-	driSupport32Bit = lib.mkForce options.hardware.opengl.driSupport32Bit.default;
-      };
-      services.xserver.videoDrivers = lib.mkForce options.services.xserver.videoDrivers.default;
-      hardware.nvidia = {
-        modesetting.enable = lib.mkForce options.hardware.nvidia.modesetting.enable.default;
-	powerManagement.enable = lib.mkForce options.hardware.nvidia.powerManagement.enable.default;
-	powerManagement.finegrained = lib.mkForce options.hardware.nvidia.powerManagement.finegrained.default;
-	open = lib.mkForce options.hardware.nvidia.open.default;
-	nvidiaSettings = lib.mkForce options.hardware.nvidia.nvidiaSettings.default;
-	package = lib.mkForce options.hardware.nvidia.package.default;
-      };
-    };
-  };
+  #specialisation = {
+  #  non-nvidia.configuration = {
+  #    hardware.opengl = {
+  #      enable = lib.mkForce options.hardware.opengl.enable.default;
+  #	 driSupport = lib.mkForce options.hardware.opengl.driSupport.default;
+  #	 driSupport32Bit = lib.mkForce options.hardware.opengl.driSupport32Bit.default;
+  #    };
+  #    services.xserver.videoDrivers = lib.mkForce options.services.xserver.videoDrivers.default;
+  #    hardware.nvidia = {
+  #      modesetting.enable = lib.mkForce options.hardware.nvidia.modesetting.enable.default;
+  #	 powerManagement.enable = lib.mkForce options.hardware.nvidia.powerManagement.enable.default;
+  #	 powerManagement.finegrained = lib.mkForce options.hardware.nvidia.powerManagement.finegrained.default;
+  #	 open = lib.mkForce options.hardware.nvidia.open.default;
+  #	 nvidiaSettings = lib.mkForce options.hardware.nvidia.nvidiaSettings.default;
+  #	 package = lib.mkForce options.hardware.nvidia.package.default;
+  #    };
+  #  };
+  #};
+  boot.extraModprobeConfig = ''
+    options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
+  '';
   qt.enable = true;
   services.cron = {
     enable = true;
@@ -174,6 +181,9 @@ in
     "nvidia_drm.fbdev=1"
     "amd_iommu=on" 
     "iommu=pt"
+  ];
+  boot.kernelModules = [
+    "v4l2loopback"
   ];
   xdg.mime.defaultApplications = {
     "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
@@ -385,13 +395,15 @@ in
      virtiofsd
      virtio-win
      networkmanagerapplet
+     wttrbar
+     (pkgs.callPackage ./linux-wallpaperengine.nix{ })
    ];
    programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
    xdg.portal.config.common.default = "*";
    programs.firefox.nativeMessagingHosts.ff2mpv = true;
    programs.adb.enable = true;
-   services.flatpak.enable = false;
+   services.flatpak.enable = true;
    virtualisation.libvirtd.hooks.qemu = {
     "AAA" = lib.getExe (
       pkgs.writeShellApplication {

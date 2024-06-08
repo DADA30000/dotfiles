@@ -19,7 +19,7 @@ env = QT_QPA_PLATFORM,wayland;xcb
 env = LIBVA_DRIVER_NAME,nvidia
 env = GBM_BACKEND,nvidia-drm
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-env = WLR_NO_HARDWARE_CURSORS,1
+#env = WLR_NO_HARDWARE_CURSORS,1
 env = __NV_PRIME_RENDER_OFFLOAD,1
 env = __VK_LAYER_NV_optimus,NVIDIA_only
 env = PROTON_ENABLE_NGX_UPDATER,1
@@ -64,7 +64,7 @@ windowrule = opacity 0.99 override 0.99 override, ^(filezilla)$
 exec-once = ulimit -c 0
 exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}') | cut -d ' ' -f 1)/libexec/polkit-gnome-authentication-agent-1
 # exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
-exec-once = /usr/lib/xdg-desktop-portal-hyprland & ~/.config/waybar/bin/watch.sh & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
+exec-once = /usr/lib/xdg-desktop-portal-hyprland & waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 exec-once = sleep 10; gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
 exec-once = keepassxc
@@ -171,7 +171,6 @@ gestures {
     # See https://wiki.hyprland.org/Configuring/Variables/ for more
     workspace_swipe = false
 }
-
 misc {
     enable_swallow = true
     animate_manual_resizes = false
