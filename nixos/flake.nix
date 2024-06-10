@@ -16,7 +16,6 @@
         url = "github:hyprwm/hyprland-plugins";
         inputs.hyprland.follows = "hyprland"; # IMPORTANT
     };
-    hyprlock.url = "github:hyprwm/Hyprlock";
     pollymc.url = "github:fn2006/PollyMC";
     nps.url = "github:OleMussmann/Nix-Package-Search";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";

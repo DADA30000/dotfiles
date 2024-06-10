@@ -64,6 +64,104 @@
     font.name = "Noto Sans Medium";
     font.size = 11;
   };
+  programs.ncmpcpp = {
+    enable = true;
+    settings = {
+      mpd_host = "127.0.0.1";
+      mpd_port = "6600";
+      mouse_list_scroll_whole_page = "yes";
+      lines_scrolled = "1";
+      visualizer_in_stereo = "yes";
+      visualizer_fifo_path = "/tmp/mpd.fifo";
+      visualizer_output_name = "my_fifo";
+      visualizer_type = "wave_filled";
+      visualizer_look = "▄▍";
+      visualizer_color = "blue";
+      progressbar_look = "▄▄";
+      mouse_support = "yes";
+      allow_for_physical_item_deletion = "yes";
+      statusbar_color = "blue";
+      current_item_prefix = " ";
+      song_columns_list_format = "(6)[]{} (25)[green]{a} (34)[white]{t|f} (5f)[magenta]{l} (1)[]{}";
+      color1 = "white";
+      color2 = "blue";
+      header_window_color = "blue";
+      main_window_color = "blue";
+      song_list_format = " $7%t$9 $R$3%a                      ";
+      song_status_format = "$b$7♫ $2%a $4⟫$3⟫ $8%t $4⟫$3⟫ $5%b ";
+      song_window_title_format = " ♬ {%a}  {%t}";
+    };
+  };
+  programs.wlogout = {
+    enable = true;
+    layout = [
+      {
+          label = "lock";
+          action = "hyprlock";
+          text = "Lock";
+          keybind = "l";
+      }
+      {
+          label = "logout";
+          action = "hyprctl dispatch exit";
+          text = "Logout";
+          keybind = "e";
+      }
+      {
+          label = "shutdown";
+          action = "systemctl poweroff";
+          text = "Shutdown";
+          keybind = "s";
+      }
+      {
+          label = "reboot";
+          action = "systemctl reboot";
+          text = "Reboot";
+          keybind = "r";
+      }
+    ];
+    style = ''
+      * {
+      	background-image: none;
+      	font-family: "JetBrainsMono Nerd Font";
+      	font-size: 16px;
+      }
+      window {
+      	background-color: rgba(0, 0, 0, 0);
+      }
+      button {
+          color: #FFFFFF;
+              border-style: solid;
+      	border-radius: 15px;
+      	border-width: 3px;
+      	background-color: rgba(0, 0, 0, 0);
+      	background-repeat: no-repeat;
+      	background-position: center;
+      	background-size: 25%;
+      }
+      
+      button:focus, button:active, button:hover {
+      	background-color: rgba(0, 0, 0, 0);
+      	color: #4470D2;
+      }
+      
+      #lock {
+          background-image: image(url("${./lock.png}"));
+      }
+      
+      #logout {
+          background-image: image(url("${./logout.png}"));
+      }
+      
+      #shutdown {
+          background-image: image(url("${./shutdown.png}"));
+      }
+      
+      #reboot {
+          background-image: image(url("${./reboot.png}"));
+      }
+    '';
+  };
   services.mpd-discord-rpc.enable = true;
   home.sessionVariables = {
     EDITOR = "nvim";

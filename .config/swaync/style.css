@@ -2,7 +2,7 @@
  * vim: ft=less
  */
 
-@define-color cc-bg rgba(0, 0, 0, 0);
+@define-color cc-bg rgba(0, 0, 0, 0.01);
 
 @define-color noti-border-color transparent;
 @define-color noti-bg rgba(0, 0, 0, 0.01);
@@ -32,6 +32,7 @@
   margin: 6px 12px;
   border: none;
   padding: 0;
+  background: rgba(0,0,0,0.1);
 }
 
 .notification-content {
@@ -177,7 +178,7 @@
 
 /* Window behind control center and on all other monitors */
 .blank-window {
-  background: alpha(black, 0.25);
+  background: alpha(black, 0);
 }
 
 /*** Widgets ***/

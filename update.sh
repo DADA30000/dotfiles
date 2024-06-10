@@ -4,7 +4,7 @@ if [ -f ./check ]; then
   cp -r /etc/nixos/* ./nixos
   rm ./nixos/hardware-configuration.nix
   git add . --all
-  git commit -m "another update"
+  git commit -m "almost fully switched to nix"
   git push -u
   ( cd ~/.mozilla; ./update.sh )
   #rclone sync -v /fileserver/Music google:Music

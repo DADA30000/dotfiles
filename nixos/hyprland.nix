@@ -182,7 +182,7 @@
           scroll_event_delay = 50
       }
       $mainMod = SUPER
-      bind = $mainMod_CTRL, V, exec, cliphist list | tofi | cliphist decode | wl-copy
+      bind = $mainMod_CTRL, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy
       bind = , Print, exec, hyprshot -m region
       bind = SHIFT, Print, exec, hyprshot -m window
       bind = ALT, Print, exec, hyprshot -m output
@@ -256,6 +256,7 @@
       layerrule = blur, wofi
       layerrule = noanim, selection
       layerrule = blur, rofi
+      layerrule = animation [slidevert], swaync-control-center
       plugin {
           hyprexpo {
               columns = 3
