@@ -14,56 +14,57 @@ in
   };
   boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
   boot.initrd.systemd.enable = true;
-  services.nextcloud = {
-    enable = true;
-    configureRedis = true;
-    config.adminpassFile = "/password";
-    https = true;
-    hostName = "nc.akff-sanic.ru";
-    package = pkgs.nextcloud29;
-  };
+ # services.nextcloud = {
+ #   enable = true;
+ #   configureRedis = true;
+ #   config.adminpassFile = "/password";
+ #   https = true;
+ #   hostName = "nc.akff-sanic.ru";
+ #   package = pkgs.nextcloud29;
+ # };
   nixpkgs.config.permittedInsecurePackages = [
     "freeimage-unstable-2021-11-01"
   ];
+  programs.xwayland.enable = true;
   systemd.services.NetworkManager-wait-online.enable = false;
-  services.nginx = {
-  enable = true;
-    virtualHosts = {
-      ${config.services.nextcloud.hostName} = {
-        forceSSL = true;
-	enableACME = true;
-      };
-      "akff-sanic.ru" = {
-        forceSSL = true;
-	enableACME = true;
-	root = "/fileserver";
-	extraConfig = ''
-	  autoindex on;
-	  add_before_body /.theme/header.html;
-          add_after_body /.theme/footer.html; 
-	  autoindex_exact_size off;
-	'';
-      };
-      "ip.akff-sanic.ru" = {
-        forceSSL = true;
-	enableACME = true;
-	root = "/fileserver";
-	extraConfig = ''
-	  autoindex on;
-	  add_before_body /.theme/header.html;
-          add_after_body /.theme/footer.html; 
-	  autoindex_exact_size off;
-	'';
-      };
-    };
-  };
-  security.acme = {
-    acceptTerms = true;
-    defaults.email = "vadimhack.ru@gmail.com";
-    certs = { 
-      ${config.services.nextcloud.hostName}.email = "vadimhack.ru@gmail.com"; 
-    };
-  }; 
+ # services.nginx = {
+ # enable = true;
+ #   virtualHosts = {
+ #     ${config.services.nextcloud.hostName} = {
+ #       forceSSL = true;
+ #       enableACME = true;
+ #     };
+ #     "akff-sanic.ru" = {
+ #       forceSSL = true;
+ #       enableACME = true;
+ #       root = "/fileserver";
+ #       extraConfig = ''
+ #         autoindex on;
+ #         add_before_body /.theme/header.html;
+ #         add_after_body /.theme/footer.html; 
+ #         autoindex_exact_size off;
+ #       '';
+ #     };
+ #     "ip.akff-sanic.ru" = {
+ #       forceSSL = true;
+ #       enableACME = true;
+ #       root = "/fileserver";
+ #       extraConfig = ''
+ #         autoindex on;
+ #         add_before_body /.theme/header.html;
+ #         add_after_body /.theme/footer.html; 
+ #         autoindex_exact_size off;
+ #       '';
+ #     };
+ #   };
+ # };
+ # security.acme = {
+ #   acceptTerms = true;
+ #   defaults.email = "vadimhack.ru@gmail.com";
+ #   certs = { 
+ #     ${config.services.nextcloud.hostName}.email = "vadimhack.ru@gmail.com"; 
+ #   };
+ # }; 
   fileSystems = {
     "/".options = [ "compress-force=zstd" ];
     "/home".options = [ "compress-force=zstd" ];
@@ -109,13 +110,17 @@ in
   ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
   virtualisation.waydroid.enable = false;
+  virtualisation.vmware.host.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   nix.settings.keep-outputs = true;
   nix.settings.keep-derivations = true;
   systemd.coredump.enable = false;
+  security.pam.loginLimits = [
+    { domain = "*"; item = "core"; value = "0"; }
+  ];
   nix.settings.auto-optimise-store = true;
-  boot.kernelPackages = pkgs.linuxPackages_latest; 
+  # boot.kernelPackages = pkgs.linuxPackages_lates; 
   boot.tmp.useTmpfs = true;
   hardware.opengl = {
     enable = true;
@@ -164,8 +169,8 @@ in
   services.cron = {
     enable = true;
     systemCronJobs = [
-      "*/59 * * * *   ${vars.myUser}  /home/${vars.myUser}/.config/cloudflare/update-cloudflare-dns"
-      "*/59 * * * *   ${vars.myUser}  /home/${vars.myUser}/.config/cloudflare/update-cloudflare-dns cloudflare2.conf"
+      "*/59 * * * *   root  update-cloudflare-dns /cloudflare1.conf"
+      "*/59 * * * *   root  update-cloudflare-dns /cloudflare2.conf"
     ];
   };
   systemd.user.services.kdeconnect.path = [ "Environment=PATH=/run/current-system/sw" ];  
@@ -236,11 +241,11 @@ in
       inputs.spicetify-nix.nixosModule
       inputs.home-manager.nixosModules.home-manager
     ];
-  home-manager.users.${vars.myUser} = {
-    imports = [
-      ./home.nix
-    ];
-  };
+  #home-manager.users.${vars.myUser} = {
+  #  imports = [
+  #    ./home.nix
+  #  ];
+  #};
   programs.spicetify =
     let
       hazy = pkgs.fetchgit {
@@ -313,7 +318,7 @@ in
   services.printing.enable = true;
    users.users.${vars.myUser} = {
      isNormalUser = true;
-     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" ]; # Enable ‘sudo’ for the user.
+     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" ]; # Enable ‘sudo’ for the user.
      packages = with pkgs; [
        tree
      ];
@@ -337,7 +342,6 @@ in
      hyprshot
      cinnamon.nemo
      cinnamon.cinnamon-translations
-     bibata-cursors
      killall
      wl-clipboard
      pulseaudio
@@ -350,13 +354,14 @@ in
      networkmanager_dmenu
      libnotify
      swappy
+     bibata-cursors
      steam
      screen
      gamemode
      moonlight-qt
      desktop-file-utils
      inputs.pollymc.packages.${pkgs.system}.pollymc
-     inputs.hyprlock.packages.${pkgs.system}.hyprlock
+     inputs.nix-fast-build.packages.${pkgs.system}.default
      inputs.nps.packages.${pkgs.system}.nps
      wlogout
      xdg-user-dirs
@@ -388,7 +393,6 @@ in
      (pkgs.callPackage ./ani-cli-ru.nix { })
      gpu-screen-recorder-gtk
      gpu-screen-recorder
-     keepassxc
      rclone
      (pkgs.nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
      android-tools
@@ -397,7 +401,8 @@ in
      networkmanagerapplet
      wttrbar
      (pkgs.callPackage ./linux-wallpaperengine.nix{ })
-   ];
+     #linuxKernel.packages.linux.cpupower
+   ] ++ (import ./waybar-scripts.nix pkgs);
    programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
    xdg.portal.config.common.default = "*";

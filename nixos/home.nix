@@ -1,4 +1,4 @@
-{ config, pkgs, inputs, libs, ... }:
+{ config, pkgs, inputs, lib, ... }:
 {
   home.username = "l0lk3k";
   home.homeDirectory = "/home/${config.home.username}";
@@ -12,11 +12,11 @@
     ./cava.nix
     ./hyprland.nix
     ./waybar.nix
+    ./fastfetch.nix
   ];
   home.packages = with pkgs; [
     fzf
     remmina
-    hyprpaper
     python311
     dmenu-wayland
     winetricks
@@ -37,9 +37,22 @@
       options.upscaling_method = "nearest_neighbour";
     };
   };
+  programs.rofi = {
+    enable = true;
+    package = pkgs.rofi-wayland;
+    font = "JetBrainsMono NF 14";
+    theme = ./theme.rasi;
+  };
   programs.obs-studio = {
     enable = true;
-    plugins = [ pkgs.obs-studio-plugins.obs-ndi ];
+    #plugins = [ pkgs.obs-studio-plugins.obs-ndi ];
+  };
+  home.pointerCursor = {
+    gtk.enable = true;
+    x11.enable = true;
+    package = pkgs.bibata-cursors;
+    name = "Bibata-Modern-Classic";
+    size = 24;
   };
   gtk = {
     enable = true;

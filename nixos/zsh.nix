@@ -34,12 +34,13 @@
   '';
   shellAliases = {
     ll = "ls -l";
-    update-full = "( cd /etc/nixos ; sudo nix flake update ; sudo nixos-rebuild switch ; update-desktop-database -v ~/.local/share/applications)";
-    update = "sudo nixos-rebuild switch;update-desktop-database -v ~/.local/share/applications";
-    update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
-    update-nvidia535 = "sudo nixos-rebuild switch --specialisation nvidia535;update-desktop-database -v ~/.local/share/applications";
-    update-config = "sudo -E neovide /etc/nixos/configuration.nix";
-    update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
+    update-full = "( cd /etc/nixos ; sudo nix flake update ; sudo nixos-rebuild -v switch ; update-desktop-database -v ~/.local/share/applications)";
+    update = "sudo nixos-rebuild -v switch;update-desktop-database -v ~/.local/share/applications";
+    #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
+    #update-nvidia535 = "sudo nixos-rebuild switch --specialisation nvidia535;update-desktop-database -v ~/.local/share/applications";
+    #update-config = "sudo -E neovide /etc/nixos/configuration.nix";
+    update-test = "sudo nixos-rebuild -v test;update-desktop-database -v ~/.local/share/applications";
+    #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
     fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
     cps="rsync -ahr --progress";
     res="screen -r";

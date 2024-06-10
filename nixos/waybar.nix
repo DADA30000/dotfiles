@@ -416,7 +416,7 @@
         };
         "custom/logout" = {
           format =  "<span color='#63c773'>󰍃</span>";
-          on-click = "pkill -u $USER";
+          on-click = "hyprctl dispatch exit";
           tooltip = false;
         };
         "custom/lock" = {
@@ -664,14 +664,14 @@
         };
         "custom/gpu" = {
           interval = 1;
-          exec = "~/.config/waybar/bin/gpu";
+          exec = "gpu";
           on-click = "kitty nvtop";
           return-type = "json";
           format = "{}";
           tooltip = true;
         };
         "custom/nixos" = {
-          exec = "~/.config/waybar/bin/nixos";
+          exec = "nixos";
           return-type = "json";
           on-click = "rofi -show drun -show-icons";
           format = "{}";
