@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Clone Drone in the Danger Zone
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/597170
-Icon=steam_icon_597170
-Terminal=false
-Type=Application
-Categories=Game;

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Deep Rock Galactic
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/548430
-Icon=steam_icon_548430
-Terminal=false
-Type=Application
-Categories=Game;

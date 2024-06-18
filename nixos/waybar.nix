@@ -385,7 +385,7 @@
           drawer = {
             "children-class" = "power-menu";
             "transition-duration" = 500;
-            "transition-left-to-right" = false;
+            "transition-left-to-right" = true;
           };
           orientation = "horizontal";
           modules = [

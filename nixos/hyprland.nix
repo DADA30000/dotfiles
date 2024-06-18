@@ -20,7 +20,6 @@
       env = LIBVA_DRIVER_NAME,nvidia
       env = GBM_BACKEND,nvidia-drm
       env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-      #env = WLR_NO_HARDWARE_CURSORS,1
       env = __NV_PRIME_RENDER_OFFLOAD,1
       env = __VK_LAYER_NV_optimus,NVIDIA_only
       env = PROTON_ENABLE_NGX_UPDATER,1
@@ -41,39 +40,27 @@
       submap=reset
       monitor=Unknown-1,disabled
       monitor=HDMI-A-1,1920x1080@60,0x0,1
-      windowrule=animation [popin] ([default]), ^(wlogout)$
+
+      windowrule = animation [popin] ([default]), ^(wlogout)$
+      windowrule = pin, ^(polkit-gnome-authentication-agent-1)$
       windowrulev2 = immediate, class:^(org.freedesktop.Xwayland)$
-      windowrule=windowdance,title:^(Rhythm Doctor)$
-      windowrule=noanim, class:^(ueberzugpp)$
-      windowrule=noanim, title:^(ueberzugpp)$
-      windowrule=forceinput,title:^(Rhythm Doctor)$
-      windowrule=float,^(org.kde.polkit-kde-authentication-agent-1)$
-      #windowrulev2 = opacity 0.0 override 0.0 override,class:^(xwaylandvideobridge)$
-      #windowrulev2 = noanim,class:^(xwaylandvideobridge)$
-      #windowrulev2 = nofocus,class:^(xwaylandvideobridge)$
-      #windowrulev2 = noinitialfocus,class:^(xwaylandvideobridge)$
-      #windowrulev2 = noborder,fullscreen:1
-      windowrule=opacity 0.99 0.99,^(Thunderbird)$
-      # windowrule=xray on,^(VencordDesktop)$
-      #windowrulev2 = forcergbx, class:firefox
-      #windowrule=xray on,^(firefox)$
-      #windowrule = opacity 0.85 override 0.85 override, title:^(.*)$
+      windowrule = windowdance,title:^(Rhythm Doctor)$
+      windowrule = noanim, class:^(ueberzugpp)$
+      windowrule = noanim, title:^(ueberzugpp)$
+      windowrule = forceinput,title:^(Rhythm Doctor)$
+      windowrule = float,^(org.kde.polkit-kde-authentication-agent-1)$
+      windowrule = opacity 0.99 0.99,^(Thunderbird)$
       windowrule = opacity 0.99 override 0.99 override, ^(firefox)$
       windowrule = opacity 0.99 override 0.99 override, ^(floorp)$
       windowrule = opacity 0.99 override 0.99 override, ^(mercury-default)$
       windowrule = opacity 0.99 override 0.99 override, ^(filezilla)$
       exec-once = ulimit -c 0
       exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}') | cut -d ' ' -f 1)/libexec/polkit-gnome-authentication-agent-1
-      # exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
-      exec-once = /usr/lib/xdg-desktop-portal-hyprland & waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll --enable-features=UseOzonePlatform --ozone-platform=wayland
+      exec-once = /usr/lib/xdg-desktop-portal-hyprland & waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll
       exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
       exec-once = sleep 10; gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
-      # exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
-      exec-once = wl-paste --type text --watch cliphist store #Stores only text data
-      exec-once = wl-paste --type image --watch cliphist store #Stores only image data
-      # exec = killall mpvpaper; mpvpaper -p -o "no-audio loop" HDMI-A-1 wallpapers/wall2.mp4
-      #exec-once = killall swww-daemon -9; swww init; ~/.config/hypr/process-wallpaper/wallpaper.sh
-      #exec-once = /usr/bin/swaylock --screenshots --config ~/.config/swaylock/config
+      exec-once = wl-paste --type text --watch cliphist store
+      exec-once = wl-paste --type image --watch cliphist store
       env = XCURSOR_SIZE,24
       env = LIBVA_DRIVER_NAME,nvidia
       env = XDG_SESSION_TYPE,wayland
@@ -93,8 +80,7 @@
               natural_scroll = false
           }
       
-          sensitivity = 1 # -1.0 - 1.0, 0 means no modification.
-          # force_no_accel = true
+          sensitivity = 1
           accel_profile = flat
       }
       
@@ -135,20 +121,21 @@
       animations {
           enabled = true
           first_launch_animation = true
-      
+	  bezier = aaaa, 0.2, 0.7, 0.7, 1  
+      	  bezier = fade, 0.165, 0.84, 0.44, 1 
           bezier = slidein, 0.39, 0.575, 0.565, 1
           bezier = myBezier, 0.05, 0.9, 0.1, 1.05
           bezier = linear, 0.0, 0.0, 0.0, 0.0
           bezier = woosh, 0.445, 0.05, 0, 1
-      #    animation = borderangle, 1, 40, linear, loop
-          animation = windowsMove, 1, 5, default # 7
+          animation = windowsMove, 1, 5, default
           animation = layers, 1, 2, woosh, slide
-          animation = windowsIn, 1, 2, woosh, slide # 3
-          animation = windows, 1, 7, default, slide # 7
-          animation = windowsOut, 1, 5, woosh, slide # 7
-          animation = fadeSwitch, 1, 7, default # 7
-          animation = fadeOut, 1, 5, linear # 5
-          animation = workspaces, 1, 4, woosh, slide # 8
+          animation = windowsIn, 1, 2, fade, popin 90%
+          animation = windows, 1, 7, default, slide
+          animation = windowsOut, 1, 3, fade, popin 90%
+          animation = fadeSwitch, 1, 7, default
+          animation = fadeOut, 1, 3, fade
+	  ##animation = fadeIn
+          animation = workspaces, 1, 4, woosh, slide
       }
       
       debug {
@@ -156,18 +143,10 @@
           disable_logs = true
       }
       dwindle {
-          # See https://wiki.hyprland.org/Configuring/Dwindle-Layout/ for more
-          pseudotile = true # master switch for pseudotiling. Enabling is bound to mainMod + P in the keybinds section below
-          preserve_split = true # you probably want this
+          pseudotile = true
+          preserve_split = true
       }
-      
-      master {
-          # See https://wiki.hyprland.org/Configuring/Master-Layout/ for more
-          new_is_master = true
-      }
-      
       gestures {
-          # See https://wiki.hyprland.org/Configuring/Variables/ for more
           workspace_swipe = false
       }
       misc {
@@ -176,7 +155,7 @@
           animate_mouse_windowdragging = false
           swallow_regex = ^(kitty|lutris|alacritty)$
           swallow_exception_regex = ^(ncspot)$
-          force_default_wallpaper = 2 # Set to 0 to disable the anime mascot wallpapers
+          force_default_wallpaper = 2
       }
       binds {
           scroll_event_delay = 50
@@ -199,18 +178,14 @@
       bind = $mainMod, M, exec, wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,
       bind = $mainMod, E, exec, nemo
       bind = $mainMod, V, togglefloating,
-      bindr = $mainMod, $mainMod_L, exec, pkill rofi || $(rofi -show drun -show-icons)  #ulauncher-toggle #pkill ulauncher || $(exec $(ulauncher))
-      bindr = $mainMod_CTRL, $mainMod_L, exec, pkill rofi || $(rofi -show run) #pkill tofi || $(tofi-run) #
-      bind = $mainMod, P, pseudo, # dwindle
-      bind = $mainMod, J, togglesplit, # dwindle
+      bindr = $mainMod, $mainMod_L, exec, pkill rofi || $(rofi -show drun -show-icons)
+      bindr = $mainMod_CTRL, $mainMod_L, exec, pkill rofi || $(rofi -show run)
+      bind = $mainMod, P, pseudo,
+      bind = $mainMod, J, togglesplit,
       bind = $mainMod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send "GPU-Screen-Recorder" "Повтор успешно сохранён"
       bind = $mainMod, F, exec, hyprctl dispatch fullscreen
       bind = $mainMod_CTRL, F, fakefullscreen
       bind = $mainMod, Space, hyprexpo:expo, toggle
-      bind = $mainMod_ALT, mouse_down, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 + 1}')"    
-      bind = $mainMod_ALT, mouse_up, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 - 1}')"
-      bind = $mainMod_CTRL, mouse_down, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 + 100}')" 
-      bind = $mainMod_CTRL, mouse_up, exec, hyprctl keyword misc:cursor_zoom_factor "$(hyprctl getoption misc:cursor_zoom_factor | grep float | awk '{print $2 - 100}')"
       bind = $mainMod, left, movefocus, l
       bind = $mainMod, right, movefocus, r
       bind = $mainMod, up, movefocus, u
@@ -243,7 +218,7 @@
       layerrule = blur,waybar
       layerrule = blur,swaync-notification-window
       bindm = $mainMod, mouse:273, resizewindow
-      exec-once=hyprctl setcursor Bibara-Modern-Classic 24
+      exec-once=hyprctl setcursor Bibata-Modern-Classic 24
       layerrule = ignorezero, waybar
       layerrule = ignorezero, swaync-notification-window
       layerrule = blur, swaync-control-center
@@ -256,17 +231,19 @@
       layerrule = blur, wofi
       layerrule = noanim, selection
       layerrule = blur, rofi
-      layerrule = animation [slidevert], swaync-control-center
+      layerrule = animation popin 90%, rofi
+      layerrule = animation slide left, swaync-control-center
+      layerrule = animation popin 90%, logout-dialog
       plugin {
           hyprexpo {
               columns = 3
               gap_size = 5
               bg_col = rgb(111111)
-              workspace_method = first 1 # [center/first] [workspace] e.g. first 1 or center m+1
+              workspace_method = first 1
       
-              enable_gesture = true # laptop touchpad, 4 fingers
-              gesture_distance = 300 # how far is the "max"
-              gesture_positive = true # positive = swipe down. Negative = swipe up.
+              enable_gesture = true
+              gesture_distance = 300
+              gesture_positive = true
           }
       }
     '';

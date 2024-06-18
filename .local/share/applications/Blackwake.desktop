@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Blackwake
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/420290
-Icon=steam_icon_420290
-Terminal=false
-Type=Application
-Categories=Game;

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Ravenfield
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/636480
-Icon=steam_icon_636480
-Terminal=false
-Type=Application
-Categories=Game;

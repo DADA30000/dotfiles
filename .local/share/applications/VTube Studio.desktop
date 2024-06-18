@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=VTube Studio
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/1325860
-Icon=steam_icon_1325860
-Terminal=false
-Type=Application
-Categories=Game;

@@ -49,7 +49,7 @@ entry {
 message {
     margin:             12px 0 0;
     border-radius:      16px;
-    border-color:       @bg2;
+    border-color:       transparent;
     background-color:   @bg2;
 }
 

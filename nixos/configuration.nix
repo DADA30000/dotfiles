@@ -5,12 +5,26 @@
 let
   vars = { myUser = "l0lk3k"; };
   spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
+  package = config.boot.kernelPackages.nvidiaPackages.beta;
 in
 {
+  services.sunshine = {
+    autoStart = false;
+    enable = true;
+    capSysAdmin = true;
+  };
+  programs.dconf.enable = true;
+  services.gvfs.enable = true;
   nix.settings = {
     substituters = ["https://hyprland.cachix.org" "https://nix-gaming.cachix.org" "https://nixpkgs-unfree.cachix.org" ];
     trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4=" "nixpkgs-unfree.cachix.org-1:hqvoInulhbV4nJ9yJOEr+4wxhDV4xq2d1DK7S6Nj6rs=" ];
     experimental-features = [ "nix-command" "flakes" ];
+  };
+  security.wrappers.gsr-kms-server = {
+    owner = "root";
+    group = "root";
+    capabilities = "cap_sys_admin+ep";
+    source = "${pkgs.gpu-screen-recorder}/bin/gsr-kms-server";
   };
   documentation.nixos.enable = false;
   boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
@@ -23,9 +37,6 @@ in
  #   hostName = "nc.akff-sanic.ru";
  #   package = pkgs.nextcloud29;
  # };
-  nixpkgs.config.permittedInsecurePackages = [
-    "freeimage-unstable-2021-11-01"
-  ];
   programs.xwayland.enable = true;
   systemd.services.NetworkManager-wait-online.enable = false;
  # services.nginx = {
@@ -81,37 +92,7 @@ in
     fsType = "btrfs";
     options = [ "compress-force=zstd" "subvol=nextcloud" "nofail" ];
   };
-  programs.nix-ld.enable = true;
-  programs.nix-ld.libraries = with pkgs; [
-    stdenv.cc.cc.lib
-    glib
-    nss
-    nspr
-    atk
-    cups
-    dbus
-    libdrm
-    gtk3
-    gnome2.pango
-    cairo
-    xorg.libX11
-    xorg.libXcomposite
-    xorg.libXdamage
-    xorg.libXext
-    xorg.libXfixes
-    xorg.libXrandr
-    mesa
-    expat
-    xorg.libxcb
-    libxkbcommon 
-    SDL2
-    gdk-pixbuf
-    alsaLib
-    fuse
-  ];
   boot.kernel.sysctl."kernel.sysrq" = 1;
-  virtualisation.waydroid.enable = false;
-  virtualisation.vmware.host.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   nix.settings.keep-outputs = true;
@@ -120,8 +101,9 @@ in
   security.pam.loginLimits = [
     { domain = "*"; item = "core"; value = "0"; }
   ];
+  nixpkgs.overlays = [inputs.nvidia-patch.overlays.default];
   nix.settings.auto-optimise-store = true;
-  # boot.kernelPackages = pkgs.linuxPackages_lates; 
+  boot.kernelPackages = pkgs.linuxPackages_6_8; 
   boot.tmp.useTmpfs = true;
   hardware.opengl = {
     enable = true;
@@ -133,36 +115,10 @@ in
     modesetting.enable = true;
     powerManagement.enable = true;
     powerManagement.finegrained = false;
-    #open = false;
+    open = false;
     nvidiaSettings = false;
-    #package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-    #  version = "555.42.02";
-    #  sha256_64bit = "sha256-k7cI3ZDlKp4mT46jMkLaIrc2YUx1lh1wj/J4SVSHWyk=";
-    #  sha256_aarch64 = lib.fakeSha256;
-    #  openSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
-    #  settingsSha256 = "sha256-rtDxQjClJ+gyrCLvdZlT56YyHQ4sbaL+d5tL4L4VfkA=";
-    #  persistencedSha256 = lib.fakeSha256;
-    #};
-    package = config.boot.kernelPackages.nvidiaPackages.beta;
+    package = pkgs.nvidia-patch.patch-nvenc (pkgs.nvidia-patch.patch-fbc package);
   };
-  #specialisation = {
-  #  non-nvidia.configuration = {
-  #    hardware.opengl = {
-  #      enable = lib.mkForce options.hardware.opengl.enable.default;
-  #	 driSupport = lib.mkForce options.hardware.opengl.driSupport.default;
-  #	 driSupport32Bit = lib.mkForce options.hardware.opengl.driSupport32Bit.default;
-  #    };
-  #    services.xserver.videoDrivers = lib.mkForce options.services.xserver.videoDrivers.default;
-  #    hardware.nvidia = {
-  #      modesetting.enable = lib.mkForce options.hardware.nvidia.modesetting.enable.default;
-  #	 powerManagement.enable = lib.mkForce options.hardware.nvidia.powerManagement.enable.default;
-  #	 powerManagement.finegrained = lib.mkForce options.hardware.nvidia.powerManagement.finegrained.default;
-  #	 open = lib.mkForce options.hardware.nvidia.open.default;
-  #	 nvidiaSettings = lib.mkForce options.hardware.nvidia.nvidiaSettings.default;
-  #	 package = lib.mkForce options.hardware.nvidia.package.default;
-  #    };
-  #  };
-  #};
   boot.extraModprobeConfig = ''
     options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
   '';
@@ -174,7 +130,6 @@ in
       "*/59 * * * *   root  update-cloudflare-dns /cloudflare2.conf"
     ];
   };
-  systemd.user.services.kdeconnect.path = [ "Environment=PATH=/run/current-system/sw" ];  
   systemd.services.zerotier = {
   description = "Starts a zerotier-one service";
   path = [pkgs.bash pkgs.zerotierone];
@@ -242,11 +197,6 @@ in
       inputs.spicetify-nix.nixosModule
       inputs.home-manager.nixosModules.home-manager
     ];
-  #home-manager.users.${vars.myUser} = {
-  #  imports = [
-  #    ./home.nix
-  #  ];
-  #};
   programs.spicetify =
     let
       hazy = pkgs.fetchgit {
@@ -281,10 +231,6 @@ in
         sidebarConfig = true;
       };
   };
-  #programs.hyprland = {
-  #  enable = true;
-  #  package = inputs.hyprland.packages.${pkgs.system}.hyprland;
-  #};
   fonts = {
     enableDefaultPackages = true;
     packages = with pkgs; [
@@ -310,16 +256,20 @@ in
    time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   console = {
+     earlySetup = true;
+     #packages = with pkgs; [ terminus_font ];
      font = null;
      useXkbConfig = true; # use xkb.options in tty.
    };
   services.xserver.xkb.layout = "us,ru";
   services.xserver.xkb.options = "grp:alt_shift_toggle";
+  services.xserver.enable = true;
+  services.xserver.displayManager.startx.enable = true;
   services.getty.autologinUser = "${vars.myUser}";
   services.printing.enable = true;
    users.users.${vars.myUser} = {
      isNormalUser = true;
-     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" ]; # Enable ‘sudo’ for the user.
+     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ]; # Enable ‘sudo’ for the user.
      packages = with pkgs; [
        tree
      ];
@@ -335,7 +285,6 @@ in
      libsForQt5.qtstyleplugin-kvantum
      qt6Packages.qtstyleplugin-kvantum 
      waybar
-     tofi
      stow
      inotify-tools
      swaynotificationcenter
@@ -373,14 +322,11 @@ in
      neovide
      fragments
      unrar
-     chafa     
      pavucontrol
      brightnessctl
      ytfzf
      mlocate
-     qemu
      imv
-     wofi
      (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
      qemu-system-x86_64 \
        -bios ${pkgs.OVMF.fd}/FV/OVMF.fd \
@@ -401,8 +347,6 @@ in
      virtio-win
      networkmanagerapplet
      wttrbar
-     (pkgs.callPackage ./linux-wallpaperengine.nix{ })
-     #linuxKernel.packages.linux.cpupower
    ] ++ (import ./waybar-scripts.nix pkgs);
    programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
@@ -410,54 +354,6 @@ in
    programs.firefox.nativeMessagingHosts.ff2mpv = true;
    programs.adb.enable = true;
    services.flatpak.enable = true;
-   virtualisation.libvirtd.hooks.qemu = {
-    "AAA" = lib.getExe (
-      pkgs.writeShellApplication {
-        name = "qemu-hook";
-
-        runtimeInputs = [
-          pkgs.libvirt
-          pkgs.systemd
-          pkgs.kmod
-        ];
-
-        text = ''
-          GUEST_NAME="$1"
-          OPERATION="$2"
-
-          if [ "$GUEST_NAME" != "win10" ]; then
-            exit 0
-          fi
-
-          if [ "$OPERATION" == "prepare" ]; then
-	      /run/current-system/sw/bin/pkill -u l0lk3k
-	      /run/current-system/sw/bin/pkill .Hyprland-wrapped
-	      echo 0 > /sys/class/vtconsole/vtcon0/bind
-	      echo 0 > /sys/class/vtconsole/vtcon1/bind
-	      echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind
-	      modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia
-	      virsh nodedev-detach pci_0000_01_00_0
-	      virsh nodedev-detach pci_0000_01_00_1
-	      modprobe vfio-pci
-          fi
-
-          if [ "$OPERATION" == "release" ]; then
-	    virsh nodedev-reattach pci_0000_01_00_0
-	    virsh nodedev-reattach pci_0000_01_00_1
-	    modprobe -r vfio-pci
-	    echo "efi-framebuffer.0" > /sys/bus/platform/drivers/efi-framebuffer/bind
-	    echo 1 > /sys/class/vtconsole/vtcon0/bind
-	    echo 1 > /sys/class/vtconsole/vtcon1/bind
-	    modprobe nvidia_drm
-	    modprobe nvidia_modeset
-	    modprobe nvidia_uvm
-	    modprobe nvidia
-          fi
-
-        '';
-      }
-    );
-  };
   services.openssh.enable = true;
   networking.firewall.enable = false;
   system.stateVersion = "23.11";

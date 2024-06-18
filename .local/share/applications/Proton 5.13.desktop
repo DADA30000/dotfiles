@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Proton 5.13
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/1420170
-Icon=steam
-Terminal=false
-Type=Application
-Categories=Game;

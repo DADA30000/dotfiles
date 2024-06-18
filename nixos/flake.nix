@@ -5,6 +5,10 @@
       url = "https://github.com/hyprwm/Hyprland";
       submodules = true;
     };
+    nvidia-patch = {
+      url = "github:icewind1991/nvidia-patch-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     spicetify-nix.url = "github:the-argus/spicetify-nix";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-fast-build.url = "github:Mic92/nix-fast-build";

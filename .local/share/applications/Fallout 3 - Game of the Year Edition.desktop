@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Fallout 3 - Game of the Year Edition
-Comment=Play this game on Steam
-Exec=steam steam://rungameid/22370
-Icon=steam_icon_22370
-Terminal=false
-Type=Application
-Categories=Game;
