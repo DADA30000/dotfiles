@@ -13,6 +13,7 @@
     ./hyprland.nix
     ./waybar.nix
     ./fastfetch.nix
+    ./swaync.nix
   ];
   home.packages = with pkgs; [
     fzf
@@ -63,6 +64,27 @@
     theme.name = "Materia-dark";
     font.name = "Noto Sans Medium";
     font.size = 11;
+  };
+  xdg.userDirs = {
+    createDirectories = true;
+    enable = true;
+  };
+  services.mpd = {
+    enable = true;
+    dataDir = "${config.xdg.dataHome}/.mpd";
+  };
+  programs.neovim = {
+    viAlias = true;
+    defaultEditor = true;
+    vimAlias = true;
+    vimdiffAlias = true;
+    extraConfig = ''
+      map! <S-Insert> <C-R>+
+      if exists("g:neovide")
+        let g:neovide_padding_top = 15
+      endif
+      let g:neovide_transparency = 0.2
+    '';
   };
   programs.ncmpcpp = {
     enable = true;

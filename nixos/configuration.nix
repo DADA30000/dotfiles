@@ -1,6 +1,3 @@
-# Edit this configuration file to define what should be installed on
-# your system. Help is available in the configuration.nix(5) man page, on
-# https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
 { config, lib, inputs, pkgs, options, ... }:
 let
   vars = { myUser = "l0lk3k"; };
@@ -136,7 +133,7 @@ in
   script = ''
     exec zerotier-one
   '';
-  wantedBy = [ "multi-user.target" ]; # starts after login
+  wantedBy = [ "multi-user.target" ];
   };
   boot.kernelParams = [ 
     "nvidia_drm.fbdev=1"
@@ -216,15 +213,12 @@ in
         name = "Hazy";
         src = hazy;
         requiredExtensions = [
-          # define extensions that will be installed with this theme
           {
 	    filename = "adblock.js";
 	    src = "${adblock}/adblock";
 	  }
         ];
-        appendName = false; # theme is located at "${src}/Dribbblish" not just "${src}"
-
-        # changes to make to config-xpui.ini for this theme:
+        appendName = false;
         injectCss = true;
         replaceColors = true;
         overwriteAssets = true;
@@ -251,15 +245,14 @@ in
     theme = "/boot/grub/themes/hyperfluent";
   };
   boot.loader.efi.canTouchEfiVariables = true;
-   networking.hostName = "nixos"; # Define your hostname.
-   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
+  networking.hostName = "nixos";
+   networking.networkmanager.enable = true;
    time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   console = {
      earlySetup = true;
-     #packages = with pkgs; [ terminus_font ];
      font = null;
-     useXkbConfig = true; # use xkb.options in tty.
+     useXkbConfig = true;
    };
   services.xserver.xkb.layout = "us,ru";
   services.xserver.xkb.options = "grp:alt_shift_toggle";
@@ -269,86 +262,90 @@ in
   services.printing.enable = true;
    users.users.${vars.myUser} = {
      isNormalUser = true;
-     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ]; # Enable ‘sudo’ for the user.
+     extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ];
      packages = with pkgs; [
        tree
      ];
    };
-   environment.variables = {
-       "QT_STYLE_OVERRIDE"="kvantum";
+   environment = {
+     variables = {
+       "QT_STYLE_OVERRIDE" = "kvantum";
+       "GTK_THEME" = "Materia-dark";
+       "XCURSOR_THEME" = "Bibata-Modern-Classic";
+       "MOZ_ENABLE_WAYLAND" = "1";
+       "EDITOR" = "nvim";
+       "VISUAL" = "nvim";
+       "TERMINAL" = "kitty";
+       "XCURSOR_SIZE" = "24";
      };
-   environment.systemPackages = with pkgs; [
-     wget
-     neovim
-     git
-     osu-lazer-bin
-     libsForQt5.qtstyleplugin-kvantum
-     qt6Packages.qtstyleplugin-kvantum 
-     waybar
-     stow
-     inotify-tools
-     swaynotificationcenter
-     fastfetch
-     hyprshot
-     cinnamon.nemo
-     cinnamon.cinnamon-translations
-     killall
-     wl-clipboard
-     pulseaudio
-     nwg-look
-     gnome.file-roller
-     nordzy-icon-theme
-     appimage-run
-     lutris
-     cliphist
-     networkmanager_dmenu
-     libnotify
-     swappy
-     bibata-cursors
-     steam
-     screen
-     gamemode
-     moonlight-qt
-     desktop-file-utils
-     inputs.pollymc.packages.${pkgs.system}.pollymc
-     inputs.nix-fast-build.packages.${pkgs.system}.default
-     inputs.nps.packages.${pkgs.system}.nps
-     wlogout
-     xdg-user-dirs
-     mpv
-     ncmpcpp
-     polkit_gnome
-     mpd
-     neovide
-     fragments
-     unrar
-     pavucontrol
-     brightnessctl
-     ytfzf
-     mlocate
-     imv
-     (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
-     qemu-system-x86_64 \
-       -bios ${pkgs.OVMF.fd}/FV/OVMF.fd \
-       "$@"
-     '')
-     (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
-     cinnamon.nemo-fileroller
-     zip
-     jdk21
-     myxer
-     (pkgs.callPackage ./ani-cli-ru.nix { })
-     gpu-screen-recorder-gtk
-     gpu-screen-recorder
-     rclone
-     (pkgs.nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
-     android-tools
-     virtiofsd
-     virtio-win
-     networkmanagerapplet
-     wttrbar
-     beep
-   ] ++ (import ./waybar-scripts.nix pkgs);
+     systemPackages = with pkgs; [
+       wget
+       neovim
+       git
+       osu-lazer-bin
+       libsForQt5.qtstyleplugin-kvantum
+       qt6Packages.qtstyleplugin-kvantum 
+       waybar
+       stow
+       inotify-tools
+       swaynotificationcenter
+       fastfetch
+       hyprshot
+       cinnamon.nemo
+       cinnamon.cinnamon-translations
+       killall
+       wl-clipboard
+       pulseaudio
+       nwg-look
+       gnome.file-roller
+       nordzy-icon-theme
+       appimage-run
+       lutris
+       cliphist
+       networkmanager_dmenu
+       libnotify
+       swappy
+       bibata-cursors
+       steam
+       screen
+       gamemode
+       moonlight-qt
+       desktop-file-utils
+       inputs.pollymc.packages.${pkgs.system}.pollymc
+       inputs.nix-fast-build.packages.${pkgs.system}.default
+       inputs.nps.packages.${pkgs.system}.nps
+       (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
+       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
+       wlogout
+       xdg-user-dirs
+       mpv
+       ncmpcpp
+       polkit_gnome
+       mpd
+       neovide
+       fragments
+       unrar
+       pavucontrol
+       brightnessctl
+       ytfzf
+       mlocate
+       imv
+       cinnamon.nemo-fileroller
+       zip
+       jdk21
+       myxer
+       (pkgs.callPackage ./ani-cli-ru.nix { })
+       gpu-screen-recorder-gtk
+       gpu-screen-recorder
+       rclone
+       android-tools
+       virtiofsd
+       virtio-win
+       networkmanagerapplet
+       wttrbar
+       beep
+     ] ++ (import ./waybar-scripts.nix pkgs);
+   };
    programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
    xdg.portal.config.common.default = "*";

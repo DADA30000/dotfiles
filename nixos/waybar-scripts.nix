@@ -10,6 +10,14 @@ pkgs: [ (pkgs.writeShellScriptBin "dinfo" ''
   { "text":"", "tooltip":"$tooltip", "class":""}
   EOF
   '')
+  (pkgs.writeShellScriptBin "qemu-system-x86_64-uefi" ''
+  qemu-system-x86_64 \
+    -bios ''${pkgs.OVMF.fd}/FV/OVMF.fd \
+    "$@"
+  '')
+  (pkgs.writeShellScriptBin "dmenu" ''
+  rofi -dmenu "$@"
+  '')
   (pkgs.writeShellScriptBin "gpu" ''
   usage=$(nvidia-smi | grep % | cut -b 73,74,75,76,77 | sed 's/ //g')
   temp=$(nvidia-smi | grep % | cut -b 9,10)
