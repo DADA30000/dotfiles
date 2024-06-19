@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
+  mkdir nixos
   rm -rf ./nixos/*
-  cp -r /etc/nixos/.[^.]* ./nixos
+  cp -r /etc/nixos/. ./nixos
   rm ./nixos/hardware-configuration.nix
   git add . --all
   git commit -m "Ok maybe I should hate myself instead of that swaync module XD"
