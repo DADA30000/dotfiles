@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-if [ -f ./check ]; then
+if [ -f ./check ] &; then
   #git clone https://github.com/DADA30000/mozilla.git ~/.mozilla
   sudo rm -r /etc/nixos/*
   sudo cp -r ./nixos/* /etc/nixos
@@ -10,4 +10,6 @@ if [ -f ./check ]; then
   git config --global credential.helper store
   sudo nixos-rebuild switch
   sudo chown -R nginx:nginx /fileserver
+else
+  echo "change your working directory to dotfiles"
 fi

@@ -65,6 +65,7 @@
     font.name = "Noto Sans Medium";
     font.size = 11;
   };
+  home.file.".themes".source = ./.themes;
   xdg.userDirs = {
     createDirectories = true;
     enable = true;
@@ -74,6 +75,7 @@
     dataDir = "${config.xdg.dataHome}/.mpd";
   };
   programs.neovim = {
+    enable = true;
     viAlias = true;
     defaultEditor = true;
     vimAlias = true;

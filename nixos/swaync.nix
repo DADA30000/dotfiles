@@ -1,7 +1,8 @@
 { pkgs, config, ... }:
 {
   services.swaync = {
-   settings = {
+    enable = true;
+    settings = {
       positionX = "left";
       positionY = "top";
       layer = "overlay";

@@ -91,6 +91,7 @@
         "animation slide left, swaync-control-center"
       ];  
       exec-once = [
+        "~/bot/start-bot.sh"
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
         "waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll"
         "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP"

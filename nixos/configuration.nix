@@ -280,15 +280,14 @@ in
      };
      systemPackages = with pkgs; [
        wget
-       neovim
        git
+       neovim
        osu-lazer-bin
        libsForQt5.qtstyleplugin-kvantum
        qt6Packages.qtstyleplugin-kvantum 
        waybar
        stow
        inotify-tools
-       swaynotificationcenter
        fastfetch
        hyprshot
        cinnamon.nemo
