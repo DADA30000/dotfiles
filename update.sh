@@ -5,7 +5,7 @@ if [ -f ./check ]; then
   cp -r /etc/nixos/. ./nixos
   rm ./nixos/hardware-configuration.nix
   git add . --all
-  git commit -m "Ok maybe I should hate myself instead of that swaync module XD"
+  git commit -m "Full Nix, no more stow, let's gooooo!"
   git push -u
   ( cd ~/.mozilla; ./update.sh )
   #rclone sync -v /fileserver/Music google:Music
