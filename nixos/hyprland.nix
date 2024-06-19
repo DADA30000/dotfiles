@@ -56,7 +56,7 @@
       windowrule = opacity 0.99 override 0.99 override, ^(filezilla)$
       exec-once = ulimit -c 0
       exec-once = /nix/store/$(echo $(ls -la /nix/store | grep polkit-gnome | grep '^d' | awk '{print $9}') | cut -d ' ' -f 1)/libexec/polkit-gnome-authentication-agent-1
-      exec-once = /usr/lib/xdg-desktop-portal-hyprland & waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll
+      exec-once = waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll
       exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
       exec-once = sleep 10; gpu-screen-recorder -w screen -q ultra -a "$(pactl get-default-sink).monitor" -f 60 -r 300 -c mp4 -o ~/Games/Replays
       exec-once = wl-paste --type text --watch cliphist store
@@ -233,7 +233,7 @@
       layerrule = blur, rofi
       layerrule = animation popin 90%, rofi
       layerrule = animation slide left, swaync-control-center
-      layerrule = animation popin 90%, logout-dialog
+      layerrule = animation popin 90%, logout_dialog
       plugin {
           hyprexpo {
               columns = 3

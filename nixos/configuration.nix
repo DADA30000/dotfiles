@@ -347,6 +347,7 @@ in
      virtio-win
      networkmanagerapplet
      wttrbar
+     beep
    ] ++ (import ./waybar-scripts.nix pkgs);
    programs.nm-applet.enable = true;
    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
