@@ -9,10 +9,10 @@
       control-center-layer = "overlay";
       layer-shell = true;
       cssPriority = "application";
-      control-center-margin-top = 0;
+      control-center-margin-top = 10;
       control-center-margin-bottom = 0;
       control-center-margin-right = 0;
-      control-center-margin-left = 0;
+      control-center-margin-left = 10;
       notification-2fa-action = true;
       notification-inline-replies = false;
       notification-icon-size = 64;
@@ -24,7 +24,7 @@
       fit-to-screen = false;
       relative-timestamps = true;
       control-center-width = 370;
-      control-center-height = 1080;
+      control-center-height = 1030;
       notification-window-width = 350;
       keyboard-shortcuts = true;
       image-visibility = "when-available";

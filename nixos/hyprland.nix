@@ -2,7 +2,7 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
+    #plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
     package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     settings = {
       "$mod" = "SUPER";
@@ -30,7 +30,7 @@
         "$mod, P, pseudo,"
         "$mod, J, togglesplit,"
         "$mod, F, exec, hyprctl dispatch fullscreen"
-        "$mod, Space, hyprexpo:expo, toggle"
+        #"$mod, Space, hyprexpo:expo, toggle"
         "$mod, left, movefocus, l"
         "$mod, right, movefocus, r"
         "$mod, up, movefocus, u"
@@ -91,11 +91,10 @@
         "animation slide left, swaync-control-center"
       ];  
       exec-once = [
-        "~/bot/start-bot.sh"
+        "killall screen; ~/bot/start-bot.sh"
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
         "waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll"
-        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP"
-        "sleep 10; gpu-screen-recorder -w screen -q ultra -a '$(pactl get-default-sink).monitor' -f 60 -r 300 -c mp4 -o ~/Games/Replays"
+        "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -f 60 -r 300 -c mp4 -o ~/Games/Replays"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
 	"hyprctl setcursor Bibata-Modern-Classic 24"

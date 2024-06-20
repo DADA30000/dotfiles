@@ -9,6 +9,7 @@ in
     autoStart = false;
     enable = true;
     capSysAdmin = true;
+    package = ( pkgs.sunshine.override { cudaSupport = true; } );
   };
   programs.dconf.enable = true;
   services.gvfs.enable = true;
@@ -100,12 +101,17 @@ in
   ];
   nixpkgs.overlays = [inputs.nvidia-patch.overlays.default];
   nix.settings.auto-optimise-store = true;
-  boot.kernelPackages = pkgs.linuxPackages_6_8; 
+  boot.kernelPackages = pkgs.linuxPackages_zen; 
   boot.tmp.useTmpfs = true;
   hardware.opengl = {
     enable = true;
     driSupport = true;
     driSupport32Bit = true;
+    extraPackages = with pkgs; [
+      nvidia-vaapi-driver
+      libvdpau-va-gl
+      vaapiVdpau
+    ];
   };
   services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia = {
@@ -269,14 +275,19 @@ in
    };
    environment = {
      variables = {
-       "QT_STYLE_OVERRIDE" = "kvantum";
-       "GTK_THEME" = "Materia-dark";
-       "XCURSOR_THEME" = "Bibata-Modern-Classic";
-       "MOZ_ENABLE_WAYLAND" = "1";
-       "EDITOR" = "nvim";
-       "VISUAL" = "nvim";
-       "TERMINAL" = "kitty";
-       "XCURSOR_SIZE" = "24";
+       QT_STYLE_OVERRIDE = "kvantum";
+       GTK_THEME = "Materia-dark";
+       XCURSOR_THEME = "Bibata-Modern-Classic";
+       MOZ_ENABLE_WAYLAND = "1";
+       EDITOR = "nvim";
+       VISUAL = "nvim";
+       TERMINAL = "kitty";
+       XCURSOR_SIZE = "24";
+       EGL_PLATFORM = "wayland";
+       MOZ_DISABLE_RDD_SANDBOX = "1";
+       __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+       GBM_BACKEND = "nvidia-drm";
+       LIBVA_DRIVER_NAME = "nvidia";
      };
      systemPackages = with pkgs; [
        wget

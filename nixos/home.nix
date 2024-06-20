@@ -65,7 +65,10 @@
     font.name = "Noto Sans Medium";
     font.size = 11;
   };
-  home.file.".themes".source = ./.themes;
+  home.file = {
+    ".themes".source = ./.themes;
+    ".config/nvim/init.vim".source = ./init.vim;
+  };
   xdg.userDirs = {
     createDirectories = true;
     enable = true;
@@ -80,13 +83,6 @@
     defaultEditor = true;
     vimAlias = true;
     vimdiffAlias = true;
-    extraConfig = ''
-      map! <S-Insert> <C-R>+
-      if exists("g:neovide")
-        let g:neovide_padding_top = 15
-      endif
-      let g:neovide_transparency = 0.2
-    '';
   };
   programs.ncmpcpp = {
     enable = true;
