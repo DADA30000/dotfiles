@@ -1,6 +1,5 @@
 { config, pkgs, inputs, lib, ... }:
 {
-  home.username = "l0lk3k";
   home.homeDirectory = "/home/${config.home.username}";
   home.stateVersion = "24.05";
   services.arrpc.enable = true;
