@@ -231,6 +231,7 @@ pkgs: [ (pkgs.writeShellScriptBin "dinfo" ''
           keyword decoration:rounding 0"
       pkill waybar
       systemctl --user stop hyprpaper
+      pkill hyprpaper
       exit
   fi
   hyprctl reload

@@ -25,9 +25,9 @@
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
   };
 
-  outputs = {self, nixpkgs, home-manager, ...} @ inputs: {
+  outputs = {self, nixpkgs, home-manager, ...} @ inputs: let user = "l0lk3k"; in { # DON'T FORGET TO CHANGE USERNAME HERE <<<<<<<<<<
     nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-      specialArgs = { inherit inputs; }; # this is the important part
+      specialArgs = { inherit inputs user; };
       modules = [
         ./configuration.nix
 	home-manager.nixosModules.home-manager
@@ -35,7 +35,7 @@
             home-manager = {
 	      extraSpecialArgs = { inherit inputs; }; 
               useGlobalPkgs = true;
-              users.l0lk3k = import ./home.nix; # DON'T FORGET TO CHANGE USERNAME HERE <<<<<<<<<<<<<<<<
+              users."${user}" = import ./home.nix;
               useUserPackages = true;
             };
           }
