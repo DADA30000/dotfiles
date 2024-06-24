@@ -92,7 +92,6 @@
       ];  
       exec-once = [
         "killall screen; ~/bot/start-bot.sh"
-        "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
         "waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll"
         "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -f 60 -r 300 -c mp4 -o ~/Games/Replays"
         "wl-paste --type text --watch cliphist store"
@@ -122,8 +121,8 @@
         blur = {
           enabled = true;
       	  popups = true;
-      	  popups_ignorealpha = 0.0;
-      	  ignore_opacity = true;
+      	  popups_ignorealpha = 0.1;
+      	  #ignore_opacity = true;
           size = 10;
       	  brightness = 0.8;
           passes = 3;
@@ -144,13 +143,13 @@
 	];
         animation = [ 
 	  "windowsMove, 1, 5, default"
-          "layers, 1, 2, woosh, slide"
           "windowsIn, 1, 2, fade, popin 90%"
           "windows, 1, 7, default, slide"
           "windowsOut, 1, 3, fade, popin 90%"
           "fadeSwitch, 1, 7, default"
           "fadeOut, 1, 3, fade"
           "workspaces, 1, 4, woosh, slide"
+	  "layers, 1, 3, fade, popin 90%"
 	];
       };
       debug = {

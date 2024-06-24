@@ -1,17 +1,17 @@
-{ config, lib, inputs, pkgs, options, user, ... }:
+{ config, lib, inputs, pkgs, options, user, hostname, ... }:
 let
   spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
   package = config.boot.kernelPackages.nvidiaPackages.beta;
   long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
   adblock = pkgs.fetchgit {
     url = "https://github.com/rxri/spicetify-extensions";
-    rev = "96c03d40518f6527db9b4122cb628d88f36f47d0";
-    sha256 = "sha256-JR2fda2IGpIbhHy7zK4A5LLT5yVjowZWTvNWPhjYHxE=";
+    rev = "9168bc5d6c3b816ba404d91161fd577b3bf43e4a";
+    sha256 = "sha256-kPjmDVyxtXG1puedQKD6HRP6eN/MPdEZ9Zs4Ao4RVtg=";
   };
   hazy = pkgs.fetchgit {
     url = "https://github.com/Astromations/Hazy";
-    rev = "0d45831a31b0c72e1d3ab8be501479e196a709d7";
-    sha256 = "sha256-0t7/25hRfvyJ8K+nTzgMl8RabTBxtMIjQvDECzYvwg8=";
+    rev = "25e472cc4563918d794190e72cba6af8397d3a78";
+    sha256 = "sha256-zK17CWwYJNSyo5pbYdIDUMKyeqKkFbtghFoK9JBR/C8=";
   };
 in
 {
@@ -20,7 +20,6 @@ in
     getty.autologinUser = user;
     printing.enable = true;
     gvfs.enable = true;
-    xserver.videoDrivers = ["nvidia" "amdgpu"];
     flatpak.enable = true;
     openssh.enable = true;
     sunshine = {
@@ -53,6 +52,7 @@ in
       xkb.layout = "us,ru";
       xkb.options = "grp:alt_shift_toggle";
       displayManager.startx.enable = true;
+      videoDrivers = ["nvidia" "amdgpu"];
       enable = true;
     };
   };
@@ -120,7 +120,7 @@ in
         enable = true;
         efiSupport = true;
         device = "nodev";
-        theme = "/boot/grub/themes/hyperfluent";
+	timeoutStyle = "hidden";
       };
     };
   };
@@ -164,6 +164,15 @@ in
           exec zerotier-one
         '';
         wantedBy = [ "multi-user.target" ];
+      };
+    };
+    user.services = {
+      polkit_gnome = {
+        path = [pkgs.bash];
+	script = ''
+	  exec ${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1
+	'';
+	wantedBy = [ "hyprland-session.target" ];
       };
     };
   };
@@ -246,7 +255,6 @@ in
       xdg-user-dirs
       mpv
       ncmpcpp
-      polkit_gnome
       mpd
       neovide
       fragments
@@ -326,7 +334,7 @@ in
       hinting.autohint = true;
     };
   };
-  networking.hostName = "nixos";
+  networking.hostName = hostname;
   networking.networkmanager.enable = true;
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";

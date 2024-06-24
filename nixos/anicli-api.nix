@@ -8,13 +8,13 @@
 python3Packages.buildPythonApplication rec{
 
   pname = "anicli_api";
-  version = "0.6.4";
+  version = "0.6.5";
   pyproject = true;
 
   src = fetchPypi {
     pname = "anicli_api";
     inherit version;
-    hash = "sha256-Yz6/R1FxHlkIR91FJ/LZ0iqRs9TmucKQq7S9ORYt+oA=";
+    hash = "sha256-8lFvX9tbPjwY7MYsdS4/Z4zGr7MUzTxyOEB+WbtvM1I=";
   };
 
   build-system = with python3Packages; [

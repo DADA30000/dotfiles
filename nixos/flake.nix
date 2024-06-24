@@ -25,9 +25,9 @@
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
   };
 
-  outputs = {self, nixpkgs, home-manager, ...} @ inputs: let user = "l0lk3k"; in { # DON'T FORGET TO CHANGE USERNAME HERE <<<<<<<<<<
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-      specialArgs = { inherit inputs user; };
+  outputs = {self, nixpkgs, home-manager, ...} @ inputs: let user = "l0lk3k"; hostname = "nixos"; in { # DON'T FORGET TO CHANGE USERNAME AND HOSTNAME HERE <<<<<<<<<<
+    nixosConfigurations."${hostname}" = nixpkgs.lib.nixosSystem {
+      specialArgs = { inherit inputs user hostname; };
       modules = [
         ./configuration.nix
 	home-manager.nixosModules.home-manager
