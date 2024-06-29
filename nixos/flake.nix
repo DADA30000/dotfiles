@@ -11,6 +11,10 @@
     };
     spicetify-nix.url = "github:the-argus/spicetify-nix";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    kwin-effects-forceblur = {
+      url = "github:taj-ny/kwin-effects-forceblur";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nix-fast-build.url = "github:Mic92/nix-fast-build";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -23,6 +27,7 @@
     pollymc.url = "github:fn2006/PollyMC";
     nps.url = "github:OleMussmann/Nix-Package-Search";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
+    ags.url = "github:Aylur/ags";
   };
 
   outputs = {self, nixpkgs, home-manager, ...} @ inputs: let user = "l0lk3k"; hostname = "nixos"; in { # DON'T FORGET TO CHANGE USERNAME AND HOSTNAME HERE <<<<<<<<<<

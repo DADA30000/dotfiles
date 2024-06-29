@@ -23,11 +23,11 @@
     if ! [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
       fastfetch --logo-color-1 'blue' --logo-color-2 'blue'
     fi
-    [[ ! -f /etc/nixos/p10k-config/.p10k.zsh ]] || source /etc/nixos/p10k-config/.p10k.zsh
+    [[ ! -f ${./stuff/p10k-config/.p10k.zsh} ]] || source ${./stuff/p10k-config/.p10k.zsh}
     if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-     exec Hyprland >/dev/null 2>&1
+      Hyprland >/dev/null 2>&1
     fi
-    source /etc/nixos/p10k-config/p10k.zsh
+    source ${./stuff/p10k-config/p10k.zsh}
     setopt correct
     export NIXPKGS_ALLOW_UNFREE=1
   '';
@@ -62,7 +62,7 @@
       }
       {
         name = "p10k-config";
-	src = ./p10k-config;
+	src = ./stuff/p10k-config;
 	file = "p10k.zsh";
       }
       {
