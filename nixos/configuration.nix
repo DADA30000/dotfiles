@@ -22,6 +22,23 @@ in
     gvfs.enable = true;
     flatpak.enable = true;
     openssh.enable = true;
+    desktopManager.plasma6.enable = true;
+    #displayManager = {
+    #  sddm = {
+    #    enable = true;
+    #    theme = "elegant";
+    #    settings = {
+    #      Autologin = {
+    #	    Session = "plasma.desktop";
+    #	    User = user;
+    #      };
+    #    };
+    #    wayland = {
+    #      enable = true;
+    #      compositor = "kwin";
+    #    };
+    #  };
+    #};
     sunshine = {
       autoStart = false;
       enable = true;
@@ -165,6 +182,40 @@ in
         '';
         wantedBy = [ "multi-user.target" ];
       };
+      libvirtd = {
+        path = with pkgs; [ libvirt killall ];
+        preStart = 
+        let
+          qemuHook = pkgs.writeScript "qemu-hook" ''
+            #!${pkgs.bash}/bin/bash
+            GUEST_NAME="$1"
+            HOOK_NAME="$2"
+            STATE_NAME="$3"
+            MISC="''${@:4}"
+            
+            BASEDIR="$(dirname $0)"
+            
+            HOOKPATH="$BASEDIR/qemu.d/$GUEST_NAME/$HOOK_NAME/$STATE_NAME"
+            set -e # If a script exits with an error, we should as well.
+            
+            if [ -f "$HOOKPATH" ]; then
+            eval \""$HOOKPATH"\" "$@"
+            elif [ -d "$HOOKPATH" ]; then
+            while read file; do
+              eval \""$file"\" "$@"
+            done <<< "$(find -L "$HOOKPATH" -maxdepth 1 -type f -executable -print;)"
+            fi 
+          '';
+        in ''
+          mkdir -p /var/lib/libvirt/hooks
+          mkdir -p /var/lib/libvirt/hooks/qemu.d/win10/prepare/begin
+          mkdir -p /var/lib/libvirt/hooks/qemu.d/win10/release/end
+          # Copy hook files
+          ln -sf ${./stuff/start.sh} /var/lib/libvirt/hooks/qemu.d/win10/prepare/begin/start.sh
+          ln -sf ${./stuff/stop.sh} /var/lib/libvirt/hooks/qemu.d/win10/release/end/stop.sh
+          ln -sf ${qemuHook} /var/lib/libvirt/hooks/qemu
+        '';
+      };
     };
     user.services = {
       polkit_gnome = {
@@ -221,23 +272,19 @@ in
       osu-lazer-bin
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum 
-      waybar
-      stow
       inotify-tools
       fastfetch
       hyprshot
-      cinnamon.nemo
+      cinnamon.nemo-with-extensions
       cinnamon.cinnamon-translations
       killall
       wl-clipboard
       pulseaudio
       nwg-look
       gnome.file-roller
-      nordzy-icon-theme
       appimage-run
       lutris
       cliphist
-      networkmanager_dmenu
       libnotify
       swappy
       bibata-cursors
@@ -251,11 +298,7 @@ in
       inputs.nps.packages.${pkgs.system}.nps
       (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
-      wlogout
-      xdg-user-dirs
       mpv
-      ncmpcpp
-      mpd
       neovide
       fragments
       unrar
@@ -271,52 +314,54 @@ in
       (pkgs.callPackage ./ani-cli-ru.nix { })
       gpu-screen-recorder-gtk
       gpu-screen-recorder
-      rclone
       android-tools
-      virtiofsd
-      virtio-win
       networkmanagerapplet
-      wttrbar
       beep
-    ] ++ (import ./waybar-scripts.nix pkgs);
+      elegant-sddm
+      inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
+      #(pkgs.callPackage ./linux-wallpaperengine.nix { })
+    ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
+  nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
   #And here is some other small stuff
   documentation.nixos.enable = false;
-   virtualisation.libvirtd.enable = true;
-  nixpkgs.overlays = [inputs.nvidia-patch.overlays.default];
+  virtualisation.libvirtd.enable = true;
+  nixpkgs.overlays = [
+    inputs.nvidia-patch.overlays.default
+  ];
   qt.enable = true;
-  xdg.mime.defaultApplications = {
-    "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
-    "application/x-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-bzip2-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-bzip1-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-tzo" = "org.gnome.FileRoller.desktop";
-    "application/x-xz"= "org.gnome.FileRoller.desktop";
-    "application/x-lzma-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/zstd" = "org.gnome.FileRoller.desktop";
-    "application/x-7z-compressed" = "org.gnome.FileRoller.desktop";
-    "application/x-zstd-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-lzma" = "org.gnome.FileRoller.desktop";
-    "application/x-lz4" = "org.gnome.FileRoller.desktop";
-    "application/x-xz-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-lz4-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-archive" = "org.gnome.FileRoller.desktop";
-    "application/x-cpio" = "org.gnome.FileRoller.desktop";
-    "application/x-lzop" = "org.gnome.FileRoller.desktop";
-    "application/x-bzip1" = "org.gnome.FileRoller.desktop";
-    "application/x-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-bzip2" = "org.gnome.FileRoller.desktop";
-    "application/gzip" = "org.gnome.FileRoller.desktop";
-    "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
-    "application/x-tarz "= "org.gnome.FileRoller.desktop";
-    "application/zip" = "org.gnome.FileRoller.desktop";
-    "inode/directory" = "nemo.desktop";
-  };
+  #xdg.mime.defaultApplications = {
+  #  "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
+  #  "application/x-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-bzip2-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-bzip1-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-tzo" = "org.gnome.FileRoller.desktop";
+  #  "application/x-xz"= "org.gnome.FileRoller.desktop";
+  #  "application/x-lzma-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/zstd" = "org.gnome.FileRoller.desktop";
+  #  "application/x-7z-compressed" = "org.gnome.FileRoller.desktop";
+  #  "application/x-zstd-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-lzma" = "org.gnome.FileRoller.desktop";
+  #  "application/x-lz4" = "org.gnome.FileRoller.desktop";
+  #  "application/x-xz-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-lz4-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-archive" = "org.gnome.FileRoller.desktop";
+  #  "application/x-cpio" = "org.gnome.FileRoller.desktop";
+  #  "application/x-lzop" = "org.gnome.FileRoller.desktop";
+  #  "application/x-bzip1" = "org.gnome.FileRoller.desktop";
+  #  "application/x-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-bzip2" = "org.gnome.FileRoller.desktop";
+  #  "application/gzip" = "org.gnome.FileRoller.desktop";
+  #  "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
+  #  "application/x-tarz "= "org.gnome.FileRoller.desktop";
+  #  "application/zip" = "org.gnome.FileRoller.desktop";
+  #  "inode/directory" = "nemo.desktop";
+  #};
   users.defaultUserShell = pkgs.zsh;
   nixpkgs.config.allowUnfree = true;
   imports =
     [
-      # ./my-services.nix
+      #./my-services.nix
       ./hardware-configuration.nix
       inputs.spicetify-nix.nixosModule
       inputs.home-manager.nixosModules.home-manager
@@ -345,7 +390,7 @@ in
   };
   users.users."${user}" = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "libvirtd" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ];
+    extraGroups = [ "wheel" "libvirtd" "libvirt ""uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ];
     packages = with pkgs; [
       tree
     ];

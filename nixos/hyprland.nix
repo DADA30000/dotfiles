@@ -2,7 +2,7 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    #plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
+    plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
     package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     settings = {
       "$mod" = "SUPER";
@@ -30,7 +30,7 @@
         "$mod, P, pseudo,"
         "$mod, J, togglesplit,"
         "$mod, F, exec, hyprctl dispatch fullscreen"
-        #"$mod, Space, hyprexpo:expo, toggle"
+        "$mod, Space, hyprexpo:expo, toggle"
         "$mod, left, movefocus, l"
         "$mod, right, movefocus, r"
         "$mod, up, movefocus, u"
@@ -81,7 +81,15 @@
         "blur, gtk-layer-shell"
         "blur, swaync-control-center"
         "blur, swaync-notification-window"
+	"blur, .*"
 	"noanim, selection"
+	"ignorealpha 0.9, selection"
+	"ignorezero, corner0"
+	"ignorezero, overview"
+	"ignorezero, indicator0"
+	"ignorezero, datemenu"
+	"ignorezero, launcher"
+	"ignorezero, quicksettings"
 	"ignorezero, swaync-control-center"
         "ignorezero, rofi"
 	"ignorezero, waybar"
@@ -92,7 +100,7 @@
       ];  
       exec-once = [
         "killall screen; ~/bot/start-bot.sh"
-        "waybar & hyprpaper & firefox & swaync & vesktop --enable-blink-features=MiddleClickAutoscroll"
+        "waybar & firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
         "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -f 60 -r 300 -c mp4 -o ~/Games/Replays"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
@@ -121,7 +129,7 @@
         blur = {
           enabled = true;
       	  popups = true;
-      	  popups_ignorealpha = 0.1;
+      	  popups_ignorealpha = 0;
       	  #ignore_opacity = true;
           size = 10;
       	  brightness = 0.8;
@@ -239,10 +247,86 @@
     settings = {
       ipc = "on";
       splash = false;
-      preload = [ "${./wallpaper.jpg}" ];
+      preload = [ "${./stuff/wallpaper.jpg}" ];
       wallpaper = [
-        "HDMI-A-1,${./wallpaper.jpg}"
+        "HDMI-A-1,${./stuff/wallpaper.jpg}"
       ];
     };
   };
+  programs.rofi = {
+    enable = true;
+    package = pkgs.rofi-wayland;
+    font = "JetBrainsMono NF 14";
+    theme = ./stuff/theme.rasi;
+  };
+  programs.wlogout = {
+    enable = true;
+    layout = [
+      {
+          label = "lock";
+          action = "hyprlock";
+          text = "Lock";
+          keybind = "l";
+      }
+      {
+          label = "logout";
+          action = "hyprctl dispatch exit";
+          text = "Logout";
+          keybind = "e";
+      }
+      {
+          label = "shutdown";
+          action = "systemctl poweroff";
+          text = "Shutdown";
+          keybind = "s";
+      }
+      {
+          label = "reboot";
+          action = "systemctl reboot";
+          text = "Reboot";
+          keybind = "r";
+      }
+    ];
+    style = ''
+      * {
+      	background-image: none;
+      	font-family: "JetBrainsMono Nerd Font";
+      	font-size: 16px;
+      }
+      window {
+      	background-color: rgba(0, 0, 0, 0);
+      }
+      button {
+          color: #FFFFFF;
+              border-style: solid;
+      	border-radius: 15px;
+      	border-width: 3px;
+      	background-color: rgba(0, 0, 0, 0);
+      	background-repeat: no-repeat;
+      	background-position: center;
+      	background-size: 25%;
+      }
+      
+      button:focus, button:active, button:hover {
+      	background-color: rgba(0, 0, 0, 0);
+      	color: #4470D2;
+      }
+      
+      #lock {
+          background-image: image(url("${./stuff/lock.png}"));
+      }
+      
+      #logout {
+          background-image: image(url("${./stuff/logout.png}"));
+      }
+      
+      #shutdown {
+          background-image: image(url("${./stuff/shutdown.png}"));
+      }
+      
+      #reboot {
+          background-image: image(url("${./stuff/reboot.png}"));
+      }
+    '';
+  };  
 }

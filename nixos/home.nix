@@ -5,43 +5,31 @@
   services.arrpc.enable = true;
   nixpkgs.config.allowUnfree = true;
   imports = [
+    #inputs.ags.homeManagerModules.default
     ./zsh.nix
     ./kitty.nix
-    ./btop.nix
-    ./cava.nix
     ./hyprland.nix
     ./waybar.nix
     ./fastfetch.nix
     ./swaync.nix
   ];
   home.packages = with pkgs; [
-    fzf
     remmina
-    python311
-    dmenu-wayland
-    winetricks
-    gnome.zenity
-    wine
     telegram-desktop
     xorg.xeyes
-    bat
-    tldr
-    espeak
     bottles
     steam-run
     vesktop
+    gnome.adwaita-icon-theme
   ];
+  #programs.ags = {
+  #  enable = true;
+  #};
   programs.imv = {
     enable = true;
     settings = {
       options.upscaling_method = "nearest_neighbour";
     };
-  };
-  programs.rofi = {
-    enable = true;
-    package = pkgs.rofi-wayland;
-    font = "JetBrainsMono NF 14";
-    theme = ./theme.rasi;
   };
   programs.obs-studio = {
     enable = true;
@@ -59,14 +47,17 @@
     gtk3.extraConfig.gtk-decoration-layout = "menu:";
     gtk4.extraConfig.gtk-hint-font-metrics = 1;
     cursorTheme.name = "Bibata-Modern-Classic";
-    iconTheme.name = "Nordzy";
+    iconTheme = {
+      name = "MoreWaita";
+      package = pkgs.morewaita-icon-theme;
+    };
     theme.name = "Materia-dark";
     font.name = "Noto Sans Medium";
     font.size = 11;
   };
   home.file = {
-    ".themes".source = ./.themes;
-    ".config/nvim/init.vim".source = ./init.vim;
+    ".themes".source = ./stuff/.themes;
+    ".config/nvim/init.vim".source = ./stuff/init.vim;
   };
   xdg.userDirs = {
     createDirectories = true;
@@ -111,79 +102,32 @@
       song_window_title_format = " ♬ {%a}  {%t}";
     };
   };
-  programs.wlogout = {
-    enable = true;
-    layout = [
-      {
-          label = "lock";
-          action = "hyprlock";
-          text = "Lock";
-          keybind = "l";
-      }
-      {
-          label = "logout";
-          action = "hyprctl dispatch exit";
-          text = "Logout";
-          keybind = "e";
-      }
-      {
-          label = "shutdown";
-          action = "systemctl poweroff";
-          text = "Shutdown";
-          keybind = "s";
-      }
-      {
-          label = "reboot";
-          action = "systemctl reboot";
-          text = "Reboot";
-          keybind = "r";
-      }
-    ];
-    style = ''
-      * {
-      	background-image: none;
-      	font-family: "JetBrainsMono Nerd Font";
-      	font-size: 16px;
-      }
-      window {
-      	background-color: rgba(0, 0, 0, 0);
-      }
-      button {
-          color: #FFFFFF;
-              border-style: solid;
-      	border-radius: 15px;
-      	border-width: 3px;
-      	background-color: rgba(0, 0, 0, 0);
-      	background-repeat: no-repeat;
-      	background-position: center;
-      	background-size: 25%;
-      }
-      
-      button:focus, button:active, button:hover {
-      	background-color: rgba(0, 0, 0, 0);
-      	color: #4470D2;
-      }
-      
-      #lock {
-          background-image: image(url("${./lock.png}"));
-      }
-      
-      #logout {
-          background-image: image(url("${./logout.png}"));
-      }
-      
-      #shutdown {
-          background-image: image(url("${./shutdown.png}"));
-      }
-      
-      #reboot {
-          background-image: image(url("${./reboot.png}"));
-      }
-    '';
-  };
   services.mpd-discord-rpc.enable = true;
   home.sessionVariables = {
     EDITOR = "nvim";
     VISUAL = "nvim";
+  };
+  programs.btop = {
+    enable = true;
+    settings = {
+      color_theme = "${pkgs.btop}/share/btop/themes/dracula.theme";
+      update_ms = 200;
+      theme_background = false;
+    };
+  };
+  programs.cava = {
+  enable = true;
+  settings = {
+    general = {
+      framerate = 60;
+      bar_width = 4;
+      };
+    color = {
+      gradient = 1;
+      gradient_count = 2;
+      gradient_color_1 = "'#4575da'";
+      gradient_color_2 = "'#6804b5'";
+      };
+    };
   };
 }

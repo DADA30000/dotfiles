@@ -6,7 +6,7 @@
   {
       logo = {
           type = "kitty-direct";
-          source = ./logo.png;
+          source = ./stuff/logo.png;
           width = 50;
           height = 20;
       };
