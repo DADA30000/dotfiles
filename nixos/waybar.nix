@@ -2,6 +2,10 @@
 {
   programs.waybar = {
     enable = true;
+    systemd = {
+      enable = true;
+      target = "hyprland-session.target";
+    };
     style = ''
       @define-color accent #2362ba;
       * {
@@ -429,7 +433,16 @@
           on-click = "activate";
           all-outputs = true;
           persistent-workspaces = {
-            "*" = 10;
+            "1" = [];
+	    "2" = [];
+	    "3" = [];
+	    "4" = [];
+	    "5" = [];
+	    "6" = [];
+	    "7" = [];
+	    "8" = [];
+	    "9" = [];
+	    "10" = [];
           };
           format-icons = {
             "empty" = "";
