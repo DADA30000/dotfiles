@@ -2,6 +2,7 @@
 let
   spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
   package = config.boot.kernelPackages.nvidiaPackages.beta;
+  fileroller = "org.gnome.FileRoller.desktop";
   long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
   adblock = pkgs.fetchgit {
     url = "https://github.com/rxri/spicetify-extensions";
@@ -294,8 +295,6 @@ in
       moonlight-qt
       desktop-file-utils
       inputs.pollymc.packages.${pkgs.system}.pollymc
-      inputs.nix-fast-build.packages.${pkgs.system}.default
-      inputs.nps.packages.${pkgs.system}.nps
       (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
@@ -330,33 +329,37 @@ in
     inputs.nvidia-patch.overlays.default
   ];
   qt.enable = true;
-  #xdg.mime.defaultApplications = {
-  #  "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
-  #  "application/x-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-bzip2-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-bzip1-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-tzo" = "org.gnome.FileRoller.desktop";
-  #  "application/x-xz"= "org.gnome.FileRoller.desktop";
-  #  "application/x-lzma-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/zstd" = "org.gnome.FileRoller.desktop";
-  #  "application/x-7z-compressed" = "org.gnome.FileRoller.desktop";
-  #  "application/x-zstd-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-lzma" = "org.gnome.FileRoller.desktop";
-  #  "application/x-lz4" = "org.gnome.FileRoller.desktop";
-  #  "application/x-xz-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-lz4-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-archive" = "org.gnome.FileRoller.desktop";
-  #  "application/x-cpio" = "org.gnome.FileRoller.desktop";
-  #  "application/x-lzop" = "org.gnome.FileRoller.desktop";
-  #  "application/x-bzip1" = "org.gnome.FileRoller.desktop";
-  #  "application/x-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-bzip2" = "org.gnome.FileRoller.desktop";
-  #  "application/gzip" = "org.gnome.FileRoller.desktop";
-  #  "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
-  #  "application/x-tarz "= "org.gnome.FileRoller.desktop";
-  #  "application/zip" = "org.gnome.FileRoller.desktop";
-  #  "inode/directory" = "nemo.desktop";
-  #};
+  xdg.mime.defaultApplications = {
+    "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
+    "application/x-compressed-tar" = fileroller;
+    "application/x-bzip2-compressed-tar" = fileroller;
+    "application/x-bzip1-compressed-tar" = fileroller;
+    "application/x-tzo" = fileroller;
+    "application/x-xz"= fileroller;
+    "application/x-lzma-compressed-tar" = fileroller;
+    "application/zstd" = fileroller;
+    "application/x-7z-compressed" = fileroller;
+    "application/x-zstd-compressed-tar" = fileroller;
+    "application/x-lzma" = fileroller;
+    "application/x-lz4" = fileroller;
+    "application/x-xz-compressed-tar" = fileroller;
+    "application/x-lz4-compressed-tar" = fileroller;
+    "application/x-archive" = fileroller;
+    "application/x-cpio" = fileroller;
+    "application/x-lzop" = fileroller;
+    "application/x-bzip1" = fileroller;
+    "application/x-tar" = fileroller;
+    "application/x-bzip2" = fileroller;
+    "application/gzip" = fileroller;
+    "application/x-lzip-compressed-tar" = fileroller;
+    "application/x-tarz "= fileroller;
+    "application/zip" = fileroller;
+    "inode/directory" = "nemo.desktop";
+    "text/html" = "firefox.desktop";
+    "video/mp4" = "mpv.desktop";
+    "audio/mpeg" = "mpv.desktop";
+    "audio/flac" = "mpv.desktop";
+  };
   users.defaultUserShell = pkgs.zsh;
   nixpkgs.config.allowUnfree = true;
   imports =

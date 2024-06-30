@@ -10,9 +10,9 @@
 	", Print, exec, hyprshot -m region"
         "SHIFT, Print, exec, hyprshot -m window"
         "ALT, Print, exec, hyprshot -m output"
-        "CTRL, Print, exec, hyprshot -m region -r | swappy -f -"
-        "CTRL_SHIFT, Print, exec, hyprshot -m window -r | swappy -f -"
-        "CTRL_ALT, Print, exec, hyprshot -m output -r | swappy -f -"
+        "CTRL, Print, exec, hyprshot -m region -r d | swappy -f -"
+        "CTRL_SHIFT, Print, exec, hyprshot -m window -r d | swappy -f -"
+        "CTRL_ALT, Print, exec, hyprshot -m output -r d | swappy -f -"
 	"ALT,R,submap,passthrough"
 	"$mod_CTRL, Q, exec, neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
 	"$mod_CTRL, C, exec, hyprctl kill"
@@ -100,8 +100,8 @@
       ];  
       exec-once = [
         "killall screen; ~/bot/start-bot.sh"
-        "waybar & firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
-        "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -f 60 -r 300 -c mp4 -o ~/Games/Replays"
+        "firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
+        "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
 	"hyprctl setcursor Bibata-Modern-Classic 24"
