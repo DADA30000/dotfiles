@@ -23,11 +23,12 @@
 , SDL2
 , SDL2_mixer
 , zlib
+, unstableGitUpdater
 }:
 
 stdenv.mkDerivation {
   pname = "linux-wallpaperengine";
-  version = "unstable-2023-09-23";
+  version = "0-unstable-2024-06-07";
 
   src = fetchFromGitHub {
     owner = "Almamu";
@@ -64,6 +65,8 @@ stdenv.mkDerivation {
     SDL2_mixer.all
     zlib
   ];
+
+  passthru.updateScript = unstableGitUpdater { };
 
   meta = {
     description = "Wallpaper Engine backgrounds for Linux";

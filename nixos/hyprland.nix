@@ -70,6 +70,7 @@
       ];
       windowrule = [
         "pin, ^(polkit-gnome-authentication-agent-1)$"
+	"opacity 0.99 override 0.99 override, title:^(MainPicker)$"
       ];
       layerrule = [
 	"blur, waybar"
@@ -82,6 +83,7 @@
         "blur, swaync-control-center"
         "blur, swaync-notification-window"
 	"blur, .*"
+	"blurpopups, .*"
 	"noanim, selection"
 	"ignorealpha 0.9, selection"
 	"ignorezero, corner0"
@@ -130,7 +132,7 @@
           enabled = true;
       	  popups = true;
       	  popups_ignorealpha = 0;
-      	  #ignore_opacity = true;
+      	  ignore_opacity = true;
           size = 10;
       	  brightness = 0.8;
           passes = 3;
