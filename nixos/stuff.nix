@@ -231,13 +231,13 @@ scripts = [ (pkgs.writeShellScriptBin "dinfo" ''
           keyword general:border_size 0;\
   	keyword windowrule opacity 1 override 1 override, title:^(.*)$;\
           keyword decoration:rounding 0"
-      pkill waybar
+      systemctl --user stop waybar
       systemctl --user stop hyprpaper
       pkill hyprpaper
       exit
   fi
   hyprctl reload
-  waybar &!
+  systemctl --user start waybar
   systemctl --user start hyprpaper
   exit
   '')

@@ -23,7 +23,7 @@ in
     gvfs.enable = true;
     flatpak.enable = true;
     openssh.enable = true;
-    desktopManager.plasma6.enable = true;
+    #desktopManager.plasma6.enable = true;
     #displayManager = {
     #  sddm = {
     #    enable = true;
@@ -271,8 +271,6 @@ in
       git
       neovim
       osu-lazer-bin
-      libsForQt5.qtstyleplugin-kvantum
-      qt6Packages.qtstyleplugin-kvantum 
       inotify-tools
       fastfetch
       hyprshot
@@ -317,7 +315,7 @@ in
       networkmanagerapplet
       beep
       elegant-sddm
-      inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
+      #inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
       #(pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
@@ -328,7 +326,6 @@ in
   nixpkgs.overlays = [
     inputs.nvidia-patch.overlays.default
   ];
-  qt.enable = true;
   xdg.mime.defaultApplications = {
     "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
     "application/x-compressed-tar" = fileroller;
@@ -398,7 +395,7 @@ in
       tree
     ];
   };
-    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland ]; }; 
+    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
   xdg.portal.config.common.default = "*";
   networking.firewall.enable = false;
   system.stateVersion = "23.11";

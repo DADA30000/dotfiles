@@ -16,6 +16,10 @@
         min-height: 0px;
         min-width: 0px;
       }
+      tooltip {
+        background-color: rgba(0,0,0,0.1);
+        text-shadow: none;
+      }      
       #custom-notification {
         font-size: 16px
       }

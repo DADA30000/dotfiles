@@ -31,6 +31,14 @@
       options.upscaling_method = "nearest_neighbour";
     };
   };
+  qt = {
+    enable = true;
+    platformTheme.name = "gtk3";
+    #style = {
+    #  name = "lightly";
+    #  package = pkgs.lightly-qt;
+    #};
+  };
   programs.obs-studio = {
     enable = true;
     #plugins = [ pkgs.obs-studio-plugins.obs-ndi ];
