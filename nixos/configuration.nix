@@ -221,10 +221,18 @@ in
     user.services = {
       polkit_gnome = {
         path = [pkgs.bash];
+	wantedBy = [ "hyprland-session.target" ];
 	script = ''
 	  exec ${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1
 	'';
+      };
+      replays = {
+        path = with pkgs; [ bash gpu-screen-recorder pulseaudio ];
 	wantedBy = [ "hyprland-session.target" ];
+	script = ''
+	  export PATH=/run/wrappers/bin:$PATH
+          exec gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays
+        '';
       };
     };
   };
@@ -319,7 +327,7 @@ in
       #(pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
-  nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
+  #nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
   #And here is some other small stuff
   documentation.nixos.enable = false;
   virtualisation.libvirtd.enable = true;
@@ -364,7 +372,6 @@ in
       #./my-services.nix
       ./hardware-configuration.nix
       inputs.spicetify-nix.nixosModule
-      inputs.home-manager.nixosModules.home-manager
     ];
   fonts = {
     enableDefaultPackages = true;
