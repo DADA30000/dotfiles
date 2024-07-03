@@ -225,6 +225,9 @@ in
 	script = ''
 	  exec ${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1
 	'';
+	serviceConfig = {
+	  Restart = "always";
+	};
       };
       replays = {
         path = with pkgs; [ bash gpu-screen-recorder pulseaudio ];
@@ -233,6 +236,9 @@ in
 	  export PATH=/run/wrappers/bin:$PATH
           exec gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays
         '';
+	serviceConfig = {
+	  Restart = "always";
+	};
       };
     };
   };
