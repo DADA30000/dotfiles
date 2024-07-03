@@ -103,7 +103,6 @@
       exec-once = [
         "killall screen; ~/bot/start-bot.sh"
         "firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
-        "sleep 10; gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
 	"hyprctl setcursor Bibata-Modern-Classic 24"

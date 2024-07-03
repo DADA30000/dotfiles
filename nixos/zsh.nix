@@ -25,7 +25,7 @@
     fi
     [[ ! -f ${./stuff/p10k-config/.p10k.zsh} ]] || source ${./stuff/p10k-config/.p10k.zsh}
     if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-      Hyprland >/dev/null 2>&1
+      exec Hyprland >/dev/null 2>&1
     fi
     source ${./stuff/p10k-config/p10k.zsh}
     setopt correct
