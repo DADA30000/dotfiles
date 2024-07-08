@@ -1,7 +1,6 @@
 { config, lib, inputs, pkgs, options, user, hostname, ... }:
 let
   spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
-  package = config.boot.kernelPackages.nvidiaPackages.beta;
   fileroller = "org.gnome.FileRoller.desktop";
   long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
   adblock = pkgs.fetchgit {
@@ -28,12 +27,12 @@ in
     #  sddm = {
     #    enable = true;
     #    theme = "elegant";
-    #    settings = {
-    #      Autologin = {
-    #	    Session = "plasma.desktop";
-    #	    User = user;
-    #      };
-    #    };
+    #    #settings = {
+    #    #  Autologin = {
+    #	#    Session = "plasma.desktop";
+    #	#    User = user;
+    #    #  };
+    #    #};
     #    wayland = {
     #      enable = true;
     #      compositor = "kwin";
@@ -119,7 +118,7 @@ in
     extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     initrd.systemd.enable = true;
     kernel.sysctl."kernel.sysrq" = 1;
-    kernelPackages = pkgs.linuxPackages_zen; 
+    kernelPackages = pkgs.linuxPackages_xanmod_latest; 
     tmp.useTmpfs = true;
     extraModprobeConfig = ''
       options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
@@ -139,6 +138,19 @@ in
         efiSupport = true;
         device = "nodev";
 	timeoutStyle = "hidden";
+	extraConfig = "set timeout=1";
+	minegrub-world-sel = { 
+	  enable = true;
+	  customIcons = [{
+            name = "nixos";
+            lineTop = "NixOS (06/07/2024, 2:24 AM)";
+            lineBottom = "Creative Mode, Cheats, Version: unstable";
+            customImg = builtins.path {
+              path = ./stuff/nixos-img.png;
+              name = "nixos-img";
+            };
+          }];
+	};
       };
     };
   };
@@ -231,7 +243,7 @@ in
       };
       replays = {
         path = with pkgs; [ bash gpu-screen-recorder pulseaudio ];
-	wantedBy = [ "hyprland-session.target" ];
+	wantedBy = [ "graphical-session.target" ];
 	script = ''
 	  export PATH=/run/wrappers/bin:$PATH
           exec gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays
@@ -259,8 +271,15 @@ in
       powerManagement.finegrained = false;
       open = false;
       nvidiaSettings = false;
-      package = pkgs.nvidia-patch.patch-nvenc (pkgs.nvidia-patch.patch-fbc package);
-      #package = package;
+      package = config.boot.kernelPackages.nvidiaPackages.beta;
+      #package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+      #  version = "555.99";
+      #  sha256_64bit = lib.fakeSha256;
+      #  sha256_aarch64 = lib.fakeSha256;
+      #  openSha256 = lib.fakeSha256;
+      #  settingsSha256 = lib.fakeSha256;
+      #  persistencedSha256 = lib.fakeSha256;
+      #};
     };    
   };
   #Some environment stuff
@@ -294,7 +313,7 @@ in
       wl-clipboard
       pulseaudio
       nwg-look
-      gnome.file-roller
+      file-roller
       appimage-run
       lutris
       cliphist
@@ -329,6 +348,8 @@ in
       networkmanagerapplet
       beep
       elegant-sddm
+      ffmpegthumbnailer
+      cached-nix-shell
       #inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
       #(pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;

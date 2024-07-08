@@ -23,6 +23,10 @@
         url = "github:hyprwm/hyprland-plugins";
         inputs.hyprland.follows = "hyprland"; # IMPORTANT
     };
+    minegrub-world-sel-theme = {
+      url = "github:Lxtharia/minegrub-world-sel-theme";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     pollymc.url = "github:fn2006/PollyMC";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
     ags.url = "github:Aylur/ags";
@@ -33,6 +37,7 @@
       specialArgs = { inherit inputs user hostname; };
       modules = [
         ./configuration.nix
+	inputs.minegrub-world-sel-theme.nixosModules.default
 	home-manager.nixosModules.home-manager
           {
             home-manager = {

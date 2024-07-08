@@ -33,15 +33,15 @@
   '';
   shellAliases = {
     ll = "ls -l";
-    update-full = "( cd /etc/nixos ; sudo nix flake update ; sudo nixos-rebuild -v switch ; update-desktop-database -v ~/.local/share/applications)";
-    update = "sudo nixos-rebuild -v switch;update-desktop-database -v ~/.local/share/applications";
+    update-full = "(cd /etc/nixos; sudo nix flake update; sudo nixos-rebuild -v switch)";
+    update = "sudo nixos-rebuild -v switch";
     #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
-    #update-nvidia535 = "sudo nixos-rebuild switch --specialisation nvidia535;update-desktop-database -v ~/.local/share/applications";
-    #update-config = "sudo -E neovide /etc/nixos/configuration.nix";
-    update-test = "sudo nixos-rebuild -v test;update-desktop-database -v ~/.local/share/applications";
+    update-test = "sudo nixos-rebuild -v test";
+    update-boot = "sudo nixos-rebuild -v boot";
     #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
     fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
     cps="rsync -ahr --progress";
+    nix-sh = "cached-nix-shell --run 'zsh' -p";
     res="screen -r";
     record-discord="gpu-screen-recorder -k h264 -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
     nvide="neovide --no-fork";
@@ -64,16 +64,6 @@
         name = "p10k-config";
 	src = ./stuff/p10k-config;
 	file = "p10k.zsh";
-      }
-      {
-        name = "zsh-nix-shell";
-        file = "nix-shell.plugin.zsh";
-        src = pkgs.fetchFromGitHub {
-          owner = "chisui";
-          repo = "zsh-nix-shell";
-          rev = "v0.8.0";
-          sha256 = "1lzrn0n4fxfcgg65v0qhnj7wnybybqzs4adz7xsrkgmcsr0ii8b7";
-        };
       }
     ];
 }
