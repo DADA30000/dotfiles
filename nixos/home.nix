@@ -20,7 +20,7 @@
     bottles
     steam-run
     vesktop
-    gnome.adwaita-icon-theme
+    adwaita-icon-theme
   ];
   #programs.ags = {
   #  enable = true;
