@@ -330,7 +330,8 @@ in
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
       neovide
-      fragments
+      #fragments
+      qbittorrent
       unrar
       pavucontrol
       brightnessctl
