@@ -201,15 +201,15 @@
         background-color: #3275a8;
       }
       #workspaces button:nth-child(1) {
-        border-radius: 10px 0 0 10px;
+        border-radius: 10px 5px 5px 10px;
       }
       #workspaces button:nth-child(10) {
-        border-radius: 0 10px 10px 0;
+        border-radius: 5px 10px 10px 5px;
       }
       #workspaces button {
         padding: 0px 10px 0 5px;
         margin: 4px 0px;
-        border-radius: 0;
+        border-radius: 5;
       }
       #workspaces button:hover {
         background-color: rgba(255,255,255,0.25);
