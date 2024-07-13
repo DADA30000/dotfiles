@@ -392,6 +392,14 @@ in
     "audio/mpeg" = "mpv.desktop";
     "audio/flac" = "mpv.desktop";
   };
+  xdg.terminal-exec = {
+    enable = true;
+    settings = {
+      default = [
+        "kitty.desktop"
+      ];
+    };
+  };
   users.defaultUserShell = pkgs.zsh;
   nixpkgs.config.allowUnfree = true;
   imports =

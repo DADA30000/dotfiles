@@ -105,7 +105,6 @@
         "animation slide left, swaync-control-center"
       ];  
       exec-once = [
-        "killall screen; ~/bot/start-bot.sh"
         "firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
