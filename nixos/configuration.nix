@@ -39,12 +39,12 @@ in
     #    };
     #  };
     #};
-    sunshine = {
-      autoStart = false;
-      enable = true;
-      capSysAdmin = true;
-      package = ( pkgs.sunshine.override { cudaSupport = true; } );
-    };
+    #sunshine = {
+    #  autoStart = false;
+    #  enable = true;
+    #  capSysAdmin = true;
+    #  package = ( pkgs.sunshine.override { cudaSupport = true; } );
+    #};
     cron = {
       enable = true;
       systemCronJobs = [
