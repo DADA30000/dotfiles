@@ -6,6 +6,7 @@
   nixpkgs.config.allowUnfree = true;
   imports = [
     #inputs.ags.homeManagerModules.default
+    inputs.nix-flatpak.homeManagerModules.nix-flatpak
     ./zsh.nix
     ./kitty.nix
     ./hyprland.nix
@@ -19,12 +20,27 @@
     xorg.xeyes
     bottles
     steam-run
-    vesktop
     adwaita-icon-theme
   ];
+  services.flatpak = {
+    enable = true;
+    uninstallUnmanaged = true;
+    packages = [];
+    update.auto = {
+      enable = true;
+      onCalendar = "daily";
+    };
+  };
   #programs.ags = {
   #  enable = true;
   #};
+  dconf.settings = {
+    "org/nemo/preferences" = {
+      default-folder-viewer = "list-view";
+      show-hidden-files = true;
+      thumbnail-limit = lib.hm.gvariant.mkUint64 68719476736;
+    };
+  };
   programs.imv = {
     enable = true;
     settings = {

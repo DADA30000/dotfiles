@@ -3,7 +3,7 @@
 , fetchFromGitHub
 , cmake
 , ffmpeg
-, freeglut
+, libglut
 , freeimage
 , glew
 , glfw
@@ -23,19 +23,18 @@
 , SDL2
 , SDL2_mixer
 , zlib
-, unstableGitUpdater
 }:
 
 stdenv.mkDerivation {
   pname = "linux-wallpaperengine";
-  version = "0-unstable-2024-06-07";
+  version = "unstable-2023-09-23";
 
   src = fetchFromGitHub {
     owner = "Almamu";
     repo = "linux-wallpaperengine";
     # upstream lacks versioned releases
-    rev = "4bc52050341b8bceb01f2b2f1ccfd6500b7f3b78";
-    hash = "sha256-t89L1aZtmZJosjKVFuwmKFfz8cImN7kl5QAdvKDgjeY=";
+    rev = "e28780562bdf8bcb2867cca7f79b2ed398130eb9";
+    hash = "sha256-VvrYOh/cvWxDx9dghZV5dcOrfMxjVCzIGhVPm9d7P2g=";
   };
 
   nativeBuildInputs = [
@@ -45,7 +44,7 @@ stdenv.mkDerivation {
 
   buildInputs = [
     ffmpeg
-    freeglut
+    libglut
     freeimage
     glew
     glfw
@@ -65,8 +64,6 @@ stdenv.mkDerivation {
     SDL2_mixer.all
     zlib
   ];
-
-  passthru.updateScript = unstableGitUpdater { };
 
   meta = {
     description = "Wallpaper Engine backgrounds for Linux";

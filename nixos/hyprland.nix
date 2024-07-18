@@ -2,7 +2,7 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = [ inputs.hyprland-plugins.packages.${pkgs.system}.hyprexpo ];
+    plugins = with inputs.hyprland-plugins.packages.${pkgs.system}; [ hyprexpo ];
     package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     settings = {
       "$mod" = "SUPER";
@@ -75,6 +75,7 @@
       windowrule = [
         "pin, ^(polkit-gnome-authentication-agent-1)$"
 	"opacity 0.99 override 0.99 override, title:^(MainPicker)$"
+	"opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
       ];
       layerrule = [
 	"blur, waybar"
@@ -105,7 +106,7 @@
         "animation slide left, swaync-control-center"
       ];  
       exec-once = [
-        "firefox & vesktop --enable-blink-features=MiddleClickAutoscroll"
+        "firefox & flatpak run dev.vencord.Vesktop"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
 	"hyprctl setcursor Bibata-Modern-Classic 24"
@@ -196,6 +197,9 @@
           gesture_distance = 300;
           gesture_positive = true;
         };
+	hyprwinwrap = {
+	  class = "heh";
+	};
       };
     };
     extraConfig = ''
