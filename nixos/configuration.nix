@@ -1,6 +1,5 @@
-{ config, lib, inputs, pkgs, options, user, hostname, ... }:
+{ config, lib, inputs, pkgs, options, var, ... }:
 let
-  spicePkgs = inputs.spicetify-nix.packages.${pkgs.system}.default;
   fileroller = "org.gnome.FileRoller.desktop";
   long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
   adblock = pkgs.fetchgit {
@@ -17,10 +16,20 @@ in
 {
   #Some services
   services = {
-    getty.autologinUser = user;
+    getty.autologinUser = var.user;
     printing.enable = true;
     gvfs.enable = true;
-    flatpak.enable = true;
+    flatpak = {
+      enable = true;
+      uninstallUnmanaged = true;
+      packages = [
+        "dev.vencord.Vesktop"
+      ];
+      update.auto = {
+        enable = true;
+        onCalendar = "daily"; # Default value
+      };
+    };
     openssh.enable = true;
     #desktopManager.plasma6.enable = true;
     #displayManager = {
@@ -30,7 +39,7 @@ in
     #    #settings = {
     #    #  Autologin = {
     #	#    Session = "plasma.desktop";
-    #	#    User = user;
+    #	#    User = var.user;
     #    #  };
     #    #};
     #    wayland = {
@@ -101,9 +110,9 @@ in
         src = hazy;
         requiredExtensions = [
           {
-	    filename = "adblock.js";
-	    src = "${adblock}/adblock";
-	  }
+            filename = "adblock.js";
+            src = "${adblock}/adblock";
+          }
         ];
         appendName = false;
         injectCss = true;
@@ -352,10 +361,10 @@ in
       ffmpegthumbnailer
       cached-nix-shell
       #inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
-      #(pkgs.callPackage ./linux-wallpaperengine.nix { })
+      (pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
-  #nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
+  nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
   #And here is some other small stuff
   documentation.nixos.enable = false;
   virtualisation.libvirtd.enable = true;
@@ -422,7 +431,7 @@ in
       hinting.autohint = true;
     };
   };
-  networking.hostName = hostname;
+  networking.hostName = var.hostname;
   networking.networkmanager.enable = true;
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
@@ -431,12 +440,16 @@ in
     font = null;
     useXkbConfig = true;
   };
-  users.users."${user}" = {
+  users.users."${var.user}" = {
     isNormalUser = true;
+    hashedPassword = var.user-hash;
     extraGroups = [ "wheel" "libvirtd" "libvirt ""uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ];
     packages = with pkgs; [
       tree
     ];
+  };
+  users.users.root = {
+    hashedPassword = var.root-hash;
   };
     xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
   xdg.portal.config.common.default = "*";
