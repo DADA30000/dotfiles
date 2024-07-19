@@ -13,51 +13,14 @@
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/disk/by-uuid/24b515ba-643e-4639-878f-8b38357ce8fa";
-      fsType = "btrfs";
-      options = [ "subvol=root" "compress-force=zstd" ];
-    };
-
-  fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/24b515ba-643e-4639-878f-8b38357ce8fa";
-      fsType = "btrfs";
-      options = [ "subvol=nix" "compress-force=zstd" "noatime" ];
-    };
-
-  fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/24b515ba-643e-4639-878f-8b38357ce8fa";
-      fsType = "btrfs";
-      options = [ "subvol=home" "compress-force=zstd" ];
-    };
-
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/FC3C-A7DF";
-      fsType = "vfat";
-    };
-  fileSystems."/home/l0lk3k/Games" =
-  { device = "/dev/disk/by-label/Games";
-    fsType = "btrfs";
-    options = [ "compress-force=zstd" "subvol=games" "nofail"];
-  };
-  fileSystems."/var/lib/nextcloud" = 
-  { device = "/dev/disk/by-label/Games";
-    fsType = "btrfs";
-    options = [ "compress-force=zstd" "subvol=nextcloud" "nofail" ];
-  };
-  
-
-  swapDevices = [
-  #    { device = "/dev/disk/by-uuid/4946d018-95b8-4731-a4cb-f090a0f296db"; }
-       { device = "/var/lib/swapfile"; size = 4*1024; } 
-    ];
-
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
   # (the default) this is the recommended approach. When using systemd-networkd it's
   # still possible to use this option, but it's recommended to use it in conjunction
   # with explicit per-interface declarations with `networking.interfaces.<interface>.useDHCP`.
   networking.useDHCP = lib.mkDefault true;
   # networking.interfaces.enp2s0.useDHCP = lib.mkDefault true;
+  # networking.interfaces.virbr0.useDHCP = lib.mkDefault true;
+  # networking.interfaces.ztjlhzjklt.useDHCP = lib.mkDefault true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;

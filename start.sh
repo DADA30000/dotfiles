@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
+  sudo nixos-generate-config --no-filesystems
   sudo find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
   sudo rm ./nixos/hardware-configuration.nix
   sudo cp -r ./nixos flake.{nix,lock} /mnt/etc/nixos
