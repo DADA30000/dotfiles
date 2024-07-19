@@ -56,7 +56,7 @@
         ];
       };
       iso = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs var; };
 	modules = [
 	  ./iso/configuration.nix
 	];
