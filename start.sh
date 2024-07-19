@@ -3,7 +3,7 @@ if [ -f ./check ]; then
   sudo nixos-generate-config --no-filesystems
   sudo find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
   sudo rm ./nixos/hardware-configuration.nix
-  sudo cp -r ./nixos flake.{nix,lock} /mnt/etc/nixos
+  sudo cp -r ./nixos ./iso flake.{nix,lock} /mnt/etc/nixos
   sudo nixos-install --flake "/mnt/etc/nixos#nixos"
   #sudo nixos-install --flake github:DADA30000/dotfiles#nixos
 else
