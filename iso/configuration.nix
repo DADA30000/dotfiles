@@ -10,15 +10,16 @@
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   nixpkgs.config.allowUnfree = true;
-  boot.kernelPackages = pkgs.linuxPackages_xanmod_latest;
   environment.systemPackages = with pkgs; [
     git
     gum
     neovim
     btrfs-progs
+    clolcat
     (writeShellScriptBin "nix-install" ''
-      #!/usr/bin/env bash
-      sudo -i
+      if [[ $EUID -ne 0 ]]; then
+        exec sudo nix-install
+      fi
       clear
       echo "Проверка наличия соединения с интернетом..."
       if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
@@ -57,19 +58,19 @@
       fi
       if gum confirm "Всё верно?"; then
         echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | clolcat
-	echo "Разметка дисков..."
+	echo "\e[34mРазметка дисков..."
 	echo "label: gpt" | sudo sfdisk "$disk_system"
 	echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sudo sfdisk "$disk_system"
-	echo "start=     1050624, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sudo sfdisk "$disk_system"
+	echo "start=     1050624, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sudo sfdisk "$disk_system" -N 2
 	if [ -n "$disk_games" ]; then
 	  echo "label: gpt" | sudo sfdisk "$disk_games"
 	  echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sudo sfdisk "$disk_games"
 	fi
-	echo "Форматирование и монтирование разделов..."
+	echo "\e[34mФорматирование и монтирование разделов...\e[0m"
 	sudo mkdir -p /mnt
 	if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
 	  sudo mkfs.fat -n boot -F 32 "''${disk_system}p1"
-	  sudo mkfs.btrfs -L nixos "''${disk_system}p2"
+	  sudo mkfs.btrfs -f -L nixos "''${disk_system}p2"
 	  sudo mount "''${disk_system}p2" /mnt
 	  sudo btrfs subvolume create /mnt/root
 	  sudo btrfs subvolume create /mnt/home
@@ -83,7 +84,7 @@
 	  sudo mount "''${disk_system}p1" /mnt/boot
 	else
 	  sudo mkfs.fat -n boot -F 32 "''${disk_system}1"
-	  sudo mkfs.btrfs -L nixos "''${disk_system}2"
+	  sudo mkfs.btrfs -f -L nixos "''${disk_system}2"
 	  sudo mount "''${disk_system}2" /mnt
 	  sudo btrfs subvolume create /mnt/root
 	  sudo btrfs subvolume create /mnt/home
@@ -99,7 +100,7 @@
 	if [ -n "$disk_games" ]; then
 	  if [ $(echo "$disk_games" | grep -c nvme) -eq 1 ]; then
 	    sudo mkdir /mnt1
-	    sudo mkfs.btrfs -L Games "''${disk_games}p1"
+	    sudo mkfs.btrfs -f -L Games "''${disk_games}p1"
 	    sudo mount "''${disk_games}p1" /mnt1
 	    sudo btrfs subvolume create /mnt1/games
 	    sudo umount /mnt1
@@ -107,7 +108,7 @@
 	    sudo mkdir -p /mnt/home/${var.user}/Games
 	  else
 	    sudo mkdir /mnt1
-	    sudo mkfs.btrfs -L Games "''${disk_games}1"
+	    sudo mkfs.btrfs -f -L Games "''${disk_games}1"
 	    sudo mount "''${disk_games}1" /mnt1
 	    sudo btrfs subvolume create /mnt1/games
 	    sudo umount /mnt1
@@ -115,14 +116,14 @@
 	    sudo mkdir -p /mnt/home/${var.user}/Games
 	  fi
 	fi
-	echo "Копирование файлов конфигурации..."
+	echo "\e[34mКопирование файлов конфигурации...\e[0m"
 	sudo mkdir /mnt1
 	sudo git clone "$url" /mnt1/dotfiles
 	sudo mkdir -p /mnt/etc/nixos
-	echo "Установка системы..."
+	echo "\e[34mУстановка системы...\e[0m"
 	(cd /mnt1/dotfiles; ./start.sh)
 	sudo rm -rf /mnt1
-	echo "Установка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)"
+	echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
 	sleep 10
 	reboot
       fi
