@@ -7,7 +7,7 @@ if [ -f ./check ]; then
   cp -r /etc/nixos/nixos ./
   cp /etc/nixos/flake.{lock,nix} .
   git add . --all
-  git commit -m "lil update"
+  git commit -m "iso update"
   git push -u
 else
   echo "change your working directory to dotfiles already"
