@@ -257,14 +257,14 @@ in
         vaapiVdpau
       ];
     };
-    nvidia = {
-      modesetting.enable = true;
-      powerManagement.enable = true;
-      powerManagement.finegrained = false;
-      open = false;
-      nvidiaSettings = false;
-      package = config.boot.kernelPackages.nvidiaPackages.beta;
-    };    
+    #nvidia = {
+    #  modesetting.enable = true;
+    #  powerManagement.enable = true;
+    #  powerManagement.finegrained = false;
+    #  open = false;
+    #  nvidiaSettings = false;
+    #  package = config.boot.kernelPackages.nvidiaPackages.beta;
+    #};    
   };
   #Some environment stuff
   environment = {
@@ -309,7 +309,6 @@ in
       gamemode
       moonlight-qt
       desktop-file-utils
-      inputs.pollymc.packages.${pkgs.system}.pollymc
       (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
