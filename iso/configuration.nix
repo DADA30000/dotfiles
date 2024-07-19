@@ -9,6 +9,20 @@
   networking.networkmanager.enable = true;
   networking.wireless.enable = false;
   time.timeZone = "Europe/Moscow";
+  boot.loader.grub = {
+    minegrub-world-sel = { 
+      enable = true;
+      customIcons = [{
+        name = "nixos";
+        lineTop = "NixOS (06/07/2024, 2:24 AM)";
+        lineBottom = "Creative Mode, Cheats, Version: unstable";
+        customImg = builtins.path {
+          path = ../nixos/stuff/nixos-img.png;
+          name = "nixos-img";
+        };
+      }];
+    };
+  }; 
   i18n.defaultLocale = "ru_RU.UTF-8";
   nixpkgs.config.allowUnfree = true;
   environment.systemPackages = with pkgs; [
@@ -58,8 +72,10 @@
         echo "Вы хотите установить СИСТЕМУ на $disk_system"
       fi
       if gum confirm "Всё верно?"; then
+        clear
         echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | clolcat
-	echo "\e[34mРазметка дисков..."
+	sleep 2
+	echo -e "\e[34mРазметка дисков..."
 	echo "label: gpt" | sudo sfdisk "$disk_system"
 	echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sudo sfdisk "$disk_system"
 	echo "start=     1050624, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sudo sfdisk "$disk_system" -N 2
@@ -67,7 +83,7 @@
 	  echo "label: gpt" | sudo sfdisk "$disk_games"
 	  echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sudo sfdisk "$disk_games"
 	fi
-	echo "\e[34mФорматирование и монтирование разделов...\e[0m"
+	echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
 	sudo mkdir -p /mnt
 	if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
 	  sudo mkfs.fat -n boot -F 32 "''${disk_system}p1"
@@ -117,11 +133,11 @@
 	    sudo mkdir -p /mnt/home/${var.user}/Games
 	  fi
 	fi
-	echo "\e[34mКопирование файлов конфигурации...\e[0m"
+	echo -e "\e[34mКопирование файлов конфигурации...\e[0m"
 	sudo mkdir /mnt1
 	sudo git clone "$url" /mnt1/dotfiles
 	sudo mkdir -p /mnt/etc/nixos
-	echo "\e[34mУстановка системы...\e[0m"
+	echo -e "\e[34mУстановка системы...\e[0m"
 	(cd /mnt1/dotfiles; ./start.sh)
 	sudo rm -rf /mnt1
 	echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"

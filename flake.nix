@@ -59,6 +59,7 @@
         specialArgs = { inherit inputs var; };
 	modules = [
 	  ./iso/configuration.nix
+	  inputs.minegrub-world-sel-theme.nixosModules.default
 	];
       };
     };
