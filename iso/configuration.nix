@@ -9,6 +9,8 @@
   networking.networkmanager.enable = true;
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
+  nixpkgs.config.allowUnfree = true;
+  boot.kernelPackages = pkgs.linuxPackages_xanmod_latest;
   environment.systemPackages = with pkgs; [
     git
     gum
