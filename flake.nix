@@ -9,10 +9,6 @@
       url = "github:icewind1991/nvidia-patch-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    kwin-effects-forceblur = {
-      url = "github:taj-ny/kwin-effects-forceblur";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -39,26 +35,32 @@
       user = "l0lk3k"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
       hostname = "nixos"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
       user-hash = "$y$j9T$bf35xNR0RElwGaD22Dg0z/$mrMjZhFVre2.3rqCyAheMSyq38zMVLesJt64kPUrcPD"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
-      root-hash = "$y$j9T$5o3jjYBndjdmLUGMsi9Ua0$HDMIKO1utEEAwYDZukMWfis1Hbq9WF.x.HY4kTi2sAD"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
     };
   in { 
-    nixosConfigurations."${var.hostname}" = nixpkgs.lib.nixosSystem {
-      specialArgs = { inherit inputs var; };
-      modules = [
-        ./nixos/configuration.nix
-	inputs.nix-flatpak.nixosModules.nix-flatpak
-	#inputs.nix-flatpak.homeManagerModules.nix-flatpak
-	inputs.minegrub-world-sel-theme.nixosModules.default
-	home-manager.nixosModules.home-manager
+    nixosConfigurations = {
+      "${var.hostname}" = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit inputs var; };
+        modules = [
+          ./nixos/configuration.nix
+          inputs.nix-flatpak.nixosModules.nix-flatpak
+          inputs.minegrub-world-sel-theme.nixosModules.default
+          home-manager.nixosModules.home-manager
           {
             home-manager = {
-	      extraSpecialArgs = { inherit inputs; }; 
+              extraSpecialArgs = { inherit inputs; }; 
               useGlobalPkgs = true;
               users."${var.user}" = import ./nixos/home.nix;
               useUserPackages = true;
             };
           }
-      ];
+        ];
+      };
+      iso = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit inputs; };
+	modules = [
+	  ./iso/configuration.nix
+	];
+      };
     };
   };
 }

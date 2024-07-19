@@ -27,27 +27,10 @@ in
       ];
       update.auto = {
         enable = true;
-        onCalendar = "daily"; # Default value
+        onCalendar = "daily";
       };
     };
     openssh.enable = true;
-    #desktopManager.plasma6.enable = true;
-    #displayManager = {
-    #  sddm = {
-    #    enable = true;
-    #    theme = "elegant";
-    #    #settings = {
-    #    #  Autologin = {
-    #	#    Session = "plasma.desktop";
-    #	#    User = var.user;
-    #    #  };
-    #    #};
-    #    wayland = {
-    #      enable = true;
-    #      compositor = "kwin";
-    #    };
-    #  };
-    #};
     #sunshine = {
     #  autoStart = false;
     #  enable = true;
@@ -281,14 +264,6 @@ in
       open = false;
       nvidiaSettings = false;
       package = config.boot.kernelPackages.nvidiaPackages.beta;
-      #package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-      #  version = "555.99";
-      #  sha256_64bit = lib.fakeSha256;
-      #  sha256_aarch64 = lib.fakeSha256;
-      #  openSha256 = lib.fakeSha256;
-      #  settingsSha256 = lib.fakeSha256;
-      #  persistencedSha256 = lib.fakeSha256;
-      #};
     };    
   };
   #Some environment stuff
@@ -339,7 +314,6 @@ in
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
       neovide
-      #fragments
       qbittorrent
       unrar
       pavucontrol
@@ -360,7 +334,6 @@ in
       elegant-sddm
       ffmpegthumbnailer
       cached-nix-shell
-      #inputs.kwin-effects-forceblur.packages.${pkgs.system}.default
       (pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
@@ -415,6 +388,7 @@ in
   imports =
     [
       #./my-services.nix
+      ./disks.nix
       ./hardware-configuration.nix
       inputs.spicetify-nix.nixosModule
     ];
@@ -448,10 +422,7 @@ in
       tree
     ];
   };
-  users.users.root = {
-    hashedPassword = var.root-hash;
-  };
-    xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
+  xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
   xdg.portal.config.common.default = "*";
   networking.firewall.enable = false;
   system.stateVersion = "23.11";
