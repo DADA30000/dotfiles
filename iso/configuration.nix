@@ -7,6 +7,7 @@
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   networking.hostName = "iso";
   networking.networkmanager.enable = true;
+  networking.wireless.enable = false;
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   nixpkgs.config.allowUnfree = true;
