@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
-  sudo nixos-generate-config --no-filesystems
   sudo find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
   sudo rm ./nixos/hardware-configuration.nix
+  sudo nixos-generate-config --no-filesystems --root /mnt
   sudo cp -r ./nixos ./iso flake.{nix,lock} /mnt/etc/nixos
-  sudo nixos-install --flake "/mnt/etc/nixos#nixos"
+  sudo mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/nixos
+  sudo nixos-install --flake "/mnt/etc/nixos#nixos" --impure
   #sudo nixos-install --flake github:DADA30000/dotfiles#nixos
 else
   echo "change your working directory to dotfiles"
