@@ -82,6 +82,7 @@
   home.file = {
     ".themes".source = ./stuff/.themes;
     ".config/nvim/init.vim".source = ./stuff/init.vim;
+    ".config/mpv".source = ./stuff/mpv;
   };
   xdg.userDirs = {
     createDirectories = true;
