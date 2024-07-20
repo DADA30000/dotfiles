@@ -32,9 +32,9 @@
   outputs = {self, nixpkgs, home-manager, ...} @ inputs: 
   let
     var = {
-      user = "l0lk3k"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
+      user = "haher"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
       hostname = "nixos"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
-      user-hash = "$y$j9T$bf35xNR0RElwGaD22Dg0z/$mrMjZhFVre2.3rqCyAheMSyq38zMVLesJt64kPUrcPD"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
+      user-hash = "$y$j9T$pgAYDSkVLpIvwzavhQiie.$SvSt/sLoMxL0ULL2QrBW0EArugM2fRSvI/kFun2XRqB"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
     };
   in { 
     nixosConfigurations = {
