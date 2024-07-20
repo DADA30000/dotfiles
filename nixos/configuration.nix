@@ -248,11 +248,12 @@ in
   };
   #Some hardware stuff
   hardware = {
+    opentabletdriver.enable = true;
     graphics = {
       enable = true;
       enable32Bit = true;
       extraPackages = with pkgs; [
-        nvidia-vaapi-driver
+        #nvidia-vaapi-driver
         libvdpau-va-gl
         vaapiVdpau
       ];
@@ -279,9 +280,9 @@ in
       XCURSOR_SIZE = "24";
       EGL_PLATFORM = "wayland";
       MOZ_DISABLE_RDD_SANDBOX = "1";
-      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-      GBM_BACKEND = "nvidia-drm";
-      LIBVA_DRIVER_NAME = "nvidia";
+      #__GLX_VENDOR_LIBRARY_NAME = "nvidia";
+      #GBM_BACKEND = "nvidia-drm";
+      #LIBVA_DRIVER_NAME = "nvidia";
     };
     systemPackages = with pkgs; [
       wget
@@ -309,6 +310,7 @@ in
       gamemode
       moonlight-qt
       desktop-file-utils
+      #inputs.pollymc.packages.${pkgs.system}.pollymc
       (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
@@ -333,6 +335,9 @@ in
       elegant-sddm
       ffmpegthumbnailer
       cached-nix-shell
+      zed-editor
+      dotnetCorePackages.dotnet_8.sdk
+      dotnetCorePackages.dotnet_8.runtime
       (pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
