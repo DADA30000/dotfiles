@@ -61,7 +61,7 @@ in
       xkb.layout = "us,ru";
       xkb.options = "grp:alt_shift_toggle";
       displayManager.startx.enable = true;
-      videoDrivers = ["nvidia" "amdgpu"];
+      videoDrivers = ["amdgpu"]; #"nvidia"
       enable = true;
     };
   };
@@ -116,7 +116,7 @@ in
       options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
     '';
     kernelParams = [ 
-      "nvidia_drm.fbdev=1"
+      #"nvidia_drm.fbdev=1"
       "amd_iommu=on" 
       "iommu=pt"
     ];
@@ -311,7 +311,7 @@ in
       moonlight-qt
       desktop-file-utils
       #inputs.pollymc.packages.${pkgs.system}.pollymc
-      (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
+      #(nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
       neovide
