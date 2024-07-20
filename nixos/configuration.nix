@@ -288,7 +288,7 @@ in
       wget
       git
       neovim
-      osu-lazer-bin
+      #osu-lazer-bin
       inotify-tools
       fastfetch
       hyprshot
