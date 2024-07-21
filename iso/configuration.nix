@@ -17,6 +17,7 @@
     neovim
     btrfs-progs
     clolcat
+    openssl
     (writeShellScriptBin "nix-install" ''
       if [[ $EUID -ne 0 ]]; then
         exec sudo nix-install
