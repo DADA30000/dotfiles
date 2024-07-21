@@ -39,37 +39,37 @@ tZXxn9qc34vndv7Nyuoe0g=="
     echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
       mkdir -p /mnt
     if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
-      mkfs.fat -n boot -F 32 "''${disk_system}p1"
-      mkfs.btrfs -f -L nixos "''${disk_system}p2"
-      mount "''${disk_system}p2" /mnt
+      mkfs.fat -n boot -F 32 "${disk_system}p1"
+      mkfs.btrfs -f -L nixos "${disk_system}p2"
+      mount "${disk_system}p2" /mnt
       btrfs subvolume create /mnt/root
       btrfs subvolume create /mnt/home
       btrfs subvolume create /mnt/nix
       umount /mnt
-      mount -o compress-force=zstd,subvol=root "''${disk_system}p2" /mnt
+      mount -o compress-force=zstd,subvol=root "${disk_system}p2" /mnt
       mkdir /mnt/{home,nix}
-      mount -o compress-force=zstd,subvol=home "''${disk_system}p2" /mnt/home
-      mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}p2" /mnt/nix
+      mount -o compress-force=zstd,subvol=home "${disk_system}p2" /mnt/home
+      mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}p2" /mnt/nix
       mkdir /mnt/boot
-      mount "''${disk_system}p1" /mnt/boot
-      mkswap -L swap "''${disk_system}p3"
-      swapon "''${disk_system}p3"
+      mount "${disk_system}p1" /mnt/boot
+      mkswap -L swap "${disk_system}p3"
+      swapon "${disk_system}p3"
     else
-      mkfs.fat -n boot -F 32 "''${disk_system}1"
-      mkfs.btrfs -f -L nixos "''${disk_system}2"
-      mount "''${disk_system}2" /mnt
+      mkfs.fat -n boot -F 32 "${disk_system}1"
+      mkfs.btrfs -f -L nixos "${disk_system}2"
+      mount "${disk_system}2" /mnt
       btrfs subvolume create /mnt/root
       btrfs subvolume create /mnt/home
       btrfs subvolume create /mnt/nix
       umount /mnt
-      mount -o compress-force=zstd,subvol=root "''${disk_system}2" /mnt
+      mount -o compress-force=zstd,subvol=root "${disk_system}2" /mnt
       mkdir /mnt/{home,nix}
-      mount -o compress-force=zstd,subvol=home "''${disk_system}2" /mnt/home
-      mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}2" /mnt/nix
+      mount -o compress-force=zstd,subvol=home "${disk_system}2" /mnt/home
+      mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}2" /mnt/nix
       mkdir /mnt/boot
-      mount "''${disk_system}1" /mnt/boot
-      mkswap -L swap "''${disk_system}3"
-      swapon "''${disk_system}3"
+      mount "${disk_system}1" /mnt/boot
+      mkswap -L swap "${disk_system}3"
+      swapon "${disk_system}3"
     fi
     if [ -n "$myuser" ]; then
       mkdir -p /mnt/home/${myuser}
@@ -78,15 +78,15 @@ tZXxn9qc34vndv7Nyuoe0g=="
     if [ -n "$disk_games" ]; then
       if [ $(echo "$disk_games" | grep -c nvme) -eq 1 ]; then
          mkdir /mnt1
-         mkfs.btrfs -f -L Games "''${disk_games}p1"
-         mount "''${disk_games}p1" /mnt1
+         mkfs.btrfs -f -L Games "${disk_games}p1"
+         mount "${disk_games}p1" /mnt1
          btrfs subvolume create /mnt1/games
          umount /mnt1
          rmdir /mnt1
       else
          mkdir /mnt1
-         mkfs.btrfs -f -L Games "''${disk_games}1"
-         mount "''${disk_games}1" /mnt1
+         mkfs.btrfs -f -L Games "${disk_games}1"
+         mount "${disk_games}1" /mnt1
          btrfs subvolume create /mnt1/games
          umount /mnt1
          rmdir /mnt1
