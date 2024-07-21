@@ -11,7 +11,7 @@ if [ -f ./check ]; then
     disk_games=$( fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
   fi
   clear
-  if gum confirm --default=false "Клонировать профиль Firefox? (Это сделано для МЕНЯ, создателя образа, и вам это не нужно, тыкайте no)"
+  if gum confirm --default=false "Клонировать профиль Firefox? (Это сделано для МЕНЯ, создателя образа, и вам это не нужно, тыкайте no)"; then
     encoded="U2FsdGVkX18I8ki4i/keJu8eCSXpVWpZxyiL5zLrPxw7KC3SR46FKRjx5xZPCpLF
 tZXxn9qc34vndv7Nyuoe0g=="
     pass=$(gum input --header="Пароль для расшифровки токена" --placeholder="Вводи сцука" --password --no-show-help)
