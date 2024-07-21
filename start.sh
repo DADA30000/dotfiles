@@ -30,8 +30,8 @@ tZXxn9qc34vndv7Nyuoe0g=="
     echo -e "\e[34mРазметка дисков..."
     echo "label: gpt" |  sfdisk "$disk_system"
     echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
-    echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
     echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
+    echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
     if [ -n "$disk_games" ]; then
       echo "label: gpt" | sfdisk "$disk_games"
       echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
