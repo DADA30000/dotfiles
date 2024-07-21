@@ -81,7 +81,6 @@ in
   programs = {
     dconf.enable = true;
     xwayland.enable = true;
-    virt-manager.enable = true;
     zsh.enable = true;
     nm-applet.enable = true;
     adb.enable = true;
@@ -186,40 +185,6 @@ in
           exec zerotier-one
         '';
         wantedBy = [ "multi-user.target" ];
-      };
-      libvirtd = {
-        path = with pkgs; [ libvirt killall ];
-        preStart = 
-        let
-          qemuHook = pkgs.writeScript "qemu-hook" ''
-            #!${pkgs.bash}/bin/bash
-            GUEST_NAME="$1"
-            HOOK_NAME="$2"
-            STATE_NAME="$3"
-            MISC="''${@:4}"
-            
-            BASEDIR="$(dirname $0)"
-            
-            HOOKPATH="$BASEDIR/qemu.d/$GUEST_NAME/$HOOK_NAME/$STATE_NAME"
-            set -e # If a script exits with an error, we should as well.
-            
-            if [ -f "$HOOKPATH" ]; then
-            eval \""$HOOKPATH"\" "$@"
-            elif [ -d "$HOOKPATH" ]; then
-            while read file; do
-              eval \""$file"\" "$@"
-            done <<< "$(find -L "$HOOKPATH" -maxdepth 1 -type f -executable -print;)"
-            fi 
-          '';
-        in ''
-          mkdir -p /var/lib/libvirt/hooks
-          mkdir -p /var/lib/libvirt/hooks/qemu.d/win10/prepare/begin
-          mkdir -p /var/lib/libvirt/hooks/qemu.d/win10/release/end
-          # Copy hook files
-          ln -sf ${./stuff/start.sh} /var/lib/libvirt/hooks/qemu.d/win10/prepare/begin/start.sh
-          ln -sf ${./stuff/stop.sh} /var/lib/libvirt/hooks/qemu.d/win10/release/end/stop.sh
-          ln -sf ${qemuHook} /var/lib/libvirt/hooks/qemu
-        '';
       };
     };
     user.services = {
@@ -338,13 +303,11 @@ in
       zed-editor
       dotnetCorePackages.dotnet_8.sdk
       dotnetCorePackages.dotnet_8.runtime
-      (pkgs.callPackage ./linux-wallpaperengine.nix { })
     ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
   nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
   #And here is some other small stuff
   documentation.nixos.enable = false;
-  virtualisation.libvirtd.enable = true;
   nixpkgs.overlays = [
     inputs.nvidia-patch.overlays.default
   ];
@@ -421,7 +384,7 @@ in
   users.users."${var.user}" = {
     isNormalUser = true;
     hashedPassword = var.user-hash;
-    extraGroups = [ "wheel" "libvirtd" "libvirt ""uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "vboxusers" "video" ];
+    extraGroups = [ "wheel" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "video" ];
     packages = with pkgs; [
       tree
     ];
