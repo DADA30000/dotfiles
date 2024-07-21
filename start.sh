@@ -11,6 +11,13 @@ if [ -f ./check ]; then
     disk_games=$( fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
   fi
   clear
+  if gum confirm --default=false "Клонировать профиль Firefox? (Это сделано для МЕНЯ, создателя образа, и вам это не нужно, тыкайте no)"
+    encoded="U2FsdGVkX18I8ki4i/keJu8eCSXpVWpZxyiL5zLrPxw7KC3SR46FKRjx5xZPCpLF
+tZXxn9qc34vndv7Nyuoe0g=="
+    pass=$(gum input --header="Пароль для расшифровки токена" --placeholder="Вводи сцука" --password --no-show-help)
+    decoded=$(echo $encoded | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:${pass})
+    myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
+  fi
   if [ -n "$disk_games" ]; then
     echo "Вы хотите установить СИСТЕМУ на $disk_system, и использовать в качестве ДОПОЛНИТЕЛЬНОГО ДИСКА $disk_games (предупреждение: он отформатируется)"
   else
@@ -30,39 +37,43 @@ if [ -f ./check ]; then
       echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
     fi
     echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
-     mkdir -p /mnt
+      mkdir -p /mnt
     if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
-       mkfs.fat -n boot -F 32 "''${disk_system}p1"
-       mkfs.btrfs -f -L nixos "''${disk_system}p2"
-       mount "''${disk_system}p2" /mnt
-       btrfs subvolume create /mnt/root
-       btrfs subvolume create /mnt/home
-       btrfs subvolume create /mnt/nix
-       umount /mnt
-       mount -o compress-force=zstd,subvol=root "''${disk_system}p2" /mnt
-       mkdir /mnt/{home,nix}
-       mount -o compress-force=zstd,subvol=home "''${disk_system}p2" /mnt/home
-       mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}p2" /mnt/nix
-       mkdir /mnt/boot
-       mount "''${disk_system}p1" /mnt/boot
-       mkswap -L swap "''${disk_system}p3"
-       swapon "''${disk_system}p3"
+      mkfs.fat -n boot -F 32 "''${disk_system}p1"
+      mkfs.btrfs -f -L nixos "''${disk_system}p2"
+      mount "''${disk_system}p2" /mnt
+      btrfs subvolume create /mnt/root
+      btrfs subvolume create /mnt/home
+      btrfs subvolume create /mnt/nix
+      umount /mnt
+      mount -o compress-force=zstd,subvol=root "''${disk_system}p2" /mnt
+      mkdir /mnt/{home,nix}
+      mount -o compress-force=zstd,subvol=home "''${disk_system}p2" /mnt/home
+      mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}p2" /mnt/nix
+      mkdir /mnt/boot
+      mount "''${disk_system}p1" /mnt/boot
+      mkswap -L swap "''${disk_system}p3"
+      swapon "''${disk_system}p3"
     else
-       mkfs.fat -n boot -F 32 "''${disk_system}1"
-       mkfs.btrfs -f -L nixos "''${disk_system}2"
-       mount "''${disk_system}2" /mnt
-       btrfs subvolume create /mnt/root
-       btrfs subvolume create /mnt/home
-       btrfs subvolume create /mnt/nix
-       umount /mnt
-       mount -o compress-force=zstd,subvol=root "''${disk_system}2" /mnt
-       mkdir /mnt/{home,nix}
-       mount -o compress-force=zstd,subvol=home "''${disk_system}2" /mnt/home
-       mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}2" /mnt/nix
-       mkdir /mnt/boot
-       mount "''${disk_system}1" /mnt/boot
-       mkswap -L swap "''${disk_system}3"
-       swapon "''${disk_system}3"
+      mkfs.fat -n boot -F 32 "''${disk_system}1"
+      mkfs.btrfs -f -L nixos "''${disk_system}2"
+      mount "''${disk_system}2" /mnt
+      btrfs subvolume create /mnt/root
+      btrfs subvolume create /mnt/home
+      btrfs subvolume create /mnt/nix
+      umount /mnt
+      mount -o compress-force=zstd,subvol=root "''${disk_system}2" /mnt
+      mkdir /mnt/{home,nix}
+      mount -o compress-force=zstd,subvol=home "''${disk_system}2" /mnt/home
+      mount -o compress-force=zstd,noatime,subvol=nix "''${disk_system}2" /mnt/nix
+      mkdir /mnt/boot
+      mount "''${disk_system}1" /mnt/boot
+      mkswap -L swap "''${disk_system}3"
+      swapon "''${disk_system}3"
+    fi
+    if [ -n "$myuser" ]; then
+      mkdir -p /mnt/home/${myuser}
+      git clone https://DADA30000:${decoded}@github.com/DADA30000/mozilla.git /mnt/home/${myuser}/.mozilla
     fi
     if [ -n "$disk_games" ]; then
       if [ $(echo "$disk_games" | grep -c nvme) -eq 1 ]; then
