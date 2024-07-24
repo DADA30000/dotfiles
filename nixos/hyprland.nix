@@ -18,12 +18,15 @@
 	"$mod_CTRL, C, exec, hyprctl kill"
 	"$mod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
 	"$mod_CTRL, F, fakefullscreen"
+	"$mod_CTRL, U, exec, update-damn-nixos ${config.home.username}"
+	"$mod, R, exec, pkill rofi || rofi -show drun -show-icons"
+        "$mod_SHIFT, R, exec, pkill rofi || rofi -show run"
 	"$mod_CTRL, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy"
-	"$mainMod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
-	"$mainMod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
-	"$mainMod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
-	"$mainMod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
-        "$mod, F1, exec, gamemode.sh"
+	"$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
+	"$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
+	"$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
+	"$mod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
+	"$mod, F1, exec, gamemode.sh"
         "$mod, F2, exec, sheesh.sh"
         "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
         "$mod, Q, exec, kitty"
@@ -64,10 +67,10 @@
         "$mod, mouse_down, workspace, e+1"
         "$mod, mouse_up, workspace, e-1"
       ];
-      bindr = [
- 	"$mod, $mod_L, exec, pkill rofi || $(rofi -show drun -show-icons)"
-        "$mod_CTRL, $mod_L, exec, pkill rofi || $(rofi -show run)"
-      ];
+      #bindr = [
+      #  "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons"
+      #  "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run"
+      #];
       bindm = [
         "$mod, mouse:272, movewindow"
 	"$mod, mouse:273, resizewindow"
@@ -205,7 +208,7 @@
     extraConfig = ''
       submap=passthrough
         bind=,escape,submap,reset
-      submap=reset      
+      submap=reset
     '';
   };
   programs.hyprlock = {

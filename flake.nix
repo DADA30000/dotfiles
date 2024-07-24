@@ -21,8 +21,11 @@
       url = "github:Lxtharia/minegrub-world-sel-theme";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    spicetify-nix = {
+      url = "github:Gerg-L/spicetify-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     pollymc.url = "github:fn2006/PollyMC";
-    spicetify-nix.url = "github:DADA30000/spicetify-nix";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.4.1";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
@@ -32,9 +35,9 @@
   outputs = {self, nixpkgs, home-manager, ...} @ inputs: 
   let
     var = {
-      user = "haher"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
+      user = "l0lk3k"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
       hostname = "nixos"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<<
-      user-hash = "$y$j9T$pgAYDSkVLpIvwzavhQiie.$SvSt/sLoMxL0ULL2QrBW0EArugM2fRSvI/kFun2XRqB"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
+      user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1"; # DON'T FORGET TO CHANGE STUFF HERE <<<<<<<<<< # change to null if you don't need this
     };
   in { 
     nixosConfigurations = {
@@ -42,6 +45,7 @@
         specialArgs = { inherit inputs var; };
         modules = [
           ./nixos/configuration.nix
+	  inputs.spicetify-nix.nixosModules.default
           inputs.nix-flatpak.nixosModules.nix-flatpak
           inputs.minegrub-world-sel-theme.nixosModules.default
           home-manager.nixosModules.home-manager

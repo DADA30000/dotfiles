@@ -1,12 +1,8 @@
 { config, lib, inputs, pkgs, options, var, ... }:
 let
   fileroller = "org.gnome.FileRoller.desktop";
+  spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.system};
   long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
-  adblock = pkgs.fetchgit {
-    url = "https://github.com/rxri/spicetify-extensions";
-    rev = "9168bc5d6c3b816ba404d91161fd577b3bf43e4a";
-    sha256 = "sha256-kPjmDVyxtXG1puedQKD6HRP6eN/MPdEZ9Zs4Ao4RVtg=";
-  };
   hazy = pkgs.fetchgit {
     url = "https://github.com/Astromations/Hazy";
     rev = "25e472cc4563918d794190e72cba6af8397d3a78";
@@ -61,7 +57,7 @@ in
       xkb.layout = "us,ru";
       xkb.options = "grp:alt_shift_toggle";
       displayManager.startx.enable = true;
-      videoDrivers = ["amdgpu"]; #"nvidia"
+      videoDrivers = ["nvidia" "amdgpu"];
       enable = true;
     };
   };
@@ -87,16 +83,14 @@ in
     firefox.nativeMessagingHosts.ff2mpv = true;
     spicetify = {
       enable = true;
+      enabledExtensions = with spicePkgs.extensions; [
+        adblock
+        hidePodcasts
+        shuffle # shuffle+ (special characters are sanitized out of extension names)
+      ];
       theme = {
         name = "Hazy";
         src = hazy;
-        requiredExtensions = [
-          {
-            filename = "adblock.js";
-            src = "${adblock}/adblock";
-          }
-        ];
-        appendName = false;
         injectCss = true;
         replaceColors = true;
         overwriteAssets = true;
@@ -109,13 +103,13 @@ in
     extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     initrd.systemd.enable = true;
     kernel.sysctl."kernel.sysrq" = 1;
-    kernelPackages = pkgs.linuxPackages_xanmod_latest; 
+    kernelPackages = pkgs.linuxPackages_testing; 
     tmp.useTmpfs = true;
     extraModprobeConfig = ''
       options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
     '';
     kernelParams = [ 
-      #"nvidia_drm.fbdev=1"
+      "nvidia_drm.fbdev=1"
       "amd_iommu=on" 
       "iommu=pt"
     ];
@@ -147,8 +141,6 @@ in
   };
   #Some nix settings
   nix.settings = {
-    keep-outputs = true;
-    keep-derivations = true;
     auto-optimise-store = true;
     substituters = [
       "https://hyprland.cachix.org" 
@@ -172,7 +164,7 @@ in
       NetworkManager-wait-online.enable = false;
       startup-sound = {
         wantedBy = ["sysinit.target"];
-        enable = true;
+        enable = false;
         preStart = "${pkgs.kmod}/bin/modprobe pcspkr";
         serviceConfig = {
           ExecStart = long-script;
@@ -218,19 +210,19 @@ in
       enable = true;
       enable32Bit = true;
       extraPackages = with pkgs; [
-        #nvidia-vaapi-driver
+        nvidia-vaapi-driver
         libvdpau-va-gl
         vaapiVdpau
       ];
     };
-    #nvidia = {
-    #  modesetting.enable = true;
-    #  powerManagement.enable = true;
-    #  powerManagement.finegrained = false;
-    #  open = false;
-    #  nvidiaSettings = false;
-    #  package = config.boot.kernelPackages.nvidiaPackages.beta;
-    #};    
+    nvidia = {
+      modesetting.enable = true;
+      powerManagement.enable = true;
+      powerManagement.finegrained = false;
+      open = false;
+      nvidiaSettings = false;
+      package = config.boot.kernelPackages.nvidiaPackages.beta;
+    };    
   };
   #Some environment stuff
   environment = {
@@ -245,15 +237,15 @@ in
       XCURSOR_SIZE = "24";
       EGL_PLATFORM = "wayland";
       MOZ_DISABLE_RDD_SANDBOX = "1";
-      #__GLX_VENDOR_LIBRARY_NAME = "nvidia";
-      #GBM_BACKEND = "nvidia-drm";
-      #LIBVA_DRIVER_NAME = "nvidia";
+      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+      GBM_BACKEND = "nvidia-drm";
+      LIBVA_DRIVER_NAME = "nvidia";
     };
     systemPackages = with pkgs; [
       wget
       git
       neovim
-      #osu-lazer-bin
+      osu-lazer-bin
       inotify-tools
       fastfetch
       hyprshot
@@ -275,8 +267,8 @@ in
       gamemode
       moonlight-qt
       desktop-file-utils
-      #inputs.pollymc.packages.${pkgs.system}.pollymc
-      #(nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
+      inputs.pollymc.packages.${pkgs.system}.pollymc
+      (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
       (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
       mpv
       neovide
@@ -303,7 +295,7 @@ in
       zed-editor
       dotnetCorePackages.dotnet_8.sdk
       dotnetCorePackages.dotnet_8.runtime
-    ] ++ (import ./stuff.nix pkgs).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
+    ] ++ (import ./stuff.nix (pkgs)).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
   nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
   #And here is some other small stuff
@@ -357,7 +349,6 @@ in
       #./my-services.nix
       ./disks.nix
       ./hardware-configuration.nix
-      inputs.spicetify-nix.nixosModule
     ];
   fonts = {
     enableDefaultPackages = true;
