@@ -18,6 +18,9 @@
      |_|\_|_/_\_\\___/|___/
     EOF
     }
+    nix-sh () {
+      nix shell nixpkgs#''${@}
+    }
     export PATH="$PATH:$HOME/.local/bin"
     printf '\n%.0s' {1..100}
     if ! [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
@@ -41,7 +44,6 @@
     #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
     fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
     cps="rsync -ahr --progress";
-    nix-sh = "cached-nix-shell --run 'zsh' -p";
     res="screen -r";
     record-discord="gpu-screen-recorder -k h264 -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
     nvide="neovide --no-fork";

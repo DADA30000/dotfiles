@@ -50,6 +50,7 @@
     # =========================[ Line #1 ]=========================
     context                   # user@host
     nix_shell
+    prompt_shell_level
     dir                       # current directory
     vcs                       # git status
     command_execution_time    # previous command duration
