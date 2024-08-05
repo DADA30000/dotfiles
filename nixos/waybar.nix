@@ -681,7 +681,7 @@
         };
         "custom/gpu" = {
           interval = 1;
-          exec = "gpu";
+          exec = "amd-gpu";
           on-click = "kitty nvtop";
           return-type = "json";
           format = "{}";

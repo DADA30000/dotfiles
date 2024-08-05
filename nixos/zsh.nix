@@ -28,19 +28,20 @@
     fi
     [[ ! -f ${./stuff/p10k-config/.p10k.zsh} ]] || source ${./stuff/p10k-config/.p10k.zsh}
     if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-      exec Hyprland >/dev/null 2>&1
+      Hyprland
     fi
     source ${./stuff/p10k-config/p10k.zsh}
+    source ${pkgs.nix-index}/etc/profile.d/command-not-found.sh
     setopt correct
     export NIXPKGS_ALLOW_UNFREE=1
   '';
   shellAliases = {
     ll = "ls -l";
-    update-full = "(cd /etc/nixos; sudo nix flake update; sudo nixos-rebuild -v switch)";
-    update = "sudo nixos-rebuild -v switch";
+    update-full = "(cd /etc/nixos; sudo nix flake update; nh os switch)";
+    update = "nh os switch";
     #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
-    update-test = "sudo nixos-rebuild -v test";
-    update-boot = "sudo nixos-rebuild -v boot";
+    update-test = "nh os test";
+    update-boot = "nh os boot";
     #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
     fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
     cps="rsync -ahr --progress";

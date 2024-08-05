@@ -2,8 +2,8 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = with inputs.hyprland-plugins.packages.${pkgs.system}; [ hyprexpo ];
-    package = inputs.hyprland.packages.${pkgs.system}.hyprland;
+    #plugins = with inputs.hyprland-plugins.packages.${pkgs.system}; [ hyprexpo ];
+    #package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     settings = {
       "$mod" = "SUPER";
       bind = [
@@ -19,8 +19,6 @@
 	"$mod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
 	"$mod_CTRL, F, fakefullscreen"
 	"$mod_CTRL, U, exec, update-damn-nixos ${config.home.username}"
-	"$mod, R, exec, pkill rofi || rofi -show drun -show-icons"
-        "$mod_SHIFT, R, exec, pkill rofi || rofi -show run"
 	"$mod_CTRL, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy"
 	"$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
 	"$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
@@ -37,7 +35,7 @@
         "$mod, P, pseudo,"
         "$mod, J, togglesplit,"
         "$mod, F, exec, hyprctl dispatch fullscreen"
-        "$mod, Space, hyprexpo:expo, toggle"
+        #"$mod, Space, hyprexpo:expo, toggle"
         "$mod, left, movefocus, l"
         "$mod, right, movefocus, r"
         "$mod, up, movefocus, u"
@@ -67,10 +65,10 @@
         "$mod, mouse_down, workspace, e+1"
         "$mod, mouse_up, workspace, e-1"
       ];
-      #bindr = [
-      #  "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons"
-      #  "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run"
-      #];
+      bindr = [
+        "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons"
+        "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run"
+      ];
       bindm = [
         "$mod, mouse:272, movewindow"
 	"$mod, mouse:273, resizewindow"
@@ -131,6 +129,9 @@
         "col.inactive_border" = "rgb(595959)";
         layout = "dwindle";
         allow_tearing = false;
+      };
+      cursor = {
+        no_hardware_cursors = true;
       };
       decoration = {
         rounding = 10;
