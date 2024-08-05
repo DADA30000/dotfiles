@@ -15,7 +15,7 @@
   fileSystems."/nix" = {
     device = "/dev/disk/by-label/nixos";
     fsType = "btrfs";
-    options = [ "subvol=nix" "compress-force=zstd" "noatime" ];
+    options = [ "subvol=nix" "compress-force=zstd" ];
   };
 
   fileSystems."/home" = {

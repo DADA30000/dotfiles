@@ -29,6 +29,32 @@ scripts = [ (pkgs.writeShellScriptBin "dinfo" ''
   {"text":"$text","tooltip":"$tooltip",}
   EOF
   '')
+  (pkgs.writeShellScriptBin "amd-gpu" ''
+  if test -f /sys/class/hwmon/hwmon0/device/gpu_busy_percent; then
+    usage=$(cat /sys/class/hwmon/hwmon0/device/gpu_busy_percent)
+    num=0
+  elif test -f /sys/class/hwmon/hwmon1/device/gpu_busy_percent; then
+    usage=$(cat /sys/class/hwmon/hwmon1/device/gpu_busy_percent)
+    num=1
+  elif test -f /sys/class/hwmon/hwmon2/device/gpu_busy_percent; then
+    usage=$(cat /sys/class/hwmon/hwmon2/device/gpu_busy_percent)
+    num=2
+  elif test -f /sys/class/hwmon/hwmon3/device/gpu_busy_percent; then
+    usage=$(cat /sys/class/hwmon/hwmon3/device/gpu_busy_percent)
+    num=3
+  elif test -f /sys/class/hwmon/hwmon4/device/gpu_busy_percent; then
+    usage=$(cat /sys/class/hwmon/hwmon4/device/gpu_busy_percent)
+    num=4
+  fi
+  name=$(lspci | grep VGA | cut -d ":" -f3 | cut -d "[" -f3 | cut -d "]" -f1)
+  temp1=$(cat /sys/class/hwmon/hwmon''${num}/temp1_input)
+  temp=$(echo $temp1 | rev | cut -c 4- | rev)
+  text="<span color='#990000'>  ''${usage}%  󰢮 </span>"
+  tooltip="$name\rGPU Usage: ''${usage}%\rGPU Temp: $temp°C"
+  cat <<EOF
+  {"text":"$text","tooltip":"$tooltip",}
+  EOF
+  '')
   (pkgs.writeShellScriptBin "nixos" ''
   cat <<EOF
   {"text":"<span color='#4575DA'> </span>","tooltip":"<span color='#4575DA'>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣷⣤⣙⢻⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⠀⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡄⠀⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⡿⠛⠛⠿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠙⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀\r⠀⠀⠀⠀⣰⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⠿⣆⠀⠀⠀⠀\r⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀\r⠀⢀⣾⣿⣿⠿⠟⠛⠋⠉⠉⠀⠀⠀⠀⠀⠀⠉⠉⠙⠛⠻⠿⣿⣿⣷⡀⠀\r⣠⠟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⣄</span>",}
@@ -288,5 +314,5 @@ scripts = [ (pkgs.writeShellScriptBin "dinfo" ''
     notify-send "Обновление" "Обновление системы, пожалуйста, выключайте компьютер когда угодно :)"; if pkexec nixos-rebuild switch -v > /home/$1/.cache/nixos-rebuild.log 2>&1; then notify-send "Успех" "Обновление завершено без ошибок"; else notify-send "Ошибка" "Во время обновления произошла ошибка, лог обновления находится в /home/$1/.cache/nixos-rebuild.log"; fi
   '')
 ];
-hyprland-pkgs = with pkgs; [ bun esbuild fd dart-sass swww hyprpicker wttrbar networkmanager_dmenu waybar ];
+hyprland-pkgs = with pkgs; [ bun esbuild fd dart-sass swww hyprpicker wttrbar networkmanager_dmenu networkmanagerapplet ];
 }

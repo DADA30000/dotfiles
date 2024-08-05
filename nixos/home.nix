@@ -18,9 +18,36 @@
     remmina
     telegram-desktop
     xorg.xeyes
-    bottles
     steam-run
     adwaita-icon-theme
+    osu-lazer-bin
+    hyprshot
+    nemo-with-extensions
+    cinnamon-translations
+    nemo-fileroller
+    file-roller
+    appimage-run
+    cliphist
+    libnotify
+    swappy
+    steam
+    moonlight-qt
+    inputs.pollymc.packages.${pkgs.system}.pollymc
+    nvtopPackages.amd
+    qbittorrent
+    pavucontrol
+    brightnessctl
+    ytfzf
+    imv
+    myxer
+    (pkgs.callPackage ./ani-cli-ru.nix { })
+    gpu-screen-recorder-gtk
+    gpu-screen-recorder
+    beep
+    ffmpegthumbnailer
+    zed-editor
+    dotnetCorePackages.dotnet_8.sdk
+    dotnetCorePackages.dotnet_8.runtime
   ];
   services.flatpak = {
     enable = true;
@@ -39,6 +66,9 @@
       default-folder-viewer = "list-view";
       show-hidden-files = true;
       thumbnail-limit = lib.hm.gvariant.mkUint64 68719476736;
+    };
+    "org/gnome/desktop/interface" = { 
+      color-scheme = "prefer-dark"; 
     };
   };
   programs.imv = {
@@ -68,8 +98,8 @@
   };
   gtk = {
     enable = true;
-    gtk3.extraConfig.gtk-decoration-layout = "menu:";
-    gtk4.extraConfig.gtk-hint-font-metrics = 1;
+    gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
+    gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
     cursorTheme.name = "Bibata-Modern-Classic";
     iconTheme = {
       name = "MoreWaita";

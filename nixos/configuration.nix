@@ -15,11 +15,27 @@ in
     getty.autologinUser = var.user;
     printing.enable = true;
     gvfs.enable = true;
+    #desktopManager.plasma6.enable = true;
+    #displayManager.sddm = {
+    #  enable = true;
+    #  #settings = {
+    #  #  Autologin = {
+    #  #    Session = "plasma.desktop";
+    #  #    User = var.user
+    #  #  };
+    #  #};
+    #  wayland = {
+    #    enable = true;
+    #    compositor = "kwin";
+    #  };
+    #};
     flatpak = {
       enable = true;
       uninstallUnmanaged = true;
       packages = [
         "dev.vencord.Vesktop"
+	"com.usebottles.bottles"
+	"com.github.tchx84.Flatseal"
       ];
       update.auto = {
         enable = true;
@@ -37,8 +53,17 @@ in
       enable = true;
       systemCronJobs = [
         "*/59 * * * *   root  update-cloudflare-dns /cloudflare1.conf"
-        "*/59 * * * *   root  update-cloudflare-dns /cloudflare2.conf"
       ];
+    };
+    dnscrypt-proxy2 = {
+      enable = true;
+      settings = {
+        server_names = [ "cloudflare" "scaleway-fr" "yandex" "google" ];
+	listen_addresses = [ "127.0.0.1:53" "[::1]:53" ];
+      };
+    };
+    resolved = {
+      enable = true;
     };
     locate = {
       enable = true;
@@ -57,7 +82,7 @@ in
       xkb.layout = "us,ru";
       xkb.options = "grp:alt_shift_toggle";
       displayManager.startx.enable = true;
-      videoDrivers = ["nvidia" "amdgpu"];
+      videoDrivers = ["amdgpu"];
       enable = true;
     };
   };
@@ -78,9 +103,12 @@ in
     dconf.enable = true;
     xwayland.enable = true;
     zsh.enable = true;
-    nm-applet.enable = true;
     adb.enable = true;
     firefox.nativeMessagingHosts.ff2mpv = true;
+    nh = {
+      enable = true;
+      flake = "/etc/nixos";
+    };
     spicetify = {
       enable = true;
       enabledExtensions = with spicePkgs.extensions; [
@@ -103,13 +131,15 @@ in
     extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     initrd.systemd.enable = true;
     kernel.sysctl."kernel.sysrq" = 1;
-    kernelPackages = pkgs.linuxPackages_testing; 
+    kernelPackages = pkgs.linuxPackages_xanmod_latest; 
     tmp.useTmpfs = true;
+    initrd.kernelModules = [
+      "amdgpu"
+    ];
     extraModprobeConfig = ''
       options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
     '';
     kernelParams = [ 
-      "nvidia_drm.fbdev=1"
       "amd_iommu=on" 
       "iommu=pt"
     ];
@@ -118,25 +148,27 @@ in
     ];
     loader = {
       efi.canTouchEfiVariables = true;
-      grub = {
-        enable = true;
-        efiSupport = true;
-        device = "nodev";
-	timeoutStyle = "hidden";
-	extraConfig = "set timeout=1";
-	minegrub-world-sel = { 
-	  enable = true;
-	  customIcons = [{
-            name = "nixos";
-            lineTop = "NixOS (06/07/2024, 2:24 AM)";
-            lineBottom = "Creative Mode, Cheats, Version: unstable";
-            customImg = builtins.path {
-              path = ./stuff/nixos-img.png;
-              name = "nixos-img";
-            };
-          }];
-	};
-      };
+      systemd-boot.enable = true;
+      timeout = 0;
+      #grub = {
+      #  enable = true;
+      #  efiSupport = true;
+      #  device = "nodev";
+      #  timeoutStyle = "hidden";
+      #  extraConfig = "set timeout=1";
+      #  minegrub-world-sel = { 
+      #    enable = true;
+      #    customIcons = [{
+      #      name = "nixos";
+      #      lineTop = "NixOS (06/07/2024, 2:24 AM)";
+      #      lineBottom = "Creative Mode, Cheats, Version: unstable";
+      #      customImg = builtins.path {
+      #        path = ./stuff/nixos-img.png;
+      #        name = "nixos-img";
+      #      };
+      #    }];
+      #  };
+      #};
     };
   };
   #Some nix settings
@@ -144,12 +176,10 @@ in
     auto-optimise-store = true;
     substituters = [
       "https://hyprland.cachix.org" 
-      "https://nix-gaming.cachix.org" 
       "https://nixpkgs-unfree.cachix.org"
     ];
     trusted-public-keys = [ 
       "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" 
-      "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4=" 
       "nixpkgs-unfree.cachix.org-1:hqvoInulhbV4nJ9yJOEr+4wxhDV4xq2d1DK7S6Nj6rs=" 
     ];
     experimental-features = [ 
@@ -161,7 +191,43 @@ in
   systemd = {
     coredump.enable = false;
     services = {
-      NetworkManager-wait-online.enable = false;
+      zapret = {
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        wantedBy = [ "multi-user.target" ];
+        path = with pkgs; [
+          iptables
+          nftables
+	  zapret
+          gawk
+        ];
+        serviceConfig = {
+          Type = "forking";
+          Restart = "no";
+          TimeoutSec = "30sec";
+          IgnoreSIGPIPE = "no";
+          KillMode = "none";
+          GuessMainPID = "no";
+          ExecStart = "${pkgs.zapret}/bin/zapret start";
+          ExecStop = "${pkgs.zapret}/bin/zapret stop";
+          EnvironmentFile = pkgs.writeText "zapret-environment" ''
+            # MODE="tpws"
+	    MODE="nfqws"
+	    FWTYPE="iptables"
+	    MODE_HTTP=1
+	    MODE_HTTP_KEEPALIVE=1
+	    MODE_HTTPS=1
+	    MODE_QUIC=0
+	    MODE_FILTER=none
+	    DISABLE_IPV6=1
+	    INIT_APPLY_FW=1
+	    #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-fooling=datanoack"
+	    NFQWS_OPT_DESYNC="--dpi-desync=split2"
+	    #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
+            # и прочая конфигурация которую можно получить с помощью nix-shell -p zapret --run blockcheck
+          '';
+        };
+      };
       startup-sound = {
         wantedBy = ["sysinit.target"];
         enable = false;
@@ -209,20 +275,16 @@ in
     graphics = {
       enable = true;
       enable32Bit = true;
-      extraPackages = with pkgs; [
-        nvidia-vaapi-driver
-        libvdpau-va-gl
-        vaapiVdpau
-      ];
     };
-    nvidia = {
-      modesetting.enable = true;
-      powerManagement.enable = true;
-      powerManagement.finegrained = false;
-      open = false;
-      nvidiaSettings = false;
-      package = config.boot.kernelPackages.nvidiaPackages.beta;
-    };    
+    amdgpu = {
+      initrd.enable = true;
+      opencl.enable = true;
+      #amdvlk = {
+      #  support32Bit.enable = true;
+      #  enable = true;
+      #  supportExperimental.enable = true;
+      #};
+    };
   };
   #Some environment stuff
   environment = {
@@ -237,72 +299,47 @@ in
       XCURSOR_SIZE = "24";
       EGL_PLATFORM = "wayland";
       MOZ_DISABLE_RDD_SANDBOX = "1";
-      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-      GBM_BACKEND = "nvidia-drm";
-      LIBVA_DRIVER_NAME = "nvidia";
+      ROC_ENABLE_PRE_VEGA = "1";
     };
     systemPackages = with pkgs; [
       wget
       git
       neovim
-      osu-lazer-bin
-      inotify-tools
-      fastfetch
       hyprshot
-      cinnamon.nemo-with-extensions
-      cinnamon.cinnamon-translations
       killall
-      wl-clipboard
-      pulseaudio
-      nwg-look
-      file-roller
-      appimage-run
-      lutris
-      cliphist
-      libnotify
-      swappy
-      bibata-cursors
-      steam
-      screen
       gamemode
-      moonlight-qt
-      desktop-file-utils
-      inputs.pollymc.packages.${pkgs.system}.pollymc
-      (nvtopPackages.nvidia.overrideAttrs (oldAttrs: { buildInputs = with lib; [ ncurses udev ]; }))
-      (firefox.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ff2mpv ]; })
-      mpv
-      neovide
-      qbittorrent
+      screen
       unrar
-      pavucontrol
-      brightnessctl
-      ytfzf
-      mlocate
-      imv
-      cinnamon.nemo-fileroller
+      pulseaudio
+      android-tools
+      elegant-sddm
+      cached-nix-shell
       zip
       jdk21
-      myxer
-      (pkgs.callPackage ./ani-cli-ru.nix { })
-      gpu-screen-recorder-gtk
-      gpu-screen-recorder
-      android-tools
-      networkmanagerapplet
-      beep
-      elegant-sddm
-      ffmpegthumbnailer
-      cached-nix-shell
-      zed-editor
-      dotnetCorePackages.dotnet_8.sdk
-      dotnetCorePackages.dotnet_8.runtime
+      mlocate
+      neovide
+      mpv
+      firefox
+      wl-clipboard
+      ipset
+      nix-index
+      zerotierone
     ] ++ (import ./stuff.nix (pkgs)).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
-  nixpkgs.config.permittedInsecurePackages = [ "freeimage-unstable-2021-11-01" ];
+  #Some networking stuff
+  networking = {
+    hostName = var.hostname;
+    networkmanager.enable = true;
+    nameservers = [ "::1" "127.0.0.1" ];
+    resolvconf.dnsSingleRequest = true;
+    firewall = {
+      enable = true;
+      allowedTCPPorts = [ 22 80 ];
+      allowedUDPPorts = [ 22 80 ];
+    };
+  };
   #And here is some other small stuff
   documentation.nixos.enable = false;
-  nixpkgs.overlays = [
-    inputs.nvidia-patch.overlays.default
-  ];
   xdg.mime.defaultApplications = {
     "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
     "application/x-compressed-tar" = fileroller;
@@ -363,8 +400,6 @@ in
       hinting.autohint = true;
     };
   };
-  networking.hostName = var.hostname;
-  networking.networkmanager.enable = true;
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   console = {
@@ -376,12 +411,14 @@ in
     isNormalUser = true;
     hashedPassword = var.user-hash;
     extraGroups = [ "wheel" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "video" ];
-    packages = with pkgs; [
-      tree
-    ];
   };
+  users.users.tpws = {
+    isSystemUser = true;
+    group = "tpws";
+  };
+  users.groups.tpws = {};
+  virtualisation.waydroid.enable = true;
   xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
   xdg.portal.config.common.default = "*";
-  networking.firewall.enable = false;
   system.stateVersion = "23.11";
 }
