@@ -25,7 +25,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
   fi
   if gum confirm "Всё верно?"; then
     clear
-    echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | clolcat
+    echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
     sleep 2
     echo -e "\e[34mРазметка дисков..."
     echo "label: gpt" |  sfdisk "$disk_system"

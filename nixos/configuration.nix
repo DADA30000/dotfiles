@@ -221,9 +221,9 @@ in
 	    MODE_FILTER=none
 	    DISABLE_IPV6=1
 	    INIT_APPLY_FW=1
-	    #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-fooling=datanoack"
-	    NFQWS_OPT_DESYNC="--dpi-desync=split2"
-	    #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
+	    NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-fooling=datanoack"
+	    #NFQWS_OPT_DESYNC="--dpi-desync=split2"
+	    #NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
             # и прочая конфигурация которую можно получить с помощью nix-shell -p zapret --run blockcheck
           '';
         };
@@ -334,8 +334,8 @@ in
     resolvconf.dnsSingleRequest = true;
     firewall = {
       enable = true;
-      allowedTCPPorts = [ 22 80 ];
-      allowedUDPPorts = [ 22 80 ];
+      allowedTCPPorts = [ 22 80 9993 ];
+      allowedUDPPorts = [ 22 80 9993 ];
     };
   };
   #And here is some other small stuff
