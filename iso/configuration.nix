@@ -16,7 +16,7 @@
     gum
     neovim
     btrfs-progs
-    clolcat
+    lolcat
     openssl
     (writeShellScriptBin "nix-install" ''
       if [[ $EUID -ne 0 ]]; then
