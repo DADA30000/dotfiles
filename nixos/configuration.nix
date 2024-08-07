@@ -148,27 +148,27 @@ in
     ];
     loader = {
       efi.canTouchEfiVariables = true;
-      systemd-boot.enable = true;
+      #systemd-boot.enable = true;
       timeout = 0;
-      #grub = {
-      #  enable = true;
-      #  efiSupport = true;
-      #  device = "nodev";
-      #  timeoutStyle = "hidden";
-      #  extraConfig = "set timeout=1";
-      #  minegrub-world-sel = { 
-      #    enable = true;
-      #    customIcons = [{
-      #      name = "nixos";
-      #      lineTop = "NixOS (06/07/2024, 2:24 AM)";
-      #      lineBottom = "Creative Mode, Cheats, Version: unstable";
-      #      customImg = builtins.path {
-      #        path = ./stuff/nixos-img.png;
-      #        name = "nixos-img";
-      #      };
-      #    }];
-      #  };
-      #};
+      grub = {
+        enable = true;
+        efiSupport = true;
+        device = "nodev";
+        timeoutStyle = "hidden";
+        extraConfig = "set timeout=1";
+        minegrub-world-sel = { 
+          enable = true;
+          customIcons = [{
+            name = "nixos";
+            lineTop = "NixOS (06/07/2024, 2:24 AM)";
+            lineBottom = "Creative Mode, Cheats, Version: unstable";
+            customImg = builtins.path {
+              path = ./stuff/nixos-img.png;
+              name = "nixos-img";
+            };
+          }];
+        };
+      };
     };
   };
   #Some nix settings
