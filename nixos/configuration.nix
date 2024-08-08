@@ -148,27 +148,27 @@ in
     ];
     loader = {
       efi.canTouchEfiVariables = true;
-      #systemd-boot.enable = true;
+      systemd-boot.enable = true;
       timeout = 0;
-      grub = {
-        enable = true;
-        efiSupport = true;
-        device = "nodev";
-        timeoutStyle = "hidden";
-        extraConfig = "set timeout=1";
-        minegrub-world-sel = { 
-          enable = true;
-          customIcons = [{
-            name = "nixos";
-            lineTop = "NixOS (06/07/2024, 2:24 AM)";
-            lineBottom = "Creative Mode, Cheats, Version: unstable";
-            customImg = builtins.path {
-              path = ./stuff/nixos-img.png;
-              name = "nixos-img";
-            };
-          }];
-        };
-      };
+      #grub = {
+      #  enable = true;
+      #  efiSupport = true;
+      #  device = "nodev";
+      #  timeoutStyle = "hidden";
+      #  extraConfig = "set timeout=1";
+      #  minegrub-world-sel = { 
+      #    enable = true;
+      #    customIcons = [{
+      #      name = "nixos";
+      #      lineTop = "NixOS (06/07/2024, 2:24 AM)";
+      #      lineBottom = "Creative Mode, Cheats, Version: unstable";
+      #      customImg = builtins.path {
+      #        path = ./stuff/nixos-img.png;
+      #        name = "nixos-img";
+      #      };
+      #    }];
+      #  };
+      #};
     };
   };
   #Some nix settings
@@ -198,6 +198,8 @@ in
         path = with pkgs; [
           iptables
           nftables
+	  ipset
+	  curl
 	  zapret
           gawk
         ];
@@ -211,20 +213,33 @@ in
           ExecStart = "${pkgs.zapret}/bin/zapret start";
           ExecStop = "${pkgs.zapret}/bin/zapret stop";
           EnvironmentFile = pkgs.writeText "zapret-environment" ''
-            # MODE="tpws"
 	    MODE="nfqws"
-	    FWTYPE="iptables"
-	    MODE_HTTP=1
-	    MODE_HTTP_KEEPALIVE=1
-	    MODE_HTTPS=1
-	    MODE_QUIC=0
-	    MODE_FILTER=none
-	    DISABLE_IPV6=1
-	    INIT_APPLY_FW=1
-	    NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-fooling=datanoack"
-	    #NFQWS_OPT_DESYNC="--dpi-desync=split2"
-	    #NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
-            # и прочая конфигурация которую можно получить с помощью nix-shell -p zapret --run blockcheck
+  	    FWTYPE="nftables"
+  	    MODE_HTTP=1
+  	    MODE_HTTP_KEEPALIVE=1
+  	    MODE_HTTPS=1
+  	    MODE_QUIC=0
+  	    MODE_FILTER=none
+  	    DISABLE_IPV6=1
+  	    INIT_APPLY_FW=1
+  	    NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-fooling=datanoack"
+  	    #NFQWS_OPT_DESYNC="--dpi-desync=split2"
+  	    #NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
+  	    TMPDIR=/tmp
+  	    SET_MAXELEM=522288
+  	    IPSET_OPT="hashsize 262144 maxelem $SEX_MAXELEM"
+  	    IP2NET_OPT4="--prefix-length=22-30 --v4-threshold=3/4"
+  	    IP2NET_OPT6="--prefix-length=56-64 --v6-threshold=5"
+  	    AUTOHOSTLIST_RETRANS_THRESHOLD=3
+  	    AUTOHOSTLIST_FAIL_THRESHOLD=3
+  	    AUTOHOSTLIST_FAIL_TIME=60
+  	    AUTOHOSTLIST_DEBUGLOG=0
+  	    MDIG_THREADS=30
+  	    GZIP_LISTS=1
+  	    DESYNC_MARK=0x40000000
+  	    DESYNC_MARK_POSTNAT=0x20000000
+  	    FLOWOFFLOAD=donttouch
+  	    GETLIST=get_antifilter_ipsmart.sh
           '';
         };
       };
@@ -332,6 +347,7 @@ in
     networkmanager.enable = true;
     nameservers = [ "::1" "127.0.0.1" ];
     resolvconf.dnsSingleRequest = true;
+    nftables.enable = true;
     firewall = {
       enable = true;
       allowedTCPPorts = [ 22 80 9993 ];
