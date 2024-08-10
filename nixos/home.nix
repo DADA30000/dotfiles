@@ -15,39 +15,6 @@
     ./swaync.nix
   ];
   home.packages = with pkgs; [
-    remmina
-    telegram-desktop
-    xorg.xeyes
-    steam-run
-    adwaita-icon-theme
-    osu-lazer-bin
-    hyprshot
-    nemo-with-extensions
-    cinnamon-translations
-    nemo-fileroller
-    file-roller
-    appimage-run
-    cliphist
-    libnotify
-    swappy
-    steam
-    moonlight-qt
-    inputs.pollymc.packages.${pkgs.system}.pollymc
-    nvtopPackages.amd
-    qbittorrent
-    pavucontrol
-    brightnessctl
-    ytfzf
-    imv
-    myxer
-    (pkgs.callPackage ./ani-cli-ru.nix { })
-    gpu-screen-recorder-gtk
-    gpu-screen-recorder
-    beep
-    ffmpegthumbnailer
-    zed-editor
-    dotnetCorePackages.dotnet_8.sdk
-    dotnetCorePackages.dotnet_8.runtime
   ];
   services.flatpak = {
     enable = true;
