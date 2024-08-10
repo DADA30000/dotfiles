@@ -200,7 +200,12 @@ in
           nftables
 	  ipset
 	  curl
-	  zapret
+	  (zapret.overrideAttrs (prev: {
+            installPhase = ''
+              ${prev.installPhase}
+              touch $out/usr/share/zapret/config
+            '';
+          }))
           gawk
         ];
         serviceConfig = {
@@ -210,8 +215,8 @@ in
           IgnoreSIGPIPE = "no";
           KillMode = "none";
           GuessMainPID = "no";
-          ExecStart = "${pkgs.zapret}/bin/zapret start";
-          ExecStop = "${pkgs.zapret}/bin/zapret stop";
+          ExecStart = "${pkgs.bash}/bin/bash -c 'zapret start'";
+          ExecStop = "${pkgs.bash}/bin/bash -c 'zapret stop'";
           EnvironmentFile = pkgs.writeText "zapret-environment" ''
 	    MODE="nfqws"
   	    FWTYPE="nftables"
@@ -222,6 +227,7 @@ in
   	    MODE_FILTER=none
   	    DISABLE_IPV6=1
   	    INIT_APPLY_FW=1
+	    TPWS_OPT="--hostspell=HOST --split-http-req=method --split-pos=3 --hostcase --oob"
   	    NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-fooling=datanoack"
   	    #NFQWS_OPT_DESYNC="--dpi-desync=split2"
   	    #NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
@@ -336,9 +342,46 @@ in
       mpv
       firefox
       wl-clipboard
-      ipset
       nix-index
       zerotierone
+      iptables
+      nftables
+      ipset
+      curl
+      gawk
+      remmina
+      telegram-desktop
+      xorg.xeyes
+      steam-run
+      adwaita-icon-theme
+      osu-lazer-bin
+      hyprshot
+      nemo-with-extensions
+      cinnamon-translations
+      nemo-fileroller
+      file-roller
+      appimage-run
+      cliphist
+      libnotify
+      swappy
+      steam
+      moonlight-qt
+      inputs.pollymc.packages.${pkgs.system}.pollymc
+      nvtopPackages.amd
+      qbittorrent
+      pavucontrol
+      brightnessctl
+      ytfzf
+      imv
+      myxer
+      (pkgs.callPackage ./ani-cli-ru.nix { })
+      gpu-screen-recorder-gtk
+      gpu-screen-recorder
+      beep
+      ffmpegthumbnailer
+      zed-editor
+      dotnetCorePackages.dotnet_8.sdk
+      dotnetCorePackages.dotnet_8.runtime
     ] ++ (import ./stuff.nix (pkgs)).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
   #Some networking stuff
