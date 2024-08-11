@@ -6,7 +6,7 @@
   ];
   hyprland = {
 
-    # Enable Hyprland configuration
+    # Enable base Hyprland configuration
     enable = true;
 
     # Whether to use release from nixpkgs, or use latest git
