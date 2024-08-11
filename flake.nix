@@ -5,10 +5,6 @@
       url = "https://github.com/hyprwm/Hyprland";
       submodules = true;
     };
-    nvidia-patch = {
-      url = "github:icewind1991/nvidia-patch-nixos";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -17,13 +13,13 @@
         url = "github:hyprwm/hyprland-plugins";
         inputs.hyprland.follows = "hyprland";
     };
-    minegrub-world-sel-theme = {
-      url = "github:Lxtharia/minegrub-world-sel-theme";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     spicetify-nix = {
       url = "github:Gerg-L/spicetify-nix";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    hypr-dynamic-cursors = {
+      url = "github:VirtCode/hypr-dynamic-cursors";
+      inputs.hyprland.follows = "hyprland";
     };
     pollymc.url = "github:fn2006/PollyMC";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -47,7 +43,6 @@
           ./nixos/configuration.nix
 	  inputs.spicetify-nix.nixosModules.default
           inputs.nix-flatpak.nixosModules.nix-flatpak
-          inputs.minegrub-world-sel-theme.nixosModules.default
           home-manager.nixosModules.home-manager
           {
             home-manager = {

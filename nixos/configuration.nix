@@ -10,11 +10,13 @@ let
   };
 in
 {
-  #Some services
+  #Some servicess
   services = {
     getty.autologinUser = var.user;
     printing.enable = true;
     gvfs.enable = true;
+    openssh.enable = true;
+    resolved.enable = true;
     #desktopManager.plasma6.enable = true;
     #displayManager.sddm = {
     #  enable = true;
@@ -42,7 +44,6 @@ in
         onCalendar = "daily";
       };
     };
-    openssh.enable = true;
     #sunshine = {
     #  autoStart = false;
     #  enable = true;
@@ -61,9 +62,6 @@ in
         server_names = [ "cloudflare" "scaleway-fr" "yandex" "google" ];
 	listen_addresses = [ "127.0.0.1:53" "[::1]:53" ];
       };
-    };
-    resolved = {
-      enable = true;
     };
     locate = {
       enable = true;
@@ -150,25 +148,6 @@ in
       efi.canTouchEfiVariables = true;
       systemd-boot.enable = true;
       timeout = 0;
-      #grub = {
-      #  enable = true;
-      #  efiSupport = true;
-      #  device = "nodev";
-      #  timeoutStyle = "hidden";
-      #  extraConfig = "set timeout=1";
-      #  minegrub-world-sel = { 
-      #    enable = true;
-      #    customIcons = [{
-      #      name = "nixos";
-      #      lineTop = "NixOS (06/07/2024, 2:24 AM)";
-      #      lineBottom = "Creative Mode, Cheats, Version: unstable";
-      #      customImg = builtins.path {
-      #        path = ./stuff/nixos-img.png;
-      #        name = "nixos-img";
-      #      };
-      #    }];
-      #  };
-      #};
     };
   };
   #Some nix settings
@@ -219,7 +198,7 @@ in
           ExecStop = "${pkgs.bash}/bin/bash -c 'zapret stop'";
           EnvironmentFile = pkgs.writeText "zapret-environment" ''
 	    MODE="nfqws"
-  	    FWTYPE="nftables"
+  	    FWTYPE="iptables"
   	    MODE_HTTP=1
   	    MODE_HTTP_KEEPALIVE=1
   	    MODE_HTTPS=1
@@ -390,11 +369,23 @@ in
     networkmanager.enable = true;
     nameservers = [ "::1" "127.0.0.1" ];
     resolvconf.dnsSingleRequest = true;
-    nftables.enable = true;
+    wireguard.interfaces = {
+      wg0 = {
+        ips = [ "0.0.0.0/0" ];
+        listenPort = 51820;
+        privateKeyFile = "/vpn.key";
+        peers = [
+          {
+            publicKey = "DKC+1tKbksOr/UeL3AmJKJ7IqHTlIWIbC9zeZmpCaig=";
+            allowedIPs = [ "10.100.0.2/32" ];
+          }
+        ];
+      };
+    };
     firewall = {
       enable = true;
-      allowedTCPPorts = [ 22 80 9993 ];
-      allowedUDPPorts = [ 22 80 9993 ];
+      allowedTCPPorts = [ 22 80 9993 51820 ];
+      allowedUDPPorts = [ 22 80 9993 51820 ];
     };
   };
   #And here is some other small stuff

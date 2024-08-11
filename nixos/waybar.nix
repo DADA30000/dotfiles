@@ -207,7 +207,7 @@
         border-radius: 5px 10px 10px 5px;
       }
       #workspaces button {
-        padding: 0px 10px 0 5px;
+        padding: 0px 10px 0 4px;
         margin: 4px 0px;
         border-radius: 5;
       }
