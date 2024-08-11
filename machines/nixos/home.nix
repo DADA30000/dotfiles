@@ -28,6 +28,17 @@
   #programs.ags = {
   #  enable = true;
   #};
+  systemd.user.services.mpvpaper = {
+    Unit = {
+      Description = "Play video wallpaper.";
+    };
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket' '*' ${./stuff/wallpaper.mp4}";
+    };
+  };
   dconf.settings = {
     "org/nemo/preferences" = {
       default-folder-viewer = "list-view";

@@ -16,7 +16,6 @@ in
     printing.enable = true;
     gvfs.enable = true;
     openssh.enable = true;
-    resolved.enable = true;
     #desktopManager.plasma6.enable = true;
     #displayManager.sddm = {
     #  enable = true;
@@ -55,13 +54,6 @@ in
       systemCronJobs = [
         "*/59 * * * *   root  update-cloudflare-dns /cloudflare1.conf"
       ];
-    };
-    dnscrypt-proxy2 = {
-      enable = true;
-      settings = {
-        server_names = [ "cloudflare" "scaleway-fr" "yandex" "google" ];
-	listen_addresses = [ "127.0.0.1:53" "[::1]:53" ];
-      };
     };
     locate = {
       enable = true;
@@ -170,64 +162,6 @@ in
   systemd = {
     coredump.enable = false;
     services = {
-      zapret = {
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-        wantedBy = [ "multi-user.target" ];
-        path = with pkgs; [
-          iptables
-          nftables
-	  ipset
-	  curl
-	  (zapret.overrideAttrs (prev: {
-            installPhase = ''
-              ${prev.installPhase}
-              touch $out/usr/share/zapret/config
-            '';
-          }))
-          gawk
-        ];
-        serviceConfig = {
-          Type = "forking";
-          Restart = "no";
-          TimeoutSec = "30sec";
-          IgnoreSIGPIPE = "no";
-          KillMode = "none";
-          GuessMainPID = "no";
-          ExecStart = "${pkgs.bash}/bin/bash -c 'zapret start'";
-          ExecStop = "${pkgs.bash}/bin/bash -c 'zapret stop'";
-          EnvironmentFile = pkgs.writeText "zapret-environment" ''
-	    MODE="nfqws"
-  	    FWTYPE="iptables"
-  	    MODE_HTTP=1
-  	    MODE_HTTP_KEEPALIVE=1
-  	    MODE_HTTPS=1
-  	    MODE_QUIC=0
-  	    MODE_FILTER=none
-  	    DISABLE_IPV6=1
-  	    INIT_APPLY_FW=1
-	    TPWS_OPT="--hostspell=HOST --split-http-req=method --split-pos=3 --hostcase --oob"
-  	    NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-fooling=datanoack"
-  	    #NFQWS_OPT_DESYNC="--dpi-desync=split2"
-  	    #NFQWS_OPT_DESYNC="--dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
-  	    TMPDIR=/tmp
-  	    SET_MAXELEM=522288
-  	    IPSET_OPT="hashsize 262144 maxelem $SEX_MAXELEM"
-  	    IP2NET_OPT4="--prefix-length=22-30 --v4-threshold=3/4"
-  	    IP2NET_OPT6="--prefix-length=56-64 --v6-threshold=5"
-  	    AUTOHOSTLIST_RETRANS_THRESHOLD=3
-  	    AUTOHOSTLIST_FAIL_THRESHOLD=3
-  	    AUTOHOSTLIST_FAIL_TIME=60
-  	    AUTOHOSTLIST_DEBUGLOG=0
-  	    MDIG_THREADS=30
-  	    GZIP_LISTS=1
-  	    DESYNC_MARK=0x40000000
-  	    DESYNC_MARK_POSTNAT=0x20000000
-  	    FLOWOFFLOAD=donttouch
-  	    GETLIST=get_antifilter_ipsmart.sh
-          '';
-        };
-      };
       startup-sound = {
         wantedBy = ["sysinit.target"];
         enable = false;
@@ -303,6 +237,7 @@ in
     };
     systemPackages = with pkgs; [
       wget
+      git-lfs
       git
       neovim
       hyprshot
@@ -353,7 +288,6 @@ in
       ytfzf
       imv
       myxer
-      (pkgs.callPackage ./ani-cli-ru.nix { })
       gpu-screen-recorder-gtk
       gpu-screen-recorder
       beep
@@ -367,26 +301,6 @@ in
   networking = {
     hostName = var.hostname;
     networkmanager.enable = true;
-    nameservers = [ "::1" "127.0.0.1" ];
-    resolvconf.dnsSingleRequest = true;
-    wireguard.interfaces = {
-      wg0 = {
-        ips = [ "0.0.0.0/0" ];
-        listenPort = 51820;
-        privateKeyFile = "/vpn.key";
-        peers = [
-          {
-            publicKey = "DKC+1tKbksOr/UeL3AmJKJ7IqHTlIWIbC9zeZmpCaig=";
-            allowedIPs = [ "10.100.0.2/32" ];
-          }
-        ];
-      };
-    };
-    firewall = {
-      enable = true;
-      allowedTCPPorts = [ 22 80 9993 51820 ];
-      allowedUDPPorts = [ 22 80 9993 51820 ];
-    };
   };
   #And here is some other small stuff
   documentation.nixos.enable = false;
@@ -404,7 +318,7 @@ in
     "application/x-lzma" = fileroller;
     "application/x-lz4" = fileroller;
     "application/x-xz-compressed-tar" = fileroller;
-    "application/x-lz4-compressed-tar" = fileroller;
+   "application/x-lz4-compressed-tar" = fileroller;
     "application/x-archive" = fileroller;
     "application/x-cpio" = fileroller;
     "application/x-lzop" = fileroller;

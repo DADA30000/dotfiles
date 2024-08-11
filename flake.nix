@@ -40,7 +40,7 @@
       "${var.hostname}" = nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs var; };
         modules = [
-          ./nixos/configuration.nix
+          ./machines/nixos/conf.nix
 	  inputs.spicetify-nix.nixosModules.default
           inputs.nix-flatpak.nixosModules.nix-flatpak
           home-manager.nixosModules.home-manager
@@ -48,17 +48,16 @@
             home-manager = {
               extraSpecialArgs = { inherit inputs; }; 
               useGlobalPkgs = true;
-              users."${var.user}" = import ./nixos/home.nix;
+              users."${var.user}" = import ./machines/nixos/home-configuration.nix;
               useUserPackages = true;
             };
           }
         ];
       };
       iso = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs var; };
+        specialArgs = { inherit inputs; };
 	modules = [
-	  ./iso/configuration.nix
-	  inputs.minegrub-world-sel-theme.nixosModules.default
+	  ./machines/iso/configuration.nix
 	];
       };
     };
