@@ -2,8 +2,9 @@
 {
   wayland.windowManager.hyprland = {
     enable = true;
-    #plugins = with inputs.hyprland-plugins.packages.${pkgs.system}; [ hyprexpo ];
-    #package = inputs.hyprland.packages.${pkgs.system}.hyprland;
+    plugins = with inputs.hyprland-plugins.packages.${pkgs.system}; [ hyprexpo inputs.hypr-dynamic-cursors.packages.${pkgs.system}.hypr-dynamic-cursors ];
+    #plugins = with pkgs.hyprlandPlugins; [ hypr-dynamic-cursors ];
+    package = inputs.hyprland.packages.${pkgs.system}.hyprland;
     settings = {
       "$mod" = "SUPER";
       bind = [
@@ -17,7 +18,6 @@
 	"$mod_CTRL, Q, exec, neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
 	"$mod_CTRL, C, exec, hyprctl kill"
 	"$mod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
-	"$mod_CTRL, F, fakefullscreen"
 	"$mod_CTRL, U, exec, update-damn-nixos ${config.home.username}"
 	"$mod_CTRL, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy"
 	"$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
@@ -110,7 +110,7 @@
         "firefox & flatpak run dev.vencord.Vesktop"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
-	"hyprctl setcursor Bibata-Modern-Classic 24"
+	"hyprctl setcursor GoogleDot-Black 24"
       ]; 
       input = {
 	kb_layout = "us,ru";
@@ -131,7 +131,7 @@
         allow_tearing = false;
       };
       cursor = {
-        no_hardware_cursors = true;
+        no_hardware_cursors = false;
       };
       decoration = {
         rounding = 10;
@@ -201,6 +201,12 @@
           gesture_distance = 300;
           gesture_positive = true;
         };
+	dynamic-cursors = {
+	  enabled = true;
+	  mode = "stretch";
+	  shake.enabled = false;
+	  stretch.function = "negative_quadratic";
+	};
 	hyprwinwrap = {
 	  class = "heh";
 	};

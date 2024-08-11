@@ -59,8 +59,8 @@
   home.pointerCursor = {
     gtk.enable = true;
     x11.enable = true;
-    package = pkgs.bibata-cursors;
-    name = "Bibata-Modern-Classic";
+    package = pkgs.google-cursor;
+    name = "GoogleDot-Black";
     size = 24;
   };
   gtk = {
