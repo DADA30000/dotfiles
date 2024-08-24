@@ -11,7 +11,6 @@
     ./kitty.nix
     ./hyprland.nix
     ./waybar.nix
-    ./fastfetch.nix
     ./swaync.nix
   ];
   home.packages = with pkgs; [
@@ -36,7 +35,7 @@
       WantedBy = [ "graphical-session.target" ];
     };
     Service = {
-      ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket' '*' ${./stuff/wallpaper.mp4}";
+      ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket hwdec=auto' '*' ${./stuff/wallpaper.mp4}";
     };
   };
   dconf.settings = {
@@ -45,27 +44,20 @@
       show-hidden-files = true;
       thumbnail-limit = lib.hm.gvariant.mkUint64 68719476736;
     };
+    "org/gnome/nautilus/preferences" = {
+      default-folder-viewer = "list-view";
+      migrated-gtk-settings = true;
+    };
     "org/gnome/desktop/interface" = { 
       color-scheme = "prefer-dark"; 
-    };
-  };
-  programs.imv = {
-    enable = true;
-    settings = {
-      options.upscaling_method = "nearest_neighbour";
     };
   };
   qt = {
     enable = true;
     platformTheme.name = "gtk3";
-    #style = {
-    #  name = "lightly";
-    #  package = pkgs.lightly-qt;
-    #};
   };
   programs.obs-studio = {
     enable = true;
-    #plugins = [ pkgs.obs-studio-plugins.obs-ndi ];
   };
   home.pointerCursor = {
     gtk.enable = true;
@@ -78,7 +70,7 @@
     enable = true;
     gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
     gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
-    cursorTheme.name = "Bibata-Modern-Classic";
+    cursorTheme.name = "GoogleDot-Black";
     iconTheme = {
       name = "MoreWaita";
       package = pkgs.morewaita-icon-theme;
@@ -96,6 +88,38 @@
     createDirectories = true;
     enable = true;
   };
+  xdg.mimeApps.defaultApplications = {
+    "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
+    "application/x-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip2-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip1-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-tzo" = "org.gnome.FileRoller.desktop";
+    "application/x-xz"= "org.gnome.FileRoller.desktop";
+    "application/x-lzma-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/zstd" = "org.gnome.FileRoller.desktop";
+    "application/x-7z-compressed" = "org.gnome.FileRoller.desktop";
+    "application/x-zstd-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-lzma" = "org.gnome.FileRoller.desktop";
+    "application/x-lz4" = "org.gnome.FileRoller.desktop";
+    "application/x-xz-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-lz4-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-archive" = "org.gnome.FileRoller.desktop";
+    "application/x-cpio" = "org.gnome.FileRoller.desktop";
+    "application/x-lzop" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip1" = "org.gnome.FileRoller.desktop";
+    "application/x-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-bzip2" = "org.gnome.FileRoller.desktop";
+    "application/gzip" = "org.gnome.FileRoller.desktop";
+    "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
+    "application/x-tarz "= "org.gnome.FileRoller.desktop";
+    "application/zip" = "org.gnome.FileRoller.desktop";
+    "inode/directory" = "nemo.desktop";
+    "text/html" = "firefox.desktop";
+    "video/mp4" = "mpv.desktop";
+    "audio/mpeg" = "mpv.desktop";
+    "audio/flac" = "mpv.desktop";
+  };
+  xdg.mimeApps.enable = true;
   services.mpd = {
     enable = true;
     dataDir = "${config.xdg.dataHome}/.mpd";

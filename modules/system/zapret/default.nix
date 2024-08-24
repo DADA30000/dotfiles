@@ -11,6 +11,11 @@ in
 
 
   config = mkIf cfg.enable {
+    users.users.tpws = {
+      isSystemUser = true;
+      group = "tpws";
+    };
+    users.groups.tpws = {};
     systemd.services.zapret = {
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
@@ -84,8 +89,8 @@ in
       resolvconf.dnsSingleRequest = true;
       firewall = {
         enable = true;
-        allowedTCPPorts = [ 22 80 9993 51820 ];
-        allowedUDPPorts = [ 22 80 9993 51820 ];
+        allowedTCPPorts = [ 22 80 9993 51820 8080 443 ];
+        allowedUDPPorts = [ 22 80 9993 51820 8080 443 ];
       };
     };
   };

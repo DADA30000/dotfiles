@@ -27,6 +27,7 @@
       tab_bar_min_tabs        2
       tab_switch_strategy     previous
       wheel_scroll_multiplier 10
+      cursor_blink_interval 0.5
       background              #000000
       foreground              #bbddff
       cursor                  #aaaaaa

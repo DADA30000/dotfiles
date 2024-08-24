@@ -1,35 +1,10 @@
 { config, lib, inputs, pkgs, options, var, ... }:
-let
-  fileroller = "org.gnome.FileRoller.desktop";
-  spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.system};
-  long-script = "${pkgs.beep}/bin/beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400";
-  hazy = pkgs.fetchgit {
-    url = "https://github.com/Astromations/Hazy";
-    rev = "25e472cc4563918d794190e72cba6af8397d3a78";
-    sha256 = "sha256-zK17CWwYJNSyo5pbYdIDUMKyeqKkFbtghFoK9JBR/C8=";
-  };
-in
 {
   #Some servicess
   services = {
-    getty.autologinUser = var.user;
     printing.enable = true;
     gvfs.enable = true;
     openssh.enable = true;
-    #desktopManager.plasma6.enable = true;
-    #displayManager.sddm = {
-    #  enable = true;
-    #  #settings = {
-    #  #  Autologin = {
-    #  #    Session = "plasma.desktop";
-    #  #    User = var.user
-    #  #  };
-    #  #};
-    #  wayland = {
-    #    enable = true;
-    #    compositor = "kwin";
-    #  };
-    #};
     flatpak = {
       enable = true;
       uninstallUnmanaged = true;
@@ -43,12 +18,6 @@ in
         onCalendar = "daily";
       };
     };
-    #sunshine = {
-    #  autoStart = false;
-    #  enable = true;
-    #  capSysAdmin = true;
-    #  package = ( pkgs.sunshine.override { cudaSupport = true; } );
-    #};
     cron = {
       enable = true;
       systemCronJobs = [
@@ -64,16 +33,7 @@ in
     pipewire = {
       enable = true;
       alsa.enable = true;
-      alsa.support32Bit = false;
       pulse.enable = true;
-      jack.enable = false;
-    };
-    xserver = {
-      xkb.layout = "us,ru";
-      xkb.options = "grp:alt_shift_toggle";
-      displayManager.startx.enable = true;
-      videoDrivers = ["amdgpu"];
-      enable = true;
     };
   };
   #Some security
@@ -81,39 +41,19 @@ in
     pam.loginLimits = [ { domain = "*"; item = "core"; value = "0"; } ];
     rtkit.enable = true;
     polkit.enable = true;
-    wrappers.gsr-kms-server = {
-      owner = "root";
-      group = "root";
-      capabilities = "cap_sys_admin+ep";
-      source = "${pkgs.gpu-screen-recorder}/bin/gsr-kms-server";
-    };
   };
   #Some programs
   programs = {
+    firejail.enable = true;
     dconf.enable = true;
-    xwayland.enable = true;
     zsh.enable = true;
     adb.enable = true;
-    firefox.nativeMessagingHosts.ff2mpv = true;
-    nh = {
+    nh.enable = true;
+    neovim = {
+      defaultEditor = true;
+      viAlias = true;
+      vimAlias = true;
       enable = true;
-      flake = "/etc/nixos";
-    };
-    spicetify = {
-      enable = true;
-      enabledExtensions = with spicePkgs.extensions; [
-        adblock
-        hidePodcasts
-        shuffle # shuffle+ (special characters are sanitized out of extension names)
-      ];
-      theme = {
-        name = "Hazy";
-        src = hazy;
-        injectCss = true;
-        replaceColors = true;
-        overwriteAssets = true;
-        sidebarConfig = true;
-      };
     };
   };
   #Some boot settings
@@ -121,18 +61,11 @@ in
     extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     initrd.systemd.enable = true;
     kernel.sysctl."kernel.sysrq" = 1;
-    kernelPackages = pkgs.linuxPackages_xanmod_latest; 
+    kernelPackages = pkgs.linuxPackages_testing; 
     tmp.useTmpfs = true;
-    initrd.kernelModules = [
-      "amdgpu"
-    ];
     extraModprobeConfig = ''
       options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
     '';
-    kernelParams = [ 
-      "amd_iommu=on" 
-      "iommu=pt"
-    ];
     kernelModules = [
       "v4l2loopback"
     ];
@@ -158,82 +91,17 @@ in
       "flakes"
     ];
   };
-  #Some systemd stuff
-  systemd = {
-    coredump.enable = false;
-    services = {
-      startup-sound = {
-        wantedBy = ["sysinit.target"];
-        enable = false;
-        preStart = "${pkgs.kmod}/bin/modprobe pcspkr";
-        serviceConfig = {
-          ExecStart = long-script;
-        };
-      };
-      zerotier = {
-        description = "Starts a zerotier-one service";
-        path = [pkgs.bash pkgs.zerotierone];
-        script = ''
-          exec zerotier-one
-        '';
-        wantedBy = [ "multi-user.target" ];
-      };
-    };
-    user.services = {
-      polkit_gnome = {
-        path = [pkgs.bash];
-	wantedBy = [ "hyprland-session.target" ];
-	script = ''
-	  exec ${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1
-	'';
-	serviceConfig = {
-	  Restart = "always";
-	};
-      };
-      replays = {
-        path = with pkgs; [ bash gpu-screen-recorder pulseaudio ];
-	wantedBy = [ "graphical-session.target" ];
-	script = ''
-	  export PATH=/run/wrappers/bin:$PATH
-          exec gpu-screen-recorder -w screen -q ultra -a $(pactl get-default-sink).monitor -a $(pactl get-default-source) -f 60 -r 300 -c mp4 -o ~/Games/Replays
-        '';
-	serviceConfig = {
-	  Restart = "always";
-	};
-      };
-    };
-  };
-  #Some hardware stuff
-  hardware = {
-    opentabletdriver.enable = true;
-    graphics = {
-      enable = true;
-      enable32Bit = true;
-    };
-    amdgpu = {
-      initrd.enable = true;
-      opencl.enable = true;
-      #amdvlk = {
-      #  support32Bit.enable = true;
-      #  enable = true;
-      #  supportExperimental.enable = true;
-      #};
-    };
-  };
+  nix.package = pkgs.nixVersions.latest;
+  systemd.coredump.enable = false;
+  hardware.opentabletdriver.enable = true;
   #Some environment stuff
   environment = {
     variables = {
-      QT_STYLE_OVERRIDE = "kvantum";
       GTK_THEME = "Materia-dark";
-      XCURSOR_THEME = "Bibata-Modern-Classic";
       MOZ_ENABLE_WAYLAND = "1";
-      EDITOR = "nvim";
-      VISUAL = "nvim";
       TERMINAL = "kitty";
-      XCURSOR_SIZE = "24";
       EGL_PLATFORM = "wayland";
       MOZ_DISABLE_RDD_SANDBOX = "1";
-      ROC_ENABLE_PRE_VEGA = "1";
     };
     systemPackages = with pkgs; [
       wget
@@ -257,7 +125,6 @@ in
       firefox
       wl-clipboard
       nix-index
-      zerotierone
       iptables
       nftables
       ipset
@@ -270,9 +137,8 @@ in
       adwaita-icon-theme
       osu-lazer-bin
       hyprshot
-      nemo-with-extensions
+      nautilus
       cinnamon-translations
-      nemo-fileroller
       file-roller
       appimage-run
       cliphist
@@ -285,16 +151,15 @@ in
       qbittorrent
       pavucontrol
       brightnessctl
-      ytfzf
       imv
       myxer
-      gpu-screen-recorder-gtk
-      gpu-screen-recorder
       beep
       ffmpegthumbnailer
       zed-editor
       dotnetCorePackages.dotnet_8.sdk
       dotnetCorePackages.dotnet_8.runtime
+      imv
+      any-nix-shell
     ] ++ (import ./stuff.nix (pkgs)).scripts ++ (import ./stuff.nix pkgs).hyprland-pkgs;
   };
   #Some networking stuff
@@ -304,37 +169,6 @@ in
   };
   #And here is some other small stuff
   documentation.nixos.enable = false;
-  xdg.mime.defaultApplications = {
-    "x-scheme-handler/tg" = "org.telegram.desktop.desktop";
-    "application/x-compressed-tar" = fileroller;
-    "application/x-bzip2-compressed-tar" = fileroller;
-    "application/x-bzip1-compressed-tar" = fileroller;
-    "application/x-tzo" = fileroller;
-    "application/x-xz"= fileroller;
-    "application/x-lzma-compressed-tar" = fileroller;
-    "application/zstd" = fileroller;
-    "application/x-7z-compressed" = fileroller;
-    "application/x-zstd-compressed-tar" = fileroller;
-    "application/x-lzma" = fileroller;
-    "application/x-lz4" = fileroller;
-    "application/x-xz-compressed-tar" = fileroller;
-   "application/x-lz4-compressed-tar" = fileroller;
-    "application/x-archive" = fileroller;
-    "application/x-cpio" = fileroller;
-    "application/x-lzop" = fileroller;
-    "application/x-bzip1" = fileroller;
-    "application/x-tar" = fileroller;
-    "application/x-bzip2" = fileroller;
-    "application/gzip" = fileroller;
-    "application/x-lzip-compressed-tar" = fileroller;
-    "application/x-tarz "= fileroller;
-    "application/zip" = fileroller;
-    "inode/directory" = "nemo.desktop";
-    "text/html" = "firefox.desktop";
-    "video/mp4" = "mpv.desktop";
-    "audio/mpeg" = "mpv.desktop";
-    "audio/flac" = "mpv.desktop";
-  };
   xdg.terminal-exec = {
     enable = true;
     settings = {
@@ -345,44 +179,31 @@ in
   };
   users.defaultUserShell = pkgs.zsh;
   nixpkgs.config.allowUnfree = true;
-  imports =
-    [
-      #./my-services.nix
-      ./disks.nix
-      ./hardware-configuration.nix
-    ];
   fonts = {
     enableDefaultPackages = true;
     packages = with pkgs; [
       noto-fonts
-      (nerdfonts.override { fonts = [ "JetBrainsMono" "0xProto" "Hack" ]; })
+      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
     ];
-    fontconfig = {
-      antialias = true;
-      cache32Bit = true;
-      hinting.enable = true;
-      hinting.autohint = true;
-    };
   };
   time.timeZone = "Europe/Moscow";
   i18n.defaultLocale = "ru_RU.UTF-8";
   console = {
     earlySetup = true;
-    font = null;
-    useXkbConfig = true;
+    keyMap = "us,ru";
   };
   users.users."${var.user}" = {
     isNormalUser = true;
     hashedPassword = var.user-hash;
     extraGroups = [ "wheel" "uinput" "mlocate" "nginx" "input" "kvm" "adbusers" "video" ];
   };
-  users.users.tpws = {
-    isSystemUser = true;
-    group = "tpws";
-  };
-  users.groups.tpws = {};
+  system.etc.overlay.mutable = false;
+  users.mutableUsers = false;
   virtualisation.waydroid.enable = true;
-  xdg.portal = { enable = true; extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ]; }; 
-  xdg.portal.config.common.default = "*";
+  xdg.portal = {
+    enable = true;
+    extraPortals = [ pkgs.xdg-desktop-portal-hyprland pkgs.xdg-desktop-portal-gtk ];
+    config.common.default = "*";
+  };
   system.stateVersion = "23.11";
 }

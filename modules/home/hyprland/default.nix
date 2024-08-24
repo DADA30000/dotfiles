@@ -31,7 +31,7 @@ in
           "$mod_CTRL, C, exec, hyprctl kill"
           "$mod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
           "$mod_CTRL, U, exec, update-damn-nixos ${config.home.username}"
-          "$mod_CTRL, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy"
+          "$mod_CTRL, V, exec, cliphist list | rofi -dmenu -hover-select -me-select-entry '' -me-accept-entry MousePrimary | cliphist decode | wl-copy"
           "$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
           "$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
           "$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
@@ -42,7 +42,7 @@ in
           "$mod, Q, exec, kitty"
           "$mod, C, killactive,"
           "$mod, M, exec, wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
-          "$mod, E, exec, nemo"
+          "$mod, E, exec, nautilus -w"
           "$mod, V, togglefloating,"
           "$mod, P, pseudo,"
           "$mod, J, togglesplit,"
@@ -77,15 +77,16 @@ in
           "$mod, mouse_up, workspace, e-1"
         ];
         bindr = [
-          "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons"
-          "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run"
+          "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+          "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
         ];
         bindm = [
           "$mod, mouse:272, movewindow"
           "$mod, mouse:273, resizewindow"
         ];
         windowrule = [
-          "pin, ^(polkit-gnome-authentication-agent-1)$"
+	  "nomaxsize, ^(polkit-mate-authentication-agent-1)$"
+          "pin, ^(polkit-mate-authentication-agent-1)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
           "opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
         ];
@@ -225,6 +226,15 @@ in
           bind=,escape,submap,reset
         submap=reset
       '';
+    };
+    systemd.user.services.polkit_mate = {
+      Install= {
+        wantedBy = [ "hyprland-session.target" ];
+      };
+      Service = {
+	ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
+	Restart = "always";
+      };
     };
   };
 }
