@@ -8,11 +8,17 @@ in
     enable = mkEnableOption "Enable my Hyprland configuration";
     stable = mkEnableOption "Whether to use release from nixpkgs, or use latest git";
     enable-plugins = mkEnableOption "Enable Hyprland plugins";
+    mpvpaper = mkEnableOption "Enable video wallpapers with mpvpaper";
+    hyprpaper = mkEnableOption "Enable image wallpapers with hyprpaper";
+    wlogout = mkEnableOption "Enable power options menu";
+    hyprlock = mkEnableOption "Enable locking program";
+    rofi = mkEnableOption "Enable rofi (used as applauncher and dmenu)";
   };
   
   
 
   config = mkIf cfg.enable {
+    home.packages = with pkgs; [ hyprshot pulseaudio hyprshot nautilus file-roller cliphist libnotify swappy brightnessctl imv myxer ffmpegthumbnailer bun esbuild fd dart-sass swww hyprpicker wttrbar ];
     wayland.windowManager.hyprland = {
       package = mkIf (!cfg.stable) inputs.hyprland.packages.${pkgs.system}.hyprland;
       plugins = lib.optionals (cfg.enable-plugins && cfg.stable) [ pkgs.hyprlandPlugins.hypr-dynamic-cursors ] ++ lib.optionals (cfg.enable-plugins && !cfg.stable) [ inputs.hypr-dynamic-cursors.packages.${pkgs.system}.hypr-dynamic-cursors ];
@@ -229,12 +235,153 @@ in
     };
     systemd.user.services.polkit_mate = {
       Install= {
-        wantedBy = [ "hyprland-session.target" ];
+        WantedBy = [ "hyprland-session.target" ];
       };
       Service = {
 	ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
 	Restart = "always";
       };
     };
+    xdg.portal = {
+      enable = true;
+      extraPortals = [ pkgs.xdg-desktop-portal-hyprland ];
+      config.common.default = "*";
+    };
+    programs.hyprlock = mkIf cfg.hyprlock {
+      enable = true;
+      settings = {
+        background = [{
+          monitor = "";
+          color = "rgba(0, 0, 0, 0.7)";
+        }];
+        
+        input-field = [{
+          monitor = "";
+          size = "200, 50";
+          outline_thickness = 1;
+          dots_size = 0.2;
+          dots_spacing = 0.15;
+          dots_center = true;
+          outer_color = "rgb(000000)";
+          inner_color = "rgb(100, 100, 100)";
+          font_color = "rgb(10, 10, 10)";
+          fade_on_empty = true;
+          placeholder_text = "<i>Введите пароль...</i>";
+          hide_input = false;
+          position = "0, -20";
+          halign = "center";
+          valign = "center";
+        }];
+        
+        label = [{
+          monitor = "";
+          text = "Введите пароль от пользователя $USER $TIME $ATTEMPTS";
+          color = "rgba(200, 200, 200, 1.0)";
+          font_size = 25;
+          font_family = "Noto Sans";
+          position = "0, 200";
+          halign = "center";
+          valign = "center";
+        }];
+      };
+    };
+    services.hyprpaper = mkIf (cfg.hyprpaper && !cfg.mpvpaper) {
+      enable = false;
+      settings = {
+        ipc = "on";
+        splash = false;
+        preload = [ "${../../../stuff/wallpaper.jpg}" ];
+        wallpaper = [
+          "HDMI-A-1,${../../../stuff/wallpaper.jpg}"
+        ];
+      };
+    };
+    systemd.user.services.mpvpaper = mkIf (!cfg.hyprpaper && cfg.mpvpaper) {
+      Unit = {
+        Description = "Play video wallpaper.";
+      };
+      Install = {
+        WantedBy = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket hwdec=auto' '*' ${../../../stuff/wallpaper.mp4}";
+      };
+    };
+    programs.rofi = mkIf cfg.rofi {
+      enable = true;
+      package = pkgs.rofi-wayland;
+      font = "JetBrainsMono NF 14";
+      theme = ../../../stuff/theme.rasi;
+    };
+    programs.wlogout = mkIf cfg.wlogout {
+      enable = true;
+      layout = [
+        {
+            label = "lock";
+            action = "hyprlock";
+            text = "Lock";
+            keybind = "l";
+        }
+        {
+            label = "logout";
+            action = "hyprctl dispatch exit";
+            text = "Logout";
+            keybind = "e";
+        }
+        {
+            label = "shutdown";
+            action = "systemctl poweroff";
+            text = "Shutdown";
+            keybind = "s";
+        }
+        {
+            label = "reboot";
+            action = "systemctl reboot";
+            text = "Reboot";
+            keybind = "r";
+        }
+      ];
+      style = ''
+        * {
+        	background-image: none;
+        	font-family: "JetBrainsMono Nerd Font";
+        	font-size: 16px;
+        }
+        window {
+        	background-color: rgba(0, 0, 0, 0);
+        }
+        button {
+            color: #FFFFFF;
+                border-style: solid;
+        	border-radius: 15px;
+        	border-width: 3px;
+        	background-color: rgba(0, 0, 0, 0);
+        	background-repeat: no-repeat;
+        	background-position: center;
+        	background-size: 25%;
+        }
+        
+        button:focus, button:active, button:hover {
+        	background-color: rgba(0, 0, 0, 0);
+        	color: #4470D2;
+        }
+        
+        #lock {
+            background-image: image(url("${../../../stuff/lock.png}"));
+        }
+        
+        #logout {
+            background-image: image(url("${../../../stuff/logout.png}"));
+        }
+        
+        #shutdown {
+            background-image: image(url("${../../../stuff/shutdown.png}"));
+        }
+        
+        #reboot {
+            background-image: image(url("${../../../stuff/reboot.png}"));
+        }
+      '';
+    };  
   };
 }

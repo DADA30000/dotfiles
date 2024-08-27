@@ -4,15 +4,18 @@ let
   cfg = config.my-services;
 in
 {
-  options.my-services.nginx = {
-    enable = mkEnableOption "Enable nginx";
-    website.enable = mkEnableOption "Enable my goofy website";
-    nextcloud.enable = mkEnableOption "Enable nextcloud";
-    hostName = mkOption {
-      type = types.str;
-      default = "sanic.space";
-      example = "mybio.space";
-      description = "Website domain";
+  options.my-services = {
+    cloudflare-ddns.enable = mkEnableOption "Enable automatic Cloudflare DDNS";
+    nginx = {
+      enable = mkEnableOption "Enable nginx";
+      website.enable = mkEnableOption "Enable my goofy website";
+      nextcloud.enable = mkEnableOption "Enable nextcloud";
+      hostName = mkOption {
+        type = types.str;
+        default = "sanic.space";
+        example = "mybio.space";
+        description = "Website domain";
+      };
     };
   };
   
@@ -83,5 +86,11 @@ in
         })
       ];
     }; 
+    services.cron = mkIf cfg.cloudflare-ddns.enable {
+      enable = true;
+      systemCronJobs = [
+        "*/59 * * * *   root  update-cloudflare-dns /cloudflare1.conf"
+      ];
+    };
   };
 }
