@@ -19,7 +19,7 @@ in
   boot.tmp.useTmpfs = true;
 
   # Use mainline kernel instead of LTS kernel
-  boot.kernelPackages = pkgs.linuxPackages_testing; 
+  #boot.kernelPackages = pkgs.linuxPackages_testing; 
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
@@ -74,7 +74,7 @@ in
     # Set options for vm that is built using nixos-rebuild build-vm
     systemd.user.services.mpvpaper.enable = false;
     virtualisation = {
-       qemu.options = [ "-display sdl,gl=on" "-device virtio-vga-gl" "-enable-kvm" ];
+       qemu.options = [ "-display sdl,gl=on" "-device virtio-vga-gl" "-enable-kvm" "-audio driver=sdl,model=virtio" ];
        cores = 6;
        diskSize = 1024 * 8;
        msize = 16384 * 16;
@@ -89,7 +89,7 @@ in
     enable = true;
 
     # Packages to install from flatpak
-    packages = [ "dev.vencord.Vesktop" "com.usebottles.bottles" "com.github.tchx84.Flatseal" ];
+    packages = [ "dev.vencord.Vesktop" "com.usebottles.bottles" "com.github.tchx84.Flatseal" { appId = "org.vinegarhq.Sober"; origin = "sober"; } ];
 
   };
 
