@@ -286,7 +286,7 @@ in
       };
     };
     services.hyprpaper = mkIf (cfg.hyprpaper && !cfg.mpvpaper) {
-      enable = false;
+      enable = true;
       settings = {
         ipc = "on";
         splash = false;

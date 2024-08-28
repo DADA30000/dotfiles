@@ -19,7 +19,7 @@ in
   boot.tmp.useTmpfs = true;
 
   # Use mainline kernel instead of LTS kernel
-  #boot.kernelPackages = pkgs.linuxPackages_testing; 
+  boot.kernelPackages = pkgs.linuxPackages_testing; 
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
@@ -40,7 +40,7 @@ in
   networking.networkmanager.enable = true;
 
   # Allow making users through useradd
-  users.mutableUsers = false;
+  users.mutableUsers = true;
 
   # Enable WayDroid
   virtualisation.waydroid.enable = true;
