@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
-  rm -rf ./nixos ./iso ./flake.nix ./flake.lock
+  rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
   cp -r /etc/nixos/* ./
   git add . --all
   git add .gitattributes
