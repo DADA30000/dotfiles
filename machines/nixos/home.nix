@@ -3,6 +3,9 @@
   # Import other modules
   imports = [ ../../modules/home ];
 
+  # Enable firefox customization
+  firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "24.05";
   

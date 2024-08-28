@@ -7,7 +7,7 @@ in
   options.flatpak = {
     enable = mkEnableOption "Enable system flatpak";
     packages = mkOption {
-      type = types.listOf types.str;
+      type = types.listOf (types.oneOf [ types.str types.attrs ]);
       default = [ ];
       example = [ "com.github.tchx84.Flatseal" ];
       description = "Packages to install from flatpak";
@@ -21,6 +21,9 @@ in
       enable = true;
       uninstallUnmanaged = true;
       packages = cfg.packages;
+      remotes = mkOptionDefault [
+        { name = "sober"; location = "${./sober.flatpakrepo}"; }
+      ];
       update.auto = {
         enable = true;
         onCalendar = "daily";
