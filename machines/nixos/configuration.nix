@@ -12,6 +12,9 @@ in
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
 
+  # GPU and CPU OC, fan control utility
+  programs.corectrl.enable = true;
+
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
 
@@ -89,7 +92,7 @@ in
     enable = true;
 
     # Packages to install from flatpak
-    packages = [ "dev.vencord.Vesktop" "com.usebottles.bottles" "com.github.tchx84.Flatseal" { appId = "org.vinegarhq.Sober"; origin = "sober"; } ];
+    packages = [ { appId = "org.vinegarhq.Sober"; origin = "sober"; } ];
 
   };
 
@@ -262,12 +265,14 @@ in
       osu-lazer-bin
       steam
       moonlight-qt
-      inputs.pollymc.packages.${pkgs.system}.pollymc
+      inputs.pollymc.packages.${system}.pollymc
       nvtopPackages.amd
       qbittorrent
       pavucontrol
       any-nix-shell
       wl-clipboard
+      bottles
+      vesktop
       networkmanager_dmenu
       neovide
     ] ++ (import ../../modules/system/stuff (pkgs)).scripts;
