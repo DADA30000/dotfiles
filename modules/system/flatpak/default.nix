@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 with lib;
 let
   cfg = config.flatpak;
@@ -15,7 +15,7 @@ in
   };
   
 
-
+  imports = [ inputs.nix-flatpak.nixosModules.nix-flatpak ];
   config = mkIf cfg.enable {
     services.flatpak = {
       enable = true;

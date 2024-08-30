@@ -26,29 +26,24 @@
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.4.1";
   };
 
-  outputs = {self, nixpkgs, home-manager, ...} @ inputs: 
-  let
-  in { 
+  outputs = { nixpkgs, home-manager, ...} @ inputs: { 
     nixosConfigurations = {
       nixos = nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [
           ./machines/nixos/configuration.nix
-	  inputs.spicetify-nix.nixosModules.default
-          inputs.nix-flatpak.nixosModules.nix-flatpak
           home-manager.nixosModules.home-manager
           {
-            home-manager = {
+          home-manager = {
               extraSpecialArgs = { inherit inputs; }; 
               useGlobalPkgs = true;
               users.l0lk3k = import ./machines/nixos/home.nix;
               useUserPackages = true;
-            };
+          };
           }
         ];
       };
       iso = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
 	modules = [
 	  ./machines/iso/configuration.nix
 	];

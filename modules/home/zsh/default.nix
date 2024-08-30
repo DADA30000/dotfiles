@@ -19,26 +19,30 @@ in
         enable = true;
         plugins = [ "sudo" ];
       };
+      # Must be without indents/tabs/spaces (that's just dumb)
       initExtra = ''
-        nixos_ascii () {
-        echo -n $'\E[34m'
-        cat << "EOF"
-          _  _ _      ___  ___ 
-         | \| (_)_ __/ _ \/ __|
-         | .` | \ \ / (_) \__ \
-         |_|\_|_/_\_\\___/|___/
-        EOF
-        }
-        ${pkgs.any-nix-shell}/bin/any-nix-shell zsh --info-right | source /dev/stdin
-        export PATH="$PATH:$HOME/.local/bin"
-        printf '\n%.0s' {1..100}
-        [[ ! -f ${../../../stuff/p10k-config/.p10k.zsh} ]] || source ${../../../stuff/p10k-config/.p10k.zsh}
-        if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-          Hyprland
-        fi
-        source ${../../../stuff/p10k-config/p10k.zsh}
-        source ${pkgs.nix-index}/etc/profile.d/command-not-found.sh
-        setopt correct
+nixos_ascii () {
+echo -n $'\E[34m'
+cat << "EOF"
+  _  _ _      ___  ___ 
+ | \| (_)_ __/ _ \/ __|
+ | .` | \ \ / (_) \__ \
+ |_|\_|_/_\_\\___/|___/
+EOF
+}
+${pkgs.any-nix-shell}/bin/any-nix-shell zsh --info-right | source /dev/stdin
+export PATH="$PATH:$HOME/.local/bin"
+printf '\n%.0s' {1..100}
+[[ ! -f ${../../../stuff/p10k-config/.p10k.zsh} ]] || source ${../../../stuff/p10k-config/.p10k.zsh}
+if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
+  Hyprland
+fi
+source ${../../../stuff/p10k-config/p10k.zsh}
+source ${pkgs.nix-index}/etc/profile.d/command-not-found.sh
+setopt correct
+nix-sh () {
+  nix shell ''${@/#/nixpkgs#}
+}
       '';
       shellAliases = {
         ll = "ls -l";
@@ -48,7 +52,6 @@ in
         update-test = "nh os test /etc/nixos";
         update-boot = "nh os boot /etc/nixos";
         update-build = "nh os build /etc/nixos";
-	nix-sh = "nix-shell -p";
         #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
         fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
         cps="rsync -ahr --progress";
