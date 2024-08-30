@@ -11,7 +11,25 @@ in
 
 
   config = mkIf cfg.enable {
-    home.file.".themes".source = ../../../stuff/.themes;
+    home.file = {
+      ".themes".source = ../../../stuff/.themes;
+      ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/assets;
+      ".config/gtk-4.0/gtk.css".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/gtk.css;
+      ".config/gtk-4.0/icons".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/icons;
+      ".config/vesktop/settings".source = ../../../stuff/vesktop/settings;
+      ".config/vesktop/settings.json".source = ../../../stuff/vesktop/settings.json;
+      ".config/vesktop/themes".source = ../../../stuff/vesktop/themes;
+    };
+    xdg.desktopEntries.vesktop.settings= {
+      Exec = "vesktop --ozone-platform-hint=auto %U";
+      Categories = "Network;InstantMessaging;Chat";
+      GenericName = "Internet Messenger";
+      Icon = "vesktop";
+      Keywords = "discord;vencord;electron;chat";
+      Name = "Vesktop";
+      StartupWMClass = "Vesktop";
+      Type = "Application";
+    };
     dconf.settings = {
       "org/nemo/preferences" = {
         default-folder-viewer = "list-view";

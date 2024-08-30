@@ -125,7 +125,7 @@ in
           "animation slide left, swaync-control-center"
         ];  
         exec-once = [
-          "firefox & flatpak run dev.vencord.Vesktop"
+          "firefox & vesktop --ozone-platform-hint=auto"
           "wl-paste --type text --watch cliphist store"
           "wl-paste --type image --watch cliphist store"
           "hyprctl setcursor GoogleDot-Black 24"
