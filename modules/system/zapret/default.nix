@@ -25,12 +25,7 @@ in
         nftables
         ipset
         curl
-        (zapret.overrideAttrs (prev: {
-          installPhase = ''
-            ${prev.installPhase}
-            touch $out/usr/share/zapret/config
-          '';
-        }))
+	zapret
         gawk
       ];
       serviceConfig = {
