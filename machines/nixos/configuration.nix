@@ -9,6 +9,9 @@ in
     ../../modules/system
   ];
 
+  # Enable IOMMU
+  boot.kernelParams = [ "iommu=pt" ];
+
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
 
