@@ -12,5 +12,6 @@
     ./obs
     ./flatpak
     ./mlocate
+    ./nvidia
   ];
 }
