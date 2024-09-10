@@ -56,7 +56,7 @@
             "enabled": false
         },
         "WebRichPresence (arRPC)": {
-            "enabled": false
+            "enabled": true
         },
         "AutomodContext": {
             "enabled": false
