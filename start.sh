@@ -18,6 +18,17 @@ tZXxn9qc34vndv7Nyuoe0g=="
     decoded=$(echo $encoded | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:${pass})
     myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
   fi
+  if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
+    echo "Введите пароль"
+    passtemp=$(mkpasswd)
+    echo "Введите имя пользователя"
+    read usertemp
+    sed -i 's/  user = "l0lk3k";/  user = "'${usertemp}'";/' ./machines/nixos/configuration.nix 
+    sed -i 's/  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";/  user-hash = "'${passtemp}'";/' ./machines/nixos/configuration.nix
+  fi
+  if gum confirm --default=false "Отредактировать файл конфигурации?"; then
+    nvim ./machines/nixos/configuration.nix
+  fi
   if [ -n "$disk_games" ]; then
     echo "Вы хотите установить СИСТЕМУ на $disk_system, и использовать в качестве ДОПОЛНИТЕЛЬНОГО ДИСКА $disk_games (предупреждение: он отформатируется)"
   else
