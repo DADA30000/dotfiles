@@ -23,8 +23,8 @@ tZXxn9qc34vndv7Nyuoe0g=="
     passtemp=$(mkpasswd)
     echo "Введите имя пользователя"
     read usertemp
-    sed -i 's|  user = "l0lk3k";|  user = "'"${usertemp}"'";|' ./configuration.nix 
-    sed -i 's|  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";|  user-hash = "'"${passtemp}"'";|' ./configuration.nix
+    sed -i 's|  user = "l0lk3k";|  user = "'"${usertemp}"'";|' ./machines/nixos/configuration.nix 
+    sed -i 's|  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";|  user-hash = "'"${passtemp}"'";|' ./machines/nixos/configuration.nix
   fi
   if gum confirm --default=false "Отредактировать файл конфигурации?"; then
     nvim ./machines/nixos/configuration.nix
