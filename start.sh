@@ -106,11 +106,11 @@ tZXxn9qc34vndv7Nyuoe0g=="
     echo -e "\e[34mУстановка системы...\e[0m"
       mkdir -p /mnt/etc/nixos
       rm -rf /mnt/etc/nixos/*
-      rm ./nixos/hardware-configuration.nix
+      rm ./machines/nixos/hardware-configuration.nix
       nixos-generate-config --no-filesystems --root /mnt
       find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
-      cp -r ./nixos ./iso flake.{nix,lock} /mnt/etc/nixos
-      mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/nixos
+      cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
+      mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
       nixos-install -v --flake "/mnt/etc/nixos#nixos" --impure
     echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
     for i in {1..9}; do
