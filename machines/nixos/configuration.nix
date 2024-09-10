@@ -171,6 +171,9 @@ in
 
   };
 
+  # Enable nvidia stuff
+  nvidia.enable = false;
+
   amdgpu = {
 
     # Enable AMDGPU stuff
