@@ -94,6 +94,7 @@ in
 	  "nomaxsize, ^(polkit-mate-authentication-agent-1)$"
           "pin, ^(polkit-mate-authentication-agent-1)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
+	  "opacity 0.99 override 0.99 override, ^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
         ];
         layerrule = [
@@ -171,7 +172,7 @@ in
         };
         animations = {
           enabled = true;
-          first_launch_animation = true;
+          first_launch_animation = false;
           bezier = [
             "fade, 0.165, 0.84, 0.44, 1"
             "woosh, 0.445, 0.05, 0, 1"
@@ -199,6 +200,8 @@ in
           workspace_swipe = true;
         };
         misc = {
+	  disable_hyprland_logo = true;
+	  background_color = "0x000000";
           enable_swallow = true;
           animate_manual_resizes = false;
     	  animate_mouse_windowdragging = false;
@@ -296,6 +299,7 @@ in
         ];
       };
     };
+    systemd.user.services.hyprpaper.Service.ExecStartPre = mkIf (cfg.hyprpaper && !cfg.mpvpaper) "${pkgs.coreutils-full}/bin/sleep 1.8";
     systemd.user.services.mpvpaper = mkIf (!cfg.hyprpaper && cfg.mpvpaper) {
       Unit = {
         Description = "Play video wallpaper.";

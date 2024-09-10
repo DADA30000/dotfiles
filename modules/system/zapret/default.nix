@@ -74,7 +74,7 @@ in
       dnscrypt-proxy2 = {
         enable = true;
         settings = {
-          server_names = [ "cloudflare" "scaleway-fr" "yandex" "google" ];
+          server_names = [ "cloudflare" "scaleway-fr" "google" ];
           listen_addresses = [ "127.0.0.1:53" "[::1]:53" ];
         };
       };

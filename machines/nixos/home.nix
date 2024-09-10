@@ -3,6 +3,9 @@
   # Import other modules
   imports = [ ../../modules/home ];
 
+  # Enable rich presence
+  services.arrpc.enable = true;
+
   # Enable firefox customization
   firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -79,10 +82,10 @@
     enable-plugins = true;
 
     # Enable video wallpapers with mpvpaper
-    mpvpaper = true;
+    mpvpaper = false;
 
     # Enable image wallpapers with hyprpaper
-    hyprpaper = false;
+    hyprpaper = true;
 
     # Enable power options menu
     wlogout = true;

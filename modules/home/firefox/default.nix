@@ -657,6 +657,7 @@ in
 	"browser.download.always_ask_before_handling_new_types" = false;
 	"browser.download.manager.addToRecentDocs" = false;
 	"browser.download.open_pdf_attachments_inline" = true;
+	"browser.download.alwaysOpenPanel" = true;
 	"browser.bookmarks.openInTabClosesMenu" = false;
 	"browser.menu.showViewImageInfo" = true;
 	"findbar.highlightAll" = true;
@@ -699,6 +700,7 @@ in
 	{ url = "https://mail.google.com/mail/u/1/#inbox"; name = "second gmail"; }
 	{ url = "https://home-manager-options.extranix.com/"; name = "Home Manager - Option Search"; }
 	{ url = "https://search.nixos.org/options"; name = "NixOS Search - Options"; }
+	{ url = "https://nixpk.gs/pr-tracker.html"; name = "Nixpkgs PR status"; }
 	{ url = "https://youtube.com"; name = ""; }
 	{ url = "https://cartoonsub.com/"; name = ""; }
 	{ url = "https://diakov.net/"; name = ""; }
