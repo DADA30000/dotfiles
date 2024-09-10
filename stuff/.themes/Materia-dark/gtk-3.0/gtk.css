@@ -1,3 +1,6 @@
+* {
+  border-width: 0;
+}
 @keyframes ripple {
   to {
     background-size: 1000% 1000%;
@@ -311,7 +314,7 @@ spinbutton.flat:not(.vertical),
 entry.flat {
   min-height: 0;
   padding: 2px;
-  border-radius: 0;
+  border-radius: 15px;
   background-color: transparent;
 }
 spinbutton:not(.vertical) image,
@@ -1056,7 +1059,7 @@ spinbutton:not(.vertical) entry {
   min-width: 32px;
   margin: 0;
   border-image: none;
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   background-color: transparent;
 }
@@ -1101,7 +1104,7 @@ spinbutton.vertical button.down {
 treeview spinbutton:not(.vertical) {
   min-height: 0;
   border-style: none;
-  border-radius: 0;
+  border-radius: 15px;
 }
 treeview spinbutton:not(.vertical) entry {
   min-height: 0;
@@ -1209,7 +1212,7 @@ toolbar {
   padding: 2px;
 }
 toolbar.osd.left, toolbar.osd.right, toolbar.osd.top, toolbar.osd.bottom {
-  border-radius: 0;
+  border-radius: 15px;
 }
 toolbar.osd.bottom {
   box-shadow: none;
@@ -1472,7 +1475,7 @@ searchbar > revealer > box {
   background-color: #8ab4f8;
 }
 .tiled .titlebar, .tiled-top .titlebar, .tiled-right .titlebar, .tiled-bottom .titlebar, .tiled-left .titlebar, .maximized .titlebar, .fullscreen .titlebar {
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: 0 2px 2px -2px rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.24), 0 1px 2px -0.6px rgba(0, 0, 0, 0.17);
 }
 .titlebar.default-decoration {
@@ -1493,7 +1496,7 @@ searchbar > revealer > box {
   background-size: 1000% 1000%;
 }
 .solid-csd .titlebar:dir(rtl), .solid-csd .titlebar:dir(ltr) {
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: 0 2px 2px -2px rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.24), 0 1px 2px -0.6px rgba(0, 0, 0, 0.17);
 }
 
@@ -1622,7 +1625,7 @@ treeview.view {
 }
 
 treeview.view:hover, treeview.view:selected {
-  border-radius: 0;
+  border-radius: 15px;
 }
 treeview.view.separator {
   min-height: 5px;
@@ -1675,7 +1678,7 @@ treeview.view header button {
   border-style: none solid solid none;
   border-width: 1px;
   border-color: rgba(255, 255, 255, 0.2);
-  border-radius: 0;
+  border-radius: 15px;
   background-clip: padding-box;
   color: rgba(255, 255, 255, 0.7);
   box-shadow: none;
@@ -1710,7 +1713,7 @@ treeview.view header.button.dnd {
   border-style: none solid solid;
   border-width: 1px;
   border-color: rgba(255, 255, 255, 0.2);
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   background-clip: padding-box;
   background-color: rgba(46, 46, 46, 0.2666666667);
@@ -1978,7 +1981,7 @@ notebook > header > tabs > arrow {
   min-height: 16px;
   min-width: 16px;
   padding: 4px;
-  border-radius: 0;
+  border-radius: 15px;
   color: rgba(255, 255, 255, 0.7);
 }
 notebook > header > tabs > arrow:drop(active), notebook > header > tabs > arrow:hover {
@@ -2145,7 +2148,7 @@ scrollbar button {
   min-width: 16px;
   min-height: 16px;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
 }
 scrollbar.vertical button.down {
   -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
@@ -2699,7 +2702,7 @@ frame > border,
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   background-clip: padding-box;
   background-color: rgba(30, 30, 30, 0.2666666667);
@@ -2901,7 +2904,7 @@ calendar:selected {
 calendar.header {
   border-style: none none solid;
   border-color: rgba(255, 255, 255, 0.2);
-  border-radius: 0;
+  border-radius: 15px;
 }
 calendar.button {
   border-radius: 5px;
@@ -3380,7 +3383,7 @@ decoration:backdrop {
   box-shadow: 0 2px 2.4px -1px rgba(0, 0, 0, 0.2), 0 4px 3px 0 rgba(0, 0, 0, 0.14), 0 1px 6px 0 rgba(0, 0, 0, 0.12), 0 16px 14.4px 2px transparent, 0 6px 18px 5px transparent;
 }
 .maximized decoration, .fullscreen decoration, .tiled decoration, .tiled-top decoration, .tiled-right decoration, .tiled-bottom decoration, .tiled-left decoration {
-  border-radius: 0;
+  border-radius: 15px;
 }
 .popup decoration {
   box-shadow: none;
@@ -3402,7 +3405,7 @@ messagedialog.csd decoration {
 .solid-csd decoration {
   margin: 0;
   padding: 2px;
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
   background-color: rgba(111, 111, 111, 0.3326666667);
@@ -3479,7 +3482,7 @@ popover.emoji-picker {
 popover.emoji-picker entry {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   border-image: none;
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   background-color: transparent;
 }
@@ -3550,7 +3553,7 @@ keypad .symbol {
 viewswitcher button {
   margin: 0;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
 }
 viewswitcher button > stack > box.narrow image,
 viewswitcher button > stack > box.narrow label {
@@ -3720,7 +3723,7 @@ dialog.background > box.dialog-vbox.vertical > grid.horizontal > box.horizontal:
   margin: 0 8px;
 }
 dialog.background > box.dialog-vbox.vertical > grid.horizontal > box.horizontal:last-child > box > button {
-  border-radius: 0;
+  border-radius: 15px;
 }
 
 .nautilus-window > popover.menu:not(:last-child) {
@@ -4026,7 +4029,7 @@ popover.messagepopover.background {
 popover.messagepopover .popover-action-area button {
   padding: 8px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0;
+  border-radius: 15px;
 }
 popover.messagepopover .popover-action-area button:first-child {
   border-bottom-left-radius: 4px;
@@ -4180,7 +4183,7 @@ ideeditorutilities > dzldockpaned > box > stackswitcher:dir(rtl) {
   border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 ideeditorutilities > dzldockpaned > box > stackswitcher button {
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   background-color: transparent;
 }
@@ -4222,7 +4225,7 @@ dzlsuggestionpopover > revealer > box > elastic > scrolledwindow > viewport > li
 }
 #titlebar_container .suggestionbutton button {
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: inset 0 0 0 9999px rgba(111, 111, 111, 0.3326666667);
 }
 #titlebar_container .suggestionbutton button:backdrop {
@@ -4355,7 +4358,7 @@ terminal-window notebook > header > box {
   margin: -2px;
 }
 terminal-window notebook > header > box button {
-  border-radius: 0;
+  border-radius: 15px;
 }
 
 /**
@@ -4495,7 +4498,7 @@ overlay > revealer.right > scrolledwindow.frame {
 }
 
 .terminal-titlebar button {
-  border-radius: 0;
+  border-radius: 15px;
 }
 
 button.image-button.session-new-button {
@@ -4711,7 +4714,7 @@ tooltip.background.chromium {
   min-height: 16px;
   min-width: 16px;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
 }
 #CanvasTable #HorizontalScrollbar {
   border-top: 1px solid rgba(255, 255, 255, 0.2);
@@ -4789,7 +4792,7 @@ UnityDecoration .menuitem:hover {
 }
 
 .background:not(.csd) headerbar:not(.titlebar) {
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: 0 2px 2px -2px rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.24), 0 1px 2px -0.6px rgba(0, 0, 0, 0.17);
 }
 .background:not(.csd) headerbar:not(.titlebar).inline-toolbar {
@@ -4840,7 +4843,7 @@ UnityPanelWidget:backdrop,
   min-height: 16px;
   min-width: 16px;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
   color: rgba(255, 255, 255, 0.6);
   box-shadow: none;
   background-color: transparent;
@@ -5117,7 +5120,7 @@ na-tray-applet {
   box-shadow: none;
 }
 .brisk-menu .apps-list button {
-  border-radius: 0;
+  border-radius: 15px;
   color: #fff;
   font-weight: normal;
 }
@@ -5226,7 +5229,7 @@ na-tray-applet {
 }
 .pluma-window statusbar frame button.flat {
   padding: 0 4px;
-  border-radius: 0;
+  border-radius: 15px;
 }
 .pluma-window statusbar frame button.flat widget {
   -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
@@ -5299,11 +5302,11 @@ MsdOsdWindow.background.osd {
   color: #fff;
 }
 MsdOsdWindow.background.osd .trough {
-  border-radius: 0;
+  border-radius: 15px;
   background-color: rgba(255, 255, 255, 0.2);
 }
 MsdOsdWindow.background.osd .progressbar {
-  border-radius: 0;
+  border-radius: 15px;
   background-color: #fff;
 }
 /**
@@ -5361,14 +5364,14 @@ MsdOsdWindow.background.osd .progressbar {
 .budgie-popover.budgie-menu entry.search {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   border-image: none;
-  border-radius: 0;
+  border-radius: 15px;
   box-shadow: none;
   font-size: 120%;
 }
 .budgie-popover.budgie-menu button.flat:not(.image-button) {
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 0;
+  border-radius: 15px;
 }
 .budgie-popover.budgie-menu button.flat:not(.image-button):drop(active):not(:active), .budgie-popover.budgie-menu button.flat:not(.image-button):hover:not(:active) {
   transition-property: all, border-image, background-size, background-image, background-color;
@@ -5491,7 +5494,7 @@ MsdOsdWindow.background.osd .progressbar {
   min-height: 16px;
   min-width: 16px;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
   color: rgba(255, 255, 255, 0.6);
   box-shadow: none;
   background-color: transparent;
@@ -5642,7 +5645,7 @@ frame.raven-frame > border {
   padding: 0 16px;
   min-height: 48px;
   border-image: radial-gradient(circle closest-corner at center calc(100% - 1px), #8ab4f8 0%, transparent 0%) 0 0 0/0 0 0;
-  border-radius: 0;
+  border-radius: 15px;
 }
 .raven .raven-header.top stackswitcher.linked > button:checked {
   border-image: radial-gradient(circle closest-corner at center calc(100% - 1px), #8ab4f8 100%, transparent 0%) 0 0 2/0 0 2px;
@@ -5922,7 +5925,7 @@ calendar.raven-calendar:selected {
   min-height: 16px;
   min-width: 16px;
   padding: 0;
-  border-radius: 0;
+  border-radius: 15px;
   color: rgba(255, 255, 255, 0.6);
   box-shadow: none;
   background-color: transparent;
@@ -6004,7 +6007,7 @@ XfdesktopIconView.view:active {
   background-color: rgba(138, 180, 248, 0.24);
 }
 XfdesktopIconView.view .rubberband {
-  border-radius: 0;
+  border-radius: 15px;
 }
 
 #XfceNotifyWindow {
