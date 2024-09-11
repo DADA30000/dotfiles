@@ -108,12 +108,11 @@ tZXxn9qc34vndv7Nyuoe0g=="
     mkdir -p /mnt/etc/nixos
     rm -rf /mnt/etc/nixos/*
     rm ./machines/nixos/hardware-configuration.nix
-    #nixos-generate-config --no-filesystems --root /mnt
-    nixos-generate-config --root /mnt
-    #find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
+    nixos-generate-config --no-filesystems --root /mnt
+    find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
-    cp /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-    if nixos-install -v; then
+    mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
+    if nixos-install -v --flake "/mnt/etc/nixos#nixos" --impure; then
       echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
       for i in {1..9}; do
         sleep 0.25
