@@ -105,29 +105,33 @@ tZXxn9qc34vndv7Nyuoe0g=="
       fi
     fi
     echo -e "\e[34mУстановка системы...\e[0m"
-      mkdir -p /mnt/etc/nixos
-      rm -rf /mnt/etc/nixos/*
-      rm ./machines/nixos/hardware-configuration.nix
-      nixos-generate-config --no-filesystems --root /mnt
-      find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
-      cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
-      mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-      nixos-install -v --flake "/mnt/etc/nixos#nixos" --impure
-    echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
-    for i in {1..9}; do
+    mkdir -p /mnt/etc/nixos
+    rm -rf /mnt/etc/nixos/*
+    rm ./machines/nixos/hardware-configuration.nix
+    #nixos-generate-config --no-filesystems --root /mnt
+    nixos-generate-config --root /mnt
+    #find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
+    cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
+    cp /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
+    if nixos-install -v; then
+      echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
+      for i in {1..9}; do
+        sleep 0.25
+        printf "${i}"
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+      done
       sleep 0.25
-      printf "${i}"
-      sleep 0.25
-      printf "."
-      sleep 0.25
-      printf "."
-      sleep 0.25
-      printf "."
-    done
-    sleep 0.25
-    printf "10"
-    echo -ne '\n'
-    reboot
+      printf "10"
+      echo -ne '\n'
+      reboot
+    else
+      echo -e "\e[31mОшибка установки :(\e[0m"
+    fi
   fi
 else
   echo "change your working directory to dotfiles"
