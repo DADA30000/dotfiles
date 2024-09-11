@@ -91,7 +91,7 @@ in
     fileSystems."${cfg.second-disk.path}" = mkIf cfg.second-disk.enable {
       device = "/dev/disk/by-label/${cfg.second-disk.label}";
       fsType = "btrfs";
-      options = optionals cfg.second-disk.compression [ "compress-force=zstd" ] ++ optionals (cfg.second-disk.subvol!=null) [ "subvol=${cfg.second-disk.subvol}" ];
+      options = optionals cfg.second-disk.compression [ "compress-force=zstd" ] ++ optionals (cfg.second-disk.subvol!=null) [ "subvol=${cfg.second-disk.subvol}" ] ++ [ "nofail" ];
     };
 
     swapDevices = optionals cfg.swap.file.enable [{
