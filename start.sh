@@ -39,16 +39,16 @@ tZXxn9qc34vndv7Nyuoe0g=="
     clear
     echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
     sleep 2
-    echo -e "\e[34mРазметка дисков..."
-    echo "label: gpt" |  sfdisk "$disk_system"
-    echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
-    echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
-    echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
-    if [ -n "$disk_games" ]; then
-      echo "label: gpt" | sfdisk "$disk_games"
-      echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
-    fi
     if gum confirm "Отформатировать выбранные разделы?"; then
+      echo -e "\e[34mРазметка дисков..."
+      echo "label: gpt" |  sfdisk "$disk_system"
+      echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
+      echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
+      echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
+      if [ -n "$disk_games" ]; then
+        echo "label: gpt" | sfdisk "$disk_games"
+        echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
+      fi
       echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
         mkdir -p /mnt
       if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then

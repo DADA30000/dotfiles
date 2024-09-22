@@ -164,7 +164,7 @@ in
   obs = {
     
     # Enable OBS
-    enable = false;
+    enable = true;
 
     # Enable virtual camera
     virt-cam = false;

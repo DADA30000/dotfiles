@@ -30,6 +30,7 @@ in
       hostName = "nc.${cfg.nginx.hostName}";
       package = pkgs.nextcloud29;
     };
+    systemd.services.nginx.serviceConfig.ReadWritePaths = [ "/website/stream" ];
     services.nginx = {
       enable = true;
       virtualHosts = mkMerge [
@@ -45,6 +46,29 @@ in
             enableACME = true;
             root = "/website";
             extraConfig = ''
+	      location / {
+	        if ($request_method = 'OPTIONS') {
+	           add_header 'Access-Control-Allow-Origin' '*';
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+	           add_header 'Access-Control-Max-Age' 1728000;
+	           add_header 'Content-Type' 'text/plain; charset=utf-8';
+	           add_header 'Content-Length' 0;
+	           return 204;
+	        }
+	        if ($request_method = 'POST') {
+	           add_header 'Access-Control-Allow-Origin' '*' always;
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+	           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	        }
+	        if ($request_method = 'GET') {
+	           add_header 'Access-Control-Allow-Origin' '*' always;
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+	           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	        }
+	      }
 	      location /index/ {
 	        alias /website/index/;
 	        sub_filter_once off;
@@ -60,6 +84,29 @@ in
             enableACME = true;
             root = "/website";
             extraConfig = ''
+	      location / {
+	        if ($request_method = 'OPTIONS') {
+	           add_header 'Access-Control-Allow-Origin' '*';
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+	           add_header 'Access-Control-Max-Age' 1728000;
+	           add_header 'Content-Type' 'text/plain; charset=utf-8';
+	           add_header 'Content-Length' 0;
+	           return 204;
+	        }
+	        if ($request_method = 'POST') {
+	           add_header 'Access-Control-Allow-Origin' '*' always;
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+	           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	        }
+	        if ($request_method = 'GET') {
+	           add_header 'Access-Control-Allow-Origin' '*' always;
+	           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+	           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+	           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	        }
+	      }
 	      location /index/ {
 	        alias /website/index/;
 	        sub_filter_once off;
@@ -72,6 +119,26 @@ in
           };
         })
       ];
+      appendConfig = ''
+      rtmp {
+        server {
+	  listen 1935;
+          chunk_size 4096;
+          allow publish 127.0.0.1;
+          deny publish all;
+          application live {
+            live on;
+            record off;
+	    hls on;
+            hls_path /website/stream/hls;
+            hls_fragment 3;
+            hls_playlist_length 60;
+            dash on;
+            dash_path /website/stream/dash;
+	  }
+	}
+      }
+      '';
     };
     security.acme = {
       acceptTerms = true;
