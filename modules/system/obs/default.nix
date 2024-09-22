@@ -12,7 +12,7 @@ in
 
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [ pkgs.obs-studio ];
+    environment.systemPackages = [ (pkgs.wrapOBS { plugins = [ pkgs.obs-studio-plugins.obs-vaapi pkgs.gst_all_1.gstreamer ]; }) pkgs.gst_all_1.gstreamer pkgs.obs-studio-plugins.obs-vaapi ];
     boot = mkIf cfg.virt-cam {
       extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
       extraModprobeConfig = ''
