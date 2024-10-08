@@ -9,9 +9,6 @@
     fg1:    #FFFFFF;
     fg2:    #969696;
     fg3:    #969696;
-    margin:     0px;
-    padding:    0px;
-    spacing:    0px;
 }
 
 window {
@@ -63,6 +60,10 @@ listview {
     margin:     12px 0 0;
     lines:      10;
     columns:    1;
+
+    scrollbar-width: 2px;
+
+    scrollbar:  true;
 
     fixed-height: false;
 }
