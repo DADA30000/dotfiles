@@ -29,6 +29,8 @@ in
 
   };
 
+  #boot.crashDump.enable = true;
+
   # Enable RAM compression
   zramSwap.enable = true;
 
@@ -318,6 +320,8 @@ partition = {
     efi.canTouchEfiVariables = true;
 
     systemd-boot.enable = true;
+
+    systemd-boot.memtest86.enable = true;
 
     timeout = 0;
 

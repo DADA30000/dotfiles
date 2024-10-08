@@ -76,7 +76,7 @@
     enable = true;
 
     # Whether to use release from nixpkgs, or use latest git
-    stable = false;
+    stable = true;
 
     # Enable Hyprland plugins
     enable-plugins = true;

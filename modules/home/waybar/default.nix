@@ -701,7 +701,7 @@ in
           "custom/nixos" = {
             exec = "nixos";
             return-type = "json";
-            on-click = "rofi -show drun -show-icons";
+            on-click = "rofi -show drun -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary";
             format = "{}";
             tooltip = true;
           };

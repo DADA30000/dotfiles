@@ -48,19 +48,19 @@ in
           MODE="nfqws"
           FWTYPE="iptables"
           MODE_HTTP=1
-          MODE_HTTP_KEEPALIVE=1
+          MODE_HTTP_KEEPALIVE=0
           MODE_HTTPS=1
-          MODE_QUIC=0
+          MODE_QUIC=1
+	  QUIC_PORTS=50000-65535
           MODE_FILTER=none
           DISABLE_IPV6=1
           INIT_APPLY_FW=1
           #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-ttl=11 --dpi-desync-fake-http=0x00000000"
           #NFQWS_OPT_DESYNC="--dpi-desync=split2"
 	  #NFQWS_OPT_DESYNC="--dpi-desync=split2 --dpi-desync-split-pos=1 --dpi-desync-ttl=0 --dpi-desync-fooling=md5sig,badsum --dpi-desync-repeats=6 --dpi-desync-any-protocol --dpi-desync-cutoff=d4"
-          NFQWS_OPT_DESYNC="--dpi-desync=split2 --hostlist=${../../../stuff/youtube-hosts} --new --dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
-	  #NFQWS_OPT_DESYNC_HTTP="--dpi-desync=fake --dpi-desync-ttl=11 --dpi-desync-fake-http=0x00000000 --hostlist=${../../../stuff/youtube-hosts} --new --dpi-desync=fake,disorder2 --dpi-desync-ttl=4 --dpi-desync-ttl6=0 --dpi-desync-fooling=badsum" 
-	  #NFQWS_OPT_DESYNC_HTTP_SUFFIX="--dpi-desync=syndata"
-	  #NFQWS_OPT_DESYNC_HTTPS="--dpi-desync=fake,split --dpi-desync-fooling=badseq --dpi-desync-split-pos=1 --hostlist=${../../../stuff/youtube-hosts} --new --dpi-desync=fake,disorder2 --dpi-desync-ttl=4 --dpi-desync-ttl6=0 --dpi-desync-fooling=badsum"
+          NFQWS_OPT_DESYNC="--dpi-desync=split2 --dpi-desync-any-protocol --hostlist=${../../../stuff/youtube-hosts} --new --dpi-desync-any-protocol --dpi-desync=fake,split2 --dpi-desync-ttl=9 --dpi-desync-fooling=md5sig"
+	  #NFQWS_OPT_DESYNC="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=0 --dpi-desync-fooling=md5sig,badsum --dpi-desync-repeats=6 --dpi-desync-any-protocol --dpi-desync-cutoff=d4 --dpi-desync-fake-tls=${../../../stuff/tls_clienthello_www_google_com.bin} "
+	  NFQWS_OPT_DESYNC_QUIC="--dpi-desync=fake,tamper --dpi-desync-any-protocol"
           TMPDIR=/tmp
         '';
       };
