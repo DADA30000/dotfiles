@@ -129,7 +129,7 @@ in
           "firefox & vesktop --ozone-platform-hint=auto"
           "wl-paste --type text --watch cliphist store"
           "wl-paste --type image --watch cliphist store"
-          "hyprctl setcursor GoogleDot-Black 24"
+          "hyprctl setcursor Bibata-Modern-Classic 24"
         ]; 
         input = {
           kb_layout = "us,ru";
@@ -223,8 +223,8 @@ in
             gesture_positive = true;
           };
           dynamic-cursors = {
-            enabled = true;
-            mode = "stretch";
+            enabled = false;
+            mode = "tilt";
             shake.enabled = false;
             stretch.function = "negative_quadratic";
           };

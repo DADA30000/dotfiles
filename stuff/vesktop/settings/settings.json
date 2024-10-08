@@ -336,6 +336,9 @@
         "oneko": {
             "enabled": false
         },
+	"VolumeBooster": {
+	    "enabled": true
+	},
         "OpenInApp": {
             "enabled": false
         },
