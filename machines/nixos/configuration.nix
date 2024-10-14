@@ -29,6 +29,8 @@ in
 
   };
 
+  programs.nix-ld.enable = true;
+
   #boot.crashDump.enable = true;
 
   # Enable RAM compression
@@ -311,6 +313,8 @@ partition = {
       lact
       libreoffice
       qalculate-gtk
+      p7zip
+      inputs.nix-alien.packages.${system}.nix-alien
     ] ++ (import ../../modules/system/stuff (pkgs)).scripts;
     
   };

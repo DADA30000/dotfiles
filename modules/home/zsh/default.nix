@@ -56,14 +56,14 @@ nix-sh () {
         fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
         cps="rsync -ahr --progress";
         res="screen -r";
-        record-discord="gpu-screen-recorder -k h264 -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
+        record-discord="gpu-screen-recorder -k h264 -w screen -f 60 -a '$(pactl get-default-sink).monitor' -o";
         nvide="neovide --no-fork";
         c="clear;printf '\n%.0s' {1..100};fastfetch";
         cl="clear;printf '\n%.0s' {1..100};fastfetch --pipe false|lolcat -b -g 4f05fc:4287f5";
         sudoe="sudo -E";
         suvide="sudo -E neovide --no-fork";
         cwp="swww img --transition-type wipe --transition-fps 60 --transition-step 255";
-        record="gpu-screen-recorder -w screen -f 60 -a '$(pactl get-default-sink).monitor' -o";
+        record="gpu-screen-recorder -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
         fzfd="fzf | xargs xdg-open";
       };
       plugins = [
