@@ -79,7 +79,7 @@
     stable = true;
 
     # Enable Hyprland plugins
-    enable-plugins = true;
+    enable-plugins = false;
 
     # Enable video wallpapers with mpvpaper
     mpvpaper = false;
