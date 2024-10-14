@@ -663,9 +663,11 @@ in
 	"findbar.highlightAll" = true;
 	"layout.word_select.eat_space_to_next_word" = false;
 	"mousewheel.min_line_scroll_amount" = 10;
+	"extensions.webextensions.restrictedDomains" = "";
 	"general.smoothScroll.mouseWheel.durationMinMS" = 80;
 	"mousewheel.default.delta_multiplier_y" = 300;
 	"apz.overscroll.enabled" = true;
+	"privacy.resistFingerprinting.block_mozAddonManager" = true;
 	"general.smoothScroll" = true;
 	"general.smoothScroll.msdPhysics.continuousMotionMaxDeltaMS" = 12;
 	"general.smoothScroll.msdPhysics.enabled" = true;
