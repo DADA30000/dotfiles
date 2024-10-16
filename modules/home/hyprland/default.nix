@@ -42,6 +42,7 @@ in
           "$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
           "$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
           "$mod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
+	  "$mod_CTRL, F, fullscreenstate, 0 2"
           "$mod, F1, exec, gamemode.sh"
           "$mod, F2, exec, sheesh.sh"
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
@@ -97,6 +98,9 @@ in
 	  "opacity 0.99 override 0.99 override, ^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
         ];
+	windowrulev2 = [
+	  "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
+	];
         layerrule = [
           "blur, waybar"
           "blur, rofi"
@@ -126,7 +130,8 @@ in
           "animation slide left, swaync-control-center"
         ];  
         exec-once = [
-          "firefox & vesktop --ozone-platform-hint=auto"
+	  "pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
+          "firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
           "wl-paste --type text --watch cliphist store"
           "wl-paste --type image --watch cliphist store"
           "hyprctl setcursor Bibata-Modern-Classic 24"

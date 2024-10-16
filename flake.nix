@@ -17,6 +17,7 @@
       url = "github:VirtCode/hypr-dynamic-cursors";
       inputs.hyprland.follows = "hyprland";
     };
+    pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
     nix-alien.url = "github:thiagokokada/nix-alien";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.4.1";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
