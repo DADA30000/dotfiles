@@ -29,6 +29,12 @@ in
 
   };
 
+  # Firefox PWAs
+  programs.firefox.package = pkgs.firefox-bin;
+  programs.firefox.enable = true;
+  programs.firefox.nativeMessagingHosts.packages = [ pkgs.firefoxpwa inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
+
+  # Run non-nix apps
   programs.nix-ld.enable = true;
 
   #boot.crashDump.enable = true;
@@ -291,7 +297,6 @@ partition = {
       zip
       jdk21
       mpv
-      firefox
       nix-index
       remmina
       telegram-desktop
@@ -314,6 +319,7 @@ partition = {
       libreoffice
       qalculate-gtk
       p7zip
+      firefoxpwa
       inputs.nix-alien.packages.${system}.nix-alien
     ] ++ (import ../../modules/system/stuff (pkgs)).scripts;
     

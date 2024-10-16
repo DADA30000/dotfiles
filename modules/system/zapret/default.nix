@@ -58,7 +58,7 @@ in
           #NFQWS_OPT_DESYNC="--dpi-desync=fake --dpi-desync-ttl=11 --dpi-desync-fake-http=0x00000000"
           #NFQWS_OPT_DESYNC="--dpi-desync=split2"
 	  #NFQWS_OPT_DESYNC="--dpi-desync=split2 --dpi-desync-split-pos=1 --dpi-desync-ttl=0 --dpi-desync-fooling=md5sig,badsum --dpi-desync-repeats=6 --dpi-desync-any-protocol --dpi-desync-cutoff=d4"
-          NFQWS_OPT_DESYNC="--dpi-desync=syndata,fake,split2 --dpi-desync-ttl=0 --dpi-desync-fooling=md5sig --dpi-desync-repeats=15 --dpi-desync-fake-tls=${../../../stuff/tls_clienthello_www_google_com.bin}"
+          NFQWS_OPT_DESYNC="--dpi-desync=syndata,fake,split2 --dpi-desync-fooling=md5sig"
 	  #NFQWS_OPT_DESYNC="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=0 --dpi-desync-fooling=md5sig,badsum --dpi-desync-repeats=6 --dpi-desync-any-protocol --dpi-desync-cutoff=d4 --dpi-desync-fake-tls=${../../../stuff/tls_clienthello_www_google_com.bin} "
 	  NFQWS_OPT_DESYNC_QUIC="--dpi-desync=fake,tamper --dpi-desync-any-protocol"
           TMPDIR=/tmp

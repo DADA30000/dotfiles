@@ -204,11 +204,11 @@
         "xdph": "xdph"
       },
       "locked": {
-        "lastModified": 1728902262,
-        "narHash": "sha256-1FaxcYkzHaZvRjT3kCDA0nS22bsmCgXDxO0gEF+XOec=",
+        "lastModified": 1728925396,
+        "narHash": "sha256-K9Ry8H/rAavxXqTn+s/B/ZexaRsDjNpeRHFCNSq47y8=",
         "ref": "refs/heads/main",
-        "rev": "ce62521883e217aab4da305d71e40e4a50567dfb",
-        "revCount": 5340,
+        "rev": "22b1370ae512c92d84bbcd4cff2a3f8a4496c994",
+        "revCount": 5342,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/hyprwm/Hyprland"
@@ -477,6 +477,40 @@
         "type": "github"
       }
     },
+    "nixpkgs_5": {
+      "locked": {
+        "lastModified": 1728492678,
+        "narHash": "sha256-9UTxR8eukdg+XZeHgxW5hQA9fIKHsKCdOIUycTryeVw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "5633bcff0c6162b9e4b5f1264264611e950c8ec7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "pipewire-screenaudio": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_5"
+      },
+      "locked": {
+        "lastModified": 1720719825,
+        "narHash": "sha256-+StN4RWwuVHmGFHeDr815t8lTWmRNC16uGTx8jEffPw=",
+        "owner": "IceDBorn",
+        "repo": "pipewire-screenaudio",
+        "rev": "bd404d0ee4b32fb797f2dcdeee3b6e773c06455c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "IceDBorn",
+        "repo": "pipewire-screenaudio",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -509,6 +543,7 @@
         "nix-alien": "nix-alien",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs_4",
+        "pipewire-screenaudio": "pipewire-screenaudio",
         "spicetify-nix": "spicetify-nix"
       }
     },
