@@ -24,6 +24,9 @@ in
           gradient_color_1 = "'#4575da'";
           gradient_color_2 = "'#6804b5'";
         };
+	smoothing = {
+	  noise_reduction = 50;
+	};
       };
     };
   };

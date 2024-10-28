@@ -103,7 +103,7 @@ radio:active, row.activatable:active {
   color: rgba(255, 255, 255, 0.5);
 }
 .view:hover, .view:selected {
-  border-radius: 4px;
+  border-radius: 16px;
 }
 .view selection, .view:selected {
   background-color: rgba(138, 180, 248, 0.24);

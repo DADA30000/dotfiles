@@ -19,7 +19,7 @@ in
 
       ExecStart = "${pkgs.lact}/bin/lact daemon";
 
-      ExecStartPre = "${pkgs.coreutils-full}/bin/sleep 10";
+      #ExecStartPre = "${pkgs.coreutils-full}/bin/sleep 10";
 
       Restart = "always";
 
@@ -28,12 +28,7 @@ in
     };
 
   };
-
-  # Firefox PWAs
-  programs.firefox.package = pkgs.firefox-bin;
-  programs.firefox.enable = true;
-  programs.firefox.nativeMessagingHosts.packages = [ pkgs.firefoxpwa inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
-
+  
   # Run non-nix apps
   programs.nix-ld.enable = true;
 
@@ -50,6 +45,11 @@ in
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
+
+  # Enable portals
+  xdg.portal.enable = true;
+  xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+  xdg.portal.config.common.default = "*";
 
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
@@ -75,14 +75,23 @@ in
   # Enable generation of NixOS documentation for modules (slows down builds)
   documentation.nixos.enable = false;
 
+  # Enable systemd-networkd for internet
+  systemd.network.wait-online.enable = false;
+  boot.initrd.systemd.network.enable = true;
+  systemd.network.enable = true;
+  networking.useNetworkd = true;
+
+  # Enable dhcpcd for using internet using ethernet cable
+  #networking.dhcpcd.enable = true;
+
   # Enable NetworkManager
-  networking.networkmanager.enable = true;
+  #networking.networkmanager.enable = true;
 
   # Allow making users through useradd
   users.mutableUsers = true;
 
   # Enable WayDroid
-  virtualisation.waydroid.enable = true;
+  virtualisation.waydroid.enable = false;
 
   # Autologin
   services.getty.autologinUser = user;
@@ -125,7 +134,7 @@ in
   flatpak = {
    
     # Enable system flatpak
-    enable = true;
+    enable = false;
 
     # Packages to install from flatpak
     packages = [ { appId = "org.vinegarhq.Sober"; origin = "sober"; } ];
@@ -285,7 +294,8 @@ partition = {
     };
 
     systemPackages = with pkgs; [
-      elegant-sddm
+      gdu
+      (firefox-bin.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
       wget
       git-lfs
       git
@@ -337,7 +347,7 @@ partition = {
 
   };
 
-  nix.package = pkgs.nixVersions.latest;
+  #nix.package = pkgs.nixVersions.latest;
 
   services = {
 
@@ -350,6 +360,8 @@ partition = {
     pipewire = {
       enable = true;
       alsa.enable = true;
+      alsa.support32Bit = true;
+      jack.enable = true;
       pulse.enable = true;
     };
 
