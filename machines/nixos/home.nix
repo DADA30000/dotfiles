@@ -63,7 +63,7 @@
   flatpak = {
     
     # Enable user flatpak
-    enable = true;
+    enable = false;
 
     # Packages to install from flatpak
     packages = [];
@@ -76,7 +76,7 @@
     enable = true;
 
     # Whether to use release from nixpkgs, or use latest git
-    stable = true;
+    stable = false;
 
     # Enable Hyprland plugins
     enable-plugins = false;
