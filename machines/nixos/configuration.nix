@@ -28,7 +28,10 @@ in
     };
 
   };
-  
+
+  # Enable singbox proxy to my XRay vpn
+  singbox.enable = true;
+
   # Run non-nix apps
   programs.nix-ld.enable = true;
 
@@ -100,7 +103,7 @@ in
   anicli-ru.enable = true;
   
   # Enable DPI (Deep packet inspection) bypass
-  zapret.enable = true;
+  zapret.enable = false;
   
   # Enable replays
   replays.enable = true;
@@ -297,6 +300,7 @@ partition = {
       gdu
       (firefox-bin.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
       wget
+      nekoray
       git-lfs
       git
       killall
