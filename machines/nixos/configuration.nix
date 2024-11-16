@@ -29,6 +29,9 @@ in
 
   };
 
+  # Disable annoying firewall
+  networking.firewall.enable = false;
+
   # Enable singbox proxy to my XRay vpn
   singbox.enable = true;
 
@@ -288,7 +291,7 @@ partition = {
   environment = {
 
     variables = {
-      GTK_THEME = "Materia-dark";
+      GTK_THEME = "Fluent-Dark";
       MOZ_ENABLE_WAYLAND = "1";
       TERMINAL = "kitty";
       EGL_PLATFORM = "wayland";
@@ -297,7 +300,14 @@ partition = {
     };
 
     systemPackages = with pkgs; [
+      nixfmt-rfc-style
+      gdb
       gdu
+      gcc
+      nixd
+      nodejs
+      yarn
+      ccls
       (firefox-bin.override { nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ]; })
       wget
       nekoray
@@ -335,6 +345,7 @@ partition = {
       p7zip
       firefoxpwa
       inputs.nix-alien.packages.${system}.nix-alien
+      inputs.nix-search.packages.${system}.default
     ] ++ (import ../../modules/system/stuff (pkgs)).scripts;
     
   };
