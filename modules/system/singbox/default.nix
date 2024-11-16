@@ -33,5 +33,19 @@ in
 	ExecStop = "${pkgs.bash}/bin/bash ${../../../stuff/singbox/vpn-run-root.sh} stop ${../../../stuff/singbox/sing-box-vpn.json}";
       };
     };
+    services = {
+      resolved.enable = true;
+      dnscrypt-proxy2 = {
+        enable = true;
+        settings = {
+          server_names = [ "cloudflare" "scaleway-fr" "google" "yandex" ];
+          listen_addresses = [ "127.0.0.1:53" "[::1]:53" ];
+        };
+      };
+    };
+    networking = {
+      nameservers = [ "::1" "127.0.0.1" ];
+      resolvconf.dnsSingleRequest = true;
+    };
   };
 }

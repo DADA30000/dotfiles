@@ -3,57 +3,11 @@
         "level": "info"
     },
     "dns": {
-        "fakeip": {
-            "enabled": true,
-            "inet4_range": "198.18.0.0/15",
-            "inet6_range": "fc00::/18"
-        },
         "servers": [
             {
                 "tag": "dns-remote",
                 "address": "8.8.8.8",
-                "detour": "nekoray-socks"
-            },
-            {
-                "tag": "dns-direct",
-                "address": "local",
-                "detour": "direct"
-            },
-            {
-                "address": "fakeip",
-                "tag": "dns-fake"
-            },
-            {
-                "address": "rcode://success",
-                "tag": "dns-block"
-            }
-        ],
-        "rules": [
-            {
-                "query_type": [
-                    32,
-                    33
-                ],
-                "server": "dns-block"
-            },
-            {
-                "domain_suffix": [
-                    ".lan"
-                ],
-                "server": "dns-block"
-            },
-            {
-                "process_name": [
-                    "nekoray_core",
-                    "nekoray_core.exe",
-                    "nekobox_core",
-                    "nekobox_core.exe"
-                ],
-                "server": "dns-direct"
-            },
-            {
-                "inbound": "empty",
-                "server": "dns-fake"
+                "detour": "proxy"
             }
         ]
     },
@@ -61,29 +15,21 @@
         {
             "type": "tun",
             "tag": "tun-in",
-            "interface_name": "nekoray-tun",
+            "interface_name": "tun0",
             "inet4_address": "172.19.0.1/28",
-            
             "mtu": 9000,
             "auto_route": true,
-            "strict_route": false,
-            "stack": "gvisor",
-            "endpoint_independent_nat": true,
-            "sniff": false
+            "stack": "system",
+            "endpoint_independent_nat": false
         }
     ],
     "outbounds": [
         {
             "type": "socks",
-            "tag": "nekoray-socks",
+            "tag": "proxy",
             "udp_fragment": true,
-            
             "server": "127.0.0.1",
             "server_port": 2080
-        },
-        {
-            "type": "block",
-            "tag": "block"
         },
         {
             "type": "direct",
@@ -95,62 +41,20 @@
         }
     ],
     "route": {
-        "final": "nekoray-socks",
+        "final": "direct",
         "auto_detect_interface": true,
         "rules": [
-            {
-                "network": "udp",
-                "port": [
-                    135,
-                    137,
-                    138,
-                    139,
-                    5353
-                ],
-                "outbound": "block"
-            },
-            {
-                "ip_cidr": [
-                    "224.0.0.0/3",
-                    "ff00::/8"
-                ],
-                "outbound": "block"
-            },
-            {
-                "source_ip_cidr": [
-                    "224.0.0.0/3",
-                    "ff00::/8"
-                ],
-                "outbound": "block"
-            },
+	    {
+		"process_path_regex": [
+		    "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|abaddon|.abaddon-wrappe|.abaddon-wrapped)$"
+		],
+		"outbound": "proxy"
+	    },
             {
                 "port": 53,
                 "process_name": [
-                    "nekoray_core",
-                    "nekoray_core.exe"
+                    "anything in here, like really anything"
                 ],
-                "outbound": "dns-out"
-            },
-            {
-                "process_name": [
-                    "nekoray_core",
-                    "nekoray_core.exe",
-                    "nekobox_core",
-                    "nekobox_core.exe"
-                ],
-                "outbound": "direct"
-            }
-            ,{
-    "outbound": "direct",
-    "process_name": [
-        "ut2004-win64.exe"
-    ]
-}
-
-            
-            ,
-            {
-                "port": 53,
                 "outbound": "dns-out"
             }
         ]
