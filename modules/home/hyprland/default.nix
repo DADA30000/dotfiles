@@ -26,6 +26,8 @@ in
       settings = {
         "$mod" = "SUPER";
         bind = [
+	  ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
+	  ", code:123, exec, pactl set-sink-volume @DEFAULT_SINK@ +4096"
           ", Print, exec, hyprshot -m region"
           "SHIFT, Print, exec, hyprshot -m window"
           "ALT, Print, exec, hyprshot -m output"
@@ -170,10 +172,6 @@ in
             noise = 0;
             vibrancy = 0;
           };
-          drop_shadow = "yes";
-          shadow_range = 4;
-          shadow_render_power = 3;
-          "col.shadow" = "rgba(1a1a1aee)";
         };
         animations = {
           enabled = true;

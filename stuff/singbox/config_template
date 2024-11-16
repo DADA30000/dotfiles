@@ -1,45 +1,4 @@
 {
-  "dns":{
-    "independent_cache":true,
-    "rules":[
-      {
-        "query_type":[
-          32,
-          33
-        ],
-        "server":"dns-block"
-      },
-      {
-        "domain_suffix":".lan",
-        "server":"dns-block"
-      }
-    ],
-    "servers":[
-      {
-        "address":"https://8.8.8.8/dns-query",
-        "address_resolver":"dns-local",
-        "detour":"proxy",
-        "strategy":"",
-        "tag":"dns-remote"
-      },
-      {
-        "address":"local",
-        "address_resolver":"dns-local",
-        "detour":"direct",
-        "strategy":"",
-        "tag":"dns-direct"
-      },
-      {
-        "address":"rcode://success",
-        "tag":"dns-block"
-      },
-      {
-        "address":"local",
-        "detour":"direct",
-        "tag":"dns-local"
-      }
-    ]
-  },
   "inbounds":[
     {
       "domain_strategy":"",
@@ -59,8 +18,8 @@
       "domain_strategy":"",
       "flow":"xtls-rprx-vision",
       "packet_encoding":"xudp",
-      "server":"SOMETHING HERE SOMETHING HERE SOMETHING HERE",
-      "server_port":444,
+      "server":"AAA.AAA.AAA.AAA",
+      "server_port":AAA,
       "tag":"proxy",
       "tls":{
         "alpn":[
@@ -69,8 +28,8 @@
         "enabled":true,
         "reality":{
           "enabled":true,
-          "public_key":"SOMETHING HERE SOMETHING HERE SOMETHING HERE",
-          "short_id":"SOMETHING HERE SOMETHING HERE SOMETHING HERE"
+          "public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "short_id":"AAAAAAAAAAAAAAAA"
         },
         "server_name":"yahoo.com",
         "utls":{
@@ -79,58 +38,15 @@
         }
       },
       "type":"vless",
-      "uuid":"SOMETHING HERE SOMETHING HERE SOMETHING HERE"
+      "uuid":"AAAAAAA-AAAAAAAAA-AAAA-AAAAAAAAAA"
     },
     {
       "tag":"direct",
       "type":"direct"
-    },
-    {
-      "tag":"bypass",
-      "type":"direct"
-    },
-    {
-      "tag":"block",
-      "type":"block"
-    },
-    {
-      "tag":"dns-out",
-      "type":"dns"
     }
   ],
   "route":{
-    "auto_detect_interface":true,
-    "final":"proxy",
-    "rules":[
-      {
-        "outbound":"dns-out",
-        "protocol":"dns"
-      },
-      {
-        "network":"udp",
-        "outbound":"block",
-        "port":[
-          135,
-          137,
-          138,
-          139,
-          5353
-        ]
-      },
-      {
-        "ip_cidr":[
-          "224.0.0.0/3",
-          "ff00::/8"
-        ],
-        "outbound":"block"
-      },
-      {
-        "outbound":"block",
-        "source_ip_cidr":[
-          "224.0.0.0/3",
-          "ff00::/8"
-        ]
-      }
-    ]
+    "auto_detect_interface":true
   }
 }
+

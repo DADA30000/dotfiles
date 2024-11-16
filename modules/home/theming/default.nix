@@ -13,9 +13,9 @@ in
   config = mkIf cfg.enable {
     home.file = {
       ".themes".source = ../../../stuff/.themes;
-      ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/assets;
-      ".config/gtk-4.0/gtk.css".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/gtk.css;
-      ".config/gtk-4.0/icons".source = ../../../stuff/.themes/Materia-dark/gtk-4.0/icons;
+      ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
+      ".config/gtk-4.0/gtk.css".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
+      ".config/gtk-4.0/icons".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
       ".config/vesktop/settings".source = ../../../stuff/vesktop/settings;
       ".config/vesktop/settings.json".source = ../../../stuff/vesktop/settings.json;
       ".config/vesktop/themes".source = ../../../stuff/vesktop/themes;
@@ -64,7 +64,7 @@ in
         name = "MoreWaita";
         package = pkgs.morewaita-icon-theme;
       };
-      theme.name = "Materia-dark";
+      theme.name = "Fluent-Dark";
       font.name = "Noto Sans Medium";
       font.size = 11;
     };

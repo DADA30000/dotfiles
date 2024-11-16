@@ -21,6 +21,7 @@
     nix-alien.url = "github:thiagokokada/nix-alien";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.4.1";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nix-search.url = "github:diamondburned/nix-search";
   };
 
   outputs = { nixpkgs, home-manager, ...} @ inputs: { 
