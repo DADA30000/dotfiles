@@ -27,6 +27,9 @@ in
         nvim-treesitter-parsers.cpp
         nvim-treesitter-parsers.nix
         nvim-treesitter
+        coc-ultisnips
+        coc-snippets
+        vim-snippets
       ];
       coc.settings = {
         languageserver = {
