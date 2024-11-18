@@ -1,62 +1,80 @@
 {
-    "log": {
-        "level": "info"
-    },
-    "dns": {
-        "servers": [
-            {
-                "tag": "dns-remote",
-                "address": "8.8.8.8",
-                "detour": "proxy"
-            }
-        ]
-    },
-    "inbounds": [
-        {
-            "type": "tun",
-            "tag": "tun-in",
-            "interface_name": "tun0",
-            "inet4_address": "172.19.0.1/28",
-            "mtu": 9000,
-            "auto_route": true,
-            "stack": "system",
-            "endpoint_independent_nat": false
-        }
-    ],
-    "outbounds": [
-        {
-            "type": "socks",
-            "tag": "proxy",
-            "udp_fragment": true,
-            "server": "127.0.0.1",
-            "server_port": 2080
-        },
-        {
-            "type": "direct",
-            "tag": "direct"
-        },
-        {
-            "type": "dns",
-            "tag": "dns-out"
-        }
-    ],
-    "route": {
-        "final": "direct",
-        "auto_detect_interface": true,
-        "rules": [
-	    {
-		"process_path_regex": [
-		    "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|abaddon|.abaddon-wrappe|.abaddon-wrapped)$"
-		],
-		"outbound": "proxy"
-	    },
-            {
-                "port": 53,
-                "process_name": [
-                    "anything in here, like really anything"
-                ],
-                "outbound": "dns-out"
-            }
-        ]
+  "log": {
+    "level": "info"
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "dns-remote",
+        "address": "8.8.8.8",
+        "detour": "proxy"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "tun0",
+      "inet4_address": "172.19.0.1/28",
+      "mtu": 9000,
+      "auto_route": true,
+      "stack": "system",
+      "endpoint_independent_nat": false
     }
+  ],
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "proxy",
+      "udp_fragment": true,
+      "server": "127.0.0.1",
+      "server_port": 2080
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    }
+  ],
+  "route": {
+    "final": "direct",
+    "auto_detect_interface": true,
+    "rules": [
+      {
+        "source_ip_cidr": [
+          "127.0.0.1"
+        ],
+        "ip_cidr": [
+          "127.0.0.1"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "process_path_regex": [
+          "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|flatpak|.flatpak-wrappe|.flatpak-wrapped)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "source_ip_cidr": [
+          "127.0.0.1"
+        ],
+        "ip_cidr": [
+          "127.0.0.1"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "port": 53,
+        "process_name": [
+          "anything in here, like really anything"
+        ],
+        "outbound": "dns-out"
+      }
+    ]
+  }
 }

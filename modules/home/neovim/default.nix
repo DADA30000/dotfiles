@@ -30,6 +30,8 @@ in
         coc-ultisnips
         coc-snippets
         vim-snippets
+        presence-nvim
+        coc-json
       ];
       coc.settings = {
         languageserver = {
