@@ -1,4 +1,8 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  ...
+}:
 with lib;
 let
   cfg = config.kitty;
@@ -7,8 +11,6 @@ in
   options.kitty = {
     enable = mkEnableOption "Enable kitty terminal emulator";
   };
-  
-
 
   config = mkIf cfg.enable {
     programs.kitty = {
@@ -38,7 +40,10 @@ in
         tab_bar_min_tabs        2
         tab_switch_strategy     previous
         wheel_scroll_multiplier 10
-        cursor_blink_interval 0.5
+        cursor_blink_interval   0.5 linear ease-out
+        cursor_trail            3
+        cursor_trail_decay      0.1 0.4
+        cursor_trail_start_threshold 0
         background              #000000
         foreground              #bbddff
         cursor                  #aaaaaa

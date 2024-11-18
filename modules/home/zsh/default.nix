@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.zsh;
@@ -7,8 +12,6 @@ in
   options.zsh = {
     enable = mkEnableOption "Enable zsh shell";
   };
-  
-
 
   config = mkIf cfg.enable {
     programs.zsh = {
@@ -40,31 +43,35 @@ fi
 source ${../../../stuff/p10k-config/p10k.zsh}
 source ${pkgs.nix-index}/etc/profile.d/command-not-found.sh
 setopt correct
-nix-sh () {
+ns () {
   nix shell ''${@/#/nixpkgs#}
+}
+ns-unfree () {
+  nix shell ''${@/#/nixpkgs#} --impure
 }
       '';
       shellAliases = {
         ll = "ls -l";
-        update-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";
-        update = "nh os switch /etc/nixos";
+        u-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";
+        u = "nh os switch /etc/nixos";
         #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
-        update-test = "nh os test /etc/nixos";
-        update-boot = "nh os boot /etc/nixos";
-        update-build = "nh os build /etc/nixos";
+        u-test = "nh os test /etc/nixos";
+        u-boot = "nh os boot /etc/nixos";
+        u-build = "nh os build /etc/nixos";
         #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
-        fastfetch="fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
-        cps="rsync -ahr --progress";
-        res="screen -r";
-        record-discord="gpu-screen-recorder -k h264 -w screen -f 60 -a '$(pactl get-default-sink).monitor' -o";
-        nvide="neovide --no-fork";
-        c="clear;printf '\n%.0s' {1..100};fastfetch";
-        cl="clear;printf '\n%.0s' {1..100};fastfetch --pipe false|lolcat -b -g 4f05fc:4287f5";
-        sudoe="sudo -E";
-        suvide="sudo -E neovide --no-fork";
-        cwp="swww img --transition-type wipe --transition-fps 60 --transition-step 255";
-        record="gpu-screen-recorder -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
-        fzfd="fzf | xargs xdg-open";
+        fastfetch = "fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
+        cps = "rsync -ahr --progress";
+        res = "screen -r";
+        nsp = "nix-search";
+        record-discord = "gpu-screen-recorder -k h264 -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
+        nvide = "neovide --no-fork";
+        c = "clear;printf '\n%.0s' {1..100};fastfetch";
+        cl = "clear;printf '\n%.0s' {1..100};fastfetch --pipe false|lolcat -b -g 4f05fc:4287f5";
+        sudoe = "sudo -E";
+        suvide = "sudo -E neovide --no-fork";
+        cwp = "swww img --transition-type wipe --transition-fps 60 --transition-step 255";
+        record = "gpu-screen-recorder -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
+        fzfd = "fzf | xargs xdg-open";
       };
       plugins = [
         {
