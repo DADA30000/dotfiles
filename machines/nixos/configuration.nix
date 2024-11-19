@@ -323,6 +323,8 @@ in
 
   environment = {
 
+    pathsToLink = [ "/share/zsh" ];
+
     variables = {
       GTK_THEME = "Fluent-Dark";
       MOZ_ENABLE_WAYLAND = "1";
@@ -380,7 +382,6 @@ in
         libreoffice
         qalculate-gtk
         p7zip
-        firefoxpwa
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
       ]

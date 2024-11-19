@@ -429,6 +429,26 @@
         "type": "github"
       }
     },
+    "nix-index-database_2": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1731814505,
+        "narHash": "sha256-l9ryrx1Twh08a+gxrMGM9O/aZKEimZfa6sZVyPCImgI=",
+        "owner": "nix-community",
+        "repo": "nix-index-database",
+        "rev": "bdba246946fb079b87b4cada4df9b1cdf1c06132",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-index-database",
+        "type": "github"
+      }
+    },
     "nix-search": {
       "inputs": {
         "flake-compat": "flake-compat_3",
@@ -610,6 +630,7 @@
         "hyprland": "hyprland",
         "nix-alien": "nix-alien",
         "nix-flatpak": "nix-flatpak",
+        "nix-index-database": "nix-index-database_2",
         "nix-search": "nix-search",
         "nixpkgs": "nixpkgs_5",
         "pipewire-screenaudio": "pipewire-screenaudio",

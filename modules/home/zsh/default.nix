@@ -1,7 +1,7 @@
 {
   config,
-  lib,
   pkgs,
+  lib,
   ...
 }:
 with lib;
@@ -14,14 +14,20 @@ in
   };
 
   config = mkIf cfg.enable {
-    programs.zsh = {
+    programs.nix-index = {
       enable = true;
-      autosuggestion.enable = true;
+      enableZshIntegration = true;
+    };
+    programs.starship = {
+      enable = true;
+      enableZshIntegration = true;
+    };
+    programs.zsh = {
+      oh-my-zsh.enable = true;
+      oh-my-zsh.plugins = [ "sudo" ];
       syntaxHighlighting.enable = true;
-      oh-my-zsh = {
-        enable = true;
-        plugins = [ "sudo" ];
-      };
+      autosuggestion.enable = true;
+      enable = true;
       # Must be without indents/tabs/spaces (that's just dumb)
       initExtra = ''
 nixos_ascii () {
@@ -33,15 +39,10 @@ cat << "EOF"
  |_|\_|_/_\_\\___/|___/
 EOF
 }
-${pkgs.any-nix-shell}/bin/any-nix-shell zsh --info-right | source /dev/stdin
-export PATH="$PATH:$HOME/.local/bin"
 printf '\n%.0s' {1..100}
-[[ ! -f ${../../../stuff/p10k-config/.p10k.zsh} ]] || source ${../../../stuff/p10k-config/.p10k.zsh}
 if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
   Hyprland
 fi
-source ${../../../stuff/p10k-config/p10k.zsh}
-source ${pkgs.nix-index}/etc/profile.d/command-not-found.sh
 setopt correct
 ns () {
   nix shell ''${@/#/nixpkgs#}
@@ -73,18 +74,6 @@ ns-unfree () {
         record = "gpu-screen-recorder -w screen -f 60 -a $(pactl get-default-sink).monitor -o";
         fzfd = "fzf | xargs xdg-open";
       };
-      plugins = [
-        {
-          name = "powerlevel10k";
-          src = pkgs.zsh-powerlevel10k;
-          file = "share/zsh-powerlevel10k/powerlevel10k.zsh-theme";
-        }
-        {
-          name = "p10k-config";
-          src = ../../../stuff/p10k-config;
-          file = "p10k.zsh";
-        }
-      ];
     };
   };
 }
