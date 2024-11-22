@@ -69,11 +69,11 @@ in
             key = "├─󰓡";
             keyColor = "blue";
           }
-          {
-            type = "display";
-            key = "├─󰍹";
-            keyColor = "blue";
-          }
+          #{
+          #  type = "display";
+          #  key = "├─󰍹";
+          #  keyColor = "blue";
+          #}
           {
             type = "brightness";
             key = "├─󰃞";
@@ -104,7 +104,6 @@ in
             key = "├─";
             keyColor = "blue";
           }
-
           {
             type = "shell";
             key = "├─";
@@ -120,7 +119,6 @@ in
             key = "├─";
             keyColor = "blue";
           }
-
           {
             type = "os";
             key = "├─";

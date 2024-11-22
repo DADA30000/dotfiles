@@ -68,7 +68,9 @@ in
   boot.tmp.useTmpfs = true;
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
-  boot.kernelPackages = pkgs.linuxPackages_testing;
+  #boot.kernelPackages = pkgs.linuxPackages_testing;
+  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  #chaotic.scx.enable = true;
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
@@ -337,6 +339,9 @@ in
     systemPackages =
       with pkgs;
       [
+        lsd
+        gamescope
+        kdiskmark
         nixfmt-rfc-style
         gdb
         gdu

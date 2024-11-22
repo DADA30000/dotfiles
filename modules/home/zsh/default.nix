@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   lib,
   ...
 }:
@@ -21,6 +20,11 @@ in
     programs.starship = {
       enable = true;
       enableZshIntegration = true;
+      settings = {
+        directory = {
+          style = "bold blue";
+        };
+      };
     };
     programs.zsh = {
       oh-my-zsh.enable = true;
@@ -39,6 +43,7 @@ cat << "EOF"
  |_|\_|_/_\_\\___/|___/
 EOF
 }
+export MANPAGER='nvim +Man!'
 printf '\n%.0s' {1..100}
 if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
   Hyprland
@@ -52,6 +57,7 @@ ns-unfree () {
 }
       '';
       shellAliases = {
+        ls = "lsd";
         ll = "ls -l";
         u-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";
         u = "nh os switch /etc/nixos";
