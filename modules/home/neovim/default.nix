@@ -30,8 +30,8 @@ in
         coc-ultisnips
         coc-snippets
         vim-snippets
-        presence-nvim
         coc-json
+        cord-nvim
       ];
       coc.settings = {
         languageserver = {
@@ -258,26 +258,75 @@ in
         -- provide custom statusline: lightline.vim, vim-airline
         vim.opt.statusline:prepend("%{coc#status()}%{get(b:,'coc_current_function','${''''}')}")
 
-        -- Mappings for CoCList
-        -- code actions and coc stuff
         ---@diagnostic disable-next-line: redefined-local
         local opts = {silent = true, nowait = true}
-        -- Show all diagnostics
         keyset("n", "<space>a", ":<C-u>CocList diagnostics<cr>", opts)
-        -- Manage extensions
         keyset("n", "<space>e", ":<C-u>CocList extensions<cr>", opts)
-        -- Show commands
         keyset("n", "<space>c", ":<C-u>CocList commands<cr>", opts)
-        -- Find symbol of current document
         keyset("n", "<space>o", ":<C-u>CocList outline<cr>", opts)
-        -- Search workspace symbols
         keyset("n", "<space>s", ":<C-u>CocList -I symbols<cr>", opts)
-        -- Do default action for next item
         keyset("n", "<space>j", ":<C-u>CocNext<cr>", opts)
-        -- Do default action for previous item
         keyset("n", "<space>k", ":<C-u>CocPrev<cr>", opts)
-        -- Resume latest coc list
         keyset("n", "<space>p", ":<C-u>CocListResume<cr>", opts)
+        require('cord').setup {
+          usercmds = true,
+          log_level = 'error',
+          timer = {
+            interval = 1500,
+            reset_on_idle = false,
+            reset_on_change = false,
+          },
+          editor = {
+            image = nil,
+            client = 'neovim',
+            tooltip = 'мяу',
+          },
+          display = {
+            show_time = true,
+            show_repository = true,
+            show_cursor_position = false,
+            swap_fields = false,
+            swap_icons = false,
+            workspace_blacklist = {},
+          },
+          lsp = {
+            show_problem_count = false,
+            severity = 1,
+            scope = 'workspace',
+          },
+          idle = {
+            enable = true,
+            show_status = true,
+            timeout = 300000,
+            disable_on_focus = false,
+            text = 'Бездельничает',
+            tooltip = '💤',
+          },
+          text = {
+            viewing = 'Просматривает {}',
+            editing = 'Редактирует {}',
+            file_browser = 'Просматривает файлы в {}',
+            plugin_manager = 'Настраивает плагины в {}',
+            lsp_manager = 'Настраивает LSP в {}',
+            vcs = 'Коммитит изменения в {}',
+            workspace = 'В {}',
+          },
+          buttons = {
+            {
+              label = 'Мой GitHub профиль',
+              url = 'https://github.com/DADA30000',
+            },
+            {
+              label = "Мои файлы конфигурации",
+              url = 'https://github.com/DADA30000/dotfiles',
+            },
+            {
+              label = 'Текущий репозиторий',
+              url = 'git',
+            },
+          },
+          assets = nil,
+        }
       '';
       extraConfig = ''
         if exists("g:neovide")
