@@ -21,6 +21,8 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    staging.url = "github:NixOS/nixpkgs/staging";
+    chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
     nix-alien.url = "github:thiagokokada/nix-alien";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.4.1";
@@ -39,6 +41,7 @@
           modules = [
             ./machines/nixos/configuration.nix
             inputs.nix-index-database.nixosModules.nix-index
+            inputs.chaotic.nixosModules.default 
             home-manager.nixosModules.home-manager
             {
               home-manager = {

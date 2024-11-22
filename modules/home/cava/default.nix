@@ -1,4 +1,8 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  ...
+}:
 with lib;
 let
   cfg = config.cava;
@@ -7,8 +11,6 @@ in
   options.cava = {
     enable = mkEnableOption "Enable cava audio visualizer";
   };
-  
-
 
   config = mkIf cfg.enable {
     programs.cava = {
@@ -24,9 +26,9 @@ in
           gradient_color_1 = "'#4575da'";
           gradient_color_2 = "'#6804b5'";
         };
-	smoothing = {
-	  noise_reduction = 50;
-	};
+        smoothing = {
+          noise_reduction = 50;
+        };
       };
     };
   };

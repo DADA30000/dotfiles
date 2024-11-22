@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   # Import other modules
   imports = [ ../../modules/home ];
