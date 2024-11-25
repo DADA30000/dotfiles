@@ -32,6 +32,7 @@ in
         vim-snippets
         coc-json
         cord-nvim
+        coc-pyright
       ];
       coc.settings = {
         languageserver = {
@@ -61,6 +62,24 @@ in
             command = "nixd";
             rootPatterns = [ ".nixd.json" ];
             filetypes = [ "nix" ];
+            settings = {
+              nixd = {
+                nixpkgs = {
+                  expr = "import <nixpkgs> { }";
+                };
+                formatting = {
+                  command = [ "nixfmt" ];
+                };
+                options = {
+                  nixos = {
+                    expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options";
+                  };
+                  home_manager = {
+                    expr = "(builtins.getFlake \"/etc/nixos\").homeConfigurations.\"l0lk3k\".options";
+                  };
+                };
+              };
+            };
           };
         };
       };

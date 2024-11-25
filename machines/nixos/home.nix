@@ -1,5 +1,6 @@
 { ... }:
 {
+
   # Import other modules
   imports = [ ../../modules/home ];
 
@@ -25,7 +26,7 @@
   theming.enable = true;
 
   # Enable cava audio visualizer
-  cava.enable = true;
+  cava.enable = false;
 
   # Enable swaync notification manager
   swaync.enable = true;

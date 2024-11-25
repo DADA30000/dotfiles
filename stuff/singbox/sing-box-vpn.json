@@ -15,6 +15,7 @@
     {
       "type": "tun",
       "tag": "tun-in",
+      "sniff": true,
       "interface_name": "tun0",
       "inet4_address": "172.19.0.1/28",
       "mtu": 9000,
@@ -56,6 +57,16 @@
       {
         "process_path_regex": [
           "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|flatpak|.flatpak-wrappe|.flatpak-wrapped|node)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "domain_suffix": [
+          "googlevideo.com",
+          "youtu.be",
+          "youtube.com",
+          "ytimg.com",
+          "ggpht.com"
         ],
         "outbound": "proxy"
       },

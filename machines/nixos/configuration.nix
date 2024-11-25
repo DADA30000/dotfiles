@@ -33,6 +33,8 @@ in
 
   };
 
+  programs.ydotool.enable = true;
+
   # Disable annoying firewall
   networking.firewall.enable = false;
 
@@ -74,6 +76,10 @@ in
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
+
+  # Restrict amount of annoying cache
+  boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
+  boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
   boot.initrd.systemd.enable = true;
@@ -157,13 +163,13 @@ in
   flatpak = {
 
     # Enable system flatpak
-    enable = false;
+    enable = true;
 
     # Packages to install from flatpak
     packages = [
       {
-        appId = "org.vinegarhq.Sober";
-        origin = "sober";
+        flatpakref = "https://vixalien.github.io/muzika/muzika.flatpakref";
+        sha256 = "0skzklwnaqqyqj0491dpf746hzzhhxi5gxl1fwb1gyy03li6cj9p";
       }
     ];
 
@@ -197,6 +203,7 @@ in
       "nginx"
       "input"
       "kvm"
+      "ydotool"
       "adbusers"
       "video"
       "corectrl"
@@ -329,6 +336,7 @@ in
 
     variables = {
       GTK_THEME = "Fluent-Dark";
+      ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
       TERMINAL = "kitty";
       EGL_PLATFORM = "wayland";
@@ -339,6 +347,7 @@ in
     systemPackages =
       with pkgs;
       [
+        pyright
         lsd
         gamescope
         kdiskmark
@@ -363,7 +372,7 @@ in
         unrar
         android-tools
         zip
-        jdk21
+        jdk23
         mpv
         nix-index
         remmina
