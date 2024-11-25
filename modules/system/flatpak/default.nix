@@ -21,9 +21,6 @@ in
       enable = true;
       uninstallUnmanaged = true;
       packages = cfg.packages;
-      remotes = mkOptionDefault [
-        { name = "sober"; location = "${./sober.flatpakrepo}"; }
-      ];
       update.auto = {
         enable = true;
         onCalendar = "daily";

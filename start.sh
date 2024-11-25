@@ -114,7 +114,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
     find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-    if nixos-install -v --flake "/mnt/etc/nixos#nixos" --impure; then
+    if nixos-install -v 'extra-substituters' 'https://chaotic-nyx.cachix.org/' --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#nixos" --impure; then
       echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
       for i in {1..9}; do
         sleep 0.25
