@@ -2,7 +2,7 @@
 if [ -f ./check ]; then
   rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
   cp -r /etc/nixos/* ./
-  rm ./stuff/singbox/config
+  rm ./stuff/singbox/config.json
   git add . --all
   git add .gitattributes
   echo "Enter commit name (enter to default)"

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.theming;
@@ -7,8 +12,6 @@ in
   options.theming = {
     enable = mkEnableOption "Enable theming stuff like cursor theme, icon theme and etc";
   };
-  
-
 
   config = mkIf cfg.enable {
     home.file = {
@@ -20,7 +23,7 @@ in
       ".config/vesktop/settings.json".source = ../../../stuff/vesktop/settings.json;
       ".config/vesktop/themes".source = ../../../stuff/vesktop/themes;
     };
-    xdg.desktopEntries.vesktop.settings= {
+    xdg.desktopEntries.vesktop.settings = {
       Exec = "vesktop --ozone-platform-hint=auto %U";
       Categories = "Network;InstantMessaging;Chat";
       GenericName = "Internet Messenger";
@@ -40,8 +43,8 @@ in
         default-folder-viewer = "list-view";
         migrated-gtk-settings = true;
       };
-      "org/gnome/desktop/interface" = { 
-        color-scheme = "prefer-dark"; 
+      "org/gnome/desktop/interface" = {
+        color-scheme = "prefer-dark";
       };
     };
     qt = {
@@ -51,15 +54,17 @@ in
     home.pointerCursor = {
       gtk.enable = true;
       x11.enable = true;
-      package = pkgs.bibata-cursors;
-      name = "Bibata-Modern-Classic";
+      package = pkgs.runCommand "moveUp" { } ''
+        mkdir -p $out/share/icons
+        ln -s ${../../../stuff/Bibata-Modern} $out/share/icons/Bibata-Modern
+      '';
+      name = "Bibata-Modern";
       size = 24;
     };
     gtk = {
       enable = true;
       gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
       gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
-      cursorTheme.name = "Bibara-Modern-Classic";
       iconTheme = {
         name = "MoreWaita";
         package = pkgs.morewaita-icon-theme;
