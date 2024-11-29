@@ -13,6 +13,7 @@
     ./flatpak
     ./mlocate
     ./nvidia
-    ./singbox
+    ./singbox-wg
+    #./singbox
   ];
 }

@@ -38,8 +38,11 @@ in
   # Disable annoying firewall
   networking.firewall.enable = false;
 
-  # Enable singbox proxy to my XRay vpn
-  singbox.enable = true;
+  # Enable singbox proxy to my VPS with WireGuard
+  singbox-wg.enable = true;
+
+  # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
+  #singbox.enable = true;
 
   # Run non-nix apps
   programs.nix-ld.enable = true;
@@ -100,16 +103,17 @@ in
   documentation.nixos.enable = false;
 
   # Enable systemd-networkd for internet
-  systemd.network.wait-online.enable = false;
-  boot.initrd.systemd.network.enable = true;
-  systemd.network.enable = true;
-  networking.useNetworkd = true;
+  #systemd.network.wait-online.enable = false;
+  #boot.initrd.systemd.network.enable = true;
+  #systemd.network.enable = true;
+  #networking.useNetworkd = true;
 
   # Enable dhcpcd for using internet using ethernet cable
   #networking.dhcpcd.enable = true;
 
   # Enable NetworkManager
-  #networking.networkmanager.enable = true;
+  #systemd.services.NetworkManager-wait-online.enable = false;
+  networking.networkmanager.enable = true;
 
   # Allow making users through useradd
   users.mutableUsers = true;
@@ -163,7 +167,7 @@ in
   flatpak = {
 
     # Enable system flatpak
-    enable = true;
+    enable = false;
 
     # Packages to install from flatpak
     packages = [
