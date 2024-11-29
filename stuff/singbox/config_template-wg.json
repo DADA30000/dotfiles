@@ -1,0 +1,89 @@
+{
+  "log": {
+    "level": "info"
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "dns-remote",
+        "address": "local",
+        "detour": "direct"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "tun0",
+      "address": "172.19.0.1/28",
+      "mtu": 9000,
+      "auto_route": true,
+      "stack": "system"
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "endpoints": [
+    {
+      "system": true,
+      "name": "wg0",
+      "address": "10.8.1.3/32",
+      "private_key": "nope",
+      "type": "wireguard",
+      "tag": "proxy",
+      "peers": [
+        {
+          "address": "nope",
+          "port": 0,
+          "public_key": "nope",
+          "pre_shared_key": "nope",
+          "allowed_ips": [ "0.0.0.0/0", "::/0" ]
+        }
+      ]
+    }
+  ],
+  "route": {
+    "final": "direct",
+    "auto_detect_interface": true,
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "process_path_regex": [
+          "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|flatpak|.flatpak-wrappe|.flatpak-wrapped|node)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "domain_suffix": [
+          "googlevideo.com",
+          "youtu.be",
+          "youtube.com",
+          "ytimg.com",
+          "ggpht.com"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "port": 53,
+        "process_name": [
+          "anything in here, like really anything"
+        ],
+        "action": "hijack-dns"
+      }
+    ]
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true
+    }
+  }
+}
+
+
