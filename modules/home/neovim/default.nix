@@ -335,14 +335,6 @@ in
               label = 'Мой GitHub профиль',
               url = 'https://github.com/DADA30000',
             },
-            {
-              label = "Мои файлы конфигурации",
-              url = 'https://github.com/DADA30000/dotfiles',
-            },
-            {
-              label = 'Текущий репозиторий',
-              url = 'git',
-            },
           },
           assets = nil,
         }
