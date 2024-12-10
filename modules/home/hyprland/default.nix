@@ -46,9 +46,9 @@ in
     wayland.windowManager.hyprland = {
       package = mkIf (!cfg.stable) inputs.hyprland.packages.${pkgs.system}.hyprland;
       plugins =
-        lib.optionals (cfg.enable-plugins && cfg.stable) [ pkgs.hyprlandPlugins.hypr-dynamic-cursors ]
+        lib.optionals (cfg.enable-plugins && cfg.stable) [ pkgs.hyprlandPlugins.hyprtrails ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable) [
-          inputs.hypr-dynamic-cursors.packages.${pkgs.system}.hypr-dynamic-cursors
+          inputs.hyprland-plugins.packages.${pkgs.system}.hyprtrails
         ];
       enable = true;
       settings = {
@@ -261,6 +261,13 @@ in
             mode = "tilt";
             shake.enabled = false;
             stretch.function = "negative_quadratic";
+          };
+          hyprtrails = {
+            color = "rgba(bbddffff)";
+            bezier_step = 0.001;
+            history_points = 6;
+            points_per_step = 4;
+            histoty_step = 1;
           };
         };
       };
