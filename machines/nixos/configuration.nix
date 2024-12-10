@@ -187,7 +187,7 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+      nerd-fonts.jetbrains-mono
     ];
 
   };
