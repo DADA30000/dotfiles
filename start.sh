@@ -18,6 +18,11 @@ tZXxn9qc34vndv7Nyuoe0g=="
     decoded=$(echo $encoded | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:${pass})
     myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
   fi
+  if gum confirm --default=false "Установить /boot на другой раздел?"; then
+    fdisk -l
+    echo "Введите полный путь до раздела";
+    read bootpart
+  fi
   if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
     echo "Введите пароль"
     passtemp=$(mkpasswd)
@@ -41,10 +46,16 @@ tZXxn9qc34vndv7Nyuoe0g=="
     sleep 2
     if gum confirm "Отформатировать выбранные разделы?"; then
       echo -e "\e[34mРазметка дисков..."
-      echo "label: gpt" |  sfdisk "$disk_system"
-      echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
-      echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
-      echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
+      if [ -n "$bootpart" ]; then
+        echo "label: gpt" |  sfdisk "$disk_system"
+        echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
+        echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
+        echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
+      else
+        echo "label: gpt" |  sfdisk "$disk_system"
+        echo "start=     8390656, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
+        echo "start=     2048, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
+      fi
       if [ -n "$disk_games" ]; then
         echo "label: gpt" | sfdisk "$disk_games"
         echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
@@ -52,7 +63,6 @@ tZXxn9qc34vndv7Nyuoe0g=="
       echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
         mkdir -p /mnt
       if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
-        mkfs.fat -n boot -F 32 "${disk_system}p1"
         mkfs.btrfs -f -L nixos "${disk_system}p2"
         mount "${disk_system}p2" /mnt
         btrfs subvolume create /mnt/root
@@ -64,11 +74,15 @@ tZXxn9qc34vndv7Nyuoe0g=="
         mount -o compress-force=zstd,subvol=home "${disk_system}p2" /mnt/home
         mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}p2" /mnt/nix
         mkdir /mnt/boot
-        mount "${disk_system}p1" /mnt/boot
-        mkswap -L swap "${disk_system}p3"
-        swapon "${disk_system}p3"
+        if [ -n "$bootpart" ]; then
+          mkfs.fat -n boot -F 32 "${bootpart}"
+        else
+          mkfs.fat -n boot -F 32 "${disk_system}p1"
+          mount "${disk_system}p1" /mnt/boot
+        fi
+          mkswap -L swap "${disk_system}p3"
+          swapon "${disk_system}p3"
       else
-        mkfs.fat -n boot -F 32 "${disk_system}1"
         mkfs.btrfs -f -L nixos "${disk_system}2"
         mount "${disk_system}2" /mnt
         btrfs subvolume create /mnt/root
@@ -80,7 +94,12 @@ tZXxn9qc34vndv7Nyuoe0g=="
         mount -o compress-force=zstd,subvol=home "${disk_system}2" /mnt/home
         mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}2" /mnt/nix
         mkdir /mnt/boot
-        mount "${disk_system}1" /mnt/boot
+        if [ -n "$bootpart" ]; then
+          mkfs.fat -n boot -F 32 "${bootpart}"
+        else
+          mkfs.fat -n boot -F 32 "${disk_system}1"
+          mount "${disk_system}" /mnt/boot
+        fi
         mkswap -L swap "${disk_system}3"
         swapon "${disk_system}3"
       fi
