@@ -12,7 +12,6 @@ in
 
   config = mkIf cfg.enable {
     programs.firefox.enable = true;
-    programs.firefox.nativeMessagingHosts.packages = [ pkgs.firefoxpwa ];
     programs.firefox.profiles.kek = {
       userChrome = ''
         /* imports */
