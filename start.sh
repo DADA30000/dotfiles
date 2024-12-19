@@ -48,13 +48,13 @@ tZXxn9qc34vndv7Nyuoe0g=="
       echo -e "\e[34mРазметка дисков..."
       if [ -n "$bootpart" ]; then
         echo "label: gpt" |  sfdisk "$disk_system"
+        echo "start=     8390656, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
+        echo "start=     2048, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
+      else
+        echo "label: gpt" |  sfdisk "$disk_system"
         echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
         echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
         echo "start=     1050624, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
-      else
-        echo "label: gpt" |  sfdisk "$disk_system"
-        echo "start=     8390656, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
-        echo "start=     2048, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
       fi
       if [ -n "$disk_games" ]; then
         echo "label: gpt" | sfdisk "$disk_games"
@@ -133,7 +133,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
     find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-    if nixos-install -v 'extra-substituters' 'https://chaotic-nyx.cachix.org/' --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#nixos" --impure; then
+    if nixos-install -v --option extra-substituters "https://chaotic-nyx.cachix.org/" --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#nixos" --impure; then
       echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
       for i in {1..9}; do
         sleep 0.25

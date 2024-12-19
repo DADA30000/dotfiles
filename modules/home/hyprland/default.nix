@@ -124,6 +124,7 @@ in
         windowrule = [
           "nomaxsize, ^(polkit-mate-authentication-agent-1)$"
           "pin, ^(polkit-mate-authentication-agent-1)$"
+          "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
           "opacity 0.99 override 0.99 override, ^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
