@@ -8,6 +8,10 @@ let
     fi
     setfont cyr-sun16
     clear
+    if gum confirm --default=false "Использовать оффлайн копию репозитория?"; then
+      cd /repo
+      exec ./start.sh
+    fi
     echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
     if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
       echo -e "\e[31mСоединение не установлено :(\e[0m"
@@ -214,10 +218,6 @@ in
 
     # Packages to install from flatpak
     packages = [
-      {
-        flatpakref = "https://vixalien.github.io/muzika/muzika.flatpakref";
-        sha256 = "0skzklwnaqqyqj0491dpf746hzzhhxi5gxl1fwb1gyy03li6cj9p";
-      }
     ];
 
   };
@@ -232,6 +232,29 @@ in
       noto-fonts
       nerd-fonts.jetbrains-mono
     ];
+
+  };
+
+  security.sudo.wheelNeedsPassword = false;
+
+  system.activationScripts = {
+
+    repo = {
+
+      enable = true;
+
+      # Run after /dev has been mounted
+      deps = [ "specialfs" ];
+
+      text =
+        ''
+          sleep 3
+          mkdir /repo
+          tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+          chown root:root -R /repo 
+        '';
+
+    };
 
   };
 
@@ -301,12 +324,12 @@ in
   my-services = {
 
     # Enable automatic Cloudflare DDNS
-    cloudflare-ddns.enable = true;
+    cloudflare-ddns.enable = false;
 
     nginx = {
 
       # Enable nginx
-      enable = true;
+      enable = false;
 
       # Enable my goofy website
       website.enable = true;
