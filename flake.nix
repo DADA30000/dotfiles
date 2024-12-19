@@ -63,8 +63,26 @@
           ];
         };
         iso = nixpkgs.lib.nixosSystem {
+          specialArgs = {
+            inherit inputs system;
+          };
           modules = [
             ./machines/iso/configuration.nix
+            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            inputs.nix-index-database.nixosModules.nix-index
+            inputs.chaotic.nixosModules.default
+            home-manager.nixosModules.home-manager
+            {
+              home-manager = {
+                extraSpecialArgs = {
+                  inherit inputs system;
+                };
+                backupFileExtension = "backup";
+                useGlobalPkgs = true;
+                users.l0lk3k = import ./machines/iso/home.nix;
+                useUserPackages = true;
+              };
+            }
           ];
         };
       };
