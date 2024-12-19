@@ -56,7 +56,7 @@
       },
       {
         "process_path_regex": [
-          "^.*(wget|git|electron|firefox|firefox-bin|nix|nix-index|flatpak|.flatpak-wrappe|.flatpak-wrapped|node)$"
+          "^.*(wget|git|electron|firefox|firefox-bin|flatpak|.flatpak-wrappe|.flatpak-wrapped|node)$"
         ],
         "outbound": "proxy"
       },
