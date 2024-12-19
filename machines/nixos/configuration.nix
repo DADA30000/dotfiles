@@ -323,7 +323,7 @@ in
       partition = {
 
         # Enable swap partition
-        enable = false;
+        enable = true;
 
         # Label of swap partition
         label = "swap";
@@ -351,6 +351,7 @@ in
     systemPackages =
       with pkgs;
       [
+        spotube
         pyright
         lsd
         gamescope
@@ -419,7 +420,7 @@ in
 
   };
 
-  #nix.package = pkgs.nixVersions.latest;
+  nix.package = pkgs.nixVersions.latest;
 
   services = {
 
