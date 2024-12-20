@@ -43,8 +43,9 @@ jobs:
           sudo npm cache clean --force
           sudo rm -rf /usr/local/lib/node_modules
           rm -rf /usr/local/lib/node_modules
+          du -BM / -d 2
           df -h
-          sleep 5
+          sleep 60
 
       - name: Update flake.lock
         run: nix flake update
