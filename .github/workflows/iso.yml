@@ -30,6 +30,9 @@ jobs:
       - name: Use GitHub cache for Nix
         uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - name: Show disk size
+        run: df -h; sleep 10
+
       - name: Update flake.lock
         run: nix flake update
       - name: Commit files
