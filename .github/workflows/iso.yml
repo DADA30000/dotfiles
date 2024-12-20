@@ -37,8 +37,8 @@ jobs:
           sleep 5
           sudo rm -rf /opt/hostedtoolcache
           rm -rf /opt/hostedtoolcache
-          sudo docker prune -af; sudo docker volume prune -f; sudo docker builder prune --all -f
-          docker prune -af; docker volume prune -f; docker builder prune --all -f
+          sudo docker system prune -af; sudo docker volume prune -f; sudo docker builder prune --all -f
+          docker system prune -af; docker volume prune -f; docker builder prune --all -f
           npm cache clean --force
           sudo npm cache clean --force
           sudo rm -rf /usr/local/lib/node_modules
