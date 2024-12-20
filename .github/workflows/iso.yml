@@ -43,9 +43,7 @@ jobs:
           sudo npm cache clean --force
           sudo rm -rf /usr/local/lib/node_modules
           rm -rf /usr/local/lib/node_modules
-          dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -n
-          sleep 60
-          sudo du -BM /usr/local -d 1
+          rm -rf /usr/local
           df -h
           sleep 60
 
