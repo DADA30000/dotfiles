@@ -40,7 +40,7 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Build ISO
-        run: nix build ./#nixosConfigurations.iso.config.system.build.isoImage
+        run: nix build .#nixosConfigurations.iso.config.system.build.isoImage
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
