@@ -43,9 +43,9 @@ jobs:
           sudo npm cache clean --force
           sudo rm -rf /usr/local/lib/node_modules
           rm -rf /usr/local/lib/node_modules
-          sudo du -BM / -d 1
+          sudo du -BM /usr -d 1
           sleep 5
-          sudo du -BM / -d 2
+          sudo du -BM /usr -d 2
           df -h
           sleep 60
 
