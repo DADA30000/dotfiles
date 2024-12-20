@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Build ISO
 
 # Controls when the workflow will run
 on:
@@ -29,16 +29,23 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
       - name: Update flake.lock
-        uses: DeterminateSystems/update-flake-lock@main
-        with:
-          pr-title: "Update flake.lock" # Title of PR to be created
-          pr-labels: |                  # Labels to be set on the PR
-            dependencies
-            automated
+        run: nix flake update
+      - name: Commit files
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "Actions"
+          git commit -a -m "update flake.lock"
 
       # Runs a single command using the runners shell
       - name: Build ISO
         run: nix build ./#nixosConfigurations.iso.config.system.build.isoImage
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NixOS ISO
+          path: result/iso
+          if-no-files-found: error
+          retention-days: 5
 
       # Runs a set of commands using the runners shell
       #- name: Run a multi-line script
