@@ -20,14 +20,16 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
       - name: Use GitHub cache for Nix
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
       - name: Update flake.lock
         run: nix flake update
       - name: Commit files
