@@ -241,8 +241,6 @@ in
 
     repo = {
 
-      enable = true;
-
       # Run after /dev has been mounted
       deps = [ "specialfs" ];
 
