@@ -248,7 +248,7 @@ in
         ''
           sleep 3
           mkdir /repo
-          tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+          ${pkgs.gnutar}/bin/tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
           chown root:root -R /repo 
         '';
 
