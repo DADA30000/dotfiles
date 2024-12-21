@@ -132,7 +132,7 @@ in
   boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
-  boot.initrd.systemd.enable = true;
+  #boot.initrd.systemd.enable = true;
 
   # Disable usual coredumps (I hate them)
   security.pam.loginLimits = [
