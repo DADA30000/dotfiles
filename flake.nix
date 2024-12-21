@@ -79,7 +79,7 @@
                 };
                 backupFileExtension = "backup";
                 useGlobalPkgs = true;
-                users.l0lk3k = import ./machines/iso/home.nix;
+                users.nixos = import ./machines/iso/home.nix;
                 useUserPackages = true;
               };
             }

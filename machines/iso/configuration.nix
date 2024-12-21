@@ -6,7 +6,7 @@
   ...
 }:
 let
-  user = "l0lk3k";
+  user = "nixos";
   user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
@@ -92,26 +92,6 @@ in
     resolvconf.dnsSingleRequest = true;
   };
 
-  systemd.services.lactd = {
-
-    enable = true;
-
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-
-      ExecStart = "${pkgs.lact}/bin/lact daemon";
-
-      #ExecStartPre = "${pkgs.coreutils-full}/bin/sleep 10";
-
-      Restart = "always";
-
-      Nice = -10;
-
-    };
-
-  };
-
   programs.ydotool.enable = true;
 
   # Disable annoying firewall
@@ -132,10 +112,10 @@ in
   zramSwap.enable = true;
 
   # Enable stuff in /bin and /usr/bin
-  services.envfs.enable = true;
+  #services.envfs.enable = true;
 
   # Enable IOMMU
-  boot.kernelParams = [ "iommu=pt" ];
+  #boot.kernelParams = [ "iommu=pt" ];
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
@@ -146,22 +126,22 @@ in
   xdg.portal.config.common.default = "*";
 
   # Enable OpenTabletDriver
-  hardware.opentabletdriver.enable = true;
+  #hardware.opentabletdriver.enable = true;
 
   # Places /tmp in RAM
-  boot.tmp.useTmpfs = true;
+  #boot.tmp.useTmpfs = true;
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  #boot.kernelPackages = pkgs.linuxPackages_cachyos;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
 
   # Restrict amount of annoying cache
-  boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
-  boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
+  #boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
+  #boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
   #boot.initrd.systemd.enable = true;
@@ -195,34 +175,34 @@ in
   networking.networkmanager.enable = true;
 
   # Allow making users through useradd
-  users.mutableUsers = true;
+ # users.mutableUsers = true;
 
   # Enable WayDroid
-  virtualisation.waydroid.enable = false;
+  #virtualisation.waydroid.enable = false;
 
   # Autologin
-  services.getty.autologinUser = lib.mkForce user;
+  #services.getty.autologinUser = lib.mkForce user;
 
   # Enable russian anicli
-  anicli-ru.enable = true;
+  #anicli-ru.enable = true;
 
   # Enable DPI (Deep packet inspection) bypass
-  zapret.enable = false;
+  #zapret.enable = false;
 
   # Enable replays
-  replays.enable = true;
+  #replays.enable = true;
 
   # Enable startup sound on PC speaker (also plays after rebuilds)
-  startup-sound.enable = false;
+  #startup-sound.enable = false;
 
   # Enable zerotier
-  zerotier.enable = false;
+  #zerotier.enable = false;
 
   # Enable spotify with theme
-  spicetify.enable = true;
+  #spicetify.enable = true;
 
   # Enable mlocate (find files on system quickly)
-  mlocate.enable = true;
+  #mlocate.enable = true;
 
   virtualisation.vmVariant = {
 
@@ -243,16 +223,16 @@ in
 
   };
 
-  flatpak = {
+  #flatpak = {
 
-    # Enable system flatpak
-    enable = false;
+  #  # Enable system flatpak
+  #  enable = false;
 
-    # Packages to install from flatpak
-    packages = [
-    ];
+  #  # Packages to install from flatpak
+  #  packages = [
+  #  ];
 
-  };
+  #};
 
   fonts = {
 
@@ -327,107 +307,107 @@ in
 
   };
 
-  obs = {
+  #obs = {
 
-    # Enable OBS
-    enable = true;
+  #  # Enable OBS
+  #  enable = true;
 
-    # Enable virtual camera
-    virt-cam = false;
+  #  # Enable virtual camera
+  #  virt-cam = false;
 
-  };
+  #};
 
   # Enable nvidia stuff
-  nvidia.enable = false;
+  #nvidia.enable = false;
 
-  amdgpu = {
+  #amdgpu = {
 
-    # Enable AMDGPU stuff
-    enable = true;
+  #  # Enable AMDGPU stuff
+  #  enable = true;
 
-    # Enable OpenCL and ROCm
-    pro = false;
+  #  # Enable OpenCL and ROCm
+  #  pro = false;
 
-  };
+  #};
 
-  my-services = {
+  #my-services = {
 
-    # Enable automatic Cloudflare DDNS
-    cloudflare-ddns.enable = false;
+  #  # Enable automatic Cloudflare DDNS
+  #  cloudflare-ddns.enable = false;
 
-    nginx = {
+  #  nginx = {
 
-      # Enable nginx
-      enable = false;
+  #    # Enable nginx
+  #    enable = false;
 
-      # Enable my goofy website
-      website.enable = true;
+  #    # Enable my goofy website
+  #    website.enable = true;
 
-      # Enable nextcloud
-      nextcloud.enable = false;
+  #    # Enable nextcloud
+  #    nextcloud.enable = false;
 
-      # Website domain
-      hostName = "sanic.space";
+  #    # Website domain
+  #    hostName = "sanic.space";
 
-    };
+  #  };
 
-  };
+  #};
 
-  disks = {
+  #disks = {
 
-    # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
-    enable = false;
+  #  # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
+  #  enable = false;
 
-    # Enable system compression
-    compression = true;
+  #  # Enable system compression
+  #  compression = true;
 
-    second-disk = {
+  #  second-disk = {
 
-      # Enable additional disk (must be btrfs)
-      enable = true;
+  #    # Enable additional disk (must be btrfs)
+  #    enable = true;
 
-      # Enable compression on additional disk
-      compression = true;
+  #    # Enable compression on additional disk
+  #    compression = true;
 
-      # Filesystem label of the partition that is used for mounting
-      label = "Games";
+  #    # Filesystem label of the partition that is used for mounting
+  #    label = "Games";
 
-      # Which subvolume to mount
-      subvol = "games";
+  #    # Which subvolume to mount
+  #    subvol = "games";
 
-      # Path to a place where additional disk will be mounted
-      path = "/home/${user}/Games";
+  #    # Path to a place where additional disk will be mounted
+  #    path = "/home/${user}/Games";
 
-    };
+  #  };
 
-    swap = {
+  #  swap = {
 
-      file = {
+  #    file = {
 
-        # Enable swapfile
-        enable = false;
+  #      # Enable swapfile
+  #      enable = false;
 
-        # Path to swapfile
-        path = "/var/lib/swapfile";
+  #      # Path to swapfile
+  #      path = "/var/lib/swapfile";
 
-        # Size of swapfile in MB
-        size = 4 * 1024;
+  #      # Size of swapfile in MB
+  #      size = 4 * 1024;
 
-      };
+  #    };
 
-      partition = {
+  #    partition = {
 
-        # Enable swap partition
-        enable = true;
+  #      # Enable swap partition
+  #      enable = true;
 
-        # Label of swap partition
-        label = "swap";
+  #      # Label of swap partition
+  #      label = "swap";
 
-      };
+  #    };
 
-    };
+  #  };
 
-  };
+  #};
 
   environment = {
 
@@ -449,11 +429,11 @@ in
         gum
         lolcat
         openssl
-        spotube
+        #spotube
         pyright
         lsd
-        gamescope
-        kdiskmark
+        #gamescope
+        #kdiskmark
         nixfmt-rfc-style
         gdb
         gdu
@@ -462,15 +442,15 @@ in
         nodejs
         yarn
         ccls
-        (firefox-bin.override {
-          nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
-        })
+        #(firefox-bin.override {
+        #  nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
+        #})
         wget
-        nekoray
+        #nekoray
         git-lfs
         git
         killall
-        gamemode
+        #gamemode
         screen
         unrar
         android-tools
@@ -478,29 +458,29 @@ in
         jdk23
         mpv
         nix-index
-        remmina
-        telegram-desktop
+        #remmina
+        #telegram-desktop
         adwaita-icon-theme
-        osu-lazer-bin
-        steam
-        moonlight-qt
-        prismlauncher
-        nvtopPackages.amd
-        qbittorrent
-        pavucontrol
+        #osu-lazer-bin
+        #steam
+        #moonlight-qt
+        #prismlauncher
+        #nvtopPackages.amd
+        #qbittorrent
+        #pavucontrol
         any-nix-shell
         wl-clipboard
-        bottles
-        vesktop
-        networkmanager_dmenu
+        #bottles
+        #vesktop
+        #networkmanager_dmenu
         neovide
-        comma
-        lact
-        libreoffice
-        qalculate-gtk
+        #comma
+        #lact
+        #libreoffice
+        #qalculate-gtk
         p7zip
-        inputs.nix-alien.packages.${system}.nix-alien
-        inputs.nix-search.packages.${system}.default
+        #inputs.nix-alien.packages.${system}.nix-alien
+        #inputs.nix-search.packages.${system}.default
         (writeShellScriptBin "nix-install" nix-install)
       ]
       ++ (import ../../modules/system/stuff pkgs).scripts;
