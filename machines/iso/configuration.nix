@@ -103,7 +103,7 @@ in
   #singbox.enable = true;
 
   # Run non-nix apps
-  programs.nix-ld.enable = true;
+  #programs.nix-ld.enable = true;
 
   #boot.crashDump.enable = true;
 
@@ -125,7 +125,7 @@ in
   xdg.portal.config.common.default = "*";
 
   # Enable OpenTabletDriver
-  hardware.opentabletdriver.enable = true;
+  #hardware.opentabletdriver.enable = true;
 
   # Places /tmp in RAM
   #boot.tmp.useTmpfs = true;
@@ -158,7 +158,7 @@ in
   systemd.coredump.enable = false;
 
   # Enable generation of NixOS documentation for modules (slows down builds)
-  documentation.nixos.enable = false;
+  #documentation.nixos.enable = false;
 
   # Enable systemd-networkd for internet
   #systemd.network.wait-online.enable = false;
@@ -481,7 +481,7 @@ in
         neovide
         comma
         lact
-        libreoffice
+        #libreoffice
         qalculate-gtk
         p7zip
         inputs.nix-alien.packages.${system}.nix-alien
