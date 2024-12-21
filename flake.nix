@@ -70,7 +70,7 @@
             ./machines/iso/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             inputs.nix-index-database.nixosModules.nix-index
-            inputs.chaotic.nixosModules.default
+            #inputs.chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager = {
