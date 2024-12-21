@@ -175,7 +175,7 @@ in
   networking.networkmanager.enable = true;
 
   # Allow making users through useradd
- # users.mutableUsers = true;
+  # users.mutableUsers = true;
 
   # Enable WayDroid
   #virtualisation.waydroid.enable = false;
@@ -233,6 +233,13 @@ in
   #  ];
 
   #};
+
+  hardware = {
+    graphics = {
+      enable = true;
+      enable32Bit = true;
+    };
+  };
 
   fonts = {
 
