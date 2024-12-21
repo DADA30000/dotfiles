@@ -1,4 +1,10 @@
-{ pkgs, inputs, lib, ... }:
+{
+  pkgs,
+  inputs,
+  lib,
+  config,
+  ...
+}:
 let
   user = "l0lk3k";
   user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
@@ -59,6 +65,32 @@ in
   imports = [
     ../../modules/system
   ];
+
+  services = {
+    resolved.enable = true;
+    dnscrypt-proxy2 = {
+      enable = true;
+      settings = {
+        server_names = [
+          "cloudflare"
+          "scaleway-fr"
+          "google"
+          "yandex"
+        ];
+        listen_addresses = [
+          "127.0.0.1:53"
+          "[::1]:53"
+        ];
+      };
+    };
+  };
+  networking = {
+    nameservers = [
+      "::1"
+      "127.0.0.1"
+    ];
+    resolvconf.dnsSingleRequest = true;
+  };
 
   systemd.services.lactd = {
 
@@ -244,13 +276,12 @@ in
       # Run after /dev has been mounted
       deps = [ "specialfs" ];
 
-      text =
-        ''
-          sleep 3
-          mkdir /repo
-          ${pkgs.gnutar}/bin/tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
-          chown root:root -R /repo 
-        '';
+      text = ''
+        source ${config.system.build.setEnvironment}
+        mkdir /repo
+        ${pkgs.gnutar}/bin/tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+        chown root:root -R /repo 
+      '';
 
     };
 
