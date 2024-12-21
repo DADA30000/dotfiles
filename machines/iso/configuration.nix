@@ -126,22 +126,22 @@ in
   xdg.portal.config.common.default = "*";
 
   # Enable OpenTabletDriver
-  #hardware.opentabletdriver.enable = true;
+  hardware.opentabletdriver.enable = true;
 
   # Places /tmp in RAM
   #boot.tmp.useTmpfs = true;
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  #boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages_cachyos;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
 
   # Restrict amount of annoying cache
-  #boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
-  #boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
+  boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
+  boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
   #boot.initrd.systemd.enable = true;
@@ -190,7 +190,7 @@ in
   #zapret.enable = false;
 
   # Enable replays
-  #replays.enable = true;
+  replays.enable = true;
 
   # Enable startup sound on PC speaker (also plays after rebuilds)
   #startup-sound.enable = false;
@@ -199,10 +199,10 @@ in
   #zerotier.enable = false;
 
   # Enable spotify with theme
-  #spicetify.enable = true;
+  spicetify.enable = true;
 
   # Enable mlocate (find files on system quickly)
-  #mlocate.enable = true;
+  mlocate.enable = true;
 
   virtualisation.vmVariant = {
 
@@ -242,6 +242,8 @@ in
   };
 
   fonts = {
+
+    fontconfig.enable = true;
 
     # Enable some default fonts
     enableDefaultPackages = true;
@@ -433,11 +435,10 @@ in
         gum
         lolcat
         openssl
-        #spotube
         pyright
         lsd
-        #gamescope
-        #kdiskmark
+        gamescope
+        kdiskmark
         nixfmt-rfc-style
         gdb
         gdu
@@ -446,45 +447,37 @@ in
         nodejs
         yarn
         ccls
-        #(firefox-bin.override {
-        #  nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
-        #})
+        inputs.pipewire-screenaudio.packages.${pkgs.system}.default
         wget
-        #nekoray
+        nekoray
         git-lfs
         git
         killall
-        #gamemode
+        gamemode
         screen
         unrar
         android-tools
         zip
-        jdk23
         mpv
         nix-index
-        #remmina
-        #telegram-desktop
+        remmina
+        telegram-desktop
         adwaita-icon-theme
-        #osu-lazer-bin
-        #steam
-        #moonlight-qt
-        #prismlauncher
-        #nvtopPackages.amd
-        #qbittorrent
-        #pavucontrol
+        osu-lazer-bin
+        steam
+        moonlight-qt
+        qbittorrent
+        pavucontrol
         any-nix-shell
         wl-clipboard
-        #bottles
-        #vesktop
-        #networkmanager_dmenu
+        bottles
+        networkmanager_dmenu
         neovide
-        #comma
-        #lact
-        #libreoffice
-        #qalculate-gtk
+        comma
+        qalculate-gtk
         p7zip
-        #inputs.nix-alien.packages.${system}.nix-alien
-        #inputs.nix-search.packages.${system}.default
+        inputs.nix-alien.packages.${system}.nix-alien
+        inputs.nix-search.packages.${system}.default
         (writeShellScriptBin "nix-install" nix-install)
       ]
       ++ (import ../../modules/system/stuff pkgs).scripts;
