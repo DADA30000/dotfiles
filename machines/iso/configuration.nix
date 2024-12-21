@@ -132,15 +132,15 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  #boot.kernelPackages = pkgs.linuxPackages_cachyos;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
 
   # Restrict amount of annoying cache
-  boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
-  boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
+  #boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
+  #boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
   #boot.initrd.systemd.enable = true;
