@@ -277,7 +277,7 @@ in
       deps = [ "specialfs" ];
 
       text = ''
-        source ${config.system.build.setEnvironment}
+        PATH=$PATH:${pkgs.gzip}/bin
         mkdir /repo
         ${pkgs.gnutar}/bin/tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
         chown root:root -R /repo 
