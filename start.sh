@@ -98,7 +98,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
           mkfs.fat -n boot -F 32 "${bootpart}"
         else
           mkfs.fat -n boot -F 32 "${disk_system}1"
-          mount "${disk_system}" /mnt/boot
+          mount "${disk_system}1" /mnt/boot
         fi
         mkswap -L swap "${disk_system}3"
         swapon "${disk_system}3"
