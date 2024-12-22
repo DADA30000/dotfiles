@@ -7,17 +7,12 @@
 }:
 let
   user = "nixos";
-  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo nix-install
     fi
     setfont cyr-sun16
     clear
-    if gum confirm --default=false "Использовать оффлайн копию репозитория?"; then
-      cd /repo
-      exec ./start.sh
-    fi
     echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
     if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
       echo -e "\e[31mСоединение не установлено :(\e[0m"
@@ -31,6 +26,10 @@ let
     fi
     echo -e "\e[32mСоединение установлено!\e[0m"
     sleep 1
+    if gum confirm --default=false "Использовать оффлайн копию репозитория?"; then
+      cd /repo
+      exec ./start.sh
+    fi
     url="https://github.com/DADA30000/dotfiles"
     clear
     if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации? (скрипт запускает start.sh из репозитория, репозиторий должен быть публичным)"; then
@@ -40,7 +39,7 @@ let
       clear
       echo -e "\e[34mКлонирование репозитория...\e[0m"
       mkdir /mnt2
-      if git clone "$url" /mnt2/dotfiles; then
+      if git clone "$url" --depth 1 /mnt2/dotfiles; then
         cd /mnt2/dotfiles
         echo -e "\e[34mЗапуск start.sh...\e[0m"
         exec ./start.sh
