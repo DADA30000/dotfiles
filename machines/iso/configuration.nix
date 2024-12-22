@@ -548,6 +548,16 @@ in
 
   };
 
+  xdg = {
+
+    mime.enable = true;
+
+    icons.enable = true;
+
+    autostart.enable = true;
+
+  };
+
   users.defaultUserShell = pkgs.zsh;
 
   nixpkgs.config.allowUnfree = true;
