@@ -431,9 +431,7 @@ in
     systemPackages =
       with pkgs;
       [
-        gum
-        lolcat
-        openssl
+        spotube
         pyright
         lsd
         gamescope
@@ -446,7 +444,9 @@ in
         nodejs
         yarn
         ccls
-        inputs.pipewire-screenaudio.packages.${pkgs.system}.default
+        (firefox-bin.override {
+          nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
+        })
         wget
         nekoray
         git-lfs
@@ -457,6 +457,7 @@ in
         unrar
         android-tools
         zip
+        jdk23
         mpv
         nix-index
         remmina
@@ -465,14 +466,18 @@ in
         osu-lazer-bin
         steam
         moonlight-qt
+        prismlauncher
+        nvtopPackages.amd
         qbittorrent
         pavucontrol
         any-nix-shell
         wl-clipboard
         bottles
+        vesktop
         networkmanager_dmenu
         neovide
         comma
+        libreoffice
         qalculate-gtk
         p7zip
         inputs.nix-alien.packages.${system}.nix-alien
