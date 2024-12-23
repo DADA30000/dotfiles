@@ -58,7 +58,6 @@ let
 in
 {
   boot.supportedFilesystems.zfs = lib.mkForce false;
-  system.includeBuildDependencies = true;
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless.enable = false;
   networking.hostName = "iso";
