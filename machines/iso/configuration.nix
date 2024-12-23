@@ -432,6 +432,8 @@ in
       with pkgs;
       [
         spotube
+        gum
+        openssl
         pyright
         lsd
         gamescope
