@@ -59,6 +59,7 @@ in
 {
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
+  includeBuildDependencies = true;
   networking.wireless.enable = false;
   networking.hostName = "iso";
   imports = [
