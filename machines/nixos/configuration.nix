@@ -13,6 +13,26 @@ in
     ../../modules/system
   ];
 
+  systemd.services.lactd = {
+
+    enable = true;
+
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+
+      ExecStart = "${pkgs.lact}/bin/lact daemon";
+
+      #ExecStartPre = "${pkgs.coreutils-full}/bin/sleep 10";
+
+      Restart = "always";
+
+      Nice = -10;
+
+    };
+
+  };
+
   programs.ydotool.enable = true;
 
   # Disable annoying firewall
@@ -54,7 +74,7 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  #boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages_cachyos;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
@@ -219,12 +239,12 @@ in
   };
 
   # Enable nvidia stuff
-  nvidia.enable = true;
+  nvidia.enable = false;
 
   amdgpu = {
 
     # Enable AMDGPU stuff
-    enable = false;
+    enable = true;
 
     # Enable OpenCL and ROCm
     pro = false;
@@ -265,7 +285,7 @@ in
     second-disk = {
 
       # Enable additional disk (must be btrfs)
-      enable = false;
+      enable = true;
 
       # Enable compression on additional disk
       compression = true;
@@ -373,6 +393,7 @@ in
         networkmanager_dmenu
         neovide
         comma
+        lact
         libreoffice
         qalculate-gtk
         p7zip
