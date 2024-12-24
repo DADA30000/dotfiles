@@ -59,7 +59,6 @@ in
 {
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
-  system.includeBuildDependencies = true;
   networking.wireless.enable = false;
   networking.hostName = "iso";
   imports = [
@@ -133,7 +132,7 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  #boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages_cachyos;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
@@ -324,7 +323,7 @@ in
   #};
 
   # Enable nvidia stuff
-  nvidia.enable = true;
+  #nvidia.enable = false;
 
   #amdgpu = {
 
@@ -432,8 +431,8 @@ in
     systemPackages =
       with pkgs;
       [
-        spotube
         gum
+        lolcat
         openssl
         pyright
         lsd
@@ -447,9 +446,7 @@ in
         nodejs
         yarn
         ccls
-        (firefox-bin.override {
-          nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
-        })
+        inputs.pipewire-screenaudio.packages.${pkgs.system}.default
         wget
         nekoray
         git-lfs
@@ -460,7 +457,6 @@ in
         unrar
         android-tools
         zip
-        jdk23
         mpv
         nix-index
         remmina
@@ -469,18 +465,14 @@ in
         osu-lazer-bin
         steam
         moonlight-qt
-        prismlauncher
-        nvtopPackages.amd
         qbittorrent
         pavucontrol
         any-nix-shell
         wl-clipboard
         bottles
-        vesktop
         networkmanager_dmenu
         neovide
         comma
-        libreoffice
         qalculate-gtk
         p7zip
         inputs.nix-alien.packages.${system}.nix-alien
