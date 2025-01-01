@@ -516,9 +516,9 @@ in
             format = "{format_source}";
             format-source = "{volume}%  ";
             format-source-muted = "";
-            on-click = "pactl set-source-mute 0 toggle";
-            on-scroll-down = "pactl set-source-volume 0 -5%";
-            on-scroll-up = "pactl set-source-volume 0 +5%";
+            on-click = "pactl set-source-mute @DEFAULT_SOURCE@ toggle";
+            on-scroll-down = "pactl set-source-volume @DEFAULT_SOURCE@ -5%";
+            on-scroll-up = "pactl set-source-volume @DEFAULT_SOURCE@ +5%";
           };
           "pulseaudio" = {
             format = "{volume}% {icon}";
