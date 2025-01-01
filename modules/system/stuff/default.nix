@@ -313,6 +313,15 @@ scripts = [ (pkgs.writeShellScriptBin "dinfo" ''
   (pkgs.writeShellScriptBin "update-damn-nixos" ''
     notify-send "Обновление" "Обновление системы, пожалуйста, выключайте компьютер когда угодно :)"; if pkexec nixos-rebuild switch -v > /home/$1/.cache/nixos-rebuild.log 2>&1; then notify-send "Успех" "Обновление завершено без ошибок"; else notify-send "Ошибка" "Во время обновления произошла ошибка, лог обновления находится в /home/$1/.cache/nixos-rebuild.log"; fi
   '')
+  (pkgs.writeShellScriptBin "toggle-restriction" ''
+    if grep '    power_cap: 125.0' "/etc/lact/config.yaml"; then
+      notify-send "Включено" "Ограничение питания видеокарты включено"
+      sed -i 's/    power_cap: 125.0/    power_cap: 60.0/' /etc/lact/config.yaml
+    else
+      notify-send "Выключено" "Ограничение питания видеокарты выключено";
+      sed -i 's/    power_cap: 60.0/    power_cap: 125.0/' /etc/lact/config.yaml
+    fi
+  '')
 ];
 }
 
