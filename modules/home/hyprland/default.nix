@@ -73,6 +73,7 @@ in
           "$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
           "$mod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
           "$mod_CTRL, F, fullscreenstate, 0 2"
+          "$mod, I, exec, toggle-restriction"
           "$mod, F1, exec, gamemode.sh"
           "$mod, F2, exec, sheesh.sh"
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"

@@ -69,6 +69,9 @@ in
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
 
+  # Enable PulseAudio
+  hardware.pulseaudio.enable = true;
+
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
 
@@ -183,7 +186,7 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      nerd-fonts.jetbrains-mono
+      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
     ];
 
   };
@@ -428,10 +431,10 @@ in
 
     pipewire = {
       enable = true;
-      alsa.enable = true;
-      alsa.support32Bit = true;
-      jack.enable = true;
-      pulse.enable = true;
+      alsa.enable = false;
+      alsa.support32Bit = false;
+      jack.enable = false;
+      pulse.enable = false;
     };
 
   };
