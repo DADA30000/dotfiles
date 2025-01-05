@@ -250,7 +250,7 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      nerd-fonts.jetbrains-mono
+      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
     ];
 
   };
