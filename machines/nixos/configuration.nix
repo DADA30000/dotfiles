@@ -70,14 +70,14 @@ in
   hardware.opentabletdriver.enable = true;
 
   # Enable PulseAudio
-  hardware.pulseaudio.enable = true;
+  hardware.pulseaudio.enable = false;
 
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages_latest;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
@@ -363,7 +363,7 @@ in
         nodejs
         yarn
         ccls
-        (firefox.override {
+        (firefox-bin.override {
           nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
         })
         wget
@@ -431,10 +431,11 @@ in
 
     pipewire = {
       enable = true;
-      alsa.enable = false;
-      alsa.support32Bit = false;
-      jack.enable = false;
-      pulse.enable = false;
+      package = inputs.unstable.legacyPackages.${pkgs.system}.pipewire;
+      alsa.enable = true;
+      alsa.support32Bit = true;
+      jack.enable = true;
+      pulse.enable = true;
     };
 
   };
