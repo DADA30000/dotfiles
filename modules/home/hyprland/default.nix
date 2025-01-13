@@ -12,7 +12,8 @@ in
 {
   options.hyprland = {
     enable = mkEnableOption "Enable my Hyprland configuration";
-    stable = mkEnableOption "Whether to use release from nixpkgs, or use latest git";
+    from-unstable = mkEnableOption "Use Hyprland package from UNSTABLE nixpkgs";
+    stable = mkEnableOption "Use Hyprland from nixpkgs";
     enable-plugins = mkEnableOption "Enable Hyprland plugins";
     mpvpaper = mkEnableOption "Enable video wallpapers with mpvpaper";
     hyprpaper = mkEnableOption "Enable image wallpapers with hyprpaper";
@@ -44,11 +45,16 @@ in
       wttrbar
     ];
     wayland.windowManager.hyprland = {
-      package = mkIf (!cfg.stable) inputs.hyprland.packages.${pkgs.system}.hyprland;
+      package = mkMerge [
+        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.hyprland)
+        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)];
       plugins =
-        lib.optionals (cfg.enable-plugins && cfg.stable) [ pkgs.hyprlandPlugins.hyprtrails ]
-        ++ lib.optionals (cfg.enable-plugins && !cfg.stable) [
+        lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [ pkgs.hyprlandPlugins.hyprtrails ]
+        ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
           inputs.hyprland-plugins.packages.${pkgs.system}.hyprtrails
+        ]
+        ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
+          inputs.unstable.legacyPackages.${pkgs.system}.hyprlandPlugins.hyprtrails
         ];
       enable = true;
       settings = {
