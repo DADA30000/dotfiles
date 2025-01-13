@@ -26,7 +26,7 @@
   theming.enable = true;
 
   # Enable cava audio visualizer
-  cava.enable = false;
+  cava.enable = true;
 
   # Enable swaync notification manager
   swaync.enable = true;
@@ -76,8 +76,11 @@
     # Enable base Hyprland configuration (required for options below)
     enable = true;
 
-    # Whether to use release from nixpkgs, or use latest git
-    stable = false;
+    # Use Hyprland package from UNSTABLE nixpkgs
+    from-unstable = false;
+
+    # Use Hyprland package from nixpkgs
+    stable = true;
 
     # Enable Hyprland plugins
     enable-plugins = true;

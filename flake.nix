@@ -1,10 +1,5 @@
 {
   inputs = {
-    hyprland = {
-      type = "git";
-      url = "https://github.com/hyprwm/Hyprland";
-      submodules = true;
-    };
     home-manager = {
       url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -25,7 +20,9 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
+    unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    hyprland.url = "github:hyprwm/Hyprland/v0.46.2";
+    #chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
     nix-alien.url = "github:thiagokokada/nix-alien";
     nix-flatpak.url = "github:gmodena/nix-flatpak";
@@ -47,7 +44,7 @@
           modules = [
             ./machines/nixos/configuration.nix
             inputs.nix-index-database.nixosModules.nix-index
-            inputs.chaotic.nixosModules.default
+            #inputs.chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager = {
@@ -70,7 +67,7 @@
             ./machines/iso/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             inputs.nix-index-database.nixosModules.nix-index
-            inputs.chaotic.nixosModules.default
+            #inputs.chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
               home-manager = {

@@ -132,7 +132,7 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  boot.kernelPackages = pkgs.linuxPackages_cachyos;
+  boot.kernelPackages = pkgs.linuxPackages_latest;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
