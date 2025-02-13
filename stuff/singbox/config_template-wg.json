@@ -13,6 +13,15 @@
   },
   "inbounds": [
     {
+      "domain_strategy": "",
+      "listen": "127.0.0.1",
+      "listen_port": 2080,
+      "sniff": true,
+      "sniff_override_destination": false,
+      "tag": "mixed-in",
+      "type": "mixed"
+    },
+    {
       "type": "tun",
       "tag": "tun-in",
       "interface_name": "tun0",
@@ -55,13 +64,45 @@
         "action": "sniff"
       },
       {
-        "process_path_regex": [
-          "^.*(wget|git|electron|firefox|firefox-bin|flatpak|.flatpak-wrappe|.flatpak-wrapped|node)$"
+        "inbound": [
+          "mixed-in"
         ],
         "outbound": "proxy"
       },
       {
+        "inbound": [
+          "tun-in"
+        ],
+        "process_path_regex": [
+          "^.*(wget|git|electron|node)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "inbound": [
+          "tun-in"
+        ],
         "domain_suffix": [
+          "dis.gd",
+          "discord.co",
+          "discord.com",
+          "discord.design",
+          "discord.dev",
+          "discord.gg",
+          "discord.gift",
+          "discord.gifts",
+          "discord.media",
+          "discord.new",
+          "discord.store",
+          "discord.tools",
+          "discordapp.com",
+          "discordapp.net",
+          "discordmerch.com",
+          "discordpartygames.com",
+          "discord-activities.com",
+          "discordactivities.com",
+          "discordsays.com",
+          "discordstatus.com",
           "googlevideo.com",
           "youtu.be",
           "youtube.com",
@@ -71,6 +112,7 @@
         "outbound": "proxy"
       },
       {
+
         "port": 53,
         "process_name": [
           "anything in here, like really anything"

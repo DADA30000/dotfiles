@@ -363,7 +363,7 @@ in
         nodejs
         yarn
         ccls
-        (firefox-bin.override {
+        (firefox.override {
           nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
         })
         wget
