@@ -35,6 +35,10 @@ tZXxn9qc34vndv7Nyuoe0g=="
   if gum confirm --default=false "Отредактировать файл конфигурации?"; then
     nvim ./machines/nixos/configuration.nix
   fi
+  host="nixos"
+  if gum confirm --default=false "Изменить мя хоста в flake.nix для установки (по умолчанию nixos)?"; then
+    host=$(gum input --header="Имя хоста" --placeholder="Вводи сцука" --no-show-help)
+  fi
   if [ -n "$disk_games" ]; then
     echo "Вы хотите установить СИСТЕМУ на $disk_system, и использовать в качестве ДОПОЛНИТЕЛЬНОГО ДИСКА $disk_games (предупреждение: он отформатируется)"
   else
