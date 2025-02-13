@@ -36,7 +36,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
     nvim ./machines/nixos/configuration.nix
   fi
   host="nixos"
-  if gum confirm --default=false "Изменить мя хоста в flake.nix для установки (по умолчанию nixos)?"; then
+  if gum confirm --default=false "Изменить имя хоста в flake.nix для установки (по умолчанию nixos)?"; then
     host=$(gum input --header="Имя хоста" --placeholder="Вводи сцука" --no-show-help)
   fi
   if [ -n "$disk_games" ]; then
