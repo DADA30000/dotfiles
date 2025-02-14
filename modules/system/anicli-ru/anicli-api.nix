@@ -2,19 +2,19 @@
   lib
 , fetchPypi
 , python3Packages
-, python3
+#, python3
 }:
 
 python3Packages.buildPythonApplication rec{
 
   pname = "anicli_api";
-  version = "0.6.5";
+  version = "0.7.2";
   pyproject = true;
 
   src = fetchPypi {
     pname = "anicli_api";
     inherit version;
-    hash = "sha256-8lFvX9tbPjwY7MYsdS4/Z4zGr7MUzTxyOEB+WbtvM1I=";
+    hash = "sha256-nnJWi87WDr8pDEUb9IQocDoPFS41DlS/l7qKjeTD73Q=";
   };
 
   build-system = with python3Packages; [
@@ -22,7 +22,7 @@ python3Packages.buildPythonApplication rec{
   ];
 
   dependencies = with python3Packages; [
-    (python3.withPackages(ps: with ps; [ httpx ] ++ httpx.optional-dependencies.http2 ))
+    #(python3.withPackages(ps: with ps; [ httpx ] ++ httpx.optional-dependencies.http2 ))
     attrs
     parsel
     tqdm
