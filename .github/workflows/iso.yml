@@ -27,8 +27,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      - name: Use GitHub cache for Nix
-        uses: DeterminateSystems/magic-nix-cache-action@main
+      #- name: Use GitHub cache for Nix
+      #  uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Show disk size
         run: |
@@ -44,12 +44,9 @@ jobs:
           df -h
 
       - name: Update flake.lock
-        run: nix flake update
-      - name: Commit files
-        run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "Actions"
-          git commit -a -m "update flake.lock"
+      uses: DeterminateSystems/update-flake-lock@main
+      with:
+        pr-title: "Update flake.lock" # Title of PR to be created
 
       # Runs a single command using the runners shell
       - name: Build ISO

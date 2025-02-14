@@ -26,6 +26,7 @@ in
         nvim-web-devicons
         nvim-treesitter-parsers.cpp
         nvim-treesitter-parsers.nix
+        nvim-treesitter-parsers.javascript
         nvim-treesitter
         coc-ultisnips
         coc-snippets
@@ -33,6 +34,9 @@ in
         coc-json
         cord-nvim
         coc-pyright
+        coc-css
+        coc-html
+        coc-tsserver
       ];
       coc.settings = {
         languageserver = {
