@@ -44,9 +44,9 @@ jobs:
           df -h
 
       - name: Update flake.lock
-      uses: DeterminateSystems/update-flake-lock@main
-      with:
-        pr-title: "Update flake.lock" # Title of PR to be created
+        uses: DeterminateSystems/update-flake-lock@main
+        with:
+          pr-title: "Update flake.lock" # Title of PR to be created
 
       # Runs a single command using the runners shell
       - name: Build ISO

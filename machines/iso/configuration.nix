@@ -200,8 +200,11 @@ in
   # Enable spotify with theme
   spicetify.enable = true;
 
-  # Enable mlocate (find files on system quickly)
-  mlocate.enable = true;
+  # Enable mlocate (find files on system quickly) (Deprecated, will be removed soon)
+  # mlocate.enable = true;
+
+  # Enable locate (find files on system quickly)
+  services.locate.enable = true;
 
   virtualisation.vmVariant = {
 
@@ -250,7 +253,8 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+      #(nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+      nerd-fonts.jetbrains-mono
     ];
 
   };

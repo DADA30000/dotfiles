@@ -80,10 +80,10 @@
     from-unstable = false;
 
     # Use Hyprland package from nixpkgs
-    stable = true;
+    stable = false;
 
     # Enable Hyprland plugins
-    enable-plugins = true;
+    enable-plugins = false;
 
     # Enable video wallpapers with mpvpaper
     mpvpaper = false;
