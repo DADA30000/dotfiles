@@ -70,7 +70,7 @@ in
   hardware.opentabletdriver.enable = true;
 
   # Enable PulseAudio
-  hardware.pulseaudio.enable = false;
+  services.pulseaudio.enable = false;
 
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
@@ -145,8 +145,11 @@ in
   # Enable spotify with theme
   spicetify.enable = true;
 
-  # Enable mlocate (find files on system quickly)
-  mlocate.enable = true;
+  # Enable mlocate (find files on system quickly) (Deprecated, will be removed soon)
+  #mlocate.enable = true;
+
+  # Enable locate (find files on system quickly)
+  services.locate.enable = true;
 
   virtualisation.vmVariant = {
 
@@ -186,7 +189,8 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+      #(nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+      nerd-fonts.jetbrains-mono
     ];
 
   };
@@ -431,7 +435,7 @@ in
 
     pipewire = {
       enable = true;
-      package = inputs.unstable.legacyPackages.${pkgs.system}.pipewire;
+      #package = inputs.unstable.legacyPackages.${pkgs.system}.pipewire;
       alsa.enable = true;
       alsa.support32Bit = true;
       jack.enable = true;

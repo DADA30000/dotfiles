@@ -295,14 +295,14 @@ in
         StartLimitInterval = 0;
       };
     };
-    xdg.portal = {
-      enable = true;
-      extraPortals = [
-        pkgs.xdg-desktop-portal-hyprland
-        pkgs.xdg-desktop-portal-gtk
-      ];
-      config.common.default = "*";
-    };
+    #xdg.portal = {
+    #  enable = true;
+    #  extraPortals = [
+    #    pkgs.xdg-desktop-portal-hyprland
+    #    pkgs.xdg-desktop-portal-gtk
+    #  ];
+    #  config.common.default = "*";
+    #};
     programs.hyprlock = mkIf cfg.hyprlock {
       enable = true;
       settings = {

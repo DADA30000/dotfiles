@@ -7,13 +7,13 @@
 python3Packages.buildPythonApplication rec{
 
   pname = "eggella";
-  version = "0.1.6";
+  version = "0.1.7";
   pyproject = true;
 
   src = fetchPypi {
     pname = "eggella";
     inherit version;
-    hash = "sha256-2vnfiiS9g8O8k426PYvhiw9NUvKHDunGNeld83hUfYM=";
+    hash = "sha256-8Vo39BePA86wcLKs/F+u2N7tpIpPrEyEPp3POszy050=";
   };
 
   build-system = with python3Packages; [
