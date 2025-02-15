@@ -24,7 +24,7 @@ in
   
   
   config = mkMerge [
-  (mkIf (!builtins.pathExists ../../../stuff/singbox/config.json) {
+  (mkIf (cfg.enable && !builtins.pathExists ../../../stuff/singbox/config.json) {
     warnings = [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
   })
   (mkIf (cfg.enable && builtins.pathExists ../../../stuff/singbox/config.json) {
