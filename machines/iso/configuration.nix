@@ -13,23 +13,24 @@ let
     fi
     setfont cyr-sun16
     clear
-    echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
-    if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
-      echo -e "\e[31mСоединение не установлено :(\e[0m"
-      if gum confirm "Настроить подключение?"; then
-        nmtui
-        if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
-          echo -e "\e[34mСоединение не было установлено, перезапуск...\e[0m"
-          sleep 2; exec nix-install
+    if gum confirm "Провести оффлайн установку?"
+      cd /repo
+      exec ./start.sh offline
+    else
+      echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
+      if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
+        echo -e "\e[31mСоединение не установлено :(\e[0m"
+        if gum confirm "Настроить подключение?"; then
+          nmtui
+          if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
+            echo -e "\e[34mСоединение не было установлено, перезапуск...\e[0m"
+            sleep 2; exec nix-install
+          fi
         fi
       fi
+      echo -e "\e[32mСоединение установлено!\e[0m"
     fi
-    echo -e "\e[32mСоединение установлено!\e[0m"
     sleep 1
-    if gum confirm --default=false "Использовать оффлайн копию репозитория?"; then
-      cd /repo
-      exec ./start.sh
-    fi
     url="https://github.com/DADA30000/dotfiles"
     clear
     if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации? (скрипт запускает start.sh из репозитория, репозиторий должен быть публичным)"; then
@@ -462,6 +463,7 @@ in
         android-tools
         zip
         mpv
+        libreoffice
         nix-index
         remmina
         telegram-desktop
