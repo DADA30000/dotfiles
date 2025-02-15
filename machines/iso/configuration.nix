@@ -13,7 +13,7 @@ let
     fi
     setfont cyr-sun16
     clear
-    if gum confirm "Провести оффлайн установку?"
+    if gum confirm "Провести оффлайн установку?"; then
       cd /repo
       exec ./start.sh offline
     else
