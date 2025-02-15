@@ -21,8 +21,13 @@ in
   options.singbox-wg = {
     enable = mkEnableOption "Enable singbox proxy to my VPS with WireGuard";
   };
-
-  config = mkIf cfg.enable {
+  
+  
+  config = mkMerge [
+  (mkIf (!builtins.pathExists ../../../stuff/singbox/config.json) {
+    warnings = [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
+  })
+  (mkIf (cfg.enable && builtins.pathExists ../../../stuff/singbox/config.json) {
     systemd.services.singbox = {
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
@@ -56,5 +61,5 @@ in
       ];
       resolvconf.dnsSingleRequest = true;
     };
-  };
+  })];
 }
