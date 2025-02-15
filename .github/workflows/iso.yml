@@ -51,7 +51,7 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Build ISO
-        run: nix build .#nixosConfigurations.iso.config.system.build.isoImage
+        run: sudo nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 128 -j 128
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
