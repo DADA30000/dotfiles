@@ -99,6 +99,9 @@ in
   # Enable singbox proxy to my VPS with WireGuard
   singbox-wg.enable = false;
 
+  # Enable AmneziaVPN client
+  programs.amnezia-vpn.enable = true;
+
   # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
   #singbox.enable = true;
 

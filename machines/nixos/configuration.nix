@@ -44,6 +44,9 @@ in
   # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
   #singbox.enable = true;
 
+  # Enable AmneziaVPN client
+  programs.amnezia-vpn.enable = true;
+
   # Run non-nix apps
   programs.nix-ld.enable = true;
 
