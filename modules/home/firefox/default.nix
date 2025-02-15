@@ -11,21 +11,9 @@ let
     pname = "vencord-web";
     version = "1.10.9";
     addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
-    url = "";
+    url = "https://github.com/DADA30000/dotfiles/raw/refs/heads/main/stuff/vencord-sth.xpi";
     sha256 = "0774c1ee50a9e06ec86e7cafd423980964e6120b0bd92fbf18ec75553e870798";
-    meta = with lib; {
-      homepage = "https://github.com/Vendicated/Vencord";
-      description = "Vencord";
-      license = licenses.mit;
-      mozPermissions = [
-        "contextMenus"
-        "storage"
-        "activeTab"
-        "https://*.discord.com/*"
-        "https://raw.githubusercontent.com/*"
-      ];
-      platforms = platforms.all;
-    };
+    meta = {};
   });
   cfg = config.firefox;
 in
@@ -39,7 +27,7 @@ in
       enable = true;
       nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
       profiles.kek = {
-        extensions = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [ bitwarden ublock-origin privacy-badger sponsorblock darkreader  vencord-web ];
+        extensions = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [ bitwarden ublock-origin privacy-badger sponsorblock darkreader  vencord-we ];
         userChrome = ''
           /* imports */
 
