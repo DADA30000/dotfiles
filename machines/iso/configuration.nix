@@ -482,6 +482,7 @@ in
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
         (writeShellScriptBin "nix-install" nix-install)
+        (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos.config.system.build.toplevel} $@")
       ]
       ++ (import ../../modules/system/stuff pkgs).scripts;
 
