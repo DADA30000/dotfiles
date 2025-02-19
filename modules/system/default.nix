@@ -4,7 +4,7 @@
     ./anicli-ru
     ./zapret
     ./my-services
-    ./amdgpu
+    ./graphics
     ./replays
     ./startup-sound
     ./zerotier
@@ -12,7 +12,6 @@
     ./obs
     ./flatpak
     ./mlocate
-    ./nvidia
     ./singbox-wg
     #./singbox
   ];
