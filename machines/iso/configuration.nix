@@ -108,7 +108,7 @@ in
 
   my-services.cloudflare-ddns.enable = false;
 
-  my.services.nginx.enable = false;
+  my-services.nginx.enable = false;
 
   environment = {
 
