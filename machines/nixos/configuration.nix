@@ -39,7 +39,7 @@ in
   networking.firewall.enable = false;
 
   # Enable singbox proxy to my VPS with WireGuard
-  singbox-wg.enable = true;
+  singbox-wg.enable = false;
 
   # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
   #singbox.enable = true;
@@ -73,7 +73,7 @@ in
   hardware.opentabletdriver.enable = true;
 
   # Enable PulseAudio
-  services.pulseaudio.enable = false;
+  #services.pulseaudio.enable = false;
 
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
@@ -248,16 +248,19 @@ in
 
   };
 
-  # Enable nvidia stuff
-  nvidia.enable = false;
+  graphics = {
 
-  amdgpu = {
-
-    # Enable AMDGPU stuff
     enable = true;
 
-    # Enable OpenCL and ROCm
-    pro = false;
+    nvidia.enable = false;
+
+    amdgpu = {
+
+      enable = true;
+
+      pro = false;
+
+    };
 
   };
 
