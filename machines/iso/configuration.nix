@@ -112,6 +112,8 @@ in
 
   boot.loader.timeout = lib.mkForce 10;
 
+  services.getty.autologinUser = lib.mkForce user;
+
   environment = {
 
     systemPackages =
