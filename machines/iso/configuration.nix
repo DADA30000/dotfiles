@@ -104,6 +104,12 @@ in
 
   };
 
+  disks.enable = false;
+
+  my-services.cloudflare-ddns.enable = false;
+
+  my.services.nginx.enable = false;
+
   environment = {
 
     systemPackages =

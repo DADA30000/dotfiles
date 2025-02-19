@@ -24,9 +24,9 @@ in
         enable = true;
         enable32Bit = true;
       };
-      amdgpu = mkIf cfg.amdgpu.enable mkMerge [
-        { initrd.enable = true; }
-        (mkIf (cfg.amdgpu.pro) { opencl.enable = true; })
+      amdgpu = mkMerge [
+        (mkIf cfg.amdgpu.enable { initrd.enable = true; })
+        (mkIf cfg.amdgpu.pro { opencl.enable = true; })
       ];
       nvidia = mkIf cfg.nvidia.enable {
         modesetting.enable = true;
