@@ -110,6 +110,8 @@ in
 
   my-services.nginx.enable = lib.mkForce false;
 
+  boot.loader.timeout = lib.mkForce 10;
+
   environment = {
 
     systemPackages =
