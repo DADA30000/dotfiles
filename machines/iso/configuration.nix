@@ -104,11 +104,11 @@ in
 
   };
 
-  disks.enable = false;
+  disks.enable = lib.mkForce false;
 
-  my-services.cloudflare-ddns.enable = false;
+  my-services.cloudflare-ddns.enable = lib.mkForce false;
 
-  my-services.nginx.enable = false;
+  my-services.nginx.enable = lib.mkForce false;
 
   environment = {
 
