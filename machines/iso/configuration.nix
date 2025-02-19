@@ -114,6 +114,8 @@ in
 
   services.getty.autologinUser = lib.mkForce user;
 
+  graphics.nvidia.enable = lib.mkForce true;
+
   environment = {
 
     systemPackages =
