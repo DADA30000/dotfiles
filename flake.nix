@@ -80,7 +80,7 @@
                 };
                 backupFileExtension = "backup";
                 useGlobalPkgs = true;
-                users.nixos = import ./machines/iso/home.nix;
+                users.nixos = import ./machines/nixos/home.nix;
                 useUserPackages = true;
               };
             }

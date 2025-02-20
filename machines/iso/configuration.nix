@@ -116,6 +116,8 @@ in
 
   graphics.nvidia.enable = lib.mkForce true;
 
+  initrd.systemd.enable = lib.mkForce false;
+
   environment = {
 
     systemPackages =
