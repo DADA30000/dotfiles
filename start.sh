@@ -15,19 +15,19 @@ if [ -f ./check ]; then
     encoded="U2FsdGVkX18I8ki4i/keJu8eCSXpVWpZxyiL5zLrPxw7KC3SR46FKRjx5xZPCpLF
 tZXxn9qc34vndv7Nyuoe0g=="
     pass=$(gum input --header="Пароль для расшифровки токена" --placeholder="Вводи сцука" --password --no-show-help)
-    decoded=$(echo $encoded | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:${pass})
+    decoded=$(echo "$encoded" | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:"${pass}")
     myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
   fi
   if gum confirm --default=false "Установить /boot на другой раздел?"; then
     fdisk -l
     echo "Введите полный путь до раздела";
-    read bootpart
+    read -r bootpart
   fi
   if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
     echo "Введите пароль"
     passtemp=$(mkpasswd)
     echo "Введите имя пользователя"
-    read usertemp
+    read -r usertemp
     sed -i 's|  user = "l0lk3k";|  user = "'"${usertemp}"'";|' ./machines/nixos/configuration.nix 
     sed -i 's|  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";|  user-hash = "'"${passtemp}"'";|' ./machines/nixos/configuration.nix
     sed -i 's|              users.l0lk3k = import ./machines/nixos/home.nix;|              users.'"${usertemp}"' = import ./machines/nixos/home.nix;|' ./flake.nix 
@@ -66,7 +66,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
       fi
       echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
         mkdir -p /mnt
-      if [ $(echo "$disk_system" | grep -c nvme) -eq 1 ]; then
+      if [ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]; then
         mkfs.btrfs -f -L nixos "${disk_system}p2"
         mount "${disk_system}p2" /mnt
         btrfs subvolume create /mnt/root
@@ -108,11 +108,11 @@ tZXxn9qc34vndv7Nyuoe0g=="
         swapon "${disk_system}3"
       fi
       if [ -n "$myuser" ]; then
-        mkdir -p /mnt/home/${myuser}
-        git clone https://DADA30000:${decoded}@github.com/DADA30000/mozilla.git /mnt/home/${myuser}/.mozilla
+        mkdir -p /mnt/home/"${myuser}"
+        git clone https://DADA30000:"${decoded}"@github.com/DADA30000/mozilla.git /mnt/home/"${myuser}"/.mozilla
       fi
       if [ -n "$disk_games" ]; then
-        if [ $(echo "$disk_games" | grep -c nvme) -eq 1 ]; then
+        if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
            mkdir /mnt1
            mkfs.btrfs -f -L Games "${disk_games}p1"
            mount "${disk_games}p1" /mnt1
@@ -137,24 +137,44 @@ tZXxn9qc34vndv7Nyuoe0g=="
     find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-    if nixos-install -v --option extra-substituters "https://chaotic-nyx.cachix.org/" --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#nixos" --impure; then
-      echo "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m"
-      for i in {1..9}; do
+    if [ "$1" = "offline" ]; then
+      if offline-install; then
+        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+        for i in {1..9}; do
+          sleep 0.25
+          printf "%s" "$i"
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+        done
         sleep 0.25
-        printf "${i}"
-        sleep 0.25
-        printf "."
-        sleep 0.25
-        printf "."
-        sleep 0.25
-        printf "."
-      done
-      sleep 0.25
-      printf "10"
-      echo -ne '\n'
-      reboot
+        printf "10\n"
+        reboot
+      else
+        echo -e "\e[31mОшибка установки :(\e[0m"
+      fi
     else
-      echo -e "\e[31mОшибка установки :(\e[0m"
+      if nixos-install -v --option extra-substituters "https://chaotic-nyx.cachix.org/" --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#${host}" --impure; then
+        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+        for i in {1..9}; do
+          sleep 0.25
+          printf "%s" "$i"
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+        done
+        sleep 0.25
+        printf "10\n"
+        reboot
+      else
+        printf "\e[31mОшибка установки :(\e[0m\n"
+      fi
     fi
   fi
 else
