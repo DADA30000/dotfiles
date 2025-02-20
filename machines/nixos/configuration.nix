@@ -39,7 +39,7 @@ in
   networking.firewall.enable = false;
 
   # Enable singbox proxy to my VPS with WireGuard
-  singbox-wg.enable = false;
+  singbox-wg.enable = true;
 
   # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
   #singbox.enable = true;
