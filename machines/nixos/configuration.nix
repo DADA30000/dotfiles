@@ -56,7 +56,7 @@ in
   zramSwap.enable = true;
 
   # Enable stuff in /bin and /usr/bin
-  services.envfs.enable = true;
+  services.envfs.enable = false;
 
   # Enable IOMMU
   boot.kernelParams = [ "iommu=pt" ];
