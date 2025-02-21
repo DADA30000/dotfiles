@@ -118,6 +118,16 @@ in
 
   boot.initrd.systemd.enable = lib.mkForce false;
 
+  xdg = {
+
+    mime.enable = true;
+
+    icons.enable = true;
+
+    autostart.enable = true;
+
+  };
+
   environment = {
 
     systemPackages =
