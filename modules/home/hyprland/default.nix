@@ -354,7 +354,7 @@ in
         splash = false;
         preload = [ "${../../../stuff/wallpaper.jpg}" ];
         wallpaper = [
-          "HDMI-A-1,${../../../stuff/wallpaper.jpg}"
+          ",${../../../stuff/wallpaper.jpg}"
         ];
       };
     };
