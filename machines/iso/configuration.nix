@@ -118,6 +118,8 @@ in
 
   boot.initrd.systemd.enable = lib.mkForce false;
 
+  fonts.fontconfig.enable = true;
+
   xdg = {
 
     mime.enable = true;
