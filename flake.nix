@@ -31,6 +31,7 @@
     nix-alien.url = "github:thiagokokada/nix-alien";
     nix-flatpak.url = "github:gmodena/nix-flatpak";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    impermanence.url = "github:nix-community/impermanence";
     nix-search.url = "github:diamondburned/nix-search";
   };
 
@@ -49,6 +50,7 @@
             ./machines/nixos/configuration.nix
             inputs.nix-index-database.nixosModules.nix-index
             #inputs.chaotic.nixosModules.default
+            inputs.impermanence.nixosModules.impermanence
             home-manager.nixosModules.home-manager
             {
               home-manager = {
