@@ -292,6 +292,8 @@ in
     # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
     enable = true;
 
+    impermanence = true;
+
     # Enable system compression
     compression = true;
 
@@ -441,7 +443,16 @@ in
 
     pipewire = {
       enable = true;
-      #package = inputs.unstable.legacyPackages.${pkgs.system}.pipewire;
+      package = pkgs.pipewire.overrideAttrs (finalAttrs: previousAttrs: {
+        src = pkgs.fetchFromGitLab {
+          domain = "gitlab.freedesktop.org";
+          owner = "pipewire";
+          repo = "pipewire";
+          rev = "fb4475b5dabf853290d8f682649818649621d973";
+          sha256 = "sha256-R++9vtrDgTbfeQgauC+wlRBQLaYaIHOanBKXJGqTLg8=";
+        };
+        buildInputs = previousAttrs.buildInputs ++ [ pkgs.libebur128 ];
+      });
       alsa.enable = true;
       alsa.support32Bit = true;
       jack.enable = true;
