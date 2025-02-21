@@ -72,6 +72,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
         btrfs subvolume create /mnt/root
         btrfs subvolume create /mnt/home
         btrfs subvolume create /mnt/nix
+        btrfs subvolume create /mnt/persistent
         umount /mnt
         mount -o compress-force=zstd,subvol=root "${disk_system}p2" /mnt
         mkdir /mnt/{home,nix}
@@ -92,6 +93,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
         btrfs subvolume create /mnt/root
         btrfs subvolume create /mnt/home
         btrfs subvolume create /mnt/nix
+        btrfs subvolume create /mnt/persistent
         umount /mnt
         mount -o compress-force=zstd,subvol=root "${disk_system}2" /mnt
         mkdir /mnt/{home,nix}
