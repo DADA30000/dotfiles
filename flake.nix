@@ -29,6 +29,7 @@
     #chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
     pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
     nix-alien.url = "github:thiagokokada/nix-alien";
+    zen-browser.url = "github:0xc000022070/zen-browser-flake";
     nix-flatpak.url = "github:gmodena/nix-flatpak";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     impermanence.url = "github:nix-community/impermanence";

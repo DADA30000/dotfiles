@@ -33,6 +33,21 @@ in
 
   };
 
+  virtualisation.libvirtd.enable = true;
+
+  # Enable TPM emulation (optional)
+  virtualisation.libvirtd.qemu = {
+    swtpm.enable = true;
+    ovmf.packages = [ pkgs.OVMFFull.fd ];
+  };
+
+  xdg.mime.defaultApplications."inode/directory" = "org.gnome.Nautilus.desktop";
+  
+  # Enable USB redirection (optional)
+  virtualisation.spiceUSBRedirection.enable = true;
+
+  programs.virt-manager.enable = true;
+
   programs.ydotool.enable = true;
 
   # Disable annoying firewall
@@ -217,6 +232,8 @@ in
       "adbusers"
       "video"
       "corectrl"
+      "libvirtd"
+      "libvirt"
     ];
 
   };
@@ -412,6 +429,7 @@ in
         libreoffice
         qalculate-gtk
         p7zip
+        inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
       ]
@@ -453,13 +471,15 @@ in
         };
         buildInputs = previousAttrs.buildInputs ++ [ pkgs.libebur128 ];
       });
-      alsa.enable = true;
-      alsa.support32Bit = true;
-      jack.enable = true;
-      pulse.enable = true;
+      alsa.enable = false;
+      alsa.support32Bit = false;
+      jack.enable = false;
+      pulse.enable = false;
     };
 
   };
+
+  hardware.pulseaudio.enable = true;
 
   security = {
 
