@@ -170,7 +170,7 @@ in
         exec-once = [
           #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
           #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
-          "pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'; pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
+          #"pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'; pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
           "wl-paste --type text --watch cliphist store"
           "wl-paste --type image --watch cliphist store"
           "hyprctl setcursor Bibata-Modern-Classic 24"
@@ -207,7 +207,7 @@ in
             ignore_opacity = true;
             size = 10;
             brightness = 0.8;
-            passes = 3;
+            passes = 4;
             noise = 0;
             vibrancy = 0;
           };
