@@ -8,7 +8,7 @@ let
   cfg = config.disks;
   impermanence_subvolume_script = ''
     mkdir /btrfs_tmp
-    mount /dev/disk/by-label/nixos /btrfs_tmp
+    mount -L nixos /btrfs_tmp
     if [[ -e /btrfs_tmp/root ]]; then
         mkdir -p /btrfs_tmp/old_roots
         timestamp=$(date --date="@$(stat -c %Y /btrfs_tmp/root)" "+%Y-%m-%-d_%H:%M:%S")
@@ -106,22 +106,35 @@ in
           "/etc/NetworkManager/system-connections"
           "/website"
           "/etc/nixos"
+          "/var/lib/libvirt"
+        ];
+        files = [
+          "/cloudflare1.conf"
+          "/cloudflare2.conf"
         ];
       })
     ];
 
-    boot.initrd.systemd.services.impermanence_subvolume = {
+    boot.initrd.systemd.services.impermanence_subvolume = mkIf cfg.impermanence {
+      wantedBy = [
+        "initrd.target"
+      ]; 
+      after = [
+        "initrd-root-device.target"
+      ];
       before = [
         "sysroot.mount"
-        "local-fs.target"
       ];
+      unitConfig.DefaultDependencies = "no";
       description = "Change subvolume for impermanence";
-      path = [ pkgs.btrfs-progs pkgs.coreutils ];
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = "${pkgs.writeShellScript "impermanence_subvolume_script" impermanence_subvolume_script}";
-      };
+      #path = [ pkgs.btrfs-progs pkgs.coreutils pkgs.util-linux pkgs.mount ];
+      serviceConfig.Type = "oneshot";
+      script = impermanence_subvolume_script;
     };
+
+    boot.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
+  
+    boot.initrd.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
 
     fileSystems."/" = {
       device = "/dev/disk/by-label/nixos";
