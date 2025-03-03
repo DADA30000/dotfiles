@@ -74,6 +74,7 @@
             ./machines/iso/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             inputs.nix-index-database.nixosModules.nix-index
+            inputs.impermanence.nixosModules.impermanence
             #inputs.chaotic.nixosModules.default
             home-manager.nixosModules.home-manager
             {
