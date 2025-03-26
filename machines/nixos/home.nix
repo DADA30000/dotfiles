@@ -1,17 +1,28 @@
-{ ... }:
+{ inputs, config, pkgs, ... }:
 {
 
   # Import other modules
-  imports = [ ../../modules/home ];
+  imports = [ ../../modules/home inputs.nix-index-database.hmModules.nix-index ];
 
   # Enable rich presence
   services.arrpc.enable = true;
+
+  systemd.user.services = {
+    plymouth-quit = {
+      Install = {
+        WantedBy = [ "basic.target" ];
+      };
+      Service = {
+        ExecStart = "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit";
+      };
+    };
+  };
 
   # Enable firefox customization
   firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
   # Version at which home-manager was first configured (Don't change it)
-  home.stateVersion = "24.05";
+  home.stateVersion = "24.11";
   
   # Allow installation of proprietary stuff
   nixpkgs.config.allowUnfree = true;
@@ -37,6 +48,9 @@
   # Enable zsh shell
   zsh.enable = true;
 
+  # Enable file associations
+  file-associations.enable = true;
+
   # Enable waybar panel
   waybar.enable = true;
 
@@ -48,6 +62,16 @@
     # Create folders like Downloads, Documents automatically
     createDirectories = true;
     enable = true;
+
+    documents = "/home/${config.home.username}/Документы";
+
+    download = "/home/${config.home.username}/Загрузки";
+
+    music = "/home/${config.home.username}/Музыка";
+
+    pictures = "/home/${config.home.username}/Изображения";
+
+    videos = "/home/${config.home.username}/Видео";
 
   };
 
