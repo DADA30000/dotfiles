@@ -139,7 +139,7 @@ in
   #networking.dhcpcd.enable = true;
 
   # Enable NetworkManager
-  systemd.services.NetworkManager-wait-online.enable = false;
+  #systemd.services.NetworkManager-wait-online.enable = false;
   networking.networkmanager.enable = true;
 
   # Allow making users through useradd
