@@ -129,12 +129,12 @@ in
           "$mod, mouse:273, resizewindow"
         ];
         windowrule = [
-          "nomaxsize, ^(polkit-mate-authentication-agent-1)$"
-          "pin, ^(polkit-mate-authentication-agent-1)$"
+          "nomaxsize, class:^(polkit-mate-authentication-agent-1)$"
+          "pin, class:^(polkit-mate-authentication-agent-1)$"
           "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
-          "opacity 0.99 override 0.99 override, ^(org.prismlauncher.PrismLauncher)$"
-          "opacity 0.99 override 0.99 override, ^(org.qbittorrent.qBittorrent)$"
+          "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
+          "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
         ];
         windowrulev2 = [
           "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
@@ -170,7 +170,6 @@ in
         exec-once = [
           #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
           #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
-          #"pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'; pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
           "wl-paste --type text --watch cliphist store"
           "wl-paste --type image --watch cliphist store"
           "hyprctl setcursor Bibata-Modern-Classic 24"
@@ -293,6 +292,18 @@ in
         ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
         Restart = "always";
         StartLimitInterval = 0;
+      };
+    };
+    systemd.user.services.custom_sink = {
+      Install = {
+        WantedBy = [ "pipewire-pulse.service" ];
+      };
+      Unit = {
+        After = [ "pipewire-pulse.service" ];
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = [ "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'" "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo" ];
       };
     };
     #xdg.portal = {
