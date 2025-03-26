@@ -1,6 +1,7 @@
 {
   imports = [
     ./hyprland
+    ./file-associations
     ./fastfetch
     ./kitty
     ./waybar
