@@ -33,18 +33,6 @@ in
 
   };
 
-  security.sudo.extraRules = [ { groups = [ "wheel" ]; commands = [ { command = "${pkgs.plymouth}/bin/plymouth quit"; options = [ "NOPASSWD" ]; } ]; } ];
-
-  systemd.services.plymouth-quit.enable = false;
-
-  systemd.services.plymouth-quit-wait.enable = false;
-
-  boot.plymouth.enable = true;
-
-  boot.plymouth.theme = "breeze";
-
-  boot.plymouth.extraConfig = "ShowDelay=0";
-
   virtualisation.podman = {
     enable = true;
     dockerCompat = true;
@@ -82,6 +70,9 @@ in
 
   #boot.crashDump.enable = true;
 
+  # Enable plymouth (boot animation)
+  plymouth.enable = true;
+
   # Enable RAM compression
   zramSwap.enable = true;
 
@@ -89,7 +80,7 @@ in
   services.envfs.enable = false;
 
   # Enable IOMMU
-  boot.kernelParams = [ "iommu=pt" "quiet" "plymouth.use-simpledrm" ];
+  boot.kernelParams = [ "iommu=pt" "quiet" ];
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
@@ -148,7 +139,7 @@ in
   #networking.dhcpcd.enable = true;
 
   # Enable NetworkManager
-  #systemd.services.NetworkManager-wait-online.enable = false;
+  systemd.services.NetworkManager-wait-online.enable = false;
   networking.networkmanager.enable = true;
 
   # Allow making users through useradd
