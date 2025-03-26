@@ -111,7 +111,7 @@ in
         files = [
           "/cloudflare1.conf"
           "/cloudflare2.conf"
-        ];
+        ] ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];
       })
     ];
 

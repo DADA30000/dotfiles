@@ -33,6 +33,23 @@ in
 
   };
 
+  security.sudo.extraRules = [ { groups = [ "wheel" ]; commands = [ { command = "${pkgs.plymouth}/bin/plymouth quit"; options = [ "NOPASSWD" ]; } ]; } ];
+
+  systemd.services.plymouth-quit.enable = false;
+
+  systemd.services.plymouth-quit-wait.enable = false;
+
+  boot.plymouth.enable = true;
+
+  boot.plymouth.theme = "breeze";
+
+  boot.plymouth.extraConfig = "ShowDelay=0";
+
+  virtualisation.podman = {
+    enable = true;
+    dockerCompat = true;
+  };
+
   virtualisation.libvirtd.enable = true;
 
   # Enable TPM emulation (optional)
@@ -41,8 +58,6 @@ in
     ovmf.packages = [ pkgs.OVMFFull.fd ];
   };
 
-  xdg.mime.defaultApplications."inode/directory" = "org.gnome.Nautilus.desktop";
-  
   # Enable USB redirection (optional)
   virtualisation.spiceUSBRedirection.enable = true;
 
@@ -74,7 +89,7 @@ in
   services.envfs.enable = false;
 
   # Enable IOMMU
-  boot.kernelParams = [ "iommu=pt" ];
+  boot.kernelParams = [ "iommu=pt" "quiet" "plymouth.use-simpledrm" ];
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
@@ -88,7 +103,7 @@ in
   hardware.opentabletdriver.enable = true;
 
   # Enable PulseAudio
-  #services.pulseaudio.enable = false;
+  services.pulseaudio.enable = false;
 
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
@@ -234,9 +249,12 @@ in
       "corectrl"
       "libvirtd"
       "libvirt"
+      "uccp"
     ];
 
   };
+
+  users.groups.uccd.members = [ user ];
 
   nix.settings = {
 
@@ -427,6 +445,7 @@ in
         comma
         lact
         libreoffice
+        distrobox
         qalculate-gtk
         p7zip
         inputs.zen-browser.packages.${system}.twilight
@@ -461,25 +480,23 @@ in
 
     pipewire = {
       enable = true;
-      package = pkgs.pipewire.overrideAttrs (finalAttrs: previousAttrs: {
-        src = pkgs.fetchFromGitLab {
-          domain = "gitlab.freedesktop.org";
-          owner = "pipewire";
-          repo = "pipewire";
-          rev = "fb4475b5dabf853290d8f682649818649621d973";
-          sha256 = "sha256-R++9vtrDgTbfeQgauC+wlRBQLaYaIHOanBKXJGqTLg8=";
-        };
-        buildInputs = previousAttrs.buildInputs ++ [ pkgs.libebur128 ];
-      });
-      alsa.enable = false;
-      alsa.support32Bit = false;
-      jack.enable = false;
-      pulse.enable = false;
+      #package = pkgs.pipewire.overrideAttrs (finalAttrs: previousAttrs: {
+      #  src = pkgs.fetchFromGitLab {
+      #    domain = "gitlab.freedesktop.org";
+      #    owner = "pipewire";
+      #    repo = "pipewire";
+      #    rev = "fb4475b5dabf853290d8f682649818649621d973";
+      #    sha256 = "sha256-R++9vtrDgTbfeQgauC+wlRBQLaYaIHOanBKXJGqTLg8=";
+      #  };
+      #  buildInputs = previousAttrs.buildInputs ++ [ pkgs.libebur128 ];
+      #});
+      alsa.enable = true;
+      alsa.support32Bit = true;
+      jack.enable = true;
+      pulse.enable = true;
     };
 
   };
-
-  hardware.pulseaudio.enable = true;
 
   security = {
 
@@ -543,6 +560,6 @@ in
 
   };
 
-  system.stateVersion = "23.11";
+  system.stateVersion = "24.11";
 
 }
