@@ -36,14 +36,14 @@ in
      virtualHosts = mkMerge [
        (mkIf cfg.nginx.nextcloud.enable {
          ${config.services.nextcloud.hostName} = {
-           forceSSL = true;
-           enableACME = true;
+           #forceSSL = true;
+           #enableACME = true;
          };
        })
        (mkIf cfg.nginx.website.enable {
          "${cfg.nginx.hostName}" = {
-           forceSSL = true;
-           enableACME = true;
+           #forceSSL = true;
+           #enableACME = true;
            root = "/website";
            extraConfig = ''
              location / {
@@ -140,19 +140,19 @@ in
      }
      '';
     };
-    security.acme = {
-      acceptTerms = true;
-      defaults.email = "vadimhack.ru@gmail.com";
-      certs = mkMerge [
-        (mkIf cfg.nginx.nextcloud.enable { 
-          "${config.services.nextcloud.hostName}".email = "vadimhack.ru@gmail.com"; 
-        })
-        (mkIf cfg.nginx.website.enable {
-          "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-          #"ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-        })
-      ];
-    }; 
+    #security.acme = {
+    #  acceptTerms = true;
+    #  defaults.email = "vadimhack.ru@gmail.com";
+    #  certs = mkMerge [
+    #    (mkIf cfg.nginx.nextcloud.enable { 
+    #      "${config.services.nextcloud.hostName}".email = "vadimhack.ru@gmail.com"; 
+    #    })
+    #    (mkIf cfg.nginx.website.enable {
+    #      "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
+    #      #"ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
+    #    })
+    #  ];
+    #}; 
     services.cron = mkIf cfg.cloudflare-ddns.enable {
       enable = true;
       systemCronJobs = [

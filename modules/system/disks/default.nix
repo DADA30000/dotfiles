@@ -107,6 +107,7 @@ in
           "/website"
           "/etc/nixos"
           "/var/lib/libvirt"
+          "/var/lib/acme"
         ];
         files = [
           "/cloudflare1.conf"

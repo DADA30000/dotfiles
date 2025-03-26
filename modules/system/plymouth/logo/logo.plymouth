@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=NixOS Logo
+Description=A theme that features a background with a logo.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/logo
+ScriptFile=/usr/share/plymouth/themes/logo/logo.script
