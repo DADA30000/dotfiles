@@ -24,6 +24,22 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixpak = {
+      url = "github:nixpak/nixpak";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    fabric = {
+      url = "github:Fabric-Development/fabric";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    fabric-gray = {
+      url = "github:Fabric-Development/gray";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    fabric-cli = {
+      url = "github:HeyImKyu/fabric-cli";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     #hyprland.url = "github:hyprwm/Hyprland/v0.46.2";
     hyprland.url = "github:hyprwm/Hyprland";
     #chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
@@ -40,19 +56,32 @@
     { nixpkgs, home-manager, ... }@inputs:
     let
       system = "x86_64-linux";
+      overlays = [ 
+        (final: prev: {fabric-run-widget = inputs.fabric.packages.${system}.run-widget;})
+        (final: prev: {fabric = inputs.fabric.packages.${system}.default;})
+        (final: prev: {fabric-cli = inputs.fabric-cli.packages.${system}.default;})
+        (final: prev: {fabric-gray = inputs.fabric-gray.packages.${system}.default;})
+        inputs.fabric.overlays.${system}.default
+      ];
     in
     {
       nixosConfigurations = {
         nixos = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs system;
+            pkgs = import nixpkgs {
+              system = system;
+              overlays = overlays;
+              config.allowUnfree = true;
+            };
           };
+          
           modules = [
             ./machines/nixos/configuration.nix
             inputs.nix-index-database.nixosModules.nix-index
             #inputs.chaotic.nixosModules.default
             inputs.impermanence.nixosModules.impermanence
-            home-manager.nixosModules.home-manager
+            home-manager.nixosModules.home-manager 
             {
               home-manager = {
                 extraSpecialArgs = {
@@ -63,6 +92,9 @@
                 users.l0lk3k = import ./machines/nixos/home.nix;
                 useUserPackages = true;
               };
+              nixpkgs.overlays = [
+                overlays
+              ];
             }
           ];
         };

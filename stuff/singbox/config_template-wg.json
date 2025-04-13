@@ -2,15 +2,6 @@
   "log": {
     "level": "info"
   },
-  "dns": {
-    "servers": [
-      {
-        "tag": "dns-remote",
-        "address": "local",
-        "detour": "direct"
-      }
-    ]
-  },
   "inbounds": [
     {
       "domain_strategy": "",
@@ -110,14 +101,6 @@
           "ggpht.com"
         ],
         "outbound": "proxy"
-      },
-      {
-
-        "port": 53,
-        "process_name": [
-          "anything in here, like really anything"
-        ],
-        "action": "hijack-dns"
       }
     ]
   },
