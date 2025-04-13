@@ -4,7 +4,6 @@
     "useQuickCss": true,
     "themeLinks": [],
     "enabledThemes": [
-        "SoftX.theme.css"
     ],
     "enableReactDevtools": false,
     "frameless": false,
