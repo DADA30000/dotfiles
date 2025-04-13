@@ -6,6 +6,45 @@
 let
   user = "l0lk3k";
   user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
+  #mkNixPak = inputs.nixpak.lib.nixpak {
+  #  inherit (pkgs) lib;
+  #  inherit pkgs;
+  #};
+  #sandboxed-vesktop = mkNixPak {
+  #  config = { sloth, ... }: {
+  #    app.package = pkgs.vesktop;
+  #    dbus.policies = {
+  #      #"org.pulseaudio.Server" = "own";
+  #      #"org.pipewire.Telephony" = "own";
+  #      #"org.freedesktop.portal.Desktop" = "own";
+  #      #"org.freedesktop.portal.Documents" = "own";
+  #      #"org.freedesktop.impl.portal.desktop.hyprland" = "own";
+  #      #"org.erikreider.swaync.cc" = "own";
+  #      #"org.freedesktop.Notifications" = "own";
+  #      #"org.freedesktop.systemd1" = "own";
+  #      #"ca.desrt.dconf" = "own";
+  #      #"org.freedesktop.DBus" = "own";
+  #      #"org.a11y.Bus" = "own";
+  #      #"fr.arouillard.waybar" = "own";
+  #      #"org.gtk.vfs.Daemon" = "own";
+  #      #"org.freedesktop.impl.portal.PermissionStore" = "own";
+  #      "org.*" = "talk";
+  #    };
+  #    bubblewrap = {
+  #      network = true;
+  #      bind.rw = [
+  #        (sloth.concat' sloth.homeDir "/.config/vesktop")
+  #        (sloth.env "XDG_RUNTIME_DIR")
+  #      ];
+  #      bind.ro = [
+  #        (sloth.concat' sloth.homeDir "/Downloads")
+  #      ];
+  #      bind.dev = [
+  #        "/dev/dri"
+  #      ];
+  #    };
+  #  };
+  #};
 in
 {
   imports = [
@@ -32,7 +71,7 @@ in
     };
 
   };
-
+  
   virtualisation.podman = {
     enable = true;
     dockerCompat = true;
@@ -219,6 +258,8 @@ in
 
   };
 
+  users.users.root.hashedPassword = user-hash;
+
   users.users."${user}" = {
 
     # Marks user as real, human user
@@ -402,7 +443,7 @@ in
         yarn
         ccls
         (firefox.override {
-          nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
+          nativeMessagingHosts = [ (inputs.pipewire-screenaudio.packages.${pkgs.system}.default.overrideAttrs (finalAttrs: previousAttrs: { cargoHash = "sha256-H/Uf6Yo8z6tZduXh1zKxiOqFP8hW7Vtqc7p5GM8QDws="; })) ];
         })
         wget
         nekoray
@@ -430,7 +471,6 @@ in
         any-nix-shell
         wl-clipboard
         bottles
-        vesktop
         networkmanager_dmenu
         neovide
         comma
@@ -439,9 +479,31 @@ in
         distrobox
         qalculate-gtk
         p7zip
+        vesktop
+        #sandboxed-vesktop.config.env
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
+        fabric
+        fabric-cli
+        (fabric-run-widget.override {
+          extraPythonPackages = with python3Packages; [
+            ijson
+            numpy
+            pillow
+            psutil
+            requests
+            setproctitle
+            toml
+            watchdog
+          ];
+          extraBuildInputs = [
+            fabric-gray
+            networkmanager
+            networkmanager.dev
+            playerctl
+          ];
+        })
       ]
       ++ (import ../../modules/system/stuff pkgs).scripts;
 

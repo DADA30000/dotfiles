@@ -7,12 +7,12 @@
 with lib;
 let
   sing-box = pkgs.sing-box.overrideAttrs {
-    vendorHash = "sha256-nauD1ynX+sjtWTtgjBKob9thaeVfZAk4+g/JuCUbNOU=";
+    vendorHash = "sha256-mS2b52uKbYkv8g5bfrNSyPre/OaKwovhZBC0Abc+Nes=";
     src = pkgs.fetchFromGitHub {
       owner = "SagerNet";
       repo = "sing-box";
-      rev = "v1.11.0-beta.3";
-      hash = "sha256-9iqPqP4gmhjnkpEYCF/iNUnT1wRF9cRnEb8QbwnjsQI=";
+      rev = "v1.12.0-alpha.21";
+      hash = "sha256-dsgNe6X446KoAWh1vKPGgqdDwg8N76tT/3Hf752vMsY=";
     };
   };
   cfg = config.singbox-wg;
@@ -36,30 +36,12 @@ in
         ExecStart = "${sing-box}/bin/sing-box -c ${../../../stuff/singbox/config.json} run";
       };
     };
-    services = {
-      resolved.enable = true;
-      dnscrypt-proxy2 = {
-        enable = true;
-        settings = {
-          server_names = [
-            "cloudflare"
-            "scaleway-fr"
-            "google"
-            "yandex"
-          ];
-          listen_addresses = [
-            "127.0.0.1:53"
-            "[::1]:53"
-          ];
-        };
-      };
-    };
-    networking = {
-      nameservers = [
-        "::1"
-        "127.0.0.1"
-      ];
-      resolvconf.dnsSingleRequest = true;
+    services.resolved = { 
+      enable = true;
+      extraConfig = ''
+        [Resolve]
+        DNSStubListenerExtra=127.0.0.1
+      '';
     };
   })];
 }

@@ -23,6 +23,7 @@ in
       vimdiffAlias = true;
       plugins = with pkgs.vimPlugins; [
         onedark-nvim
+        indent-blankline-nvim
         nvim-web-devicons
         nvim-treesitter-parsers.cpp
         nvim-treesitter-parsers.nix
@@ -114,6 +115,10 @@ in
             set smartindent
             packadd termdebug
           ]])
+        }
+        require("ibl").setup {
+          indent = { char = "│" },  -- Vertical indentation line
+          scope = { enabled = true, show_start = true, show_end = true }, -- Enable scope guides
         }
         -- https://raw.githubusercontent.com/neoclide/coc.nvim/master/doc/coc-example-config.lua
 
