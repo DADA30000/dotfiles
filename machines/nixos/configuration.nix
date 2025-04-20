@@ -4,6 +4,25 @@
   ...
 }:
 let
+  krisp-patcher = pkgs.writers.writePython3Bin "krisp-patcher" {
+    libraries = with pkgs.python3Packages; [
+      capstone
+      pyelftools
+    ];
+    flakeIgnore = [
+      "E501" # line too long (82 > 79 characters)
+      "F403" # 'from module import *' used; unable to detect undefined names
+      "F405" # name may be undefined, or defined from star imports: module
+    ];
+  }
+  (
+    builtins.readFile (
+      pkgs.fetchurl {
+        url = "https://pastebin.com/raw/8tQDsMVd";
+        sha256 = "sha256-IdXv0MfRG1/1pAAwHLS2+1NESFEz2uXrbSdvU9OvdJ8=";
+      }
+    )
+  );
   user = "l0lk3k";
   user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
   #mkNixPak = inputs.nixpak.lib.nixpak {
@@ -102,7 +121,7 @@ in
   #singbox.enable = true;
 
   # Enable AmneziaVPN client
-  programs.amnezia-vpn.enable = true;
+  programs.amnezia-vpn.enable = false;
 
   # Run non-nix apps
   programs.nix-ld.enable = true;
@@ -479,11 +498,14 @@ in
         distrobox
         qalculate-gtk
         p7zip
-        vesktop
-        #sandboxed-vesktop.config.env
+        krisp-patcher
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
+        (discord.override {
+          withOpenASAR = true;
+          withVencord = true;
+        })
         fabric
         fabric-cli
         (fabric-run-widget.override {

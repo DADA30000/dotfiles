@@ -22,15 +22,18 @@ in
       ".config/vesktop/settings".source = ../../../stuff/vesktop/settings;
       ".config/vesktop/settings.json".source = ../../../stuff/vesktop/settings.json;
       ".config/vesktop/themes".source = ../../../stuff/vesktop/themes;
+      ".config/Vencord/settings".source = ../../../stuff/vesktop/settings;
+      ".config/Vencord/themes".source = ../../../stuff/vesktop/themes;
     };
-    xdg.desktopEntries.vesktop.settings = {
-      Exec = "vesktop --ozone-platform-hint=auto %U";
+    xdg.desktopEntries.discord.settings = {
+      Exec = "discord --ozone-platform-hint=auto %U";
       Categories = "Network;InstantMessaging;Chat";
-      GenericName = "Internet Messenger";
-      Icon = "vesktop";
+      GenericName = "All-in-one cross-platform voice and text chat for gamers";
+      Icon = "discord";
+      MimeType="x-scheme-handler/discord";
       Keywords = "discord;vencord;electron;chat";
-      Name = "Vesktop";
-      StartupWMClass = "Vesktop";
+      Name = "Discord";
+      StartupWMClass = "discord";
       Type = "Application";
     };
     dconf.settings = {
