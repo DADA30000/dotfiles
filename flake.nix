@@ -1,55 +1,55 @@
 {
   inputs = {
     home-manager = {
-      url = "github:nix-community/home-manager";
+      url = "git+https://github.com/nix-community/home-manager?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
+      url = "git+https://github.com/hyprwm/hyprland-plugins?shallow=1";
       inputs.hyprland.follows = "hyprland";
     };
     nur = {
-      url = "github:nix-community/NUR";
+      url = "git+https://github.com/nix-community/NUR?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     spicetify-nix = {
-      url = "github:Gerg-L/spicetify-nix";
+      url = "git+https://github.com/Gerg-L/spicetify-nix?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hypr-dynamic-cursors = {
-      url = "github:VirtCode/hypr-dynamic-cursors";
+      url = "git+https://github.com/VirtCode/hypr-dynamic-cursors?shallow=1";
       inputs.hyprland.follows = "hyprland";
     };
     nix-index-database = {
-      url = "github:nix-community/nix-index-database";
+      url = "git+https://github.com/nix-community/nix-index-database?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpak = {
-      url = "github:nixpak/nixpak";
+      url = "git+https://github.com/nixpak/nixpak?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric = {
-      url = "github:Fabric-Development/fabric";
+      url = "git+https://github.com/Fabric-Development/fabric?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric-gray = {
-      url = "github:Fabric-Development/gray";
+      url = "git+https://github.com/Fabric-Development/gray?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric-cli = {
-      url = "github:HeyImKyu/fabric-cli";
+      url = "git+https://github.com/HeyImKyu/fabric-cli?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    #hyprland.url = "github:hyprwm/Hyprland/v0.46.2";
-    hyprland.url = "github:hyprwm/Hyprland";
-    #chaotic.url = "github:chaotic-cx/nyx/nyxpkgs-unstable";
-    pipewire-screenaudio.url = "github:IceDBorn/pipewire-screenaudio";
-    nix-alien.url = "github:thiagokokada/nix-alien";
-    zen-browser.url = "github:0xc000022070/zen-browser-flake";
-    nix-flatpak.url = "github:gmodena/nix-flatpak";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    impermanence.url = "github:nix-community/impermanence";
-    nix-search.url = "github:diamondburned/nix-search";
+    #hyprland.url = "git+https://github.com/hyprwm/Hyprland/v0.46.2";
+    hyprland.url = "git+https://github.com/hyprwm/Hyprland?shallow=1";
+    #chaotic.url = "git+https://github.com/chaotic-cx/nyx/nyxpkgs-unstable";
+    pipewire-screenaudio.url = "git+https://github.com/IceDBorn/pipewire-screenaudio?shallow=1";
+    nix-alien.url = "git+https://github.com/thiagokokada/nix-alien?shallow=1";
+    zen-browser.url = "git+https://github.com/0xc000022070/zen-browser-flake?shallow=1";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
+    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixpkgs-unstable";
+    impermanence.url = "git+https://github.com/nix-community/impermanence?shallow=1";
+    nix-search.url = "git+https://github.com/diamondburned/nix-search?shallow=1";
   };
 
   outputs =
@@ -101,6 +101,11 @@
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs system;
+            pkgs = import nixpkgs {
+              system = system;
+              overlays = overlays;
+              config.allowUnfree = true;
+            };
           };
           modules = [
             ./machines/iso/configuration.nix
@@ -119,6 +124,9 @@
                 users.nixos = import ./machines/nixos/home.nix;
                 useUserPackages = true;
               };
+              nixpkgs.overlays = [
+                overlays
+              ];
             }
           ];
         };

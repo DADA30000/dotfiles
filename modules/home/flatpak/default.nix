@@ -24,6 +24,7 @@ in
       extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
       config.common.default = "*";
     };
+    home.packages = [ pkgs.flatpak ];
     services.flatpak = {
       enable = true;
       uninstallUnmanaged = true;
