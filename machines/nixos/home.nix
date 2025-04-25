@@ -91,7 +91,7 @@
     enable = false;
 
     # Packages to install from flatpak
-    packages = [];
+    packages = [ "io.github.Soundux" ];
 
   };
 
