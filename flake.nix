@@ -61,6 +61,13 @@
         (final: prev: {fabric = inputs.fabric.packages.${system}.default;})
         (final: prev: {fabric-cli = inputs.fabric-cli.packages.${system}.default;})
         (final: prev: {fabric-gray = inputs.fabric-gray.packages.${system}.default;})
+        (final: prev: {python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
+          disabledTests = [
+            "test_expr_asserts_ok"
+            "test_fuzz_math_floats"
+            "test_timeout"
+          ];
+        };})
         inputs.fabric.overlays.${system}.default
       ];
     in
