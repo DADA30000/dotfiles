@@ -169,6 +169,8 @@ in
     };
 
   };
+
+  services.preload.enable = true;  
   
   virtualisation.podman = {
     enable = true;
