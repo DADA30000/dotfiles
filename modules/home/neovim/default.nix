@@ -38,6 +38,7 @@ in
         coc-css
         coc-html
         coc-tsserver
+        coc-rust-analyzer
       ];
       coc.settings = {
         languageserver = {
