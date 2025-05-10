@@ -1,8 +1,16 @@
-{ inputs, config, pkgs, ... }:
+{
+  inputs,
+  config,
+  pkgs,
+  ...
+}:
 {
 
   # Import other modules
-  imports = [ ../../modules/home inputs.nix-index-database.hmModules.nix-index ];
+  imports = [
+    ../../modules/home
+    inputs.nix-index-database.hmModules.nix-index
+  ];
 
   # Enable rich presence
   services.arrpc.enable = true;
@@ -23,7 +31,7 @@
 
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "24.11";
-  
+
   # Allow installation of proprietary stuff
   nixpkgs.config.allowUnfree = true;
 
@@ -86,7 +94,7 @@
   };
 
   flatpak = {
-    
+
     # Enable user flatpak
     enable = false;
 

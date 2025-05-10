@@ -14,7 +14,17 @@ in
   };
 
   config = mkIf cfg.enable {
-    security.sudo.extraRules = [ { groups = [ "wheel" ]; commands = [ { command = "${pkgs.plymouth}/bin/plymouth quit"; options = [ "NOPASSWD" ]; } ]; } ];
+    security.sudo.extraRules = [
+      {
+        groups = [ "wheel" ];
+        commands = [
+          {
+            command = "${pkgs.plymouth}/bin/plymouth quit";
+            options = [ "NOPASSWD" ];
+          }
+        ];
+      }
+    ];
 
     systemd.services = {
       plymouth-quit.enable = false;
@@ -24,7 +34,7 @@ in
     boot.plymouth = {
       enable = true;
       theme = "logo";
-      themePackages = [ (pkgs.callPackage ./logo.nix {}) ];
+      themePackages = [ (pkgs.callPackage ./logo.nix { }) ];
     };
   };
 }
