@@ -30,7 +30,7 @@ in
       Categories = "Network;InstantMessaging;Chat";
       GenericName = "All-in-one cross-platform voice and text chat for gamers";
       Icon = "discord";
-      MimeType="x-scheme-handler/discord";
+      MimeType = "x-scheme-handler/discord";
       Keywords = "discord;vencord;electron;chat";
       Name = "Discord";
       StartupWMClass = "discord";

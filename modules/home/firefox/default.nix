@@ -7,14 +7,16 @@
 }:
 with lib;
 let
-  vencord-web = (inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon {
-    pname = "vencord-web";
-    version = "1.10.9";
-    addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
-    url = "https://github.com/DADA30000/dotfiles/raw/refs/heads/main/stuff/vencord-sth.xpi";
-    sha256 = "0774c1ee50a9e06ec86e7cafd423980964e6120b0bd92fbf18ec75553e870798";
-    meta = {};
-  });
+  vencord-web = (
+    inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon {
+      pname = "vencord-web";
+      version = "1.10.9";
+      addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
+      url = "https://github.com/DADA30000/dotfiles/raw/refs/heads/main/stuff/vencord-sth.xpi";
+      sha256 = "0774c1ee50a9e06ec86e7cafd423980964e6120b0bd92fbf18ec75553e870798";
+      meta = { };
+    }
+  );
   cfg = config.firefox;
 in
 {
@@ -27,81 +29,88 @@ in
       enable = true;
       nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
       profiles.kek = {
-        extensions = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [ bitwarden ublock-origin privacy-badger sponsorblock darkreader  vencord-web ];
+        extensions = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [
+          bitwarden
+          ublock-origin
+          privacy-badger
+          sponsorblock
+          darkreader
+          vencord-web
+        ];
         userChrome = ''
-          /* imports */
+                    /* imports */
 
-          :root {
-          --bg: #00000044;
-          --tabpanel-background-color: #00000044 !important;
-          }
+                    :root {
+                    --bg: #00000044;
+                    --tabpanel-background-color: #00000044 !important;
+                    }
 
-          /*window transparency*/
-          #main-window {
-          background: var(--bg) !important;
-          }
+                    /*window transparency*/
+                    #main-window {
+                    background: var(--bg) !important;
+                    }
 
-          #browser:not(.browser-toolbox-background) {
-            background-color: var(--bg) !important;
-            color: var(--bg) !important;
-          }
+                    #browser:not(.browser-toolbox-background) {
+                      background-color: var(--bg) !important;
+                      color: var(--bg) !important;
+                    }
 
-          /*current tab*/
-          tab.tabbrowser-tab[selected="true"] stack.tab-stack vbox.tab-background {
-          background: #FFFFFF22 !important;
-          }
+                    /*current tab*/
+                    tab.tabbrowser-tab[selected="true"] stack.tab-stack vbox.tab-background {
+                    background: #FFFFFF22 !important;
+                    }
 
-          /*hover tab*/
-          tab.tabbrowser-tab:hover stack.tab-stack vbox.tab-background {
-          background: #FFFFFF22 !important;
-          }
+                    /*hover tab*/
+                    tab.tabbrowser-tab:hover stack.tab-stack vbox.tab-background {
+                    background: #FFFFFF22 !important;
+                    }
 
-          /*tab selection*/
-          tab.tabbrowser-tab[pending="true"] {
-          color: #FFFFFFcc !important;
-          }
+                    /*tab selection*/
+                    tab.tabbrowser-tab[pending="true"] {
+                    color: #FFFFFFcc !important;
+                    }
 
-          /*hibernated*/
-          tab.tabbrowser-tab stack.tab-stack vbox.tab-background {
-          background: transparent !important;
-          }
+                    /*hibernated*/
+                    tab.tabbrowser-tab stack.tab-stack vbox.tab-background {
+                    background: transparent !important;
+                    }
 
-          /*bookmarks*/
-          toolbar {
-          background: transparent !important;
-          }
+                    /*bookmarks*/
+                    toolbar {
+                    background: transparent !important;
+                    }
 
-          /*idk*/
-          #nav-bar {
-          background: transparent  !important;
-          }
+                    /*idk*/
+                    #nav-bar {
+                    background: transparent  !important;
+                    }
 
-          /*idk but keep*/
-          #navigator-toolbox {
-          background: transparent !important;
-          border: none !important;
-          }
+                    /*idk but keep*/
+                    #navigator-toolbox {
+                    background: transparent !important;
+                    border: none !important;
+                    }
 
-          /*urlbar*/
-          #urlbar-background {
-/          background: #00000044 !important;
-          }
+                    /*urlbar*/
+                    #urlbar-background {
+          /          background: #00000044 !important;
+                    }
 
-          /*suggestions dropdown*/
-          #urlbar:is([open]) hbox#urlbar-background {
-          background: #42414D !important;
-          }
+                    /*suggestions dropdown*/
+                    #urlbar:is([open]) hbox#urlbar-background {
+                    background: #42414D !important;
+                    }
 
-          /*little contextual buttons at left of urlbar*/
-          #urlbar box#identity-box box {
-          background: inherit !important;
-          }
-          #urlbar box#identity-box box:hover {
-          background: #FFFFFF22 !important;
-          }
-          #urlbar box#identity-box box:active {
-          background: #FFFFFF44 !important;
-          }
+                    /*little contextual buttons at left of urlbar*/
+                    #urlbar box#identity-box box {
+                    background: inherit !important;
+                    }
+                    #urlbar box#identity-box box:hover {
+                    background: #FFFFFF22 !important;
+                    }
+                    #urlbar box#identity-box box:active {
+                    background: #FFFFFF44 !important;
+                    }
         '';
         userContent = ''
           /* imports */

@@ -119,7 +119,7 @@ in
     boot.initrd.systemd.services.impermanence_subvolume = mkIf cfg.impermanence {
       wantedBy = [
         "initrd.target"
-      ]; 
+      ];
       after = [
         "initrd-root-device.target"
       ];
@@ -134,7 +134,7 @@ in
     };
 
     boot.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
-  
+
     boot.initrd.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
 
     fileSystems."/" = {

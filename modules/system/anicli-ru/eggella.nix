@@ -1,10 +1,10 @@
 {
-  lib
-, fetchPypi
-, python3Packages
+  lib,
+  fetchPypi,
+  python3Packages,
 }:
 
-python3Packages.buildPythonApplication rec{
+python3Packages.buildPythonApplication rec {
 
   pname = "eggella";
   version = "0.1.7";

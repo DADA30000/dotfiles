@@ -1,4 +1,10 @@
-{ config, lib, pkgs, inputs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  inputs,
+  ...
+}:
 with lib;
 let
   spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.system};
@@ -13,7 +19,6 @@ in
   options.spicetify = {
     enable = mkEnableOption "Enable spotify with theme";
   };
-  
 
   imports = [ inputs.spicetify-nix.nixosModules.default ];
   config = mkIf cfg.enable {

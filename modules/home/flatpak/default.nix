@@ -1,4 +1,10 @@
-{ config, lib, pkgs, inputs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  inputs,
+  ...
+}:
 with lib;
 let
   cfg = config.flatpak;
@@ -13,7 +19,6 @@ in
       description = "Packages to install from flatpak";
     };
   };
-  
 
   imports = [
     inputs.nix-flatpak.homeManagerModules.nix-flatpak

@@ -47,9 +47,12 @@ in
     wayland.windowManager.hyprland = {
       package = mkMerge [
         (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.hyprland)
-        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)];
+        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)
+      ];
       plugins =
-        lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [ pkgs.hyprlandPlugins.hyprtrails ]
+        lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
+          pkgs.hyprlandPlugins.hyprtrails
+        ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
           inputs.hyprland-plugins.packages.${pkgs.system}.hyprtrails
         ]
@@ -134,6 +137,7 @@ in
           "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
           "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
+          "opacity 0.99 override 0.99 override, class:^(mpv)$"
           "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
         ];
         windowrulev2 = [
@@ -303,7 +307,10 @@ in
       };
       Service = {
         Type = "oneshot";
-        ExecStart = [ "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'" "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo" ];
+        ExecStart = [
+          "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'"
+          "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
+        ];
       };
     };
     #xdg.portal = {

@@ -12,7 +12,7 @@
 
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "24.05";
-  
+
   # Allow installation of proprietary stuff
   nixpkgs.config.allowUnfree = true;
 
@@ -62,12 +62,12 @@
   };
 
   flatpak = {
-    
+
     # Enable user flatpak
     enable = false;
 
     # Packages to install from flatpak
-    packages = [];
+    packages = [ ];
 
   };
 

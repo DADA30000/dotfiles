@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.mpd;
@@ -8,8 +13,6 @@ in
     enable = mkEnableOption "Enable mpd music daemon";
     ncmpcpp = mkEnableOption "Enable ncmpcpp, program to access and control mpd daemon";
   };
-  
-
 
   config = mkIf cfg.enable {
     services.mpd = {

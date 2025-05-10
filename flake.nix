@@ -56,18 +56,20 @@
     { nixpkgs, home-manager, ... }@inputs:
     let
       system = "x86_64-linux";
-      overlays = [ 
-        (final: prev: {fabric-run-widget = inputs.fabric.packages.${system}.run-widget;})
-        (final: prev: {fabric = inputs.fabric.packages.${system}.default;})
-        (final: prev: {fabric-cli = inputs.fabric-cli.packages.${system}.default;})
-        (final: prev: {fabric-gray = inputs.fabric-gray.packages.${system}.default;})
-        (final: prev: {python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
-          disabledTests = [
-            "test_expr_asserts_ok"
-            "test_fuzz_math_floats"
-            "test_timeout"
-          ];
-        };})
+      overlays = [
+        (final: prev: { fabric-run-widget = inputs.fabric.packages.${system}.run-widget; })
+        (final: prev: { fabric = inputs.fabric.packages.${system}.default; })
+        (final: prev: { fabric-cli = inputs.fabric-cli.packages.${system}.default; })
+        (final: prev: { fabric-gray = inputs.fabric-gray.packages.${system}.default; })
+        (final: prev: {
+          python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
+            disabledTests = [
+              "test_expr_asserts_ok"
+              "test_fuzz_math_floats"
+              "test_timeout"
+            ];
+          };
+        })
         inputs.fabric.overlays.${system}.default
       ];
     in
@@ -82,13 +84,13 @@
               config.allowUnfree = true;
             };
           };
-          
+
           modules = [
             ./machines/nixos/configuration.nix
             inputs.nix-index-database.nixosModules.nix-index
             #inputs.chaotic.nixosModules.default
             inputs.impermanence.nixosModules.impermanence
-            home-manager.nixosModules.home-manager 
+            home-manager.nixosModules.home-manager
             {
               home-manager = {
                 extraSpecialArgs = {

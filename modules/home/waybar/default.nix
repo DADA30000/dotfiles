@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.waybar;
@@ -7,8 +12,6 @@ in
   options.waybar = {
     enable = mkEnableOption "Enable waybar panel";
   };
-  
-
 
   config = mkIf cfg.enable {
     programs.waybar = {
@@ -62,7 +65,7 @@ in
           padding: 1px 0px 0px 0px;
           margin-left: 8px;
         }
-        
+
         #scroll,
         #cava,
         #clock,
@@ -84,10 +87,10 @@ in
         #tray {
           /* background: alpha(@background, 0.8); */
           border-radius: 8px;
-        
+
           /* border: 1px solid alpha(shade(@active, 0.6),0.6); */
         }
-        
+
         /* #window {
         	background: linear-gradient(45deg, #6804b5 0%, #4575da 33%, #6804b5 66%, #4575da 100%);
         	background-size: 400% 400%;
@@ -231,7 +234,7 @@ in
           animation-duration: 300ms;
           animation-direction: normal;
         }
-        
+
         #cpu,
         #clock,
         #network,
@@ -254,11 +257,11 @@ in
         #backlight {
           padding: 0px 6px 0px 3px;
         }
-        
+
         #custom-github {
           padding-right: 6px;
         }
-        
+
         /* subhighlight */
         #gamemode,
         #submap,
@@ -270,38 +273,38 @@ in
           background: shade(alpha(@foreground, 0.1), 0.8);
           border-radius: 8px;
         }
-        
+
         #language {
           color: #7aa2f7;
           margin-top: 3px;
         }
-        
+
         #idle_inhibitor,
         #pulseaudio,
         #pulseaudio.mic {
           color: #7aa2f7;
         }
-        
+
         #backlight {
           color: #fab387;
         }
-        
+
         #memory {
           color: shade(#cca0e4, 0.8);
         }
-        
+
         #disk {
           color: shade(#7aa2f7, 0.8);
         }
-        
+
         #custom-recorder {
           color: #d78787;
         }
-        
+
         #cpu {
           color: shade(#a6e3a1, 0.8);
         }
-        
+
         #custom-batterysaver.powersave,
         #custom-batterysaver.power {
           color: #a6e3a1;
@@ -313,11 +316,11 @@ in
         #custom-batterysaver.performance {
           color: #d78787;
         }
-        
+
         #network {
           color: #a6e3a1;
         }
-        
+
         #network.disabled,
         #network.disconnected {
           color: #d78787;
@@ -334,7 +337,7 @@ in
             color: @foreground;
           }
         }
-        
+
         #battery.warning:not(.charging),
         #battery.critical:not(.charging) {
           animation-name: blink;
@@ -343,7 +346,7 @@ in
           animation-iteration-count: infinite;
           animation-direction: alternate;
         }
-        
+
         #bluetooth.discoverable,
         #bluetooth.discovering,
         #bluetooth.pairable {
@@ -353,14 +356,14 @@ in
           animation-iteration-count: infinite;
           animation-direction: alternate;
         }
-        
+
         /* Override */
-        
+
         #batteries {
           margin-right: 0px;
           border-radius: 8px 0px 0px 8px;
         }
-        
+
         /* #clock {
           margin-left: 0px;
           border-radius: 0px 8px 8px 0px;
@@ -385,19 +388,29 @@ in
           ];
           "cava" = {
             framerate = 60;
-            format-icons = ["▁" "▂" "▃" "▄" "▅" "▆" "▆" "▇" "█"];
+            format-icons = [
+              "▁"
+              "▂"
+              "▃"
+              "▄"
+              "▅"
+              "▆"
+              "▆"
+              "▇"
+              "█"
+            ];
             bar_delimiter = 0;
             bars = 30;
             input_delay = 0;
             sleep_timer = 300;
-            };
+          };
           "hyprland/window" = {
             format = "{}";
             icon = true;
             icon-size = 18;
             rewrite = {
-                "(.*)Mozilla Firefox" = "Mozilla Firefox";
-                "(.*)Ablaze Floorp" = "Ablaze Floorp";
+              "(.*)Mozilla Firefox" = "Mozilla Firefox";
+              "(.*)Ablaze Floorp" = "Ablaze Floorp";
             };
           };
           "group/powermenu" = {
@@ -434,7 +447,7 @@ in
             tooltip = false;
           };
           "custom/logout" = {
-            format =  "<span color='#63c773'>󰍃</span>";
+            format = "<span color='#63c773'>󰍃</span>";
             on-click = "hyprctl dispatch exit";
             tooltip = false;
           };
@@ -448,16 +461,16 @@ in
             on-click = "activate";
             all-outputs = true;
             persistent-workspaces = {
-              "1" = [];
-  	    "2" = [];
-  	    "3" = [];
-  	    "4" = [];
-  	    "5" = [];
-  	    "6" = [];
-  	    "7" = [];
-  	    "8" = [];
-  	    "9" = [];
-  	    "10" = [];
+              "1" = [ ];
+              "2" = [ ];
+              "3" = [ ];
+              "4" = [ ];
+              "5" = [ ];
+              "6" = [ ];
+              "7" = [ ];
+              "8" = [ ];
+              "9" = [ ];
+              "10" = [ ];
             };
             format-icons = {
               "empty" = "";
@@ -504,7 +517,7 @@ in
             "modules" = [
               "custom/cog"
               "custom/vpn"
-  	    "custom/weather"
+              "custom/weather"
               "network"
               "memory"
               "cpu"
@@ -632,7 +645,12 @@ in
           };
           "temperature" = {
             interval = 1;
-            hwmon-path = ["/sys/class/hwmon/hwmon0/temp1_input" "/sys/class/hwmon/hwmon1/temp1_input" "/sys/class/hwmon/hwmon2/temp1_input" "/sys/class/hwmon/hwmon3/temp1_input"];
+            hwmon-path = [
+              "/sys/class/hwmon/hwmon0/temp1_input"
+              "/sys/class/hwmon/hwmon1/temp1_input"
+              "/sys/class/hwmon/hwmon2/temp1_input"
+              "/sys/class/hwmon/hwmon3/temp1_input"
+            ];
             format = "<span color='#7AA2F7'> {temperatureC}°C  </span>";
             tooltip-format = "Core Temp: {temperatureC}°C ";
           };

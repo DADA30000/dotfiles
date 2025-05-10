@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.obs;
@@ -8,11 +13,18 @@ in
     enable = mkEnableOption "Enable OBS";
     virt-cam = mkEnableOption "Enable virtual camera";
   };
-  
-
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [ (pkgs.wrapOBS { plugins = [ pkgs.obs-studio-plugins.obs-vaapi pkgs.gst_all_1.gstreamer ]; }) pkgs.gst_all_1.gstreamer pkgs.obs-studio-plugins.obs-vaapi ];
+    environment.systemPackages = [
+      (pkgs.wrapOBS {
+        plugins = [
+          pkgs.obs-studio-plugins.obs-vaapi
+          pkgs.gst_all_1.gstreamer
+        ];
+      })
+      pkgs.gst_all_1.gstreamer
+      pkgs.obs-studio-plugins.obs-vaapi
+    ];
     boot = mkIf cfg.virt-cam {
       extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
       extraModprobeConfig = ''
