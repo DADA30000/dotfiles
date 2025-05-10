@@ -1,20 +1,20 @@
 {
-  lib
-, pkgs 
-, fetchPypi
-, python3Packages
+  lib,
+  pkgs,
+  fetchPypi,
+  python3Packages,
 }:
 
-python3Packages.buildPythonApplication rec{
+python3Packages.buildPythonApplication rec {
 
   pname = "ani-cli-ru";
-  version = "5.0.12";
+  version = "5.0.16";
   pyproject = true;
 
   src = fetchPypi {
     pname = "anicli_ru";
     inherit version;
-    hash = "sha256-s8uI0ch+SPqthHy+d0jcB6o5/Zqx89JHM68Q00nwCFA=";
+    hash = "sha256-gM9on15RQIpQVJfWW/uPeN63vSSbCJt2mNN5zkvc5Jg=";
   };
 
   build-system = with python3Packages; [

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 let
   cfg = config.replays;
@@ -7,12 +12,14 @@ in
   options.replays = {
     enable = mkEnableOption "Enable replays";
   };
-  
-
 
   config = mkIf cfg.enable {
     systemd.user.services.replays = {
-      path = with pkgs; [ bash gpu-screen-recorder pulseaudio ];
+      path = with pkgs; [
+        bash
+        gpu-screen-recorder
+        pulseaudio
+      ];
       wantedBy = [ "graphical-session.target" ];
       script = ''
         export PATH=/run/wrappers/bin:$PATH
