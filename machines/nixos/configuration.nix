@@ -1,5 +1,6 @@
 {
   pkgs,
+  overlays,
   inputs,
   ...
 }:
@@ -172,6 +173,8 @@ in
 
   };
 
+  nixpkgs.overlays = overlays; 
+  
   services.preload.enable = true;
 
   virtualisation.podman = {

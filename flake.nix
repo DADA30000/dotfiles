@@ -77,12 +77,7 @@
       nixosConfigurations = {
         nixos = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs system;
-            pkgs = import nixpkgs {
-              system = system;
-              overlays = overlays;
-              config.allowUnfree = true;
-            };
+            inherit inputs system overlays;
           };
 
           modules = [
@@ -101,20 +96,13 @@
                 users.l0lk3k = import ./machines/nixos/home.nix;
                 useUserPackages = true;
               };
-              nixpkgs.overlays = [
-                overlays
-              ];
+              nixpkgs.overlays = overlays;
             }
           ];
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs system;
-            pkgs = import nixpkgs {
-              system = system;
-              overlays = overlays;
-              config.allowUnfree = true;
-            };
           };
           modules = [
             ./machines/iso/configuration.nix
@@ -133,9 +121,7 @@
                 users.nixos = import ./machines/nixos/home.nix;
                 useUserPackages = true;
               };
-              nixpkgs.overlays = [
-                overlays
-              ];
+              nixpkgs.overlays = overlays;
             }
           ];
         };
