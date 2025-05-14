@@ -34,7 +34,7 @@ in
         vim-snippets
         coc-json
         cord-nvim
-        coc-pyright
+        coc-basedpyright
         coc-css
         coc-html
         coc-tsserver
@@ -100,6 +100,7 @@ in
             highlight Normal guifg=#bbddff
             map! <S-Insert> <C-R>+
             map !aa :tabnew +Ex /etc/nixos<cr>
+            nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
             set number
             highlight EndOfBuffer ctermbg=none guibg=none
             highlight SignColumn ctermbg=none guibg=none
