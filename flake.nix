@@ -72,6 +72,23 @@
         })
         inputs.fabric.overlays.${system}.default
       ];
+      modules-list = [
+        ./machines/nixos/configuration.nix
+        inputs.nix-index-database.nixosModules.nix-index
+        inputs.impermanence.nixosModules.impermanence
+        home-manager.nixosModules.home-manager
+        {
+          home-manager = {
+            extraSpecialArgs = {
+              inherit inputs system;
+            };
+            backupFileExtension = "backup";
+            useGlobalPkgs = true;
+            users.l0lk3k = import ./machines/nixos/home.nix;
+            useUserPackages = true;
+          };
+        }
+      ];
     in
     {
       nixosConfigurations = {
@@ -79,51 +96,13 @@
           specialArgs = {
             inherit inputs system overlays;
           };
-
-          modules = [
-            ./machines/nixos/configuration.nix
-            inputs.nix-index-database.nixosModules.nix-index
-            #inputs.chaotic.nixosModules.default
-            inputs.impermanence.nixosModules.impermanence
-            home-manager.nixosModules.home-manager
-            {
-              home-manager = {
-                extraSpecialArgs = {
-                  inherit inputs system;
-                };
-                backupFileExtension = "backup";
-                useGlobalPkgs = true;
-                users.l0lk3k = import ./machines/nixos/home.nix;
-                useUserPackages = true;
-              };
-              nixpkgs.overlays = overlays;
-            }
-          ];
+          modules = modules-list;
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs system;
+            inherit inputs system overlays;
           };
-          modules = [
-            ./machines/iso/configuration.nix
-            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-            inputs.nix-index-database.nixosModules.nix-index
-            inputs.impermanence.nixosModules.impermanence
-            #inputs.chaotic.nixosModules.default
-            home-manager.nixosModules.home-manager
-            {
-              home-manager = {
-                extraSpecialArgs = {
-                  inherit inputs system;
-                };
-                backupFileExtension = "backup";
-                useGlobalPkgs = true;
-                users.nixos = import ./machines/nixos/home.nix;
-                useUserPackages = true;
-              };
-              nixpkgs.overlays = overlays;
-            }
-          ];
+          modules = modules-list ++ [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ];
         };
       };
       homeConfigurations = {
@@ -133,7 +112,7 @@
             ./machines/nixos/home-options.nix
           ];
           extraSpecialArgs = {
-            inherit inputs system;
+            inherit inputs system overlays;
           };
         };
       };
