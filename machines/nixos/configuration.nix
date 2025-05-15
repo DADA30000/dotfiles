@@ -575,7 +575,6 @@ in
         zip
         jdk23
         mpv
-        nix-index
         remmina
         telegram-desktop
         adwaita-icon-theme
