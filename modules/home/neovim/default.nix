@@ -115,7 +115,6 @@ in
             set expandtab
             set autoindent
             set smartindent
-            packadd termdebug
           ]])
         }
         require("ibl").setup {
@@ -353,8 +352,12 @@ in
       extraConfig = ''
         if exists("g:neovide")
             let g:neovide_padding_top = 15
-            let g:neovide_transparency = 0.2
+            let g:neovide_opacity = 0.2
         endif
+        augroup autosave
+          autocmd!
+          autocmd TextChanged,TextChangedI * if &modifiable && !&readonly | silent! write | endif
+        augroup END
       '';
     };
   };
