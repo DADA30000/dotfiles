@@ -57,7 +57,6 @@
     let
       system = "x86_64-linux";
       modules-list = [
-        ./machines/nixos/configuration.nix
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
         {
@@ -79,13 +78,13 @@
           specialArgs = {
             inherit inputs system;
           };
-          modules = modules-list;
+          modules = modules-list ++ [ ./machines/nixos/configuration.nix ];
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs system;
           };
-          modules = modules-list ++ [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ];
+          modules = modules-list ++ [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ./machines/iso/configuration.nix ];
         };
       };
       homeConfigurations = {
