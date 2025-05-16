@@ -110,7 +110,7 @@ in
 
   my-services.nginx.enable = lib.mkForce false;
 
-  boot.loader.timeout = lib.mkForce 10;
+  boot.loader.timeout = lib.mkDefault 10;
 
   services.getty.autologinUser = lib.mkForce user;
 
