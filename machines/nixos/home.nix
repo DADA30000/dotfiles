@@ -17,8 +17,12 @@
 
   systemd.user.services = {
     plymouth-quit = {
-      Install = {
-        WantedBy = [ "basic.target" ];
+      Install= {  
+        WantedBy = [ "default.target" ];
+      };
+      Unit = {
+        DefaultDependencies = "no";
+        Before = [ "default.target" ];
       };
       Service = {
         ExecStart = "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit";
@@ -31,9 +35,6 @@
 
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "24.11";
-
-  # Allow installation of proprietary stuff
-  nixpkgs.config.allowUnfree = true;
 
   # Enable Anime4K non-AI upscaler
   home.file.".config/mpv".source = ../../stuff/mpv;
