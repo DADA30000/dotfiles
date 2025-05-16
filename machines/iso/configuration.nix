@@ -110,8 +110,6 @@ in
 
   my-services.nginx.enable = lib.mkForce false;
 
-  boot.loader.timeout = lib.mkDefault 10;
-
   services.getty.autologinUser = lib.mkForce user;
 
   graphics.nvidia.enable = lib.mkForce true;
