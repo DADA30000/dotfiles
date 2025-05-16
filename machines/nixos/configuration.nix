@@ -1,6 +1,5 @@
 {
   pkgs,
-  overlays,
   inputs,
   ...
 }:
@@ -173,8 +172,6 @@ in
 
   };
 
-  nixpkgs.overlays = overlays; 
-  
   services.preload.enable = true;
 
   virtualisation.podman = {
@@ -604,9 +601,9 @@ in
           withOpenASAR = true;
           withVencord = true;
         })
-        fabric
-        fabric-cli
-        (fabric-run-widget.override {
+        inputs.fabric.packages.${system}.default
+        inputs.fabric-cli.packages.${system}.default
+        (inputs.fabric.packages.${system}.run-widget.override {
           extraPythonPackages = with python3Packages; [
             ijson
             numpy
@@ -618,7 +615,7 @@ in
             watchdog
           ];
           extraBuildInputs = [
-            fabric-gray
+            inputs.fabric-gray.packages.${system}.default
             networkmanager
             networkmanager.dev
             playerctl
@@ -723,15 +720,7 @@ in
 
   i18n.defaultLocale = "ru_RU.UTF-8";
 
-  console = {
-
-    earlySetup = true;
-
-    font = "${pkgs.terminus_font}/share/consolefonts/ter-k16n.psf.gz";
-
-    keyMap = "ru";
-
-  };
+  console.keyMap = "ru";
 
   system.stateVersion = "24.11";
 
