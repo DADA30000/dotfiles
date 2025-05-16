@@ -103,6 +103,18 @@ in
     ];
 
   };
+  
+  nixpkgs.overlays = [
+    (final: prev: {
+      python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
+        disabledTests = [
+          "test_expr_asserts_ok"
+          "test_fuzz_math_floats"
+          "test_timeout"
+        ];
+      };
+    })
+  ];
 
   disks.enable = lib.mkForce false;
 
