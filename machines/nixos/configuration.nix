@@ -368,8 +368,6 @@ in
 
   };
 
-  users.users.root.hashedPassword = user-hash;
-
   users.users."${user}" = {
 
     # Marks user as real, human user
