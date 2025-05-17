@@ -56,6 +56,10 @@ let
       exec nix-install
     fi
   '';
+  orig = inputs.self.outputs.nixosConfigurations.nixos.config.users.users;
+  users_without = lib.removeAttrs orig [ "l0lk3k" ];
+  imported = inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}";
+  changed = lib.mkMerge [ imported { hashedPassword = lib.mkForce null; initialPassword = lib.mkForce "1234"; }];
 in
 {
   home-manager.users."${user_iso}" = import ./home.nix;
@@ -86,13 +90,9 @@ in
 
   };
 
-  users.users."${user_iso}" = lib.mkMerge [
-    inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}"
-    { hashedPassword = lib.mkForce null; password = lib.mkForce "1234"; }
-  ];
-
-  users.users."${user}" = lib.mkForce {};
-
+  users.users = lib.mkForce (
+    users_without // { "${user_iso}" = changed; }
+  );
   
   nixpkgs.overlays = [
     (final: prev: {
