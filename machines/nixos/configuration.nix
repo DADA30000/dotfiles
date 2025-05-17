@@ -154,7 +154,7 @@ in
 
   home-manager = {
     extraSpecialArgs = {
-      inherit inputs system;
+      inherit inputs;
     };
     backupFileExtension = "backup";
     useGlobalPkgs = true;
