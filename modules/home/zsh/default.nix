@@ -32,30 +32,41 @@ in
       syntaxHighlighting.enable = true;
       autosuggestion.enable = true;
       enable = true;
-      # Must be without indents/tabs/spaces (that's just dumb)
-      initContent = ''
-        nixos_ascii () {
-        echo -n $'\E[34m'
-        cat << "EOF"
-          _  _ _      ___  ___ 
-         | \| (_)_ __/ _ \/ __|
-         | .` | \ \ / (_) \__ \
-         |_|\_|_/_\_\\___/|___/
-        EOF
-        }
-        export MANPAGER='nvim +Man!'
-        printf '\n%.0s' {1..100}
-        if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-          Hyprland
-        fi
-        setopt correct
-        ns () {
-          nix shell ''${@/#/nixpkgs#}
-        }
-        ns-unfree () {
-          nix shell ''${@/#/nixpkgs#} --impure
-        }
-      '';
+      initContent =
+        let
+          zshConfig = ''
+            nixos_ascii () {
+            echo -n $'\E[34m'
+            cat << "EOF"
+              _  _ _      ___  ___ 
+             | \| (_)_ __/ _ \/ __|
+             | .` | \ \ / (_) \__ \
+             |_|\_|_/_\_\\___/|___/
+            EOF
+            }
+            export MANPAGER='nvim +Man!'
+            printf '\n%.0s' {1..100}
+            if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
+              Hyprland
+            fi
+            setopt correct
+            ns () {
+              nix shell ''${@/#/nixpkgs#}
+            }
+            ns-unfree () {
+              nix shell ''${@/#/nixpkgs#} --impure
+            }
+          '';
+          zshEarly = mkOrder 500 ''
+            if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
+              Hyprland
+            fi
+          '';
+        in
+        mkMerge [
+          zshConfig
+          zshEarly
+        ];
       shellAliases = {
         ls = "lsd";
         ll = "ls -l";
