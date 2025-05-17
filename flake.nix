@@ -82,7 +82,7 @@
         };
         nixos-offline = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs user user_iso;
+            inherit inputs user user_iso user-hash;
           };
           modules = modules-list ++ [ ./machines/nixos-offline/configuration.nix { home-manager.users."${user_iso}" = import ./machines/nixos/home.nix; } ];
         };
