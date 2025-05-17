@@ -14,22 +14,14 @@ in
   };
 
   config = mkIf cfg.enable {
-    security.sudo.extraRules = [
-      {
-        groups = [ "wheel" ];
-        commands = [
-          {
-            command = "${pkgs.plymouth}/bin/plymouth quit";
-            options = [ "NOPASSWD" ];
-          }
-        ];
-      }
-    ];
 
-    systemd.services = {
-      plymouth-quit.enable = false;
-      plymouth-quit-wait.enable = false;
+    systemd.services.plymouth-quit = {
+      requires = [ "user@1000.service" "systemd-vconsole-setup.service" "polkit.service" ];
+      after = [ "user@1000.service" "systemd-vconsole-setup.service" "polkit.service" ];
+      preStart = "${pkgs.coreutils-full}/bin/sleep 5";
     };
+
+    systemd.services.plymouth-quit-wait.enable = false;
 
     boot.plymouth = {
       enable = true;

@@ -15,26 +15,27 @@
   # Enable rich presence
   services.arrpc.enable = true;
 
-  systemd.user.services = {
-    plymouth-quit = {
-      Install= {  
-        WantedBy = [ "default.target" ];
-      };
-      Unit = {
-        DefaultDependencies = "no";
-        Before = [ "default.target" ];
-      };
-      Service = {
-        ExecStart = "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit";
-      };
-    };
-  };
+  #systemd.user.services = {
+  #  plymouth-quit = {
+  #    Install= {  
+  #      WantedBy = [ "default.target" ];
+  #    };
+  #    Unit = {
+  #      DefaultDependencies = "no";
+  #      Before = [ "default.target" ];
+  #    };
+  #    Service = {
+  #      Type = "oneshot";
+  #      ExecStart = [ "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" ];
+  #    };
+  #  };
+  #};
 
   # Enable firefox customization
   firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
   # Version at which home-manager was first configured (Don't change it)
-  home.stateVersion = "24.11";
+  home.stateVersion = "25.05";
 
   # Enable Anime4K non-AI upscaler
   home.file.".config/mpv".source = ../../stuff/mpv;
