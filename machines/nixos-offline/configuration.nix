@@ -10,6 +10,6 @@
   users.users."${user}" = null;
   users.users."${user_iso}" = lib.mkMerge [
     inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}"
-    { hashedPassword = null; initialPassword = "1234"; }
+    { hashedPassword = lib.mkForce null; initialPassword = "1234"; }
   ];
 }
