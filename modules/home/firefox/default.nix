@@ -29,14 +29,16 @@ in
       enable = true;
       nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
       profiles.kek = {
-        extensions = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [
-          bitwarden
-          ublock-origin
-          privacy-badger
-          sponsorblock
-          darkreader
-          vencord-web
-        ];
+        extensions = {
+          packages = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [
+            bitwarden
+            ublock-origin
+            privacy-badger
+            sponsorblock
+            darkreader
+            vencord-web
+          ];
+        };
         userChrome = ''
                     /* imports */
 
