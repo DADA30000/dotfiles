@@ -1,0 +1,15 @@
+{
+  lib,
+  inputs,
+  user,
+  user_iso,
+  ...
+}:
+{
+  imports = [ ../../machines/nixos/configuration.nix ];
+  users.users."${user}" = null;
+  users.users."${user_iso}" = lib.mkMerge [
+    inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}"
+    { hashedPassword = null; initialPassword = "1234"; }
+  ];
+}

@@ -1,6 +1,8 @@
 {
   pkgs,
   inputs,
+  user-hash,
+  user,
   ...
 }:
 let
@@ -104,8 +106,6 @@ let
             else:
                 print("Couldn't find patch location - review manually. Sorry.")
       '';
-  user = "l0lk3k";
-  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
   #mkNixPak = inputs.nixpak.lib.nixpak {
   #  inherit (pkgs) lib;
   #  inherit pkgs;
@@ -151,15 +151,6 @@ in
     ./hardware-configuration.nix
     ../../modules/system
   ];
-
-  home-manager = {
-    extraSpecialArgs = {
-      inherit inputs;
-    };
-    backupFileExtension = "backup";
-    useGlobalPkgs = true;
-    useUserPackages = true;
-  };
 
   systemd.services.lactd = {
 
@@ -402,8 +393,6 @@ in
     ];
 
   };
-
-  users.groups.uccd.members = [ user ];
 
   nix.settings = {
 

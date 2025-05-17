@@ -2,10 +2,11 @@
   pkgs,
   inputs,
   lib,
+  user,
+  user_iso,
   ...
 }:
 let
-  user = "nixos";
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo nix-install
@@ -57,7 +58,7 @@ let
   '';
 in
 {
-  users.nixos = import ./home.nix;
+  home-manager.users."${user_iso}" = import ./home.nix;
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless.enable = false;
@@ -85,25 +86,13 @@ in
 
   };
 
-  users.users."${user}" = {
+  users.users."${user_iso}" = lib.mkMerge [
+    inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}"
+    { hashedPassword = null; password = "123"; }
+  ];
 
-    # Marks user as real, human user
-    isNormalUser = true;
+  users.users."${user}" = lib.mkForce null;
 
-    extraGroups = [
-      "wheel"
-      "uinput"
-      "mlocate"
-      "nginx"
-      "input"
-      "kvm"
-      "ydotool"
-      "adbusers"
-      "video"
-      "corectrl"
-    ];
-
-  };
   
   nixpkgs.overlays = [
     (final: prev: {
@@ -152,7 +141,7 @@ in
         lolcat
         openssl
         (writeShellScriptBin "nix-install" nix-install)
-        (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos.config.system.build.toplevel} $@")
+        (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
       ]
       ++ (import ../../modules/system/stuff pkgs).scripts;
 
