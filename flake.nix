@@ -59,17 +59,6 @@
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
-        {
-          home-manager = {
-            extraSpecialArgs = {
-              inherit inputs system;
-            };
-            backupFileExtension = "backup";
-            useGlobalPkgs = true;
-            users.l0lk3k = import ./machines/nixos/home.nix;
-            useUserPackages = true;
-          };
-        }
       ];
     in
     {
@@ -78,13 +67,13 @@
           specialArgs = {
             inherit inputs system;
           };
-          modules = modules-list ++ [ ./machines/nixos/configuration.nix ];
+          modules = modules-list ++ [ ./machines/nixos/configuration.nix { home-manager.users.l0lk3k = import ./machines/nixos/home.nix; } ];
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs system;
           };
-          modules = modules-list ++ [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ./machines/iso/configuration.nix ];
+          modules = modules-list ++ [ ./machines/iso/configuration.nix "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ];
         };
       };
       homeConfigurations = {
