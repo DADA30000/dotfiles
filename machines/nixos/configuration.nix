@@ -152,6 +152,15 @@ in
     ../../modules/system
   ];
 
+  home-manager = {
+    extraSpecialArgs = {
+      inherit inputs system;
+    };
+    backupFileExtension = "backup";
+    useGlobalPkgs = true;
+    useUserPackages = true;
+  };
+
   systemd.services.lactd = {
 
     enable = true;
