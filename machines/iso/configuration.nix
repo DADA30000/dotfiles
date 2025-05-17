@@ -93,6 +93,8 @@ in
   users.users = lib.mkForce (
     users_without // { "${user_iso}" = changed; }
   );
+
+  users.groups.nginx = {};
   
   nixpkgs.overlays = [
     (final: prev: {
