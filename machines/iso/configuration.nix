@@ -86,12 +86,12 @@ in
 
   };
 
-  users.users."${user_iso}" = lib.mkMerge [
+  users.users = {"${user_iso}" = lib.mkMerge [
     inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}"
     { hashedPassword = null; password = "123"; }
   ];
 
-  users.users."${user}" = lib.mkForce null;
+  users.users."${user}" = lib.mkForce {};
 
   
   nixpkgs.overlays = [
