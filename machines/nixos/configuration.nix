@@ -293,6 +293,8 @@ in
   # Allow making users through useradd
   users.mutableUsers = true;
 
+  virtualisation.vmware.host.enable = true;
+
   # Enable WayDroid
   virtualisation.waydroid.enable = false;
 
