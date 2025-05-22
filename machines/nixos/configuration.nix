@@ -540,7 +540,7 @@ in
     systemPackages =
       with pkgs;
       [
-        gimp3
+        gimp3-with-plugins
         pyright
         lsd
         gamescope
