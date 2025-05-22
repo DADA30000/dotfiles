@@ -14,6 +14,20 @@ in
   };
 
   config = mkIf cfg.enable {
+
+    home.activation = {
+      gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [[ ! -z DRY_RUN ]]; then
+          if [[ ! -d ${config.xdg.configHome}/GIMP ]]; then 
+              mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
+              cp -r $VERBOSE_ARG ${builtins.toPath ../../../stuff/GIMP/3.0} "${config.xdg.configHome}/GIMP/3.0"
+              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
+              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+          fi
+        fi
+      '';
+    };
+
     home.file = {
       ".themes".source = ../../../stuff/.themes;
       ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
@@ -69,8 +83,8 @@ in
       gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
       gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
       iconTheme = {
-        name = "MoreWaita";
-        package = pkgs.morewaita-icon-theme;
+        name = "Papirus-Dark";
+        package = pkgs.papirus-icon-theme;
       };
       theme.name = "Fluent-Dark";
       font.name = "Noto Sans Medium";
