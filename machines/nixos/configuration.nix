@@ -540,7 +540,7 @@ in
     systemPackages =
       with pkgs;
       [
-        spotube
+        gimp3
         pyright
         lsd
         gamescope
