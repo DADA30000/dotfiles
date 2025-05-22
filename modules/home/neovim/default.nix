@@ -297,57 +297,7 @@ in
         keyset("n", "<space>j", ":<C-u>CocNext<cr>", opts)
         keyset("n", "<space>k", ":<C-u>CocPrev<cr>", opts)
         keyset("n", "<space>p", ":<C-u>CocListResume<cr>", opts)
-        require('cord').setup {
-          usercmds = true,
-          log_level = 'error',
-          timer = {
-            interval = 1500,
-            reset_on_idle = false,
-            reset_on_change = false,
-          },
-          editor = {
-            image = nil,
-            client = 'neovim',
-            tooltip = 'мяу',
-          },
-          display = {
-            show_time = true,
-            show_repository = true,
-            show_cursor_position = false,
-            swap_fields = false,
-            swap_icons = false,
-            workspace_blacklist = {},
-          },
-          lsp = {
-            show_problem_count = false,
-            severity = 1,
-            scope = 'workspace',
-          },
-          idle = {
-            enable = true,
-            show_status = true,
-            timeout = 300000,
-            disable_on_focus = false,
-            text = 'Бездельничает',
-            tooltip = '💤',
-          },
-          text = {
-            viewing = 'Просматривает {}',
-            editing = 'Редактирует {}',
-            file_browser = 'Просматривает файлы в {}',
-            plugin_manager = 'Настраивает плагины в {}',
-            lsp_manager = 'Настраивает LSP в {}',
-            vcs = 'Коммитит изменения в {}',
-            workspace = 'В {}',
-          },
-          buttons = {
-            {
-              label = 'Мой GitHub профиль',
-              url = 'https://github.com/DADA30000',
-            },
-          },
-          assets = nil,
-        }
+        require('cord').setup {}
       '';
       extraConfig = ''
         if exists("g:neovide")
