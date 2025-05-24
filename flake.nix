@@ -59,14 +59,16 @@
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
-        { home-manager = {
-          extraSpecialArgs = {
-            inherit inputs;
+        {
+          home-manager = {
+            extraSpecialArgs = {
+              inherit inputs;
+            };
+            backupFileExtension = "backup";
+            useGlobalPkgs = true;
+            useUserPackages = true;
           };
-          backupFileExtension = "backup";
-          useGlobalPkgs = true;
-          useUserPackages = true;
-        }; }
+        }
       ];
       user = "l0lk3k";
       user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
@@ -78,19 +80,33 @@
           specialArgs = {
             inherit inputs user user-hash;
           };
-          modules = modules-list ++ [ ./machines/nixos/configuration.nix { home-manager.users."${user}" = import ./machines/nixos/home.nix; } ];
+          modules = modules-list ++ [
+            ./machines/nixos/configuration.nix
+            { home-manager.users."${user}" = import ./machines/nixos/home.nix; }
+          ];
         };
         nixos-offline = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs user user_iso user-hash;
+            inherit
+              inputs
+              user
+              user_iso
+              user-hash
+              ;
           };
-          modules = modules-list ++ [ ./machines/nixos-offline/configuration.nix { home-manager.users."${user_iso}" = import ./machines/nixos/home.nix; } ];
+          modules = modules-list ++ [
+            ./machines/nixos-offline/configuration.nix
+            { home-manager.users."${user_iso}" = import ./machines/nixos/home.nix; }
+          ];
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit inputs user user_iso;
           };
-          modules = modules-list ++ [ ./machines/iso/configuration.nix "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix" ];
+          modules = modules-list ++ [
+            ./machines/iso/configuration.nix
+            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ];
         };
       };
       homeConfigurations = {
