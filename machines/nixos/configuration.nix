@@ -541,7 +541,6 @@ in
       with pkgs;
       [
         gimp3-with-plugins
-        pyright
         lsd
         gamescope
         kdiskmark

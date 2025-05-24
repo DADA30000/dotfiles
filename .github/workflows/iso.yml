@@ -42,6 +42,9 @@ jobs:
           sudo rm -rf /usr/local/lib/node_modules
           sudo rm -rf /usr/local
           sudo apt install nodejs
+          sudo add-apt-repository ppa:apparmor-dev/apparmor-sru
+          sudo apt update
+          sudo apt install apparmor
           wget https://archive.org/download/vmware-workstation-full-17.6.3-24583834/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
           nix-store --add-fixed sha256 VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
           df -h
