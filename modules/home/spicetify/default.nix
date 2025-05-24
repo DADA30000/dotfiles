@@ -20,7 +20,7 @@ in
     enable = mkEnableOption "Enable spotify with theme";
   };
 
-  imports = [ inputs.spicetify-nix.nixosModules.default ];
+  imports = [ inputs.spicetify-nix.homeManagerModules.default ];
   config = mkIf cfg.enable {
     programs.spicetify = {
       enable = true;

@@ -316,9 +316,6 @@ in
   # Enable zerotier
   zerotier.enable = false;
 
-  # Enable spotify with theme
-  spicetify.enable = true;
-
   # Enable mlocate (find files on system quickly) (Deprecated, will be removed soon)
   #mlocate.enable = true;
 
