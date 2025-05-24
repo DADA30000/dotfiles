@@ -8,7 +8,6 @@
     ./replays
     ./startup-sound
     ./zerotier
-    ./spicetify
     ./obs
     ./flatpak
     ./mlocate

@@ -6,6 +6,7 @@
     ./kitty
     ./waybar
     ./swaync
+    ./spicetify
     ./zsh
     ./btop
     ./cava

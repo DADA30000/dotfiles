@@ -36,6 +36,9 @@
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "25.05";
 
+  # Enable spotify with theme
+  spicetify.enable = true;
+
   # Enable Anime4K non-AI upscaler
   home.file.".config/mpv".source = ../../stuff/mpv;
 
