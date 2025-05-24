@@ -81,7 +81,7 @@ in
                     expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options";
                   };
                   home_manager = {
-                    expr = "(builtins.getFlake \"/etc/nixos\").homeConfigurations.\"l0lk3k\".options";
+                    expr = "(builtins.getFlake \"/etc/nixos\").homeConfigurations.\"${config.home.username}\".options";
                   };
                 };
               };
