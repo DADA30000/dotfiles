@@ -100,7 +100,7 @@
             ./machines/nixos/home-options.nix
           ];
           extraSpecialArgs = {
-            inherit inputs system;
+            inherit inputs system user;
           };
         };
       };
