@@ -42,9 +42,15 @@ jobs:
           sudo rm -rf /usr/local/lib/node_modules
           sudo rm -rf /usr/local
           sudo apt install nodejs
-          sudo add-apt-repository ppa:apparmor-dev/apparmor-sru
-          sudo apt update
-          sudo apt install apparmor
+          echo "abi <abi/4.0>," | sudo tee /etc/apparmor.d/bwrap 
+          echo "include <tunables/global>" | sudo tee -a /etc/apparmor.d/bwrap
+          echo "" | sudo tee -a /etc/apparmor.d/bwrap
+          echo "profile bwrap /usr/bin/bwrap flags=(unconfined) {" | sudo tee -a /etc/apparmor.d/bwrap
+          echo "  userns," | sudo tee -a /etc/apparmor.d/bwrap
+          echo "" | sudo tee -a /etc/apparmor.d/bwrap
+          echo "  # Site-specific additions and overrides. See local/README for details." | sudo tee -a /etc/apparmor.d/bwrap
+          echo "  include if exists <local/bwrap>" | sudo tee -a /etc/apparmor.d/bwrap
+          echo "}" | sudo tee -a /etc/apparmor.d/bwrap
           wget https://archive.org/download/vmware-workstation-full-17.6.3-24583834/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
           nix-store --add-fixed sha256 VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
           df -h
