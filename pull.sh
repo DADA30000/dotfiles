@@ -6,6 +6,7 @@ if [ -f ./check ]; then
   rm ./stuff/repo.tar.gz
   sudo cp -r ./machines ./modules ./stuff ./flake.lock ./flake.nix /etc/nixos/
   sudo mv /tmp/config-aaaa /etc/nixos/stuff/singbox/config.json
+  echo "Файлы успешно скопированы"
 else
   echo "change your working directory to dotfiles already"
 fi
