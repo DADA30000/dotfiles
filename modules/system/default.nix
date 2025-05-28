@@ -1,7 +1,6 @@
 {
   imports = [
     ./disks
-    ./anicli-ru
     ./zapret
     ./my-services
     ./graphics

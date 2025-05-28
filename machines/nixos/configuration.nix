@@ -301,9 +301,6 @@ in
   # Autologin
   services.getty.autologinUser = user;
 
-  # Enable russian anicli
-  anicli-ru.enable = true;
-
   # Enable DPI (Deep packet inspection) bypass
   zapret.enable = false;
 
@@ -567,7 +564,7 @@ in
         jdk23
         mpv
         remmina
-        telegram-desktop
+        ayugram-desktop
         adwaita-icon-theme
         osu-lazer-bin
         steam
@@ -588,6 +585,7 @@ in
         qalculate-gtk
         p7zip
         krisp-patcher
+        inputs.anicli-ru.packages.${system}.default
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default

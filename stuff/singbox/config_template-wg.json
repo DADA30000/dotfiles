@@ -1,24 +1,44 @@
 {
   "log": {
-    "level": "info"
+    "level": "debug"
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "quic",
+        "server": "yournextdns.dns.nextdns.io",
+        "tag": "nextdns",
+        "domain_resolver": "cloudflare"
+      },
+      {
+        "type": "tcp",
+        "tag": "cloudflare",
+        "server": "1.1.1.1"
+      }
+    ],
+    "rules": [
+      {
+        "inbound": "any",
+        "outbound": "any",
+        "server": "nextdns"
+      }
+    ]
   },
   "inbounds": [
     {
       "domain_strategy": "",
       "listen": "127.0.0.1",
       "listen_port": 2080,
-      "sniff": true,
-      "sniff_override_destination": false,
       "tag": "mixed-in",
       "type": "mixed"
     },
     {
       "type": "tun",
       "tag": "tun-in",
+      "auto_route": true,
       "interface_name": "tun0",
       "address": "172.19.0.1/28",
-      "mtu": 9000,
-      "auto_route": true,
+      "mtu": 28160,
       "stack": "system"
     }
   ],
@@ -32,17 +52,20 @@
     {
       "system": true,
       "name": "wg0",
-      "address": "10.8.1.3/32",
-      "private_key": "nope",
+      "address": "10.8.1.5/32",
+      "private_key": "",
       "type": "wireguard",
       "tag": "proxy",
       "peers": [
         {
-          "address": "nope",
-          "port": 0,
-          "public_key": "nope",
-          "pre_shared_key": "nope",
-          "allowed_ips": [ "0.0.0.0/0", "::/0" ]
+          "address": "",
+          "port": 42800,
+          "public_key": "",
+          "pre_shared_key": "",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ]
         }
       ]
     }
@@ -61,18 +84,12 @@
         "outbound": "proxy"
       },
       {
-        "inbound": [
-          "tun-in"
-        ],
         "process_path_regex": [
           "^.*(wget|git|electron|node)$"
         ],
         "outbound": "proxy"
       },
       {
-        "inbound": [
-          "tun-in"
-        ],
         "domain_suffix": [
           "dis.gd",
           "discord.co",
@@ -98,17 +115,26 @@
           "youtu.be",
           "youtube.com",
           "ytimg.com",
-          "ggpht.com"
+          "ggpht.com",
+          "animego.org",
+          "animego.one",
+          "animego.bz",
+          "aniboom.one",
+          "ya-ligh.com"
         ],
         "outbound": "proxy"
+      },
+      {
+        "process_path_regex": [
+          "^.*(.Discord-wrapped)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
       }
     ]
-  },
-  "experimental": {
-    "cache_file": {
-      "enabled": true
-    }
   }
 }
-
 
