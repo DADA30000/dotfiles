@@ -66,7 +66,7 @@ in
     };
     qt = {
       enable = true;
-      platformTheme.name = "gtk3";
+      platformTheme.name = "qtct";
     };
     home.pointerCursor = {
       gtk.enable = true;

@@ -1,19 +1,24 @@
 {
   config,
   lib,
+  inputs,
   pkgs,
   ...
 }:
 with lib;
 let
   sing-box = pkgs.sing-box.overrideAttrs {
-    vendorHash = "sha256-mS2b52uKbYkv8g5bfrNSyPre/OaKwovhZBC0Abc+Nes=";
-    src = pkgs.fetchFromGitHub {
-      owner = "SagerNet";
-      repo = "sing-box";
-      rev = "v1.12.0-alpha.21";
-      hash = "sha256-dsgNe6X446KoAWh1vKPGgqdDwg8N76tT/3Hf752vMsY=";
-    };
+    vendorHash = "sha256-G3B/ro4Fwsm78iZtrjSLlNE6Bl7yWIT1CoYqF83ohvg=";
+    src = inputs.singbox;
+    tags = [
+      "with_quic"
+      "with_dhcp"
+      "with_wireguard"
+      "with_utls"
+      "with_acme"
+      "with_clash_api"
+      "with_gvisor"
+    ];
   };
   cfg = config.singbox-wg;
 in

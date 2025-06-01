@@ -40,6 +40,11 @@
       url = "git+https://github.com/HeyImKyu/fabric-cli?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    singbox = {
+      url = "github:SagerNet/sing-box/dev-next";
+      flake = false;
+    };
+    hyprpanel.url = "github:DADA30000/HyprPanel/json";
     anicli-ru.url = "github:vypivshiy/ani-cli-ru";
     nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";
     hyprland.url = "git+https://github.com/hyprwm/Hyprland?shallow=1";
