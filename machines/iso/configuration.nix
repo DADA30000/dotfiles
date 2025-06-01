@@ -135,9 +135,7 @@ in
 
   };
 
-  environment = {
-
-    systemPackages = lib.mkForce (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages) ++
+  environment.systemPackages = lib.mkOverride 90 (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages) ++
       (with pkgs;
       [
         gum
@@ -146,7 +144,4 @@ in
         (writeShellScriptBin "nix-install" nix-install)
         (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
       ]);
-
-  };
-
 }
