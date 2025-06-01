@@ -249,7 +249,7 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  #boot.kernelPackages = pkgs.linuxPackages_5_15;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
@@ -293,7 +293,7 @@ in
   # Allow making users through useradd
   users.mutableUsers = true;
 
-  virtualisation.vmware.host.enable = true;
+  virtualisation.vmware.host.enable = false;
 
   # Enable WayDroid
   virtualisation.waydroid.enable = false;
@@ -534,6 +534,7 @@ in
     systemPackages =
       with pkgs;
       [
+        kdePackages.qtstyleplugin-kvantum
         gimp3-with-plugins
         lsd
         gamescope
