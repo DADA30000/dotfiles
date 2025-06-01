@@ -1,6 +1,8 @@
 {
   lib,
   inputs,
+  config,
+  pkgs,
   user,
   user_iso,
   ...
@@ -16,4 +18,5 @@ in
   users.users = lib.mkForce (
     users_without // { "${user_iso}" = changed; }
   );
+  environment.systemPackages = lib.mkForce (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages);
 }
