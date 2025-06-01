@@ -200,6 +200,9 @@ in
           layout = "dwindle";
           allow_tearing = false;
         };
+        debug = {
+          full_cm_proto = true;
+        };
         cursor = {
           no_hardware_cursors = false;
         };

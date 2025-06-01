@@ -9,26 +9,19 @@
   imports = [
     ../../modules/home
     inputs.nix-index-database.hmModules.nix-index
+    inputs.hyprpanel.homeManagerModules.hyprpanel
   ];
+
+  programs.hyprpanel = {
+    enable = false;
+    systemd.enable = true;
+    overwrite.enable = true;
+  };
 
   # Enable rich presence
   services.arrpc.enable = true;
 
-  #systemd.user.services = {
-  #  plymouth-quit = {
-  #    Install= {  
-  #      WantedBy = [ "default.target" ];
-  #    };
-  #    Unit = {
-  #      DefaultDependencies = "no";
-  #      Before = [ "default.target" ];
-  #    };
-  #    Service = {
-  #      Type = "oneshot";
-  #      ExecStart = [ "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit" ];
-  #    };
-  #  };
-  #};
+  services.easyeffects.enable = true;
 
   # Enable firefox customization
   firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
