@@ -2,6 +2,7 @@
   pkgs,
   inputs,
   lib,
+  config,
   user,
   user_iso,
   ...
@@ -136,16 +137,15 @@ in
 
   environment = {
 
-    systemPackages =
-      with pkgs;
+    systemPackages = lib.mkForce (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages) ++
+      (with pkgs;
       [
         gum
         lolcat
         openssl
         (writeShellScriptBin "nix-install" nix-install)
         (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
-      ]
-      ++ (import ../../modules/system/stuff pkgs).scripts;
+      ]);
 
   };
 
