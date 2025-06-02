@@ -321,8 +321,14 @@ in
           line_number_text    = "Line %s out of %s",        -- Format string rendered when `enable_line_number` is set to true (either string or function(line_number: number, line_count: number): string)
         })
       if vim.g.neovide == true then
-        vim.keymap.set({ "n", "x" }, "<C-S-C>", '"+y', { desc = "Copy system clipboard" })
-        vim.keymap.set({ "n", "x" }, "<C-S-V>", '"+p', { desc = "Paste system clipboard" })
+        -- Copy to system clipboard (Normal/Visual mode)
+        vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
+        
+        -- Paste from system clipboard (Normal/Visual mode)
+        vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
+        
+        -- Paste from system clipboard (Insert mode)
+        vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
       end
       '';
       extraConfig = ''

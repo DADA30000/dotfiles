@@ -18,9 +18,9 @@ in
     home.activation = {
       gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [[ ! -z DRY_RUN ]]; then
-          if [[ ! -d ${config.xdg.configHome}/GIMP ]]; then 
+          if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
               mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
-              cp -r $VERBOSE_ARG ${builtins.toPath ../../../stuff/GIMP/3.0} "${config.xdg.configHome}/GIMP/3.0"
+              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
               find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
               find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
           fi
@@ -29,6 +29,7 @@ in
     };
 
     home.file = {
+      ".config/GIMP_fake".source = ../../../stuff/GIMP;
       ".themes".source = ../../../stuff/.themes;
       ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
       ".config/gtk-4.0/gtk.css".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
