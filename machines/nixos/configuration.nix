@@ -288,7 +288,10 @@ in
 
   # Enable NetworkManager
   #systemd.services.NetworkManager-wait-online.enable = false;
-  networking.networkmanager.enable = true;
+  networking.networkmanager = {
+    enable = true;
+    backend = "iwd";
+  };
 
   # Allow making users through useradd
   users.mutableUsers = true;
@@ -563,6 +566,7 @@ in
         android-tools
         zip
         jdk23
+        kdePackages.kdenlive
         mpv
         remmina
         ayugram-desktop
