@@ -60,7 +60,13 @@ let
   orig = inputs.self.outputs.nixosConfigurations.nixos.config.users.users;
   users_without = lib.removeAttrs orig [ user ];
   imported = inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}";
-  changed = lib.mkMerge [ imported { hashedPassword = lib.mkForce null; initialPassword = lib.mkForce "1234"; }];
+  changed = lib.mkMerge [
+    imported
+    {
+      hashedPassword = lib.mkForce null;
+      initialPassword = lib.mkForce "1234";
+    }
+  ];
 in
 {
   home-manager.users."${user_iso}" = import ./home.nix;
@@ -91,12 +97,10 @@ in
 
   };
 
-  users.users = lib.mkForce (
-    users_without // { "${user_iso}" = changed; }
-  );
+  users.users = lib.mkForce (users_without // { "${user_iso}" = changed; });
 
-  users.groups.nginx = {};
-  
+  users.groups.nginx = { };
+
   nixpkgs.overlays = [
     (final: prev: {
       python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
@@ -135,13 +139,14 @@ in
 
   };
 
-  environment.systemPackages = lib.mkOverride 90 (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages) ++
-      (with pkgs;
-      [
-        gum
-        lolcat
-        openssl
-        (writeShellScriptBin "nix-install" nix-install)
-        (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
-      ]);
+  environment.systemPackages = lib.mkOverride 90 (
+    (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) inputs.self.outputs.nixosConfigurations.nixos.config.environment.systemPackages)
+    ++ (with pkgs; [
+      gum
+      lolcat
+      openssl
+      (writeShellScriptBin "nix-install" nix-install)
+      (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
+    ])
+  );
 }

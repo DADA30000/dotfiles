@@ -18,5 +18,5 @@ in
   users.users = lib.mkForce (
     users_without // { "${user_iso}" = changed; }
   );
-  environment.systemPackages = lib.mkForce (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) config.environment.systemPackages);
+  environment.systemPackages = lib.mkOverride 90 (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) inputs.self.outputs.nixosConfigurations.nixos.config.environment.systemPackages);
 }
