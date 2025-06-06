@@ -43,7 +43,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     singbox = {
-      url = "github:SagerNet/sing-box/dev-next";
+      url = "github:DADA30000/sing-box/dev-next";
       flake = false;
     };
     hyprpanel = {
@@ -61,6 +61,18 @@
     pipewire-screenaudio = {
       url = "git+https://github.com/IceDBorn/pipewire-screenaudio?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    hazy = {
+      url = "git+https://github.com/Astromations/Hazy?shallow=1";
+      flake = false;
+    };
+    pmparser = { # This is for Spicetify
+      url = "git+https://github.com/ouadev/proc_maps_parser?shallow=1";
+      flake = false;
+    };
+    libcef-transparency-linux = { # This is for Spicetify
+      url = "git+https://github.com/fixpointer/libcef-transparency-linux?shallow=1";
+      flake = false;
     };
     nix-alien = {
       url = "git+https://github.com/thiagokokada/nix-alien?shallow=1";

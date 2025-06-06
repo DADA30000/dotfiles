@@ -8,7 +8,7 @@
 with lib;
 let
   sing-box = pkgs.sing-box.overrideAttrs {
-    vendorHash = "sha256-G3B/ro4Fwsm78iZtrjSLlNE6Bl7yWIT1CoYqF83ohvg=";
+    vendorHash = null;
     src = inputs.singbox;
     tags = [
       "with_quic"

@@ -135,14 +135,13 @@ in
         windowrule = [
           "nomaxsize, class:^(polkit-mate-authentication-agent-1)$"
           "pin, class:^(polkit-mate-authentication-agent-1)$"
+          "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
           "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
+          "opacity 0.99 override 0.99 override, class:^(spotify)$"
           "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, class:^(mpv)$"
           "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
-        ];
-        windowrulev2 = [
-          "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
         ];
         layerrule = [
           "blur, waybar"
