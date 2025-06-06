@@ -290,13 +290,13 @@ in
   #systemd.services.NetworkManager-wait-online.enable = false;
   networking.networkmanager = {
     enable = true;
-    backend = "iwd";
+    wifi.backend = "iwd";
   };
 
   # Allow making users through useradd
   users.mutableUsers = true;
 
-  virtualisation.vmware.host.enable = false;
+  virtualisation.vmware.host.enable = true;
 
   # Enable WayDroid
   virtualisation.waydroid.enable = false;

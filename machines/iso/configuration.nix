@@ -121,7 +121,7 @@ in
 
   boot.loader.timeout = lib.mkForce 10;
 
-  services.getty.autologinUser = lib.mkForce user;
+  services.getty.autologinUser = lib.mkForce user_iso;
 
   graphics.nvidia.enable = lib.mkForce true;
 
