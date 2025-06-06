@@ -21,7 +21,7 @@ in
       preStart = "${pkgs.coreutils-full}/bin/sleep 5";
     };
 
-    systemd.services.plymouth-quit-wait.enable = false;
+    # systemd.services.plymouth-quit-wait.enable = false;
 
     boot.plymouth = {
       enable = true;

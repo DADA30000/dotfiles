@@ -7,6 +7,7 @@
     hyprland-plugins = {
       url = "git+https://github.com/hyprwm/hyprland-plugins?shallow=1";
       inputs.hyprland.follows = "hyprland";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     nur = {
       url = "git+https://github.com/nix-community/NUR?shallow=1";
@@ -19,6 +20,7 @@
     hypr-dynamic-cursors = {
       url = "git+https://github.com/VirtCode/hypr-dynamic-cursors?shallow=1";
       inputs.hyprland.follows = "hyprland";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-index-database = {
       url = "git+https://github.com/nix-community/nix-index-database?shallow=1";
@@ -44,18 +46,37 @@
       url = "github:SagerNet/sing-box/dev-next";
       flake = false;
     };
-    hyprpanel.url = "github:DADA30000/HyprPanel/json";
-    anicli-ru.url = "github:vypivshiy/ani-cli-ru";
-    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";
-    hyprland.url = "git+https://github.com/hyprwm/Hyprland?shallow=1";
-    #chaotic.url = "git+https://github.com/chaotic-cx/nyx/nyxpkgs-unstable";
-    pipewire-screenaudio.url = "git+https://github.com/IceDBorn/pipewire-screenaudio?shallow=1";
-    #determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
-    nix-alien.url = "git+https://github.com/thiagokokada/nix-alien?shallow=1";
-    zen-browser.url = "git+https://github.com/0xc000022070/zen-browser-flake?shallow=1";
+    hyprpanel = {
+      url = "github:DADA30000/HyprPanel/json";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    anicli-ru = {
+      url = "github:vypivshiy/ani-cli-ru";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    hyprland = {
+      url = "git+https://github.com/hyprwm/Hyprland?shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pipewire-screenaudio = {
+      url = "git+https://github.com/IceDBorn/pipewire-screenaudio?shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-alien = {
+      url = "git+https://github.com/thiagokokada/nix-alien?shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    zen-browser = {
+      url = "git+https://github.com/0xc000022070/zen-browser-flake?shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-search = {
+      url = "git+https://github.com/diamondburned/nix-search?shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";    
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
     impermanence.url = "git+https://github.com/nix-community/impermanence?shallow=1";
-    nix-search.url = "git+https://github.com/diamondburned/nix-search?shallow=1";
   };
 
   outputs =
