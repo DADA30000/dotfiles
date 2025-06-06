@@ -2,7 +2,6 @@
   pkgs,
   inputs,
   lib,
-  config,
   user,
   user_iso,
   ...
@@ -14,7 +13,8 @@ let
     fi
     setfont cyr-sun16
     clear
-    if gum confirm "Провести оффлайн установку?"; then
+    # if gum confirm "Провести оффлайн установку?"; then
+    if false; then
       cd /repo
       exec ./start.sh offline
     else
@@ -63,6 +63,8 @@ let
   changed = lib.mkMerge [
     imported
     {
+      name = lib.mkForce user_iso;
+      home = lib.mkForce "/home/${user_iso}";
       hashedPassword = lib.mkForce null;
       initialPassword = lib.mkForce "1234";
     }
@@ -146,7 +148,6 @@ in
       lolcat
       openssl
       (writeShellScriptBin "nix-install" nix-install)
-      (writeShellScriptBin "offline-install" "sudo nixos-install --system ${inputs.self.outputs.nixosConfigurations.nixos-offline.config.system.build.toplevel} $@")
     ])
   );
 }
