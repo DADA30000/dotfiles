@@ -61,6 +61,7 @@ in
             if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
               Hyprland
             fi
+            DISABLE_MAGIC_FUNCTIONS=true
           '';
         in
         mkMerge [
