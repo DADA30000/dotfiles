@@ -2,8 +2,8 @@
   pkgs,
   inputs,
   lib,
+  self,
   user,
-  user_iso,
   ...
 }:
 let
@@ -57,27 +57,14 @@ let
       exec nix-install
     fi
   '';
-  orig = inputs.self.outputs.nixosConfigurations.nixos.config.users.users;
-  users_without = lib.removeAttrs orig [ user ];
-  imported = inputs.self.outputs.nixosConfigurations.nixos.config.users.users."${user}";
-  changed = lib.mkMerge [
-    imported
-    {
-      name = lib.mkForce user_iso;
-      home = lib.mkForce "/home/${user_iso}";
-      hashedPassword = lib.mkForce null;
-      initialPassword = lib.mkForce "1234";
-    }
-  ];
 in
 {
-  home-manager.users."${user_iso}" = import ./home.nix;
+  home-manager.users."${user}" = import ./home.nix;
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless.enable = false;
   networking.hostName = "iso";
   imports = [
-    ../../modules/system
     ../nixos/configuration.nix
   ];
 
@@ -89,19 +76,15 @@ in
       deps = [ "specialfs" ];
 
       text = ''
-        PATH=$PATH:${pkgs.gzip}/bin
+        PATH=$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin
         mkdir /repo
-        ${pkgs.gnutar}/bin/tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+        tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
         chown root:root -R /repo 
       '';
 
     };
 
   };
-
-  users.users = lib.mkForce (users_without // { "${user_iso}" = changed; });
-
-  users.groups.nginx = { };
 
   nixpkgs.overlays = [
     (final: prev: {
@@ -122,8 +105,6 @@ in
   my-services.nginx.enable = lib.mkForce false;
 
   boot.loader.timeout = lib.mkForce 10;
-
-  services.getty.autologinUser = lib.mkForce user_iso;
 
   graphics.nvidia.enable = lib.mkForce true;
 
