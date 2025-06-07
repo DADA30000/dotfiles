@@ -136,28 +136,11 @@
             { home-manager.users."${user}" = import ./machines/nixos/home.nix; }
           ];
         };
-        nixos-offline = nixpkgs.lib.nixosSystem {
-          specialArgs = {
-            inherit
-              inputs
-              user
-              user_iso
-              user-hash
-              ;
-          };
-          modules = modules-list ++ [
-            ./machines/nixos-offline/configuration.nix
-            { home-manager.users."${user_iso}" = import ./machines/nixos/home.nix; }
-          ];
-        };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit
-              inputs
-              user
-              user_iso
-              self
-              ;
+            user = user_iso;
+            user-hash = null;
+            inherit inputs self;
           };
           modules = modules-list ++ [
             ./machines/iso/configuration.nix
@@ -166,7 +149,7 @@
         };
       };
       homeConfigurations = {
-        l0lk3k = home-manager.lib.homeManagerConfiguration {
+        ${user} = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${system};
           modules = [
             ./machines/nixos/home-options.nix
