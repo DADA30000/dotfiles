@@ -9,7 +9,7 @@
 let
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
-      exec sudo nix-install
+      exec sudo -E nix-install
     fi
     setfont cyr-sun16
     clear
@@ -147,6 +147,7 @@ in
       gum
       lolcat
       openssl
+      gparted
       (writeShellScriptBin "nix-install" nix-install)
     ])
   );
