@@ -66,11 +66,13 @@
       url = "git+https://github.com/Astromations/Hazy?shallow=1";
       flake = false;
     };
-    pmparser = { # This is for Spicetify
+    pmparser = {
+      # This is for Spicetify
       url = "git+https://github.com/ouadev/proc_maps_parser?shallow=1";
       flake = false;
     };
-    libcef-transparency-linux = { # This is for Spicetify
+    libcef-transparency-linux = {
+      # This is for Spicetify
       url = "git+https://github.com/fixpointer/libcef-transparency-linux?shallow=1";
       flake = false;
     };
@@ -86,13 +88,18 @@
       url = "git+https://github.com/diamondburned/nix-search?shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";    
+    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
     impermanence.url = "git+https://github.com/nix-community/impermanence?shallow=1";
   };
 
   outputs =
-    { nixpkgs, home-manager, ... }@inputs:
+    {
+      self,
+      nixpkgs,
+      home-manager,
+      ...
+    }@inputs:
     let
       system = "x86_64-linux";
       modules-list = [
@@ -101,7 +108,7 @@
         {
           home-manager = {
             extraSpecialArgs = {
-              inherit inputs;
+              inherit inputs self;
             };
             backupFileExtension = "backup";
             useGlobalPkgs = true;
@@ -117,7 +124,12 @@
       nixosConfigurations = {
         nixos = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs user user-hash;
+            inherit
+              inputs
+              user
+              user-hash
+              self
+              ;
           };
           modules = modules-list ++ [
             ./machines/nixos/configuration.nix
@@ -140,7 +152,12 @@
         };
         iso = nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit inputs user user_iso;
+            inherit
+              inputs
+              user
+              user_iso
+              self
+              ;
           };
           modules = modules-list ++ [
             ./machines/iso/configuration.nix
@@ -155,7 +172,12 @@
             ./machines/nixos/home-options.nix
           ];
           extraSpecialArgs = {
-            inherit inputs system user;
+            inherit
+              inputs
+              system
+              user
+              self
+              ;
           };
         };
       };
