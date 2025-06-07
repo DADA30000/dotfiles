@@ -3,6 +3,7 @@
   inputs,
   user-hash,
   user,
+  self,
   ...
 }:
 let
@@ -525,6 +526,7 @@ in
     pathsToLink = [ "/share/zsh" ];
 
     variables = {
+      NH_NO_CHECKS=1; # REMOVE LATER
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
@@ -594,6 +596,7 @@ in
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
+        (aria2.overrideAttrs { patches = [ "${self}/stuff/max-connection-to-unlimited.patch" ]; })
         (discord.override {
           withOpenASAR = true;
           withVencord = true;
