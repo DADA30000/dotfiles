@@ -14,6 +14,7 @@ in
   };
 
   config = mkIf cfg.enable {
+    home.packages = with pkgs; [ bash-language-server shellcheck shfmt ];
     programs.neovim = {
       coc.enable = true;
       enable = true;
@@ -35,6 +36,7 @@ in
         coc-json
         presence-nvim
         coc-basedpyright
+        coc-sh
         coc-css
         coc-html
         coc-tsserver
