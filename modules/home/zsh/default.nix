@@ -1,6 +1,8 @@
 {
   config,
   lib,
+  inputs,
+  pkgs,
   ...
 }:
 with lib;
@@ -16,6 +18,7 @@ in
     programs.nix-index = {
       enable = true;
       enableZshIntegration = true;
+      package = inputs.nix-index-database.packages.${pkgs.system}.nix-index-with-small-db;
     };
     programs.starship = {
       enable = true;
@@ -73,6 +76,7 @@ in
         ll = "ls -l";
         u-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";
         u = "nh os switch /etc/nixos";
+        nix-locate-full = "${inputs.nix-index-database.packages.${pkgs.system}.default}/bin/nix-locate";
         #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
         u-test = "nh os test /etc/nixos";
         u-boot = "nh os boot /etc/nixos";

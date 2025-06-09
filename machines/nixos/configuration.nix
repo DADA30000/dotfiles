@@ -598,7 +598,7 @@ in
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
-        (aria2.overrideAttrs { patches = [ "${self}/stuff/max-connection-to-unlimited.patch" ]; })
+        (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
         (discord.override {
           withOpenASAR = true;
           withVencord = true;
@@ -624,7 +624,7 @@ in
           ];
         })
       ]
-      ++ (import ../../modules/system/stuff pkgs).scripts;
+      ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 
   };
 
