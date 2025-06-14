@@ -720,7 +720,10 @@ in
 
   time.timeZone = "Europe/Moscow";
 
-  i18n.defaultLocale = "ru_RU.UTF-8";
+  i18n = {
+    defaultLocale = "ru_RU.UTF-8";
+    extraLocaleSettings = { LC_CTYPE = "en_US.UTF-8"; };
+  };
 
   console.keyMap = "ru";
 

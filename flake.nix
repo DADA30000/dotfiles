@@ -1,45 +1,45 @@
 {
   inputs = {
     home-manager = {
-      url = "git+https://github.com/nix-community/home-manager?shallow=1";
+      url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland-plugins = {
-      url = "git+https://github.com/hyprwm/hyprland-plugins?shallow=1";
+      url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nur = {
-      url = "git+https://github.com/nix-community/NUR?shallow=1";
+      url = "github:nix-community/NUR";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     spicetify-nix = {
-      url = "git+https://github.com/Gerg-L/spicetify-nix?shallow=1";
+      url = "github:Gerg-L/spicetify-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hypr-dynamic-cursors = {
-      url = "git+https://github.com/VirtCode/hypr-dynamic-cursors?shallow=1";
+      url = "github:VirtCode/hypr-dynamic-cursors";
       inputs.hyprland.follows = "hyprland";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-index-database = {
-      url = "git+https://github.com/nix-community/nix-index-database?shallow=1";
+      url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpak = {
-      url = "git+https://github.com/nixpak/nixpak?shallow=1";
+      url = "github:nixpak/nixpak";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric = {
-      url = "git+https://github.com/Fabric-Development/fabric?shallow=1";
+      url = "github:Fabric-Development/fabric";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric-gray = {
-      url = "git+https://github.com/Fabric-Development/gray?shallow=1";
+      url = "github:Fabric-Development/gray";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fabric-cli = {
-      url = "git+https://github.com/HeyImKyu/fabric-cli?shallow=1";
+      url = "github:HeyImKyu/fabric-cli";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     singbox = {
@@ -55,42 +55,42 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland = {
-      url = "git+https://github.com/hyprwm/Hyprland?shallow=1";
+      url = "github:hyprwm/Hyprland";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     pipewire-screenaudio = {
-      url = "git+https://github.com/IceDBorn/pipewire-screenaudio?shallow=1";
+      url = "github:IceDBorn/pipewire-screenaudio";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hazy = {
-      url = "git+https://github.com/Astromations/Hazy?shallow=1";
+      url = "github:Astromations/Hazy";
       flake = false;
     };
     pmparser = {
       # This is for Spicetify
-      url = "git+https://github.com/ouadev/proc_maps_parser?shallow=1";
+      url = "github:ouadev/proc_maps_parser";
       flake = false;
     };
     libcef-transparency-linux = {
       # This is for Spicetify
-      url = "git+https://github.com/fixpointer/libcef-transparency-linux?shallow=1";
+      url = "github:fixpointer/libcef-transparency-linux";
       flake = false;
     };
     nix-alien = {
-      url = "git+https://github.com/thiagokokada/nix-alien?shallow=1";
+      url = "github:thiagokokada/nix-alien";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zen-browser = {
-      url = "git+https://github.com/0xc000022070/zen-browser-flake?shallow=1";
+      url = "github:0xc000022070/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-search = {
-      url = "git+https://github.com/diamondburned/nix-search?shallow=1";
+      url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs.url = "git+https://github.com/NixOS/nixpkgs?shallow=1&ref=nixos-unstable";
-    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
-    impermanence.url = "git+https://github.com/nix-community/impermanence?shallow=1";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    impermanence.url = "github:nix-community/impermanence";
   };
 
   outputs =
