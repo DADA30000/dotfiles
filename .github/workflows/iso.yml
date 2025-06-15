@@ -53,18 +53,19 @@ jobs:
       #  with:
       #    pr-title: "Update flake.lock" # Title of PR to be created
 
-      # Runs a single command using the runners shell
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      #- name: Setup tmate session
+      #  uses: mxschmitt/action-tmate@v3
       - name: Build ISO
-        run: nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
+        run: |
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 1800 pkill nix
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: NixOS ISO
           path: result/iso
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 28
 
       # Runs a set of commands using the runners shell
       #- name: Run a multi-line script
