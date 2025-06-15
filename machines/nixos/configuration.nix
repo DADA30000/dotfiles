@@ -302,8 +302,29 @@ in
   # Enable WayDroid
   virtualisation.waydroid.enable = false;
 
+  services.xserver = {
+    enable = true;
+    displayManager.lightdm = {
+      enable = true;
+      greeter.enable = false;
+    };
+  };
+
+  services.displayManager = {
+    sessionPackages = [ inputs.hyprland.packages.${pkgs.system}.default ];
+    defaultSession = "hyprland";
+    autoLogin = {
+      user = user;
+      enable = true;
+    };
+  };
+
+  # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+  systemd.services.display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
+  systemd.user.targets.nixos-fake-graphical-session.enable = false;
+
   # Autologin
-  services.getty.autologinUser = user;
+  #services.getty.autologinUser = user;
 
   # Enable DPI (Deep packet inspection) bypass
   zapret.enable = false;
@@ -720,10 +741,7 @@ in
 
   time.timeZone = "Europe/Moscow";
 
-  i18n = {
-    defaultLocale = "ru_RU.UTF-8";
-    extraLocaleSettings = { LC_CTYPE = "en_US.UTF-8"; };
-  };
+  i18n.defaultLocale = "ru_RU.UTF-8";
 
   console.keyMap = "ru";
 
