@@ -57,7 +57,7 @@ jobs:
       #  uses: mxschmitt/action-tmate@v3
       - name: Build ISO
         run: |
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 1800 pkill nix
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 2400; pkill nix
           nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
       - name: Upload ISO
         uses: actions/upload-artifact@v4
