@@ -54,6 +54,8 @@ jobs:
       #    pr-title: "Update flake.lock" # Title of PR to be created
 
       # Runs a single command using the runners shell
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: Build ISO
         run: nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
       - name: Upload ISO
