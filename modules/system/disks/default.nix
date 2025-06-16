@@ -104,10 +104,12 @@ in
           "/var/lib/nixos"
           "/var/lib/systemd/coredump"
           "/etc/NetworkManager/system-connections"
+          "/etc/ssh"
           "/website"
           "/etc/nixos"
           "/var/lib/libvirt"
           "/var/lib/acme"
+          "/var/lib/flatpak"
         ];
         files = [
           "/cloudflare1.conf"
@@ -197,6 +199,7 @@ in
       ]
       ++ optionals cfg.swap.partition.enable [
         {
+          options = [ "nofail" ];
           device = "/dev/disk/by-label/${cfg.swap.partition.label}";
         }
       ];

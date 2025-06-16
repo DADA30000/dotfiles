@@ -3,7 +3,7 @@
   inputs,
   user-hash,
   user,
-  self,
+  lib,
   ...
 }:
 let
@@ -229,7 +229,24 @@ in
   boot.kernelParams = [
     "iommu=pt"
     "quiet"
+    "plymouth.use-simpledrm"
   ];
+
+  #boot.blacklistedKernelModules = [ "serial8250" "8250" ];
+
+  #systemd.suppressedSystemUnits = [
+  #  "dev-ttyS0.device"
+  #  "dev-ttyS1.device"
+  #  "dev-ttyS2.device"
+  #  "dev-ttyS3.device"
+  #];
+
+  #boot.initrd.systemd.suppressedUnits = [
+  #  "dev-ttyS0.device"
+  #  "dev-ttyS1.device"
+  #  "dev-ttyS2.device"
+  #  "dev-ttyS3.device"
+  #];
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
@@ -250,7 +267,7 @@ in
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
-  #boot.kernelPackages = pkgs.linuxPackages_5_15;
+  boot.kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
   #chaotic.scx.enable = true;
 
   # Enable SysRQ
@@ -288,7 +305,9 @@ in
   #networking.dhcpcd.enable = true;
 
   # Enable NetworkManager
-  #systemd.services.NetworkManager-wait-online.enable = false;
+  systemd.services = {
+    NetworkManager-wait-online.enable = false;
+  };
   networking.networkmanager = {
     enable = true;
     wifi.backend = "iwd";
@@ -297,7 +316,10 @@ in
   # Allow making users through useradd
   users.mutableUsers = true;
 
-  virtualisation.vmware.host.enable = true;
+  specialisation.vmware.configuration = {
+    virtualisation.vmware.host.enable = true;
+    boot.kernelPackages = pkgs.linuxPackages;
+  };
 
   # Enable WayDroid
   virtualisation.waydroid.enable = false;
@@ -549,7 +571,7 @@ in
     pathsToLink = [ "/share/zsh" ];
 
     variables = {
-      NH_NO_CHECKS=1; # REMOVE LATER
+      NH_NO_CHECKS = "remove_this_var_later";
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
@@ -562,6 +584,9 @@ in
     systemPackages =
       with pkgs;
       [
+        rust-analyzer
+        cargo
+        rustc
         kdePackages.qtstyleplugin-kvantum
         gimp3-with-plugins
         lsd
