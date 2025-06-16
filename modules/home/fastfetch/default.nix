@@ -21,7 +21,7 @@ in
 
   config = mkIf cfg.enable {
     programs.zsh.initContent = mkIf cfg.zsh-start ''
-      if ! [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
+      if ! [ -z "$DISPLAY" ]; then
         fastfetch --logo-color-1 'cyan' --logo-color-2 'blue'
       fi
     '';
