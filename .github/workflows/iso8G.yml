@@ -1,0 +1,75 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Build ISO (8GB version)
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  schedule:
+  - cron: "0 2 * * *"
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      #- name: Use GitHub cache for Nix
+      #  uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Show disk size
+        run: |
+          df -h
+          lscpu
+          sudo rm -rf /opt/hostedtoolcache
+          sudo docker system prune -af; sudo docker volume prune -f; sudo docker builder prune --all -f
+          docker system prune -af; docker volume prune -f; docker builder prune --all -f
+          npm cache clean --force
+          sudo npm cache clean --force
+          sudo rm -rf /usr/local/lib/node_modules
+          sudo rm -rf /usr/local
+          sudo apt install nodejs
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          df -h
+
+      #- name: Update flake.lock
+      #  uses: DeterminateSystems/update-flake-lock@main
+      #  with:
+      #    pr-title: "Update flake.lock" # Title of PR to be created
+
+      #- name: Setup tmate session
+      #  uses: mxschmitt/action-tmate@v3
+      - name: Build ISO
+        run: |
+          nix build .#nixosConfigurations.iso8G.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 2400; pkill nix
+          nix build .#nixosConfigurations.iso8G.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NixOS ISO
+          path: result/iso
+          if-no-files-found: error
+          retention-days: 28
+
+      # Runs a set of commands using the runners shell
+      #- name: Run a multi-line script
+      #  run: |
+      #    echo Add other actions to build,
+      #    echo test, and deploy your project.
+
