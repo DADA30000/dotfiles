@@ -147,6 +147,17 @@
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
         };
+        iso8G = nixpkgs.lib.nixosSystem {
+          specialArgs = {
+            user = user_iso;
+            user-hash = null;
+            inherit inputs self;
+          };
+          modules = modules-list ++ [
+            ./machines/iso8G/configuration.nix
+            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ];
+        };
       };
       homeConfigurations = {
         ${user} = home-manager.lib.homeManagerConfiguration {

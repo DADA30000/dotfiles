@@ -98,6 +98,7 @@ in
           },
           vim.cmd([[
             let g:onedark_config = { 'style': 'deep', }
+            let g:netrw_keepdir = 0
             colorscheme onedark
             highlight Normal guifg=#bbddff
             map! <S-Insert> <C-R>+
