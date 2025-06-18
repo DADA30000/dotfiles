@@ -497,7 +497,6 @@
         distrobox
         qalculate-gtk
         p7zip
-        krisp-patcher
         inputs.anicli-ru.packages.${system}.default
         inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
@@ -507,26 +506,26 @@
           withOpenASAR = true;
           withVencord = true;
         })
-        inputs.fabric.packages.${system}.default
-        inputs.fabric-cli.packages.${system}.default
-        (inputs.fabric.packages.${system}.run-widget.override {
-          extraPythonPackages = with python3Packages; [
-            ijson
-            numpy
-            pillow
-            psutil
-            requests
-            setproctitle
-            toml
-            watchdog
-          ];
-          extraBuildInputs = [
-            inputs.fabric-gray.packages.${system}.default
-            networkmanager
-            networkmanager.dev
-            playerctl
-          ];
-        })
+        #inputs.fabric.packages.${system}.default # add them later
+        #inputs.fabric-cli.packages.${system}.default
+        #(inputs.fabric.packages.${system}.run-widget.override {
+        #  extraPythonPackages = with python3Packages; [
+        #    ijson
+        #    numpy
+        #    pillow
+        #    psutil
+        #    requests
+        #    setproctitle
+        #    toml
+        #    watchdog
+        #  ];
+        #  extraBuildInputs = [
+        #    inputs.fabric-gray.packages.${system}.default
+        #    networkmanager
+        #    networkmanager.dev
+        #    playerctl
+        #  ];
+        #})
       ]
       ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 
