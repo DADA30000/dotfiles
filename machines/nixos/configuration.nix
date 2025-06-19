@@ -1,6 +1,8 @@
 {
   pkgs,
   inputs,
+  config,
+  options,
   user-hash,
   user,
   lib,
@@ -192,6 +194,7 @@
   };
 
   services.displayManager = {
+    sessionData.autologinSession = "hyprland";
     sessionPackages = [ inputs.hyprland.packages.${pkgs.system}.default ];
     defaultSession = "hyprland";
     autoLogin = {
