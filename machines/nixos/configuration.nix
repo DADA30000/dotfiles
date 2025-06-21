@@ -433,7 +433,7 @@
     pathsToLink = [ "/share/zsh" ];
 
     variables = {
-      NH_NO_CHECKS = "remove_this_var_later";
+      QT_QPA_PLATFORMTHEME = "qt5ct";
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
@@ -547,7 +547,7 @@
 
   };
 
-  nix.package = pkgs.nixVersions.git;
+  nix.package = pkgs.nixVersions.latest;
 
   services = {
 

@@ -7,6 +7,16 @@
 with lib;
 let
   cfg = config.theming;
+  mkSourcePrefix = prefix: attrs:
+    builtins.listToAttrs (
+      lib.mapAttrsToList (name: value:
+        {
+          name  = "${prefix}/${name}";
+          value = { source = value; };
+        }
+      )
+      attrs
+    );
 in
 {
   options.theming = {
@@ -28,18 +38,30 @@ in
       '';
     };
 
-    home.file = {
-      ".config/GIMP_fake".source = ../../../stuff/GIMP;
-      ".themes".source = ../../../stuff/.themes;
-      ".config/gtk-4.0/assets".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
-      ".config/gtk-4.0/gtk.css".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
-      ".config/gtk-4.0/icons".source = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
-      ".config/vesktop/settings".source = ../../../stuff/vesktop/settings;
-      ".config/vesktop/settings.json".source = ../../../stuff/vesktop/settings.json;
-      ".config/vesktop/themes".source = ../../../stuff/vesktop/themes;
-      ".config/Vencord/settings".source = ../../../stuff/vesktop/settings;
-      ".config/Vencord/themes".source = ../../../stuff/vesktop/themes;
-    };
+    home.file.".themes".source = ../../../stuff/.themes;
+    xdg.configFile = {
+        "Kvantum".source = ../../../stuff/Kvantum;
+        "qt5ct".source = ../../../stuff/qt5ct;
+        "qt6ct".source = ../../../stuff/qt6ct;
+        "GIMP_fake".source = ../../../stuff/GIMP;
+      } 
+      //
+      (mkSourcePrefix "gtk-4.0" { 
+        "assets" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
+        "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
+        "icons" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
+      })
+      //
+      (mkSourcePrefix "vesktop" {
+        "settings" = ../../../stuff/vesktop/settings;
+        "settings.json" = ../../../stuff/vesktop/settings.json;
+        "themes" = ../../../stuff/vesktop/themes;
+      })
+      //
+      (mkSourcePrefix "Vencord" {
+        "settings" = ../../../stuff/vesktop/settings;
+        "themes" = ../../../stuff/vesktop/themes;
+    });
     xdg.desktopEntries.discord.settings = {
       Exec = "discord --ozone-platform-hint=auto %U";
       Categories = "Network;InstantMessaging;Chat";
