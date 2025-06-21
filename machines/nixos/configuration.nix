@@ -486,6 +486,7 @@
         steam
         moonlight-qt
         prismlauncher
+        mangohud
         nvtopPackages.amd
         qbittorrent
         pavucontrol
