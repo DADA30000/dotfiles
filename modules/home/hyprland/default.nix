@@ -173,7 +173,6 @@ in
           "animation slide left, swaync-control-center"
         ];
         exec-once = [
-          "/run/wrappers/bin/sudo ${pkgs.plymouth}/bin/plymouth quit"
           #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
           #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
           "wl-paste --type text --watch cliphist store"
@@ -304,21 +303,21 @@ in
         StartLimitInterval = 0;
       };
     };
-    systemd.user.services.custom_sink = {
-      Install = {
-        WantedBy = [ "pipewire-pulse.service" ];
-      };
-      Unit = {
-        After = [ "pipewire-pulse.service" ];
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = [
-          "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'"
-          "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
-        ];
-      };
-    };
+    #systemd.user.services.custom_sink = {
+    #  Install = {
+    #    WantedBy = [ "pipewire-pulse.service" ];
+    #  };
+    #  Unit = {
+    #    After = [ "pipewire-pulse.service" ];
+    #  };
+    #  Service = {
+    #    Type = "oneshot";
+    #    ExecStart = [
+    #      "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'"
+    #      "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
+    #    ];
+    #  };
+    #};
     #xdg.portal = {
     #  enable = true;
     #  extraPortals = [
