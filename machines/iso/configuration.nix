@@ -122,14 +122,11 @@ in
 
   };
 
-  environment.systemPackages = lib.mkOverride 90 (
-    (lib.filter (x: x != inputs.zen-browser.packages.${pkgs.system}.twilight) inputs.self.outputs.nixosConfigurations.nixos.config.environment.systemPackages)
-    ++ (with pkgs; [
-      gum
-      lolcat
-      openssl
-      gparted
-      (writeShellScriptBin "nix-install" nix-install)
-    ])
-  );
+  environment.systemPackages = with pkgs; [
+    gum
+    lolcat
+    openssl
+    gparted
+    (writeShellScriptBin "nix-install" nix-install)
+  ];
 }
