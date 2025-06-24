@@ -19,7 +19,7 @@
   };
 
   # Enable rich presence
-  services.arrpc.enable = true;
+  services.arrpc.enable = false;
 
   services.easyeffects.enable = true;
 
