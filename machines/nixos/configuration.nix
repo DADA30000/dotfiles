@@ -498,6 +498,7 @@
         comma
         lact
         libreoffice
+        zenity
         distrobox
         qalculate-gtk
         p7zip
