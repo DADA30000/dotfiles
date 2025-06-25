@@ -9,14 +9,14 @@
   imports = [
     ../../modules/home
     inputs.nix-index-database.hmModules.nix-index
-    inputs.hyprpanel.homeManagerModules.hyprpanel
+    #inputs.hyprpanel.homeManagerModules.hyprpanel
   ];
 
-  programs.hyprpanel = {
-    enable = false;
-    systemd.enable = true;
-    overwrite.enable = true;
-  };
+  #programs.hyprpanel = {
+  #  enable = false;
+  #  systemd.enable = true;
+  #  overwrite.enable = true;
+  #};
 
   # Enable rich presence
   services.arrpc.enable = false;

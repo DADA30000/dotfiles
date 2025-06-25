@@ -46,10 +46,10 @@
       url = "github:DADA30000/sing-box/dev-next";
       flake = false;
     };
-    hyprpanel = {
-      url = "github:DADA30000/HyprPanel/json";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    #hyprpanel = {
+    #  url = "github:DADA30000/HyprPanel/json";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
     anicli-ru = {
       url = "github:vypivshiy/ani-cli-ru";
       inputs.nixpkgs.follows = "nixpkgs";
