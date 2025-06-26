@@ -29,10 +29,18 @@ in
       gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [[ ! -z DRY_RUN ]]; then
           if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
-              mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
-              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
-              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
-              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+            mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
+            cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
+            find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
+            find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+          fi
+        fi
+      '';
+      prismLauncher = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [[ ! -z DRY_RUN ]]; then
+          if [[ ! -f ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json ]]; then
+            mkdir -p $VERBOSE_ARG "${config.home.homeDirectory}/.local/share/PrismLauncher"
+            echo '{"accounts": [{"entitlement": {"canPlayMinecraft": true,"ownsMinecraft": true},"type": "MSA"}],"formatVersion": 3}' > ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json
           fi
         fi
       '';
