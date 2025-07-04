@@ -28,8 +28,8 @@ if [ -f ./check ]; then
     passtemp=$(mkpasswd)
     echo "Введите имя пользователя"
     read -r usertemp
-    sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./machines/nixos/configuration.nix
-    sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./machines/nixos/configuration.nix
+    sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./flake.nix
+    sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./flake.nix
   fi
   if gum confirm --default=false "Отредактировать файл конфигурации?"; then
     nvim ./machines/nixos/configuration.nix
@@ -82,8 +82,9 @@ tZXxn9qc34vndv7Nyuoe0g=="
           btrfs subvolume create /mnt/persistent
           umount /mnt
           mount -o compress-force=zstd,subvol=root "${disk_system}p2" /mnt
-          mkdir /mnt/{home,nix}
+          mkdir /mnt/{home,nix,persistent}
           mount -o compress-force=zstd,subvol=home "${disk_system}p2" /mnt/home
+          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/persistent
           mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}p2" /mnt/nix
           mkdir /mnt/boot
           if [ -n "$bootpart" ]; then
@@ -103,8 +104,9 @@ tZXxn9qc34vndv7Nyuoe0g=="
           btrfs subvolume create /mnt/persistent
           umount /mnt
           mount -o compress-force=zstd,subvol=root "${disk_system}2" /mnt
-          mkdir /mnt/{home,nix}
+          mkdir /mnt/{home,nix,persistent}
           mount -o compress-force=zstd,subvol=home "${disk_system}2" /mnt/home
+          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/home/persistent
           mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}2" /mnt/nix
           mkdir /mnt/boot
           if [ -n "$bootpart" ]; then
