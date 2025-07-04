@@ -28,9 +28,8 @@ if [ -f ./check ]; then
     passtemp=$(mkpasswd)
     echo "Введите имя пользователя"
     read -r usertemp
-    sed -i 's|  user = "l0lk3k";|  user = "'"${usertemp}"'";|' ./machines/nixos/configuration.nix
-    sed -i 's|  user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";|  user-hash = "'"${passtemp}"'";|' ./machines/nixos/configuration.nix
-    sed -i 's|              users.l0lk3k = import ./machines/nixos/home.nix;|              users.'"${usertemp}"' = import ./machines/nixos/home.nix;|' ./flake.nix
+    sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./machines/nixos/configuration.nix
+    sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./machines/nixos/configuration.nix
   fi
   if gum confirm --default=false "Отредактировать файл конфигурации?"; then
     nvim ./machines/nixos/configuration.nix
@@ -146,8 +145,9 @@ tZXxn9qc34vndv7Nyuoe0g=="
         btrfs subvolume create /mnt/persistent
         umount /mnt
         mount -o compress-force=zstd,subvol=root /dev/disk/by-label/nixos /mnt
-        mkdir /mnt/{home,nix}
+        mkdir /mnt/{home,nix,persistent}
         mount -o compress-force=zstd,subvol=home /dev/disk/by-label/nixos /mnt/home
+        mount -o compress-force=zstd,subvol=persistent /dev/disk/by-label/nixos /mnt/persistent
         mount -o compress-force=zstd,noatime,subvol=nix /dev/disk/by-label/nixos /mnt/nix
         mkdir /mnt/boot
         mount /dev/disk/by-label/boot /mnt/boot
@@ -162,6 +162,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
     find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
+    cp -r /mnt/etc/nixos /mnt/persisrent/etc/nixos
     if [ "$1" = "offline" ]; then
       if offline-install; then
         printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
