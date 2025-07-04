@@ -106,7 +106,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
           mount -o compress-force=zstd,subvol=root "${disk_system}2" /mnt
           mkdir /mnt/{home,nix,persistent}
           mount -o compress-force=zstd,subvol=home "${disk_system}2" /mnt/home
-          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/home/persistent
+          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/persistent
           mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}2" /mnt/nix
           mkdir /mnt/boot
           if [ -n "$bootpart" ]; then
@@ -164,7 +164,8 @@ tZXxn9qc34vndv7Nyuoe0g=="
     find /mnt/etc/nixos ! -name 'hardware-configuration.nix' -type f -exec rm -rf {} +
     cp -r ./machines ./stuff ./modules flake.{nix,lock} /mnt/etc/nixos
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
-    cp -r /mnt/etc/nixos /mnt/persisrent/etc/nixos
+    mkdir /mnt/persistent/etc
+    cp -r /mnt/etc/nixos /mnt/persistent/etc
     if [ "$1" = "offline" ]; then
       if offline-install; then
         printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
@@ -185,7 +186,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
         echo -e "\e[31mОшибка установки :(\e[0m"
       fi
     else
-      if nixos-install -v --option extra-substituters "https://chaotic-nyx.cachix.org/" --option extra-trusted-public-keys "chaotic-nyx.cachix.org-1:HfnXSw4pj95iI/n17rIDy40agHj12WfF+Gqk6SonIT8=" --flake "/mnt/etc/nixos#${host}" --impure; then
+      if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
         printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
         for i in {1..9}; do
           sleep 0.25
