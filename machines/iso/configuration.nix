@@ -40,6 +40,7 @@ let
     if GIT_ASKPASS=true git ls-remote "$url" > /dev/null 2>&1; then
       clear
       echo -e "\e[34mКлонирование репозитория...\e[0m"
+      rm -rf /mnt2
       mkdir /mnt2
       if git clone "$url" --depth 1 /mnt2/dotfiles; then
         cd /mnt2/dotfiles
