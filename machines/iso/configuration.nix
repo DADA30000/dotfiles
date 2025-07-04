@@ -1,12 +1,14 @@
 {
   pkgs,
-  inputs,
   lib,
-  self,
   user,
   ...
 }:
 let
+  bundle = pkgs.fetchurl {
+    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
+    hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
+  };
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo -E nix-install
@@ -124,11 +126,14 @@ in
 
   };
 
-  environment.systemPackages = with pkgs; [
-    gum
-    lolcat
-    openssl
-    gparted
-    (writeShellScriptBin "nix-install" nix-install)
-  ];
+  environment = {
+    systemPackages = with pkgs; [
+      gum
+      lolcat
+      openssl
+      gparted
+      (writeShellScriptBin "nix-install" nix-install)
+    ];
+    etc."vmware-bundle-keeper".source = bundle; # This is needed to keep the bundle file in ISO
+  };
 }

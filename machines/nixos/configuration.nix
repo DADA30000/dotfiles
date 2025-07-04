@@ -1,13 +1,22 @@
 {
   pkgs,
   inputs,
-  config,
-  options,
   user-hash,
   user,
   lib,
   ...
 }:
+let
+  bundle = pkgs.fetchurl {
+    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
+    hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
+  };
+  vmware-package = pkgs.vmware-workstation.overrideAttrs {
+    src = bundle;
+  };
+  hash = builtins.hashFile "sha256" "${inputs.nixpkgs}/nixos/modules/virtualisation/vmware-host.nix";
+  checker = if hash == "71d417c40302bce51887cf5c790084f0638aff6e61077c6c09b887b6ea505fe9" then true else throw "vmware module has been updated, update hash and src in package, current hash is ${hash}"; #It's needed so that I wouldn't miss an vmware update
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -178,7 +187,10 @@
   users.mutableUsers = true;
 
   specialisation.vmware.configuration = {
-    virtualisation.vmware.host.enable = true;
+    virtualisation.vmware.host = if (!checker) then {} else {
+      enable = true;
+      package = vmware-package;
+    };
     boot.kernelPackages = pkgs.linuxPackages;
   };
 
@@ -444,7 +456,7 @@
     };
 
     systemPackages =
-      with pkgs;
+      with pkgs; 
       [
         rust-analyzer
         cargo
