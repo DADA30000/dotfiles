@@ -32,7 +32,6 @@ in
         nvim-treesitter
         coc-ultisnips
         coc-snippets
-        vim-snippets
         coc-json
         cord-nvim
         coc-basedpyright

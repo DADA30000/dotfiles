@@ -6,14 +6,15 @@
 }:
 with lib;
 let
-  package = pkgs.btop.overrideAttrs {
-    src = pkgs.fetchFromGitHub {
-      owner = "aristocratos";
-      repo = "btop";
-      rev = "main";
-      hash = "sha256-i7FYWqhTisX4P/DpLaN/hRXjwZSN+/QJEX0HnA613Uo=";
-    };
-  };
+  # don't do this, don't, idk why I did this, I needed to use flakes...
+  #package = pkgs.btop.overrideAttrs {
+  #  src = pkgs.fetchFromGitHub {
+  #    owner = "aristocratos";
+  #    repo = "btop";
+  #    rev = "main";
+  #    hash = "sha256-i7FYWqhTisX4P/DpLaN/hRXjwZSN+/QJEX0HnA613Uo=";
+  #  };
+  #};
   cfg = config.btop;
 in
 {
@@ -24,9 +25,9 @@ in
   config = mkIf cfg.enable {
     programs.btop = {
       enable = true;
-      package = package;
+      #package = package;
       settings = {
-        color_theme = "${package}/share/btop/themes/dracula.theme";
+        color_theme = "${pkgs.btop}/share/btop/themes/dracula.theme";
         update_ms = 200;
         theme_background = false;
       };
