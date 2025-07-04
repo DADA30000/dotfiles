@@ -1,4 +1,35 @@
 #!/usr/bin/env bash
+format() {
+  mkfs.btrfs -f -L nixos "${1}2"
+  mount "${1}2" /mnt
+  btrfs subvolume create /mnt/root
+  btrfs subvolume create /mnt/home
+  btrfs subvolume create /mnt/nix
+  btrfs subvolume create /mnt/persistent
+  umount /mnt
+  mount -o compress-force=zstd,subvol=root "${1}2" /mnt
+  mkdir /mnt/{home,nix,persistent}
+  mount -o compress-force=zstd,subvol=home "${1}2" /mnt/home
+  mount -o compress-force=zstd,subvol=persistent "${1}2" /mnt/persistent
+  mount -o compress-force=zstd,noatime,subvol=nix "${1}2" /mnt/nix
+  mkdir /mnt/boot
+  if [ -n "$bootpart" ]; then
+    mkfs.fat -n boot -F 32 "${bootpart}"
+  else
+    mkfs.fat -n boot -F 32 "${1}1"
+    mount "${1}1" /mnt/boot
+  fi
+  mkswap -L swap "${1}3"
+  swapon "${1}3"
+}
+format_games() {
+  mkdir /mnt1
+  mkfs.btrfs -f -L Games "${1}1"
+  mount "${1}1" /mnt1
+  btrfs subvolume create /mnt1/games
+  umount /mnt1
+  rmdir /mnt1
+}
 if [ -f ./check ]; then
   clear
   if gum confirm --default=false "Использовать встроенное в скрипт разделение диска на разделы? (Использует весь диск, если нажать нет, будет открыт GParted с инструкциями)"; then
@@ -74,49 +105,9 @@ tZXxn9qc34vndv7Nyuoe0g=="
         echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
         mkdir -p /mnt
         if [ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]; then
-          mkfs.btrfs -f -L nixos "${disk_system}p2"
-          mount "${disk_system}p2" /mnt
-          btrfs subvolume create /mnt/root
-          btrfs subvolume create /mnt/home
-          btrfs subvolume create /mnt/nix
-          btrfs subvolume create /mnt/persistent
-          umount /mnt
-          mount -o compress-force=zstd,subvol=root "${disk_system}p2" /mnt
-          mkdir /mnt/{home,nix,persistent}
-          mount -o compress-force=zstd,subvol=home "${disk_system}p2" /mnt/home
-          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/persistent
-          mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}p2" /mnt/nix
-          mkdir /mnt/boot
-          if [ -n "$bootpart" ]; then
-            mkfs.fat -n boot -F 32 "${bootpart}"
-          else
-            mkfs.fat -n boot -F 32 "${disk_system}p1"
-            mount "${disk_system}p1" /mnt/boot
-          fi
-          mkswap -L swap "${disk_system}p3"
-          swapon "${disk_system}p3"
+          format "${disk_system}p"
         else
-          mkfs.btrfs -f -L nixos "${disk_system}2"
-          mount "${disk_system}2" /mnt
-          btrfs subvolume create /mnt/root
-          btrfs subvolume create /mnt/home
-          btrfs subvolume create /mnt/nix
-          btrfs subvolume create /mnt/persistent
-          umount /mnt
-          mount -o compress-force=zstd,subvol=root "${disk_system}2" /mnt
-          mkdir /mnt/{home,nix,persistent}
-          mount -o compress-force=zstd,subvol=home "${disk_system}2" /mnt/home
-          mount -o compress-force=zstd,subvol=persistent "${disk_system}p2" /mnt/persistent
-          mount -o compress-force=zstd,noatime,subvol=nix "${disk_system}2" /mnt/nix
-          mkdir /mnt/boot
-          if [ -n "$bootpart" ]; then
-            mkfs.fat -n boot -F 32 "${bootpart}"
-          else
-            mkfs.fat -n boot -F 32 "${disk_system}1"
-            mount "${disk_system}1" /mnt/boot
-          fi
-          mkswap -L swap "${disk_system}3"
-          swapon "${disk_system}3"
+          format "${disk_system}"
         fi
         if [ -n "$myuser" ]; then
           mkdir -p /mnt/home/"${myuser}"
@@ -124,19 +115,9 @@ tZXxn9qc34vndv7Nyuoe0g=="
         fi
         if [ -n "$disk_games" ]; then
           if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
-            mkdir /mnt1
-            mkfs.btrfs -f -L Games "${disk_games}p1"
-            mount "${disk_games}p1" /mnt1
-            btrfs subvolume create /mnt1/games
-            umount /mnt1
-            rmdir /mnt1
+            format_games "${disk_games}p"
           else
-            mkdir /mnt1
-            mkfs.btrfs -f -L Games "${disk_games}1"
-            mount "${disk_games}1" /mnt1
-            btrfs subvolume create /mnt1/games
-            umount /mnt1
-            rmdir /mnt1
+            format_games "${disk_games}"
           fi
         fi
       else
