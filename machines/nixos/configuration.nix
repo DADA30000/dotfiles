@@ -234,15 +234,15 @@
     systemd.user.services.mpvpaper.enable = false;
     virtualisation = {
       qemu.options = [
-        "-display sdl,gl=on"
+        "-display gtk,gl=on"
         "-device virtio-vga-gl"
         "-enable-kvm"
         "-audio driver=sdl,model=virtio"
       ];
-      cores = 6;
+      cores = 4;
       diskSize = 1024 * 8;
       msize = 16384 * 16;
-      memorySize = 1024 * 4;
+      memorySize = 1024 * 8;
     };
 
   };
