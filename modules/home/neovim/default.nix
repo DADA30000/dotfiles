@@ -189,7 +189,6 @@ in
 
 
         -- Highlight the symbol and its references on a CursorHold event(cursor is idle)
-        vim.api.nvim_create_autocmd("")
         vim.api.nvim_create_augroup("CocGroup", {})
         vim.api.nvim_create_autocmd("CursorHold", {
             group = "CocGroup",
@@ -300,17 +299,17 @@ in
         keyset("n", "<space>j", ":<C-u>CocNext<cr>", opts)
         keyset("n", "<space>k", ":<C-u>CocPrev<cr>", opts)
         keyset("n", "<space>p", ":<C-u>CocListResume<cr>", opts)
+        if vim.g.neovide == true then
+          -- Copy to system clipboard (Normal/Visual mode)
+          vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
+          
+          -- Paste from system clipboard (Normal/Visual mode)
+          vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
+          
+          -- Paste from system clipboard (Insert mode)
+          vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
+        end
         require("cord").setup({})
-      if vim.g.neovide == true then
-        -- Copy to system clipboard (Normal/Visual mode)
-        vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
-        
-        -- Paste from system clipboard (Normal/Visual mode)
-        vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
-        
-        -- Paste from system clipboard (Insert mode)
-        vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
-      end
       '';
       extraConfig = ''
         if exists("g:neovide")
