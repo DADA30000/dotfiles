@@ -62,12 +62,13 @@ tZXxn9qc34vndv7Nyuoe0g=="
     echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
     sleep 2
     if gum confirm "Отформатировать выбранные разделы?"; then
-      echo -e "\e[34mРазметка дисков..."
       if [[ -n "$bootpart" ]] && [[ -n "$disk_system" ]]; then
+        echo -e "\n\e[34mРазметка дисков...\n"
         echo "label: gpt" | sfdisk "$disk_system"
         echo "start=     8390656, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
         echo "start=     2048, size=    8388608, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 3
       elif [[ -n "$disk_system" ]]; then
+        echo -e "\n\e[34mРазметка дисков...\n"
         echo "label: gpt" | sfdisk "$disk_system"
         echo "start=        2048, size=     1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B" | sfdisk "$disk_system"
         echo "start=     9439232, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_system" -N 2
@@ -78,7 +79,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
         echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
       fi
       if [[ -n "$disk_system" ]]; then
-        echo -e "\e[34mФорматирование разделов...\e[0m"
+        echo -e "\n\e[34mФорматирование разделов...\e[0m\n"
         if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
           disk_games="${disk_games}p"
         fi
@@ -122,7 +123,7 @@ tZXxn9qc34vndv7Nyuoe0g=="
       mount /dev/disk/by-label/boot /mnt/boot
       swapon /dev/disk/by-label/swap
     fi
-    echo -e "\e[34mУстановка системы...\e[0m"
+    echo -e "\n\e[34mУстановка системы...\e[0m\n"
     mkdir -p /mnt/etc/nixos
     rm -rf /mnt/etc/nixos/*
     rm ./machines/nixos/hardware-configuration.nix
