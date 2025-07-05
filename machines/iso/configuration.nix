@@ -11,9 +11,8 @@ let
   };
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
-      exec sudo -E nix-install
+      exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
     fi
-    TERMINFO_DIRS=/home/l0lk3k/.local/share/flatpak/exports/share/terminfo:/var/lib/flatpak/exports/share/terminfo:/home/l0lk3k/.nix-profile/share/terminfo:/nix/profile/share/terminfo:/home/l0lk3k/.local/state/nix/profile/share/terminfo:/etc/profiles/per-user/l0lk3k/share/terminfo:/nix/var/nix/profiles/default/share/terminfo:/run/current-system/sw/share/terminfo
     setfont cyr-sun16
     clear
     # if gum confirm "Провести оффлайн установку?"; then
