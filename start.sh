@@ -1,35 +1,4 @@
 #!/usr/bin/env bash
-format() {
-  mkfs.btrfs -f -L nixos "${1}2"
-  mount "${1}2" /mnt
-  btrfs subvolume create /mnt/root
-  btrfs subvolume create /mnt/home
-  btrfs subvolume create /mnt/nix
-  btrfs subvolume create /mnt/persistent
-  umount /mnt
-  mount -o compress-force=zstd,subvol=root "${1}2" /mnt
-  mkdir /mnt/{home,nix,persistent}
-  mount -o compress-force=zstd,subvol=home "${1}2" /mnt/home
-  mount -o compress-force=zstd,subvol=persistent "${1}2" /mnt/persistent
-  mount -o compress-force=zstd,noatime,subvol=nix "${1}2" /mnt/nix
-  mkdir /mnt/boot
-  if [ -n "$bootpart" ]; then
-    mkfs.fat -n boot -F 32 "${bootpart}"
-  else
-    mkfs.fat -n boot -F 32 "${1}1"
-    mount "${1}1" /mnt/boot
-  fi
-  mkswap -L swap "${1}3"
-  swapon "${1}3"
-}
-format_games() {
-  mkdir /mnt1
-  mkfs.btrfs -f -L Games "${1}1"
-  mount "${1}1" /mnt1
-  btrfs subvolume create /mnt1/games
-  umount /mnt1
-  rmdir /mnt1
-}
 if [ -f ./check ]; then
   clear
   if gum confirm --default=false "Использовать встроенное в скрипт разделение диска на разделы? (Использует весь диск, если нажать нет, будет открыт GParted с инструкциями)"; then
@@ -50,7 +19,14 @@ if [ -f ./check ]; then
       read -r bootpart
     fi
   else
-    echo -e "\e[32mСейчас будет открыт GParted, в нём вам нужно будет создать 3 раздела: 1 для boot (FAT32, 1 GiB) с меткой boot, 2 для swap (половина от оперативки, не больше 16 GiB) с меткой swap, 3 (BTRFS) для системы с меткой nixos. Все 3 раздела могут быть на разных дисках. В скобках рекомендуемый размер. Нажмите Enter для продолжения.\e[0m"
+    echo -e "Сейчас будет открыт GParted
+\e[32mВ нём вам нужно будет создать 4 раздела, названия меток должны полностью совпадать, в том числе регистр: 
+  1. Для загрузочного раздела (FAT32, 1 GiB) с меткой (label) boot.
+  2. Для раздела подкачки (swap) (половина от оперативки, не больше 16 GiB) с меткой (label) swap.
+  3. Для остальных файлов и системы (BTRFS, размер не меньше 40 GiB, желательно 100 GiB) с меткой (label) nixos. 
+  4. Опциональный. Этот раздел будет смонтирован в /home/пользователь/Games (BTRFS, размер не важен), с меткой (label) Games.
+Все 4 раздела могут быть на разных дисках. В скобках рекомендуемый размер.\e[0m
+Нажмите Enter для продолжения."
     read -r
     sudo -E gparted
   fi
@@ -102,40 +78,49 @@ tZXxn9qc34vndv7Nyuoe0g=="
         echo "type=0FC63DAF-8483-4772-8E79-3D69D8477DE4" | sfdisk "$disk_games"
       fi
       if [[ -n "$disk_system" ]]; then
-        echo -e "\e[34mФорматирование и монтирование разделов...\e[0m"
-        mkdir -p /mnt
-        if [ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]; then
-          format "${disk_system}p"
-        else
-          format "${disk_system}"
+        echo -e "\e[34mФорматирование разделов...\e[0m"
+        if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
+          disk_games="${disk_games}p"
         fi
+        if [ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]; then
+          disk_system="${disk_system}p"
+        fi
+        mkdir -p /mnt
+        mkfs.btrfs -f -L nixos "${disk_system}2"
+        mkswap -L swap "${disk_system}3"
         if [ -n "$myuser" ]; then
           mkdir -p /mnt/home/"${myuser}"
           git clone https://DADA30000:"${decoded}"@github.com/DADA30000/mozilla.git /mnt/home/"${myuser}"/.mozilla
         fi
-        if [ -n "$disk_games" ]; then
-          if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
-            format_games "${disk_games}p"
-          else
-            format_games "${disk_games}"
-          fi
+        if [ -n "$bootpart" ]; then
+          mkfs.fat -n boot -F 32 "${bootpart}"
+        else
+          mkfs.fat -n boot -F 32 "${disk_system}1"
         fi
-      else
-        mount /dev/disk/by-label/nixos /mnt
-        btrfs subvolume create /mnt/root
-        btrfs subvolume create /mnt/home
-        btrfs subvolume create /mnt/nix
-        btrfs subvolume create /mnt/persistent
-        umount /mnt
-        mount -o compress-force=zstd,subvol=root /dev/disk/by-label/nixos /mnt
-        mkdir /mnt/{home,nix,persistent}
-        mount -o compress-force=zstd,subvol=home /dev/disk/by-label/nixos /mnt/home
-        mount -o compress-force=zstd,subvol=persistent /dev/disk/by-label/nixos /mnt/persistent
-        mount -o compress-force=zstd,noatime,subvol=nix /dev/disk/by-label/nixos /mnt/nix
-        mkdir /mnt/boot
-        mount /dev/disk/by-label/boot /mnt/boot
-        swapon /dev/disk/by-label/swap
+        if [ -n "$disk_games" ]; then
+          mkdir /mnt1
+          mkfs.btrfs -f -L Games "${disk_games}1"
+          mount "${disk_games}1" /mnt1
+          btrfs subvolume create /mnt1/games
+          umount /mnt1
+          rmdir /mnt1
+        fi
       fi
+      echo -e "\n\e[34mМонтирование разделов...\e[0m\n"
+      mount /dev/disk/by-label/nixos /mnt
+      btrfs subvolume create /mnt/root
+      btrfs subvolume create /mnt/home
+      btrfs subvolume create /mnt/nix
+      btrfs subvolume create /mnt/persistent
+      umount /mnt
+      mount -o compress-force=zstd,subvol=root /dev/disk/by-label/nixos /mnt
+      mkdir /mnt/{home,nix,persistent}
+      mount -o compress-force=zstd,subvol=home /dev/disk/by-label/nixos /mnt/home
+      mount -o compress-force=zstd,subvol=persistent /dev/disk/by-label/nixos /mnt/persistent
+      mount -o compress-force=zstd,noatime,subvol=nix /dev/disk/by-label/nixos /mnt/nix
+      mkdir /mnt/boot
+      mount /dev/disk/by-label/boot /mnt/boot
+      swapon /dev/disk/by-label/swap
     fi
     echo -e "\e[34mУстановка системы...\e[0m"
     mkdir -p /mnt/etc/nixos
@@ -147,58 +132,25 @@ tZXxn9qc34vndv7Nyuoe0g=="
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
     mkdir /mnt/persistent/etc
     cp -r /mnt/etc/nixos /mnt/persistent/etc
-    if [ "$1" = "offline" ]; then
-      if offline-install; then
-        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
-        for i in {1..9}; do
-          sleep 0.25
-          printf "%s" "$i"
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-        done
+    if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
+      printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+      for i in {1..9}; do
         sleep 0.25
-        printf "10\n"
-        reboot
-      else
-        echo -e "\e[31mОшибка установки :(\e[0m"
-      fi
+        printf "%s" "$i"
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+      done
+      sleep 0.25
+      printf "10\n"
+      reboot
     else
-      if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
-        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
-        for i in {1..9}; do
-          sleep 0.25
-          printf "%s" "$i"
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-        done
-        sleep 0.25
-        printf "10\n"
-        reboot
-      else
-        printf "\e[31mОшибка установки :(\e[0m\n"
-      fi
+      printf "\e[31mОшибка установки :(\e[0m\n"
     fi
   fi
 else
   echo "change your working directory to dotfiles"
 fi
-
-##!/usr/bin/env bash
-#if [ -f ./check ] &; then
-#  git clone https://github.com/DADA30000/mozilla.git ~/.mozilla
-#   touch /password
-#  ( echo "Введите пароль Nextcloud"; read;  chmod 777 /password; echo $REPLY >> /password;  chown nextcloud:nextcloud /password;  chmod 400 /password )
-#   mkdir /fileserver
-#  git config --global credential.helper store
-#   chown -R nginx:nginx /fileserver
-#else
-#  echo "change your working directory to dotfiles"
-#fi
