@@ -175,5 +175,6 @@
           };
         };
       };
+      pkgs = inputs.nixpkgs; # for nix shell
     };
 }

@@ -55,21 +55,36 @@ in
               }
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
-              if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-                Hyprland
-              fi
               setopt correct
-              ns () {
-                nix shell ''${@/#/nixpkgs#}
+              # basically nix-shell -p
+              ns-expr () {
+                local args=()
+                for arg in "$@"; do
+                    args+=(--expr "with import (builtins.getFlake \"nixpkgs\") {}; ''${arg}")
+                done
+                nix shell --impure ''${args[@]}
               }
-              ns-unfree () {
-                nix shell ''${@/#/nixpkgs#} --impure
+              # Ad-hoc python with modules env
+              ns-py () {
+                local args=()
+                for arg in "$@"; do
+                    args+=(''${arg})
+                done
+                nix shell --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; python3.withPackages (ps: with ps; [ ''${args[@]} ])"
+              }
+              # Ad-hoc nix-develop devShell
+              ns-dev () { 
+                local args=()
+                for arg in "$@"; do
+                    args+=(''${arg})
+                done
+                nix develop --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; mkShell { buildInputs = [ ''${args[@]} ]; }"
+              }
+              ns () {
+                nix shell --impure ''${@/#/nixpkgs#}
               }
             '';
             zshEarly = mkOrder 500 ''
-              if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-                Hyprland
-              fi
               DISABLE_MAGIC_FUNCTIONS=true
             '';
           in
