@@ -38,6 +38,7 @@ in
         coc-sh
         coc-css
         coc-html
+        coc-prettier
         coc-tsserver
         coc-rust-analyzer
       ];
