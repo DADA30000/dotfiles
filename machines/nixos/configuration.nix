@@ -50,13 +50,6 @@ in
     dockerCompat = true;
   };
 
-  virtualisation.libvirtd.enable = true;
-
-  # Enable TPM emulation (optional)
-  virtualisation.libvirtd.qemu = {
-    swtpm.enable = true;
-    ovmf.packages = [ pkgs.OVMFFull.fd ];
-  };
 
   programs.git.enable = true;
 
@@ -135,6 +128,12 @@ in
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
 
+  services.ollama = {
+    enable = true;
+    acceleration = "rocm";
+    rocmOverrideGfx = "10.3.0";
+  };
+
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
   boot.kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
@@ -187,6 +186,13 @@ in
   users.mutableUsers = true;
 
   specialisation.vmware.configuration = {
+    virtualisation.libvirtd.enable = true;
+
+    # Enable TPM emulation (optional)
+    virtualisation.libvirtd.qemu = {
+      swtpm.enable = true;
+      ovmf.packages = [ pkgs.OVMFFull.fd ];
+    };
     virtualisation.vmware.host = if (!checker) then {} else {
       enable = true;
       package = vmware-package;
@@ -273,6 +279,14 @@ in
 
   fonts = {
 
+    #fontconfig = {
+
+    #  antialias = true;
+
+    #  hinting.style = "full";
+
+    #};
+
     # Enable some default fonts
     enableDefaultPackages = true;
 
@@ -353,7 +367,7 @@ in
 
       enable = true;
 
-      pro = false;
+      pro = true;
 
     };
 
@@ -459,6 +473,7 @@ in
       with pkgs; 
       [
         rust-analyzer
+        heroic
         cargo
         rustc
         kdePackages.qtstyleplugin-kvantum

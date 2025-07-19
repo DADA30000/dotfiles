@@ -61,17 +61,17 @@
 	--background:			transparent;	/* general background image					*/
 	--backgroundposition:		center;				/* default: center				(position of background - values: [center/top/right/bottom/left])			*/
 	--backgroundsize:		cover;				/* default: cover				(sizefit of background - values: [cover/contain/auto])					*/
-	--backgroundblur:		0;				/* default: 0					(blur in px, only works when --background is set to an image)				*/
+	--backgroundblur:		25;				/* default: 0					(blur in px, only works when --background is set to an image)				*/
 	
 	--popout:			var(--background);		/* default: var(--background)			(change to use another background/color for modals/popouts)				*/
 	--popoutposition:		var(--backgroundposition);	/* default: center				(position of popout - values: [center/top/right/bottom/left])				*/
 	--popoutsize:			var(--backgroundsize);		/* default: cover				(sizefit of popout - values: [cover/contain/auto])					*/
 	--popoutblur:			var(--backgroundblur);		/* default: 0					(blur in px, only works when --popout is set to an image)				*/
 	
-	--backdrop:			rgba(0, 0, 0, 0.85);		/* default: rgba(0, 0, 0, 0.85)			(change to use another background/color for backdrops)					*/
+	--backdrop:			rgba(0, 0, 0, 0);		/* default: rgba(0, 0, 0, 0.85)			(change to use another background/color for backdrops)					*/
 	--backdropposition:		center;				/* default: center				(position of backdrop - values: [center/top/right/bottom/left])				*/
 	--backdropsize:			cover;				/* default: cover				(sizefit of backdrop - values: [cover/contain/auto])					*/
-	--backdropblur:			0;				/* default: 0					(blur in px, only works when --backdrop is set to an image)				*/
+	--backdropblur:			25;				/* default: 0					(blur in px, only works when --backdrop is set to an image)				*/
 	
 	--textbrightest: 		255, 255, 255;			/* default: 255, 255, 255			(text color for the brightest texts)							*/
 	--textbrighter: 		222, 222, 222;			/* default: 222, 222, 222			(text color for brighter texts)								*/

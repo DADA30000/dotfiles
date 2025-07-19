@@ -45,7 +45,6 @@ in
         fi
       '';
     };
-
     home.file.".themes".source = ../../../stuff/.themes;
     xdg.configFile = {
         "Kvantum".source = ../../../stuff/Kvantum;
@@ -114,8 +113,8 @@ in
       gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
       gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
       iconTheme = {
-        name = "Papirus-Dark";
-        package = pkgs.papirus-icon-theme;
+        name = "Adwaita";
+        package = pkgs.adwaita-icon-theme;
       };
       theme.name = "Fluent-Dark";
       font.name = "Noto Sans Medium";

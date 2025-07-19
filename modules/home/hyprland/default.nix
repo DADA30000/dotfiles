@@ -65,12 +65,12 @@ in
         bind = [
           ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
           ", code:123, exec, pactl set-sink-volume @DEFAULT_SINK@ +4096"
-          ", Print, exec, hyprshot -m region -z"
-          "SHIFT, Print, exec, hyprshot -m window -z"
-          "ALT, Print, exec, hyprshot -m output -z"
-          "CTRL, Print, exec, hyprshot -z -m region -r d | swappy -f -"
-          "CTRL_SHIFT, Print, exec, hyprshot -z -m window -r d | swappy -f -"
-          "CTRL_ALT, Print, exec, hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
+          ", Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
+          "SHIFT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+          "ALT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+          "CTRL, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+          "CTRL_SHIFT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+          "CTRL_ALT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
           "ALT,R,submap,passthrough"
           "$mod_CTRL, Q, exec, neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
           "$mod_CTRL, C, exec, hyprctl kill"
@@ -182,7 +182,8 @@ in
         input = {
           kb_layout = "us,ru";
           kb_options = "grp:alt_shift_toggle";
-          repeat_delay = 200;
+          repeat_delay = 150;
+          repeat_rate = 35;
           follow_mouse = 1;
           touchpad = {
             natural_scroll = false;
@@ -318,14 +319,13 @@ in
     #    ];
     #  };
     #};
-    #xdg.portal = {
-    #  enable = true;
-    #  extraPortals = [
-    #    pkgs.xdg-desktop-portal-hyprland
-    #    pkgs.xdg-desktop-portal-gtk
-    #  ];
-    #  config.common.default = "*";
-    #};
+    xdg.portal = {
+      enable = true;
+      extraPortals = [
+        pkgs.xdg-desktop-portal-gtk
+      ];
+      config.common.default = "*";
+    };
     programs.hyprlock = mkIf cfg.hyprlock {
       enable = true;
       settings = {

@@ -8,7 +8,7 @@
   # Import other modules
   imports = [
     ../../modules/home
-    inputs.nix-index-database.hmModules.nix-index
+    inputs.nix-index-database.homeModules.nix-index
     #inputs.hyprpanel.homeManagerModules.hyprpanel
   ];
 
@@ -18,6 +18,8 @@
   #  overwrite.enable = true;
   #};
 
+  home.sessionVariables.NIX_PATH = inputs.nixpkgs.outPath;
+  
   # Enable rich presence
   services.arrpc.enable = false;
 
