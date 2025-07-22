@@ -46,9 +46,6 @@ jobs:
           sudo apt install nodejs
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          wget https://archive.org/download/vmware-workstation-full-17.6.3-24583834/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
-          nix-store --add-fixed sha256 VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
-          umount /tmp
           df -h
 
       #- name: Update flake.lock

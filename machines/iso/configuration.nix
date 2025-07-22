@@ -129,14 +129,12 @@ in
 
   };
 
-  environment = {
-    systemPackages = with pkgs; [
-      gum
-      lolcat
-      openssl
-      gparted
-      (writeShellScriptBin "nix-install" nix-install)
-    ];
-    etc."vmware-bundle-keeper".source = bundle; # This is needed to keep the bundle file in ISO
-  };
+  environment.systemPackages = with pkgs; [
+    gum
+    lolcat
+    openssl
+    gparted
+    (writeShellScriptBin "nix-install" nix-install)
+  ];
+  environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else null; # This is needed to keep the bundle file in ISO
 }
