@@ -3,6 +3,8 @@
   inputs,
   user-hash,
   user,
+  min-flag ? false, # Needed for minimal ISO version
+  avg-flag ? false, # Needed for 8G ISO version
   lib,
   ...
 }:
@@ -45,22 +47,17 @@ in
 
   services.preload.enable = true;
 
-  virtualisation.podman = {
+  virtualisation.podman = if !(avg-flag || min-flag) then {
     enable = true;
     dockerCompat = true;
-  };
+  } else {};
 
 
   programs.git.enable = true;
 
   programs.git.lfs.enable = true;
 
-  # Enable USB redirection (optional)
-  virtualisation.spiceUSBRedirection.enable = true;
-
-  programs.virt-manager.enable = true;
-
-  programs.ydotool.enable = true;
+  programs.ydotool.enable = if !min-flag then true else false;
 
   # Disable annoying firewall
   networking.firewall.enable = false;
@@ -125,11 +122,11 @@ in
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
 
-  services.ollama = {
+  services.ollama = if !(avg-flag || min-flag) then {
     enable = true;
     acceleration = "rocm";
     rocmOverrideGfx = "10.3.0";
-  };
+  } else {};
 
   # Use mainline (or latest stable) kernel instead of LTS kernel
   #boot.kernelPackages = pkgs.linuxPackages_testing;
@@ -182,8 +179,12 @@ in
   # Allow making users through useradd
   users.mutableUsers = true;
 
-  specialisation.vmware.configuration = {
+  specialisation.vm.configuration = if !(avg-flag || min-flag) then {
     virtualisation.libvirtd.enable = true;
+
+    virtualisation.spiceUSBRedirection.enable = true;
+
+    programs.virt-manager.enable = true;
 
     # Enable TPM emulation (optional)
     virtualisation.libvirtd.qemu = {
@@ -195,10 +196,7 @@ in
       package = vmware-package;
     };
     boot.kernelPackages = pkgs.linuxPackages;
-  };
-
-  # Enable WayDroid
-  virtualisation.waydroid.enable = false;
+  } else {};
 
   services.xserver = {
     enable = true;
@@ -229,7 +227,7 @@ in
   zapret.enable = false;
 
   # Enable replays
-  replays.enable = true;
+  replays.enable = if !min-flag then true else false;
 
   # Enable startup sound on PC speaker (also plays after rebuilds)
   startup-sound.enable = false;
@@ -262,7 +260,7 @@ in
 
   };
 
-  flatpak = {
+  flatpak = if !(avg-flag || min-flag) then {
 
     # Enable system flatpak
     enable = true;
@@ -272,17 +270,9 @@ in
       "io.github.Soundux"
     ];
 
-  };
+  } else {};
 
   fonts = {
-
-    #fontconfig = {
-
-    #  antialias = true;
-
-    #  hinting.style = "full";
-
-    #};
 
     # Enable some default fonts
     enableDefaultPackages = true;
@@ -344,7 +334,7 @@ in
 
   };
 
-  obs = {
+  obs = if !(avg-flag || min-flag) then {
 
     # Enable OBS
     enable = true;
@@ -352,7 +342,7 @@ in
     # Enable virtual camera
     virt-cam = false;
 
-  };
+  } else {};
 
   graphics = {
 
@@ -364,7 +354,7 @@ in
 
       enable = true;
 
-      pro = true;
+      pro = if !(avg-flag || min-flag) then true else false;
 
     };
 
@@ -469,24 +459,12 @@ in
     systemPackages =
       with pkgs; 
       [
-        rust-analyzer
-        heroic
-        cargo
-        rustc
         kdePackages.qtstyleplugin-kvantum
-        gimp3-with-plugins
         lsd
-        gamescope
         kdiskmark
         nixfmt-rfc-style
-        gdb
         gdu
-        protonplus
-        gcc
         nixd
-        nodejs
-        yarn
-        ccls
         (firefox.override {
           nativeMessagingHosts = [
             (inputs.pipewire-screenaudio.packages.${pkgs.system}.default.overrideAttrs (
@@ -495,68 +473,62 @@ in
           ];
         })
         wget
-        nekoray
         killall
-        gamemode
         screen
         unrar
-        android-tools
         zip
-        jdk23
         mpv
-        remmina
-        ayugram-desktop
         adwaita-icon-theme
-        osu-lazer-bin
-        steam
-        moonlight-qt
-        prismlauncher
-        mangohud
         nvtopPackages.amd
-        qbittorrent
-        pavucontrol
         any-nix-shell
         wl-clipboard
-        bottles
         networkmanager_dmenu
         neovide
-        comma
-        lact
-        libreoffice
-        zenity
-        distrobox
-        qalculate-gtk
         p7zip
-        inputs.anicli-ru.packages.${system}.default
-        inputs.zen-browser.packages.${system}.twilight
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
+      ]
+      ++ (if !min-flag then [
+        rust-analyzer
+        comma
+        remmina
+        cargo
+        mangohud
+        steam
+        android-tools
+        jdk23
+        rustc
+        moonlight-qt
+        osu-lazer-bin
+        pavucontrol
+        prismlauncher
+        qalculate-gtk
+        lact
+        inputs.anicli-ru.packages.${system}.default
+        distrobox
+        bottles
+        qbittorrent
+        ayugram-desktop
+        gdb
+        gcc
+        zenity
+        nodejs
+        libreoffice
+        yarn
+        protonplus
+        gamemode
+        gimp3-with-plugins
+        inputs.zen-browser.packages.${system}.twilight
+        gamescope
+        ccls
+        heroic
         (discord.override {
           withOpenASAR = true;
           withVencord = true;
         })
-        #inputs.fabric.packages.${system}.default # add them later
-        #inputs.fabric-cli.packages.${system}.default
-        #(inputs.fabric.packages.${system}.run-widget.override {
-        #  extraPythonPackages = with python3Packages; [
-        #    ijson
-        #    numpy
-        #    pillow
-        #    psutil
-        #    requests
-        #    setproctitle
-        #    toml
-        #    watchdog
-        #  ];
-        #  extraBuildInputs = [
-        #    inputs.fabric-gray.packages.${system}.default
-        #    networkmanager
-        #    networkmanager.dev
-        #    playerctl
-        #  ];
-        #})
-      ]
+      ] else [])
+      ++ (if !(avg-flag || min-flag) then [] else [])
       ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 
   };
