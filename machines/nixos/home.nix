@@ -1,6 +1,8 @@
 {
   inputs,
   config,
+  min-flag ? false, # Needed for minimal ISO version
+  avg-flag ? false, # Needed for 8G ISO version
   ...
 }:
 {
