@@ -138,6 +138,7 @@ in
           "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
           "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
           "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
+          "opacity 0.99 override 0.99 override, class:^(thunderbird)$"
           "opacity 0.99 override 0.99 override, class:^(spotify)$"
           "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, class:^(mpv)$"

@@ -1,6 +1,7 @@
 {
   imports = [
     ./hyprland
+    ./thunderbird
     ./file-associations
     ./fastfetch
     ./kitty

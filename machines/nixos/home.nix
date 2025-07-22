@@ -23,6 +23,8 @@
   # Enable rich presence
   services.arrpc.enable = false;
 
+  thunderbird.enable = true;
+
   services.easyeffects.enable = true;
 
   # Enable firefox customization
