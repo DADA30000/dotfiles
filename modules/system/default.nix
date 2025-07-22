@@ -10,8 +10,7 @@
     ./obs
     ./flatpak
     ./mlocate
-    ./singbox-wg
+    ./singbox
     ./plymouth
-    #./singbox
   ];
 }
