@@ -1,52 +1,141 @@
 {
-  "inbounds":[
-    {
-      "domain_strategy":"",
-      "listen":"127.0.0.1",
-      "listen_port":2080,
-      "sniff":true,
-      "sniff_override_destination":false,
-      "tag":"mixed-in",
-      "type":"mixed"
-    }
-  ],
-  "log":{
-    "level":"info"
+  "log": {
+    "level": "debug"
   },
-  "outbounds":[
-    {
-      "domain_strategy":"",
-      "flow":"xtls-rprx-vision",
-      "packet_encoding":"xudp",
-      "server":"AAA.AAA.AAA.AAA",
-      "server_port":AAA,
-      "tag":"proxy",
-      "tls":{
-        "alpn":[
-          "h2"
-        ],
-        "enabled":true,
-        "reality":{
-          "enabled":true,
-          "public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "short_id":"AAAAAAAAAAAAAAAA"
-        },
-        "server_name":"yahoo.com",
-        "utls":{
-          "enabled":true,
-          "fingerprint":"chrome"
-        }
+  "dns": {
+    "servers": [
+      {
+        "type": "quic",
+        "server": "your_dns.dns.nextdns.io",
+        "tag": "nextdns",
+        "domain_resolver": "cloudflare"
       },
-      "type":"vless",
-      "uuid":"AAAAAAA-AAAAAAAAA-AAAA-AAAAAAAAAA"
+      {
+        "type": "tcp",
+        "tag": "cloudflare",
+        "server": "1.1.1.1"
+      }
+    ],
+    "rules": [
+      {
+        "inbound": "any",
+        "outbound": "any",
+        "server": "nextdns"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "domain_strategy": "",
+      "listen": "127.0.0.1",
+      "listen_port": 2080,
+      "tag": "mixed-in",
+      "type": "mixed"
     },
     {
-      "tag":"direct",
-      "type":"direct"
+      "type": "tun",
+      "tag": "tun-in",
+      "auto_route": true,
+      "interface_name": "tun0",
+      "address": "172.19.0.1/28",
+      "mtu": 28160,
+      "stack": "system"
     }
   ],
-  "route":{
-    "auto_detect_interface":true
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "endpoints": [
+    {
+      "system": true,
+      "name": "wg0",
+      "address": "10.0.0.0/32",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "type": "wireguard",
+      "tag": "proxy",
+      "peers": [
+        {
+          "address": "255.255.255.255",
+          "port": 1234,
+          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pre_shared_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ]
+        }
+      ]
+    }
+  ],
+  "route": {
+    "final": "direct",
+    "auto_detect_interface": true,
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "inbound": [
+          "mixed-in"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "process_path_regex": [
+          "^.*(wget|git|electron|node)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "domain_suffix": [
+          "dis.gd",
+          "discord.co",
+          "discord.com",
+          "discord.design",
+          "discord.dev",
+          "discord.gg",
+          "discord.gift",
+          "discord.gifts",
+          "discord.media",
+          "discord.new",
+          "discord.store",
+          "discord.tools",
+          "discordapp.com",
+          "discordapp.net",
+          "discordmerch.com",
+          "discordpartygames.com",
+          "discord-activities.com",
+          "discordactivities.com",
+          "discordsays.com",
+          "discordstatus.com",
+          "googlevideo.com",
+          "youtu.be",
+          "youtube.com",
+          "ytimg.com",
+          "ggpht.com",
+          "animego.org",
+          "animego.one",
+          "animego.bz",
+          "aniboom.one",
+          "ya-ligh.com",
+          "jut.su"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "process_path_regex": [
+          "^.*(.Discord-wrapped|TeamSpeak)$"
+        ],
+        "outbound": "proxy"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      }
+    ]
   }
 }
 

@@ -65,11 +65,8 @@ in
   # Disable annoying firewall
   networking.firewall.enable = false;
 
-  # Enable singbox proxy to my VPS with WireGuard
-  singbox-wg.enable = true;
-
-  # Enable singbox proxy to my XRay vpn (uncomment in default.nix in ../../modules/system)
-  #singbox.enable = true;
+  # Enable singbox
+  singbox.enable = true;
 
   # Enable AmneziaVPN client
   programs.amnezia-vpn.enable = false;
@@ -484,6 +481,7 @@ in
         nixfmt-rfc-style
         gdb
         gdu
+        protonplus
         gcc
         nixd
         nodejs
