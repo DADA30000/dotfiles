@@ -130,6 +130,8 @@
               user-hash
               self
               ;
+            min-flag = false;
+            avg-flag = false;
           };
           modules = modules-list ++ [
             ./machines/nixos/configuration.nix
@@ -140,6 +142,8 @@
           specialArgs = {
             user = user_iso;
             user-hash = null;
+            min-flag = false;
+            avg-flag = false;
             inherit inputs self;
           };
           modules = modules-list ++ [
@@ -151,6 +155,8 @@
           specialArgs = {
             user = user_iso;
             user-hash = null;
+            min-flag = false;
+            avg-flag = true;
             inherit inputs self;
           };
           modules = modules-list ++ [
@@ -162,6 +168,8 @@
           specialArgs = {
             user = user_iso;
             user-hash = null;
+            min-flag = true;
+            avg-flag = false;
             inherit inputs self;
           };
           modules = modules-list ++ [
