@@ -3,8 +3,8 @@
   inputs,
   user-hash,
   user,
-  min-flag ? false, # Needed for minimal ISO version
-  avg-flag ? false, # Needed for 8G ISO version
+  min-flag, # Needed for minimal ISO version
+  avg-flag, # Needed for 8G ISO version
   lib,
   ...
 }:
@@ -519,16 +519,17 @@ in
         protonplus
         gamemode
         gimp3-with-plugins
-        inputs.zen-browser.packages.${system}.twilight
         gamescope
         ccls
-        heroic
         (discord.override {
           withOpenASAR = true;
           withVencord = true;
         })
       ] else [])
-      ++ (if !(avg-flag || min-flag) then [] else [])
+      ++ (if !(avg-flag || min-flag) then [
+        inputs.zen-browser.packages.${system}.twilight
+        heroic
+      ] else [])
       ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 
   };

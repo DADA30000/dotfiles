@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: Build ISO
+name: Build ISO (Minimal version)
 
 # Controls when the workflow will run
 on:
@@ -46,9 +46,6 @@ jobs:
           sudo apt install nodejs
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          wget https://archive.org/download/vmware-workstation-full-17.6.3-24583834/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
-          nix-store --add-fixed sha256 VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
-          umount /tmp
           df -h
 
       #- name: Update flake.lock
@@ -60,8 +57,8 @@ jobs:
       #  uses: mxschmitt/action-tmate@v3
       - name: Build ISO
         run: |
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 2400; pkill nix
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
+          nix build .#nixosConfigurations.isoMIN.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true & sleep 2400; pkill nix
+          nix build .#nixosConfigurations.isoMIN.config.system.build.isoImage --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:

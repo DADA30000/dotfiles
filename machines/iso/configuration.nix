@@ -1,8 +1,9 @@
 {
   pkgs,
   lib,
-  min-flag ? false, # Needed for minimal ISO version
-  avg-flag ? false, # Needed for 8G ISO version
+  user-hash,
+  min-flag, # Needed for minimal ISO version
+  avg-flag, # Needed for 8G ISO version
   user,
   ...
 }:
@@ -64,13 +65,13 @@ let
   '';
 in
 {
-  home-manager.users."${user}" = import ./home.nix {inherit avg-flag min-flag;};
+  home-manager.users."${user}" = import ./home.nix;
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless.enable = false;
   networking.hostName = "iso";
   imports = [
-    (import ../nixos/configuration.nix { inherit avg-flag min-flag; })
+    ../nixos/configuration.nix
   ];
 
   system.activationScripts = {
