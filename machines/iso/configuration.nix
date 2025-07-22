@@ -105,6 +105,10 @@ in
   #  })
   #];
 
+  services.ollama.enable = lib.mkForce false;
+
+  graphics.amdgpu.pro = lib.mkForce false;
+
   disks.enable = lib.mkForce false;
 
   my-services.cloudflare-ddns.enable = lib.mkForce false;
