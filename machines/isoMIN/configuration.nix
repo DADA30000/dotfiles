@@ -3,6 +3,6 @@
   ...
 }:
 {
-  imports = [ (import ../iso/configuration.nix { avg-flag = true; }) ];
+  imports = [ (import ../iso/configuration.nix { min-flag = true; }) ];
   home-manager.users."${user}" = import ./home.nix;
 }
