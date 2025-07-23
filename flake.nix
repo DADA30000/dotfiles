@@ -30,18 +30,18 @@
       url = "github:nixpak/nixpak";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fabric = {
-      url = "github:Fabric-Development/fabric";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    fabric-gray = {
-      url = "github:Fabric-Development/gray";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    fabric-cli = {
-      url = "github:HeyImKyu/fabric-cli";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    #fabric = {
+    #  url = "github:Fabric-Development/fabric";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
+    #fabric-gray = {
+    #  url = "github:Fabric-Development/gray";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
+    #fabric-cli = {
+    #  url = "github:HeyImKyu/fabric-cli";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
     singbox = {
       url = "github:DADA30000/sing-box/dev-next";
       flake = false;
