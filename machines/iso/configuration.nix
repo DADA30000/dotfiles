@@ -140,5 +140,5 @@ in
     gparted
     (writeShellScriptBin "nix-install" nix-install)
   ];
-  environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else null; # This is needed to keep the bundle file in ISO
+  environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO
 }
