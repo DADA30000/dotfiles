@@ -490,6 +490,7 @@ in
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
       ]
       ++ (if !min-flag then [
+        kdePackages.qtdeclarative
         rust-analyzer
         comma
         remmina
@@ -527,12 +528,15 @@ in
         })
       ] else [])
       ++ (if !(avg-flag || min-flag) then [
+        quickshell
         inputs.zen-browser.packages.${system}.twilight
         heroic
       ] else [])
       ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 
   };
+
+  qt.enable = true;
 
   boot.loader = {
 
