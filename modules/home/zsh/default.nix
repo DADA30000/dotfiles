@@ -70,7 +70,7 @@ in
                 for arg in "$@"; do
                     args+=(''${arg})
                 done
-                nix shell --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; python3.withPackages (ps: with ps; [ ''${args[@]} ])"
+                nix shell --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; python3.withPackages (ps: with ps; [ ''${args[*]} ])"
               }
               # Ad-hoc nix-develop devShell
               ns-dev () { 
@@ -78,7 +78,7 @@ in
                 for arg in "$@"; do
                     args+=(''${arg})
                 done
-                nix develop --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; mkShell { buildInputs = [ ''${args[@]} ]; }"
+                nix develop --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; mkShell { buildInputs = [ ''${args[*]} ]; }"
               }
               ns () {
                 nix shell --impure ''${@/#/nixpkgs#}

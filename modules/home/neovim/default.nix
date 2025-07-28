@@ -26,6 +26,7 @@ in
         onedark-nvim
         indent-blankline-nvim
         nvim-web-devicons
+        nvim-treesitter-parsers.qmljs
         nvim-treesitter-parsers.cpp
         nvim-treesitter-parsers.nix
         nvim-treesitter-parsers.javascript
@@ -44,6 +45,11 @@ in
       ];
       coc.settings = {
         languageserver = {
+          qml = {
+            command  = "qmlls";
+            filetypes = [ "qml" ];
+            args = [ "-E" ];
+          };
           ccls = {
             command = "ccls";
             filetypes = [
