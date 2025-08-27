@@ -223,7 +223,6 @@ in
         };
         animations = {
           enabled = true;
-          first_launch_animation = true;
           workspace_wraparound = false;
           bezier = [
             "fade, 0.165, 0.84, 0.44, 1"
