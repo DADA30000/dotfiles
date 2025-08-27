@@ -462,7 +462,7 @@ in
         kdePackages.qtstyleplugin-kvantum
         lsd
         kdiskmark
-        nixfmt-rfc-style
+        nixfmt
         gdu
         nixd
         (firefox.override {
@@ -485,6 +485,7 @@ in
         networkmanager_dmenu
         neovide
         p7zip
+        inputs.quickshell.packages.${system}.default
         inputs.nix-alien.packages.${system}.nix-alien
         inputs.nix-search.packages.${system}.default
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
@@ -528,7 +529,6 @@ in
         })
       ] else [])
       ++ (if !(avg-flag || min-flag) then [
-        quickshell
         inputs.zen-browser.packages.${system}.twilight
         heroic
       ] else [])

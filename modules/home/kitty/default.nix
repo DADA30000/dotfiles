@@ -22,9 +22,13 @@ in
       };
       keybindings = {
         "ctrl+left" = "neighboring_window left";
-        "shift+left" = "move_window right";
+        "ctrl+up" = "neighboring_window up";
+        "ctrl+right" = "neighboring_window right";
         "ctrl+down" = "neighboring_window down";
-        "shift+down" = "move_window up";
+        "shift+left" = "move_window left";
+        "shift+up" = "move_window up";
+        "shift+right" = "move_window right";
+        "shift+down" = "move_window down";
       };
       extraConfig = ''
         mouse_hide_wait         2.0
