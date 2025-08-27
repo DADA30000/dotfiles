@@ -4,6 +4,10 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    quickshell = {
+      url = "github:quickshell-mirror/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     hyprland-plugins = {
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
@@ -101,7 +105,6 @@
       ...
     }@inputs:
     let
-      system = "x86_64-linux";
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
@@ -176,22 +179,6 @@
             ./machines/isoMIN/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
-        };
-      };
-      homeConfigurations = {
-        ${user} = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${system};
-          modules = [
-            ./machines/nixos/home-options.nix
-          ];
-          extraSpecialArgs = {
-            inherit
-              inputs
-              system
-              user
-              self
-              ;
-          };
         };
       };
     };
