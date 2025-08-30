@@ -212,7 +212,6 @@ in
           blur = {
             enabled = true;
             popups = true;
-            popups_ignorealpha = 0.09;
             ignore_opacity = true;
             size = 10;
             brightness = 0.8;

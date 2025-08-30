@@ -25,33 +25,12 @@ in
     ../../modules/system
   ];
 
-  systemd.services.lactd = {
-
-    enable = true;
-
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-
-      ExecStart = "${pkgs.lact}/bin/lact daemon";
-
-      #ExecStartPre = "${pkgs.coreutils-full}/bin/sleep 10";
-
-      Restart = "always";
-
-      Nice = -10;
-
-    };
-
-  };
-
   services.preload.enable = true;
 
   virtualisation.podman = if !(avg-flag || min-flag) then {
     enable = true;
     dockerCompat = true;
   } else {};
-
 
   programs.git.enable = true;
 
@@ -65,13 +44,8 @@ in
   # Enable singbox
   singbox.enable = true;
 
-  # Enable AmneziaVPN client
-  programs.amnezia-vpn.enable = false;
-
   # Run non-nix apps
   programs.nix-ld.enable = true;
-
-  #boot.crashDump.enable = true;
 
   # Enable plymouth (boot animation)
   plymouth.enable = true;
@@ -79,31 +53,12 @@ in
   # Enable RAM compression
   zramSwap.enable = true;
 
-  # Enable stuff in /bin and /usr/bin
-  services.envfs.enable = false;
-
   # Enable IOMMU
   boot.kernelParams = [
     "iommu=pt"
     "quiet"
     "plymouth.use-simpledrm"
   ];
-
-  #boot.blacklistedKernelModules = [ "serial8250" "8250" ];
-
-  #systemd.suppressedSystemUnits = [
-  #  "dev-ttyS0.device"
-  #  "dev-ttyS1.device"
-  #  "dev-ttyS2.device"
-  #  "dev-ttyS3.device"
-  #];
-
-  #boot.initrd.systemd.suppressedUnits = [
-  #  "dev-ttyS0.device"
-  #  "dev-ttyS1.device"
-  #  "dev-ttyS2.device"
-  #  "dev-ttyS3.device"
-  #];
 
   # Enable some important system zsh stuff
   programs.zsh.enable = true;
@@ -116,22 +71,11 @@ in
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
 
-  # Enable PulseAudio
-  services.pulseaudio.enable = false;
-
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
 
-  services.ollama = if !(avg-flag || min-flag) then {
-    enable = true;
-    acceleration = "rocm";
-    rocmOverrideGfx = "10.3.0";
-  } else {};
-
   # Use mainline (or latest stable) kernel instead of LTS kernel
-  #boot.kernelPackages = pkgs.linuxPackages_testing;
   boot.kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
-  #chaotic.scx.enable = true;
 
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
@@ -157,15 +101,6 @@ in
 
   # Enable generation of NixOS documentation for modules (slows down builds)
   documentation.nixos.enable = false;
-
-  # Enable systemd-networkd for internet
-  #systemd.network.wait-online.enable = false;
-  #boot.initrd.systemd.network.enable = true;
-  #systemd.network.enable = true;
-  #networking.useNetworkd = true;
-
-  # Enable dhcpcd for using internet using ethernet cable
-  #networking.dhcpcd.enable = true;
 
   # Enable NetworkManager
   systemd.services = {
@@ -220,9 +155,6 @@ in
   systemd.services.display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
   systemd.user.targets.nixos-fake-graphical-session.enable = false;
 
-  # Autologin
-  #services.getty.autologinUser = user;
-
   # Enable DPI (Deep packet inspection) bypass
   zapret.enable = false;
 
@@ -234,9 +166,6 @@ in
 
   # Enable zerotier
   zerotier.enable = false;
-
-  # Enable mlocate (find files on system quickly) (Deprecated, will be removed soon)
-  #mlocate.enable = true;
 
   # Enable locate (find files on system quickly)
   services.locate.enable = true;
@@ -280,7 +209,6 @@ in
     # Add some fonts
     packages = with pkgs; [
       noto-fonts
-      #(nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
       nerd-fonts.jetbrains-mono
     ];
 
@@ -306,10 +234,6 @@ in
       "ydotool"
       "adbusers"
       "video"
-      "corectrl"
-      "libvirtd"
-      "libvirt"
-      "uccp"
     ];
 
   };
@@ -459,6 +383,7 @@ in
     systemPackages =
       with pkgs; 
       [
+        libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
         lsd
         kdiskmark
@@ -506,7 +431,6 @@ in
         pavucontrol
         prismlauncher
         qalculate-gtk
-        lact
         inputs.anicli-ru.packages.${system}.default
         distrobox
         bottles
@@ -514,10 +438,8 @@ in
         ayugram-desktop
         gdb
         gcc
-        zenity
         nodejs
         libreoffice
-        yarn
         protonplus
         gamemode
         gimp3-with-plugins
