@@ -113,8 +113,8 @@ in
       gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
       gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
       iconTheme = {
-        name = "Adwaita";
-        package = pkgs.adwaita-icon-theme;
+        name = "MoreWaita";
+        package = pkgs.morewaita-icon-theme;
       };
       theme.name = "Fluent-Dark";
       font.name = "Noto Sans Medium";

@@ -93,6 +93,8 @@ in
 
   config = mkIf cfg.enable {
 
+    hardware.block.scheduler."nvme[0-9]*" = "none";
+
     environment.persistence."/persistent" = mkMerge [
       (mkIf (!cfg.impermanence) { enable = false; })
       (mkIf cfg.impermanence {
@@ -179,6 +181,10 @@ in
     fileSystems."/boot" = {
       device = "/dev/disk/by-label/boot";
       fsType = "vfat";
+      options = [
+        "noauto"
+        "x-systemd.automount"
+      ];
     };
 
     fileSystems."${cfg.second-disk.path}" = mkIf cfg.second-disk.enable {

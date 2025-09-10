@@ -27,6 +27,11 @@ in
 
   services.preload.enable = true;
 
+  services.scx = {
+    enable = true;
+    scheduler = "scx_bpfland";
+  };
+
   virtualisation.podman = if !(avg-flag || min-flag) then {
     enable = true;
     dockerCompat = true;
@@ -64,12 +69,16 @@ in
   programs.zsh.enable = true;
 
   # Enable portals
-  xdg.portal.enable = true;
-  xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-  xdg.portal.config.common.default = "*";
+  #xdg.portal.enable = true;
+  #xdg.portal.extraPortals = [ 
+  #  pkgs.xdg-desktop-portal-gtk
+  #];
+  #xdg.portal.config.common.default = "*";
 
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
+
+  programs.gamemode.enable = true;
 
   # Places /tmp in RAM
   boot.tmp.useTmpfs = true;
@@ -141,10 +150,20 @@ in
     };
   };
 
+  programs.uwsm.enable = true;
+
+  # Configure UWSM to launch Hyprland from a display manager like SDDM
+  programs.uwsm.waylandCompositors = {
+    hyprland = {
+      prettyName = "Hyprland";
+      comment = "Hyprland compositor managed by UWSM";
+      binPath = "${inputs.hyprland.packages.${pkgs.system}.default}/bin/Hyprland";
+    };
+  };
+
   services.displayManager = {
-    sessionData.autologinSession = "hyprland";
-    sessionPackages = [ inputs.hyprland.packages.${pkgs.system}.default ];
-    defaultSession = "hyprland";
+    sessionData.autologinSession = "hyprland-uwsm";
+    defaultSession = "hyprland-uwsm";
     autoLogin = {
       user = user;
       enable = true;
@@ -191,8 +210,8 @@ in
 
   flatpak = if !(avg-flag || min-flag) then {
 
-    # Enable system flatpak
-    enable = true;
+    # Enable system flatpak (currently breaks xdg portals)
+    enable = false;
 
     # Packages to install from flatpak
     packages = [
@@ -284,7 +303,7 @@ in
 
   };
 
-  my-services = {
+  my-services = if !(avg-flag || min-flag) then {
 
     # Enable automatic Cloudflare DDNS
     cloudflare-ddns.enable = true;
@@ -305,7 +324,7 @@ in
 
     };
 
-  };
+  } else {};
 
   disks = {
 
@@ -367,9 +386,10 @@ in
 
   environment = {
 
-    pathsToLink = [ "/share/zsh" ];
+    pathsToLink = [ "/share/zsh" "/share/xdg-desktop-portal" "/share/applications" ];
 
     variables = {
+      APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
@@ -441,7 +461,6 @@ in
         nodejs
         libreoffice
         protonplus
-        gamemode
         gimp3-with-plugins
         gamescope
         ccls
@@ -453,6 +472,7 @@ in
       ++ (if !(avg-flag || min-flag) then [
         inputs.zen-browser.packages.${system}.twilight
         heroic
+        gsettings-desktop-schemas
       ] else [])
       ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
 

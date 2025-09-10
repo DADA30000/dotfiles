@@ -7,6 +7,44 @@
 with lib;
 let
   cfg = config.my-services;
+  shared-config = {
+    forceSSL = true;
+    enableACME = true;
+    root = "/website";
+    extraConfig = ''
+      location / {
+        if ($request_method = 'OPTIONS') {
+           add_header 'Access-Control-Allow-Origin' '*';
+           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+           add_header 'Access-Control-Max-Age' 1728000;
+           add_header 'Content-Type' 'text/plain; charset=utf-8';
+           add_header 'Content-Length' 0;
+           return 204;
+        }
+        if ($request_method = 'POST') {
+           add_header 'Access-Control-Allow-Origin' '*' always;
+           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+        }
+        if ($request_method = 'GET') {
+           add_header 'Access-Control-Allow-Origin' '*' always;
+           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+        }
+      }
+      location /index/ {
+        alias /website/index/;
+        sub_filter_once off;
+        sub_filter '/.theme' '/index/.theme';
+        add_before_body /index/.theme/theme.html;
+        autoindex_exact_size off;
+        autoindex on;
+      }
+    '';
+  };
 in
 {
   options.my-services = {
@@ -39,87 +77,13 @@ in
       virtualHosts = mkMerge [
         (mkIf cfg.nginx.nextcloud.enable {
           ${config.services.nextcloud.hostName} = {
-            #forceSSL = true;
-            #enableACME = true;
+            forceSSL = true;
+            enableACME = true;
           };
         })
         (mkIf cfg.nginx.website.enable {
-          "${cfg.nginx.hostName}" = {
-            #forceSSL = true;
-            #enableACME = true;
-            root = "/website";
-            extraConfig = ''
-                    location / {
-                      if ($request_method = 'OPTIONS') {
-                         add_header 'Access-Control-Allow-Origin' '*';
-                         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-                         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-                         add_header 'Access-Control-Max-Age' 1728000;
-                         add_header 'Content-Type' 'text/plain; charset=utf-8';
-                         add_header 'Content-Length' 0;
-                         return 204;
-                      }
-                      if ($request_method = 'POST') {
-                         add_header 'Access-Control-Allow-Origin' '*' always;
-                         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-                         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-                         add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-                      }
-                      if ($request_method = 'GET') {
-                         add_header 'Access-Control-Allow-Origin' '*' always;
-                         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-                         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-                         add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-                      }
-                    }
-                    location /index/ {
-                      alias /website/index/;
-                      sub_filter_once off;
-              	sub_filter '/.theme' '/index/.theme';
-                      add_before_body /index/.theme/theme.html;
-              	autoindex_exact_size off;
-                      autoindex on;
-                    }
-            '';
-          };
-          #     "ip.${cfg.nginx.hostName}" = {
-          #       forceSSL = true;
-          #       enableACME = true;
-          #       root = "/website";
-          #       extraConfig = ''
-          #         location / {
-          #           if ($request_method = 'OPTIONS') {
-          #              add_header 'Access-Control-Allow-Origin' '*';
-          #              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-          #              add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-          #              add_header 'Access-Control-Max-Age' 1728000;
-          #              add_header 'Content-Type' 'text/plain; charset=utf-8';
-          #              add_header 'Content-Length' 0;
-          #              return 204;
-          #           }
-          #           if ($request_method = 'POST') {
-          #              add_header 'Access-Control-Allow-Origin' '*' always;
-          #              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-          #              add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-          #              add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-          #           }
-          #           if ($request_method = 'GET') {
-          #              add_header 'Access-Control-Allow-Origin' '*' always;
-          #              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-          #              add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-          #              add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-          #           }
-          #         }
-          #         location /index/ {
-          #           alias /website/index/;
-          #           sub_filter_once off;
-          #   	sub_filter '/.theme' '/index/.theme';
-          #           add_before_body /index/.theme/theme.html;
-          #   	autoindex_exact_size off;
-          #           autoindex on;
-          #         }
-          #       '';
-          #     };
+          "${cfg.nginx.hostName}" = shared-config;
+          "ip.${cfg.nginx.hostName}" = shared-config;
         })
       ];
       appendConfig = ''
@@ -143,19 +107,25 @@ in
         }
       '';
     };
-    #security.acme = {
-    #  acceptTerms = true;
-    #  defaults.email = "vadimhack.ru@gmail.com";
-    #  certs = mkMerge [
-    #    (mkIf cfg.nginx.nextcloud.enable {
-    #      "${config.services.nextcloud.hostName}".email = "vadimhack.ru@gmail.com";
-    #    })
-    #    (mkIf cfg.nginx.website.enable {
-    #      "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-    #      #"ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-    #    })
-    #  ];
-    #};
+    security.acme = {
+      acceptTerms = true;
+      defaults.email = "vadimhack.ru@gmail.com";
+      certs = mkMerge [
+        (mkIf cfg.nginx.nextcloud.enable {
+          "${config.services.nextcloud.hostName}".email = "vadimhack.ru@gmail.com";
+        })
+        (mkIf cfg.nginx.website.enable {
+          "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
+          "ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
+        })
+      ];
+    };
+    systemd.services = {
+      "acme-order-renew-ip.sanic.space".after = [ "graphical.target" ];
+      "acme-order-renew-sanic.space".after = [ "graphical.target" ];
+      "acme-ip.sanic.space".after = [ "graphical.target" ];
+      "acme-sanic.space".after = [ "graphical.target" ];
+    };
     services.cron = mkIf cfg.cloudflare-ddns.enable {
       enable = true;
       systemCronJobs = [
@@ -163,6 +133,6 @@ in
         "*/59 * * * *   root  update-cloudflare-dns /cloudflare2.conf"
       ];
     };
-    environment.systemPackages = mkIf cfg.cloudflare-ddns.enable [ pkgs.busybox ];
+    environment.systemPackages = with pkgs; mkIf cfg.cloudflare-ddns.enable [ net-tools dig.dnsutils ];
   };
 }

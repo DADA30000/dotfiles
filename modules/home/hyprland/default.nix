@@ -24,6 +24,7 @@ in
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      app2unit
       hyprshot
       pulseaudio
       hyprshot
@@ -45,6 +46,11 @@ in
       wttrbar
     ];
     wayland.windowManager.hyprland = {
+      #portalPackage = mkMerge [
+      #  (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland)
+      #  (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.xdg-desktop-portal-hyprland)
+      #];
+      portalPackage = null;
       package = mkMerge [
         (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.hyprland)
         (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)
@@ -65,35 +71,35 @@ in
         bind = [
           ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
           ", code:123, exec, pactl set-sink-volume @DEFAULT_SINK@ +4096"
-          ", Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-          "SHIFT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
-          "ALT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
-          "CTRL, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
-          "CTRL_SHIFT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
-          "CTRL_ALT, Print, exec, XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
+          ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
+          "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+          "ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+          "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+          "CTRL_SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+          "CTRL_ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
           "ALT,R,submap,passthrough"
-          "$mod_CTRL, Q, exec, neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
-          "$mod_CTRL, C, exec, hyprctl kill"
-          "$mod_CTRL, R, exec, killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
-          "$mod_CTRL, U, exec, update-damn-nixos"
-          "$mod_CTRL, V, exec, cliphist list | rofi -dmenu -hover-select -me-select-entry '' -me-accept-entry MousePrimary | cliphist decode | wl-copy"
+          "$mod_CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
+          "$mod_CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
+          "$mod_CTRL, U, exec, app2unit -- update-damn-nixos"
+          "$mod_CTRL, V, exec, rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
           "$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
           "$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
           "$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
           "$mod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
           "$mod_CTRL, F, fullscreenstate, 0 2"
-          "$mod, I, exec, toggle-restriction"
-          "$mod, F1, exec, gamemode.sh"
-          "$mod, F2, exec, sheesh.sh"
+          "$mod_CTRL, C, exec, hyprctl kill"
+          "$mod, I, exec, app2unit -- toggle-restriction"
+          "$mod, F1, exec, app2unit -- gamemode.sh"
+          "$mod, F2, exec, app2unit -- sheesh.sh"
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
-          "$mod, Q, exec, kitty"
+          "$mod, Q, exec, app2unit -- kitty"
           "$mod, C, killactive,"
-          "$mod, M, exec, wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
-          "$mod, E, exec, nautilus -w"
+          "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
+          "$mod, E, exec, app2unit -- nautilus -w"
           "$mod, V, togglefloating,"
           "$mod, P, pseudo,"
           "$mod, J, togglesplit,"
-          "$mod, F, exec, hyprctl dispatch fullscreen"
+          "$mod, F, fullscreen,"
           "$mod, left, movefocus, l"
           "$mod, right, movefocus, r"
           "$mod, up, movefocus, u"
@@ -125,8 +131,8 @@ in
         ];
         monitor = [ ", preferred, auto, 1" ];
         bindr = [
-          "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
-          "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+          "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
+          "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
         ];
         bindm = [
           "$mod, mouse:272, movewindow"
@@ -176,8 +182,7 @@ in
         exec-once = [
           #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
           #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
-          "wl-paste --type text --watch cliphist store"
-          "wl-paste --type image --watch cliphist store"
+          "app2unit -- wl-paste --watch cliphist store"
           "hyprctl setcursor Bibata-Modern-Classic 24"
         ];
         input = {
@@ -246,9 +251,6 @@ in
         dwindle = {
           pseudotile = true;
           preserve_split = true;
-        };
-        gestures = {
-          workspace_swipe = true;
         };
         misc = {
           disable_hyprland_logo = true;
@@ -320,8 +322,9 @@ in
     #  };
     #};
     xdg.portal = {
-      enable = true;
+      enable = lib.mkForce true;
       extraPortals = [
+        inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland
         pkgs.xdg-desktop-portal-gtk
       ];
       config.common.default = "*";

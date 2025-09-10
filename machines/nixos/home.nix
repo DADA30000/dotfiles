@@ -1,8 +1,8 @@
 {
   inputs,
   config,
-  min-flag ? false, # Needed for minimal ISO version
-  avg-flag ? false, # Needed for 8G ISO version
+  min-flag, # Needed for minimal ISO version
+  avg-flag, # Needed for 8G ISO version
   ...
 }:
 {
@@ -96,15 +96,17 @@
 
   };
 
-  flatpak = {
+  flatpak = if !(avg-flag || min-flag) then {
 
-    # Enable user flatpak
-    enable = false;
+    # Enable system flatpak
+    enable = true;
 
     # Packages to install from flatpak
-    packages = [ "io.github.Soundux" ];
+    packages = [
+      "io.github.Soundux"
+    ];
 
-  };
+  } else {};
 
   hyprland = {
 
