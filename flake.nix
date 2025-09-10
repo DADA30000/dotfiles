@@ -138,6 +138,7 @@
           };
           modules = modules-list ++ [
             ./machines/nixos/configuration.nix
+            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = false; }; }
             { home-manager.users."${user}" = import ./machines/nixos/home.nix; }
           ];
         };
