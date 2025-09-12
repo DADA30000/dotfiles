@@ -151,6 +151,7 @@
             inherit inputs self;
           };
           modules = modules-list ++ [
+            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = false; }; }
             ./machines/iso/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
@@ -164,6 +165,7 @@
             inherit inputs self;
           };
           modules = modules-list ++ [
+            { home-manager.extraSpecialArgs = { avg-flag = true; min-flag = false; }; }
             ./machines/iso8G/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
@@ -177,6 +179,7 @@
             inherit inputs self;
           };
           modules = modules-list ++ [
+            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = true; }; }
             ./machines/isoMIN/configuration.nix
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
