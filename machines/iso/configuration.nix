@@ -39,7 +39,7 @@ let
     sleep 1
     url="https://github.com/DADA30000/dotfiles"
     clear
-    if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации? (скрипт запускает start.sh из репозитория, репозиторий должен быть публичным)"; then
+ault=false "Поменять URL репозитория с файлами конфигурации? (скрипт запускает start.sh из репозитория, репозиторий должен быть публичным)"; then
       url=$(gum input --placeholder "Пример: https://github.com/DADA30000/dotfiles")
     fi
     if GIT_ASKPASS=true git ls-remote "$url" > /dev/null 2>&1; then

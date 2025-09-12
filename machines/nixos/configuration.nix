@@ -504,16 +504,6 @@ in
 
     pipewire = {
       enable = true;
-      #package = pkgs.pipewire.overrideAttrs (finalAttrs: previousAttrs: {
-      #  src = pkgs.fetchFromGitLab {
-      #    domain = "gitlab.freedesktop.org";
-      #    owner = "pipewire";
-      #    repo = "pipewire";
-      #    rev = "fb4475b5dabf853290d8f682649818649621d973";
-      #    sha256 = "sha256-R++9vtrDgTbfeQgauC+wlRBQLaYaIHOanBKXJGqTLg8=";
-      #  };
-      #  buildInputs = previousAttrs.buildInputs ++ [ pkgs.libebur128 ];
-      #});
       alsa.enable = true;
       alsa.support32Bit = true;
       jack.enable = true;
