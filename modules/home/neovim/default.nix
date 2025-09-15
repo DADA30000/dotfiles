@@ -194,7 +194,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [ bash-language-server shellcheck shfmt ];
+    home.packages = with pkgs; [ bash-language-server shellcheck shfmt asm-lsp ];
     programs.neovim = {
       coc.enable = true;
       enable = true;
@@ -222,8 +222,12 @@ in
       ];
       coc.settings = {
         languageserver = {
+          asm = {
+            command = "asm-lsp";
+            filetypes = [ "asm" "s" "S" ];
+          };
           qml = {
-            command  = "qmlls";
+            command = "qmlls";
             filetypes = [ "qml" ];
             args = [ "-E" ];
           };

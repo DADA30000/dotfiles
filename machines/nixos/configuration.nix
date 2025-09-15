@@ -25,6 +25,8 @@ in
     ../../modules/system
   ];
 
+  #services.udev.packages = [ pkgs.steam-devices-udev-rules ];
+
   services.preload.enable = true;
 
   services.scx = {
