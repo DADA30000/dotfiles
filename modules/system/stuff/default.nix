@@ -423,5 +423,23 @@
         sed -i 's/    power_cap: 60.0/    power_cap: 125.0/' /etc/lact/config.yaml
       fi
     '')
+    (pkgs.writeShellScriptBin "umu-run-wrapper" ''
+      PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run "$1"
+    '')
+    (pkgs.writeShellScriptBin "umu-run-wrapper-secure" ''
+      cleanup() {
+        echo -e "\nCtrl+C pressed. Terminating script and all child processes..."
+        kill -s TERM 0
+        exit 130
+      }
+      trap cleanup INT
+      kek1=$(realpath "$1")
+      kek=$(dirname "$kek1")
+      if [[ "$kek" != "$HOME"/Downloads ]] && [[ "$kek" != "$HOME"/Загрузки ]]; then
+        if zenity --question --text="Вы пытаетесь запустить программу в директории $kek, после запуска у неё будет полный доступ к данной директории, вы уверены что хотите её запустить?"; then
+          firejail --noprofile --no-home --read-only=all --whitelist="$kek" --whitelist=~/.umu --private-dev --seccomp umu-run-wrapper "$kek1"
+        fi
+      fi
+    '')
   ];
 }

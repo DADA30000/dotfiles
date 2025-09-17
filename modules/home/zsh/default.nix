@@ -93,6 +93,7 @@ in
             zshEarly
           ];
         shellAliases = {
+          umu-run = "umu-run-wrapper-secure";
           ls = "lsd";
           ll = "ls -l";
           u-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";

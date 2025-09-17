@@ -207,16 +207,16 @@ in
         nvim-web-devicons
         (nvim-treesitter.withPlugins (p: with p; [ qmljs cpp nix javascript ]))
         coc-ultisnips
+        (pkgs.callPackage ./cord-nvim.nix {})
         coc-snippets
         coc-json
-        cord-nvim
         coc-basedpyright
         coc-sh
         coc-css
         coc-html
         coc-prettier
         coc-tsserver
-	onedark-nvim
+	      onedark-nvim
         coc-rust-analyzer
         auto-save-nvim
       ];
