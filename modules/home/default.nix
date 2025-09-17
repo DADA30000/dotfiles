@@ -16,5 +16,6 @@
     ./mpd
     ./neovim
     ./firefox
+    ./umu
   ];
 }
