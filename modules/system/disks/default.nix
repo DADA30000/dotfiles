@@ -114,6 +114,7 @@ in
           "/var/lib/flatpak"
         ];
         files = [
+          "/etc/machine-id"
           "/cloudflare1.conf"
           "/cloudflare2.conf"
         ] ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];

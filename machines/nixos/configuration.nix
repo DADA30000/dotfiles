@@ -125,24 +125,25 @@ in
   # Allow making users through useradd
   users.mutableUsers = true;
 
-  specialisation.vm.configuration = if !(avg-flag || min-flag) then {
-    virtualisation.libvirtd.enable = true;
+  # Currently specialisations double eval time, and even when empty, still create addiitonal boot entry, not ideal.
+  #specialisation.vm.configuration = if !(avg-flag || min-flag) then {
+  #  virtualisation.libvirtd.enable = true;
 
-    virtualisation.spiceUSBRedirection.enable = true;
+  #  virtualisation.spiceUSBRedirection.enable = true;
 
-    programs.virt-manager.enable = true;
+  #  programs.virt-manager.enable = true;
 
-    # Enable TPM emulation (optional)
-    virtualisation.libvirtd.qemu = {
-      swtpm.enable = true;
-      ovmf.packages = [ pkgs.OVMFFull.fd ];
-    };
-    virtualisation.vmware.host = if (!checker) then {} else {
-      enable = true;
-      package = vmware-package;
-    };
-    boot.kernelPackages = pkgs.linuxPackages;
-  } else {};
+  #  # Enable TPM emulation (optional)
+  #  virtualisation.libvirtd.qemu = {
+  #    swtpm.enable = true;
+  #    ovmf.packages = [ pkgs.OVMFFull.fd ];
+  #  };
+  #  virtualisation.vmware.host = if (!checker) then {} else {
+  #    enable = true;
+  #    package = vmware-package;
+  #  };
+  #  boot.kernelPackages = pkgs.linuxPackages;
+  #} else {};
 
   services.xserver = {
     enable = true;
