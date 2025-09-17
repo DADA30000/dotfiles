@@ -14,6 +14,8 @@ jobs:
       - name: Sync fork
         uses: tgymnich/fork-sync@v2.0.10
         with:
+          owner: DADA30000
+          repo: sing-box
           token: ${{ secrets.TOKEN }}
           base: dev-next
           head: dev-next
