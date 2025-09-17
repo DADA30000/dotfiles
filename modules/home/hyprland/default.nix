@@ -50,7 +50,10 @@ in
       #  (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland)
       #  (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.xdg-desktop-portal-hyprland)
       #];
-      portalPackage = null;
+      portalPackage = mkMerge [
+        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland)
+        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.xdg-desktop-portal-hyprland)
+      ];
       package = mkMerge [
         (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.hyprland)
         (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)
@@ -75,19 +78,19 @@ in
           "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
           "ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
-          "CTRL_SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
-          "CTRL_ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
+          "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+          "CTRL ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
           "ALT,R,submap,passthrough"
-          "$mod_CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
-          "$mod_CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
-          "$mod_CTRL, U, exec, app2unit -- update-damn-nixos"
-          "$mod_CTRL, V, exec, rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
-          "$mod_ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
-          "$mod_ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 1}')"
-          "$mod_CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
-          "$mod_CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 - 100}')"
-          "$mod_CTRL, F, fullscreenstate, 0 2"
-          "$mod_CTRL, C, exec, hyprctl kill"
+          "$mod CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
+          "$mod CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
+          "$mod CTRL, U, exec, app2unit -- update-damn-nixos"
+          "$mod CTRL, V, exec, rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+          "$mod ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
+          "$mod ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 2) {print $2 - 1} else {print 1}}')"
+          "$mod CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
+          "$mod CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 101) {print $2 - 100} else {print 1}}')"
+          "$mod CTRL, F, fullscreenstate, 0 2"
+          "$mod CTRL, C, exec, hyprctl kill"
           "$mod, I, exec, app2unit -- toggle-restriction"
           "$mod, F1, exec, app2unit -- gamemode.sh"
           "$mod, F2, exec, app2unit -- sheesh.sh"
@@ -150,6 +153,12 @@ in
           "opacity 0.99 override 0.99 override, class:^(mpv)$"
           "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
         ];
+        permission = [
+          "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"
+          "${lib.escapeRegex (lib.getExe pkgs.grim)}, screencopy, allow"
+          "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}, screencopy, allow"
+          "${lib.escapeRegex (lib.getExe config.wayland.windowManager.hyprland.portalPackage)}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
+        ];
         layerrule = [
           "blur, waybar"
           "blur, rofi"
@@ -208,6 +217,9 @@ in
         };
         debug = {
           full_cm_proto = true;
+        };
+        ecosystem = {
+          enforce_permissions = true;
         };
         cursor = {
           no_hardware_cursors = false;
@@ -322,9 +334,8 @@ in
     #  };
     #};
     xdg.portal = {
-      enable = lib.mkForce true;
+      enable = true;
       extraPortals = [
-        inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland
         pkgs.xdg-desktop-portal-gtk
       ];
       config.common.default = "*";
