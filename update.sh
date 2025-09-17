@@ -2,12 +2,12 @@
 if [ -f ./check ]; then
   rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
   cp -r /etc/nixos/* ./
-  rm ./stuff/singbox/config.json
+  #rm ./stuff/singbox/config.json
   ./archive.sh
   git add . --all
   git add .gitattributes
   echo "Enter commit name (enter to default)"
-  read name
+  read -r name
   if [ -n "$name" ]; then
     git commit -m "$name"
     git push -u
