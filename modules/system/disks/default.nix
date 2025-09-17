@@ -114,6 +114,7 @@ in
           "/var/lib/flatpak"
         ];
         files = [
+          "/config.json"
           "/etc/machine-id"
           "/cloudflare1.conf"
           "/cloudflare2.conf"
