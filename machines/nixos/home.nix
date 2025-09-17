@@ -20,6 +20,8 @@
   #  overwrite.enable = true;
   #};
 
+  umu.enable = true;
+
   home.sessionVariables.NIX_PATH = inputs.nixpkgs.outPath;
   
   # Enable rich presence
@@ -84,14 +86,6 @@
 
     videos = "/home/${config.home.username}/Видео";
 
-  };
-
-  xdg.desktopEntries.umu.settings = {
-    Exec = "umu-run-wrapper-secure %f";
-    MimeType = "application/vnd.microsoft.portable-executable;application/x-msi;application/x-msdownload";
-    Name = "Quickly run windows apps";
-    StartupWMClass = "umu";
-    Type = "Application";
   };
 
   mpd = {

@@ -123,8 +123,14 @@ in
     systemd.services = {
       "acme-order-renew-ip.sanic.space".after = [ "graphical.target" ];
       "acme-order-renew-sanic.space".after = [ "graphical.target" ];
-      "acme-ip.sanic.space".after = [ "graphical.target" ];
-      "acme-sanic.space".after = [ "graphical.target" ];
+      "acme-ip.sanic.space" = {
+        after = [ "graphical.target" ];
+        before = lib.mkForce [];
+      };
+      "acme-sanic.space" = {
+        after = [ "graphical.target" ];
+        before = lib.mkForce [];
+      };
     };
     services.cron = mkIf cfg.cloudflare-ddns.enable {
       enable = true;
