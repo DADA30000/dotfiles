@@ -16,6 +16,7 @@ jobs:
         with:
           owner: DADA30000
           repo: sing-box
+          ignore_fail: true
           token: ${{ secrets.TOKEN }}
           base: dev-next
           head: dev-next
