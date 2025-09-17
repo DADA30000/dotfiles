@@ -20,6 +20,7 @@ jobs:
       - name:
         run: | 
           cd $GITHUB_WORKSPACE/singbox
+          sed -i "s|/vendor/||" .gitignore
           go mod vendor
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
