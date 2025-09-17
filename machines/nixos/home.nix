@@ -86,6 +86,14 @@
 
   };
 
+  xdg.desktopEntries.umu.settings = {
+    Exec = "umu-run-wrapper-secure %f";
+    MimeType = "application/vnd.microsoft.portable-executable;application/x-msi;application/x-msdownload";
+    Name = "Quickly run windows apps";
+    StartupWMClass = "umu";
+    Type = "Application";
+  };
+
   mpd = {
 
     # Enable mpd music daemon

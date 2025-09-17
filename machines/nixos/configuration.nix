@@ -107,6 +107,8 @@ in
     }
   ];
 
+  programs.firejail.enable = true;
+
   # Enable systemd coredumps
   systemd.coredump.enable = false;
 
@@ -421,6 +423,7 @@ in
           ];
         })
         wget
+        zenity
         killall
         screen
         unrar

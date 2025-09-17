@@ -75,11 +75,11 @@ in
           ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
           ", code:123, exec, pactl set-sink-volume @DEFAULT_SINK@ +4096"
           ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-          "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
-          "ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+          "SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+          "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
-          "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
-          "CTRL ALT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
+          "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+          "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
           "ALT,R,submap,passthrough"
           "$mod CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
           "$mod CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
@@ -409,7 +409,6 @@ in
     };
     programs.rofi = mkIf cfg.rofi {
       enable = true;
-      package = pkgs.rofi-wayland;
       font = "JetBrainsMono NF 14";
       theme = ../../../stuff/theme.rasi;
     };
