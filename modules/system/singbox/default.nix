@@ -18,6 +18,7 @@ let
       "with_acme"
       "with_clash_api"
       "with_gvisor"
+      "d"
     ];
   };
   cfg = config.singbox;
