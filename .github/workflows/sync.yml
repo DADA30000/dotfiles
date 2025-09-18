@@ -25,8 +25,8 @@ jobs:
           git remote add upstream https://github.com/SagerNet/sing-box.git
           git fetch upstream
           git checkout dev-next
-          git merge upstream/dev-next -m "Merge upstream changes"
-          git push origin dev-next
+          git reset --hard upstream/dev-next
+          git push --force origin dev-next
           sed -i "s|/vendor/||" .gitignore
           go mod vendor
           git add -A
