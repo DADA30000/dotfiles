@@ -71,7 +71,6 @@ in
       hostName = "nc.${cfg.nginx.hostName}";
       package = pkgs.nextcloud29;
     };
-    systemd.services.nginx.serviceConfig.ReadWritePaths = [ "/website/stream" ];
     services.nginx = {
       enable = true;
       virtualHosts = mkMerge [
@@ -130,6 +129,10 @@ in
       "acme-sanic.space" = {
         after = [ "graphical.target" ];
         before = lib.mkForce [];
+      };
+      "nginx" = {
+        wantedBy = lib.mkForce [ "graphical.target" ];
+        serviceConfig.ReadWritePaths = [ "/website/stream" ];
       };
     };
     services.cron = mkIf cfg.cloudflare-ddns.enable {
