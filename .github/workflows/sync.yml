@@ -20,6 +20,8 @@ jobs:
       - name: do the sync
         run: | 
           cd $GITHUB_WORKSPACE/singbox
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/SagerNet/sing-box.git
           git fetch upstream
           git checkout dev-next
@@ -27,8 +29,6 @@ jobs:
           git push origin dev-next
           sed -i "s|/vendor/||" .gitignore
           go mod vendor
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Automated changes"
           git push

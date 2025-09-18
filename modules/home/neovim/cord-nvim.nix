@@ -45,7 +45,7 @@ vimUtils.buildVimPlugin {
   # This still lets the user set config.advanced.server.executable_path
   # https://github.com/vyfor/cord.nvim/blob/v2.2.3/lua/cord/server/fs/init.lua#L10-L15
 
-  nvimSkipModules = [ "cord.api.log.file" ];
+  doCheck = false;
 
   postPatch = ''
     substituteInPlace lua/cord/server/fs/init.lua \
