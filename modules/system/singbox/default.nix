@@ -1,25 +1,11 @@
 {
   config,
   lib,
-  inputs,
   pkgs,
   ...
 }:
 with lib;
 let
-  sing-box = pkgs.sing-box.overrideAttrs {
-    vendorHash = null;
-    src = inputs.singbox;
-    tags = [
-      "with_quic"
-      "with_dhcp"
-      "with_wireguard"
-      "with_utls"
-      "with_acme"
-      "with_clash_api"
-      "with_gvisor"
-    ];
-  };
   cfg = config.singbox;
 in
 {
@@ -33,7 +19,7 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
-        ExecStart = "${sing-box}/bin/sing-box -c /config.json run";
+        ExecStart = "${pkgs.sing-box}/bin/sing-box -c /config.json run";
       };
     };
     services.resolved = {
