@@ -1,4 +1,5 @@
 {
+  pkgs,
   inputs,
   config,
   min-flag, # Needed for minimal ISO version
@@ -22,7 +23,13 @@
 
   umu.enable = true;
 
-  home.sessionVariables.NIX_PATH = inputs.nixpkgs.outPath;
+  home.sessionVariables.NIX_PATH = pkgs.runCommand "kekma" {
+    src = ../../stuff/nixpkgs.tar.zst;
+  } ''
+    PATH=$PATH:${pkgs.zstd}/bin
+    mkdir $out
+    tar --strip-components=1 -xvf $src -C $out
+  '';
   
   # Enable rich presence
   services.arrpc.enable = false;

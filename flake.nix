@@ -46,10 +46,6 @@
     #  url = "github:HeyImKyu/fabric-cli";
     #  inputs.nixpkgs.follows = "nixpkgs";
     #};
-    singbox = {
-      url = "github:DADA30000/sing-box/dev-next";
-      flake = false;
-    };
     #hyprpanel = {
     #  url = "github:DADA30000/HyprPanel/json";
     #  inputs.nixpkgs.follows = "nixpkgs";

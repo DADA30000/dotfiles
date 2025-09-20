@@ -39,7 +39,10 @@ in
     dockerCompat = true;
   } else {};
 
-  programs.git.enable = true;
+  programs.git = {
+    enable = true;
+    config.safe.directory = "*";
+  };
 
   programs.git.lfs.enable = true;
 
@@ -79,6 +82,8 @@ in
 
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
+
+  programs.corectrl.enable = true;
 
   programs.gamemode.enable = true;
 
