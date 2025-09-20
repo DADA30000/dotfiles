@@ -56,21 +56,13 @@ in
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
               setopt correct
-              # basically nix-shell -p
-              ns-expr () {
-                local args=()
-                for arg in "$@"; do
-                    args+=(--expr "with import (builtins.getFlake \"nixpkgs\") {}; ''${arg}")
-                done
-                nix shell --impure ''${args[@]}
-              }
               # Ad-hoc python with modules env
               ns-py () {
                 local args=()
                 for arg in "$@"; do
                     args+=(''${arg})
                 done
-                nix shell --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; python3.withPackages (ps: with ps; [ ''${args[*]} ])"
+                nix shell --expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${args[*]} ])"
               }
               # Ad-hoc nix-develop devShell
               ns-dev () { 
@@ -78,10 +70,14 @@ in
                 for arg in "$@"; do
                     args+=(''${arg})
                 done
-                nix develop --impure --expr "with import (builtins.getFlake \"nixpkgs\") {}; mkShell { buildInputs = [ ''${args[*]} ]; }"
+                nix develop --expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; mkShell { buildInputs = [ ''${args[*]} ]; }"
               }
               ns () {
-                nix shell --impure ''${@/#/nixpkgs#}
+                local args=()
+                for arg in "$@"; do
+                    args+=(--expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; ''${arg}")
+                done
+                nix shell ''${args[@]}
               }
             '';
             zshEarly = mkOrder 500 ''
@@ -96,7 +92,8 @@ in
           umu-run = "umu-run-wrapper-secure";
           ls = "lsd";
           ll = "ls -l";
-          u-full = "(cd /etc/nixos; sudo nix flake update; nh os switch /etc/nixos)";
+          # Dirty ass workaround for getting ad-hoc stuff working in pure mode
+          u-full = "(cd /etc/nixos/stuff; sudo rm -rf nixpkgs.tar.zst; sudo git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5; sudo tar -cv --zstd -f nixpkgs.tar.zst nixpkgs; sudo rm -rf nixpkgs & sudo nix flake update --flake /etc/nixos & wait; nh os switch /etc/nixos)";
           u = "nh os switch /etc/nixos";
           nix-locate-full = "${inputs.nix-index-database.packages.${pkgs.system}.default}/bin/nix-locate";
           #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
@@ -107,7 +104,6 @@ in
           fastfetch = "fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
           cps = "rsync -ahr --progress";
           res = "screen -r";
-          nsp = "nix-search";
           record-h264 = "gpu-screen-recorder -k h264 -w screen -f 60 -a 'default_output|default_input' -o";
           nvide = "neovide --no-fork";
           c = "clear;printf '\n%.0s' {1..100};fastfetch";
