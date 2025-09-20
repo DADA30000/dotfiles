@@ -157,7 +157,7 @@ in
           "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"
           "${lib.escapeRegex (lib.getExe pkgs.grim)}, screencopy, allow"
           "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}, screencopy, allow"
-          "${lib.escapeRegex (lib.getExe config.wayland.windowManager.hyprland.portalPackage)}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
+          "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
         ];
         layerrule = [
           "blur, waybar"
