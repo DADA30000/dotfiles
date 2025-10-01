@@ -93,7 +93,7 @@ in
           ls = "lsd";
           ll = "ls -l";
           # Dirty ass workaround for getting ad-hoc stuff working in pure mode
-          u-full = "(cd /etc/nixos/stuff; sudo rm -rf nixpkgs.tar.zst; sudo git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5; sudo tar -cv --zstd -f nixpkgs.tar.zst nixpkgs; sudo rm -rf nixpkgs & sudo nix flake update --flake /etc/nixos & wait; nh os switch /etc/nixos)";
+          u-full = "(cd /etc/nixos/stuff; sudo rm -rf nixpkgs.tar.zst; sudo git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5; sudo tar -cv --zstd -f nixpkgs.tar.zst nixpkgs; sudo rm -rf nixpkgs; sudo nix flake update --flake /etc/nixos; nh os switch /etc/nixos)";
           u = "nh os switch /etc/nixos";
           nix-locate-full = "${inputs.nix-index-database.packages.${pkgs.system}.default}/bin/nix-locate";
           #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
