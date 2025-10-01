@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
+  git rm ./stuff/nixpkgs.tar.zst
+  rm ./stuff/nixpkgs.tar.zst
   rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
   cp -r /etc/nixos/* ./
   #rm ./stuff/singbox/config.json
