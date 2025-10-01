@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
+  git lfs prune
   git rm ./stuff/nixpkgs.tar.zst
   rm ./stuff/nixpkgs.tar.zst
   rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
