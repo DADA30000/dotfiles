@@ -27,6 +27,8 @@ in
 
   #services.udev.packages = [ pkgs.steam-devices-udev-rules ];
 
+  boot.kernel.sysctl."net.core.default_qdisc" = "cake";
+
   services.preload.enable = true;
 
   services.scx = {

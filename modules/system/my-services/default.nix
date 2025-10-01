@@ -120,20 +120,31 @@ in
       ];
     };
     systemd.services = {
-      "acme-order-renew-ip.sanic.space".after = [ "graphical.target" ];
-      "acme-order-renew-sanic.space".after = [ "graphical.target" ];
+      "acme-order-renew-ip.sanic.space" = {
+        after = lib.mkForce [ "graphical.target" "acme-setup.service" "acme-ip.sanic.space.service" ];
+        wantedBy = lib.mkForce [ "graphical.target" ];
+      };
+      "acme-order-renew-sanic.space" = {
+        after = lib.mkForce [ "graphical.target" "acme-setup.service" "acme-ip.sanic.space.service" ];
+        wantedBy = lib.mkForce [ "graphical.target" ];
+      };
       "acme-ip.sanic.space" = {
         after = [ "graphical.target" ];
         before = lib.mkForce [];
+        wantedBy = lib.mkForce [ "graphical.target" ];
       };
       "acme-sanic.space" = {
         after = [ "graphical.target" ];
         before = lib.mkForce [];
+        wantedBy = lib.mkForce [ "graphical.target" ];
       };
       "nginx" = {
         wantedBy = lib.mkForce [ "graphical.target" ];
         serviceConfig.ReadWritePaths = [ "/website/stream" ];
+        before = lib.mkForce [];
+        after = lib.mkForce [ "graphical.target" ];
       };
+      "nginx-config-reload".wantedBy = lib.mkForce [ "acme-order-renew-ip.sanic.space.service" "acme-order-renew-sanic.space.service" ];
     };
     services.cron = mkIf cfg.cloudflare-ddns.enable {
       enable = true;

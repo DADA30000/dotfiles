@@ -359,11 +359,13 @@
       	keyword windowrule opacity 1 override 1 override, title:^(.*)$;\
               keyword decoration:rounding 0"
           systemctl --user stop waybar
+          systemctl --user stop replays
           systemctl --user stop hyprpaper
           pkill hyprpaper
           exit
       fi
       hyprctl reload
+      systemctl --user start replays
       systemctl --user start waybar
       systemctl --user start hyprpaper
       exit
