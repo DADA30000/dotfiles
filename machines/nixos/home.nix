@@ -23,7 +23,8 @@
 
   umu.enable = true;
 
-  home.sessionVariables.NIX_PATH = pkgs.runCommand "kekma" {
+  # Yes, additional H is intentional
+  home.sessionVariables.NIX_PATHH = pkgs.runCommand "kekma" {
     src = ../../stuff/nixpkgs.tar.zst;
   } ''
     PATH=$PATH:${pkgs.zstd}/bin
