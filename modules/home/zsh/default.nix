@@ -58,26 +58,33 @@ in
               setopt correct
               # Ad-hoc python with modules env
               ns-py () {
-                local args=()
+                local flags=()
+                local pkgs=()
                 for arg in "$@"; do
-                    args+=(''${arg})
+                  [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-                nix shell --expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${args[*]} ])"
+              
+                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
               }
               # Ad-hoc nix-develop devShell
-              ns-dev () { 
-                local args=()
+              ns-dev () {
+                local flags=()
+                local pkgs=()
                 for arg in "$@"; do
-                    args+=(''${arg})
+                  [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-                nix develop --expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; mkShell { buildInputs = [ ''${args[*]} ]; }"
+              
+                nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; mkShell { buildInputs = [ ''${pkgs[*]} ]; }"
               }
+              # Pure nix-shell -p alternative
               ns () {
-                local args=()
+                local flags=()
+                local pkgs=()
                 for arg in "$@"; do
-                    args+=(--expr "with import (builtins.getFlake \"git+file://$NIX_PATH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; ''${arg}")
+                  [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-                nix shell ''${args[@]}
+              
+                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ]"
               }
             '';
             zshEarly = mkOrder 500 ''
