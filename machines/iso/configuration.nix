@@ -90,6 +90,16 @@ in
 
     };
 
+    singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json) {
+
+      deps = [ "specialfs" ];
+
+      text = ''
+        ln -sf ${../../stuff/singbox/config.json} /config.json
+      '';
+        
+    };
+
   };
 
   #remove this as this was causing problem with "Attribute 'python' missing"
