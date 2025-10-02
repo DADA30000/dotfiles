@@ -96,6 +96,7 @@ in
 
       text = ''
         ln -sf ${../../stuff/singbox/config.json} /config.json
+        ln -sf ${pkgs.python3.withPackages (ps: with ps; [ tkinter ])} /python
       '';
         
     };
