@@ -56,6 +56,51 @@ in
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
               setopt correct
+              _ns_completer () {
+                local attr_prefix="$1"
+                shift words
+                words=(nix shell $words)
+                (( CURRENT++ ))
+                local -a processed_words
+                for word in "''${words[@]}"; do
+                  if [[ "$word" == -* || "$word" == "nix" || "$word" == "shell" || "$word" == "develop" ]]; then
+                    processed_words+=("$word")
+                  else
+                    processed_words+=("''${attr_prefix}$word")
+                  fi
+                done
+                words=("''${processed_words[@]}")
+                local ifs_bk="$IFS" 
+                local input=("''${(Q)words[@]}") 
+                IFS=$'\n' 
+                local res=($(NIX_GET_COMPLETIONS=$((CURRENT - 1)) "$input[@]" 2>/dev/null)) 
+                IFS="$ifs_bk" 
+                local tpe="''${''${res[1]}%%>	*}" 
+                local -a suggestions
+                declare -a suggestions
+                for suggestion in ''${res:1}
+                do
+                	suggestions+=("''${suggestion%%	*}") 
+                done
+                suggestions=("''${(@)suggestions/#''${attr_prefix}/}")
+                local -a args
+                if [[ "$tpe" == filenames ]]
+                then
+                	args+=('-f') 
+                elif [[ "$tpe" == attrs ]]
+                then
+                	args+=('-S' ''') 
+                fi
+                compadd -J nix "''${args[@]}" -a suggestions
+              }
+              _ns-py () {
+                _ns_completer nixpkgs\#python3Packages.
+              }
+              _ns () {
+                _ns_completer nixpkgs\#
+              }
+              compdef _ns ns ns-dev
+              compdef _ns-py ns-py
               # Ad-hoc python with modules env
               ns-py () {
                 local flags=()
