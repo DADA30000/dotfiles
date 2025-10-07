@@ -476,7 +476,7 @@ in
         protonplus
         gimp3-with-plugins
         gamescope
-        ccls
+        (ccls.overrideAttrs { clang = pkgs.llvmPackages_19.clang; nativeBuildInputs = with pkgs; [ cmake llvmPackages_19.llvm.dev ]; buildInputs = with pkgs.llvmPackages_19; [ libclang llvm rapidjson ]; })
         (discord.override {
           withOpenASAR = true;
           withVencord = true;
