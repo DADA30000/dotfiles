@@ -17,7 +17,7 @@ in
       enable = true;
       shellIntegration.enableZshIntegration = true;
       font = {
-        name = "JetBrainsMono NF";
+        name = "JetBrainsMono NF Medium";
         size = 12;
       };
       keybindings = {

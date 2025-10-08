@@ -505,7 +505,7 @@ in
 
   };
 
-  nix.package = pkgs.nixVersions.latest;
+  #nix.package = pkgs.nixVersions.latest;
 
   services = {
 
