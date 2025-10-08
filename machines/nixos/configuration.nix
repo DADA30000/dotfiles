@@ -271,6 +271,8 @@ in
 
   nix.settings = {
 
+    eval-cores = 0;
+
     # Disable IFD to speed up evaluation
     allow-import-from-derivation = false;
 
