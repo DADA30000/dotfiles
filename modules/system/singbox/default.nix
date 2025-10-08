@@ -13,7 +13,7 @@ in
     enable = mkEnableOption "Enable singbox";
   };
 
-  config = mkIf cfg.enable {
+  config = mkIf (cfg.enable && builtins.pathExists ../../../stuff/singbox/config.json) {
     systemd.services.singbox = {
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
