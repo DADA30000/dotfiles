@@ -73,6 +73,8 @@ in
   imports = [
     ../nixos/configuration.nix
   ];
+  
+  warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
 
   system.activationScripts = {
 
@@ -95,6 +97,7 @@ in
       deps = [ "specialfs" ];
 
       text = ''
+        PATH=$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin
         ln -sf ${../../stuff/singbox/config.json} /config.json
         ln -sf ${pkgs.python3.withPackages (ps: with ps; [ tkinter ])} /python
       '';
