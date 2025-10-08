@@ -1,5 +1,9 @@
 {
   inputs = {
+    determinate = {
+      url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -104,6 +108,7 @@
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
+        inputs.determinate.nixosModules.default
         {
           home-manager = {
             extraSpecialArgs = {
