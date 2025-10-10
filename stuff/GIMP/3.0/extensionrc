@@ -1,6 +1,6 @@
 # GIMP extensionrc
 
 (GimpExtension "org.gimp.extension.goat-exercises"
-    (active yes))
+    (active no))
 
 # end of extensionrc
