@@ -276,8 +276,8 @@ in
     # Deduplicates stuff in /nix/store
     auto-optimise-store = true;
 
-    # Enable Hyprland cache
-    substituters = [ "https://hyprland.cachix.org" ];
+    # Change cache providers (lower priority number = higher priority)
+    substituters = [ "https://hyprland.cachix.org" "http://cache.nixos.org?priority=1" ];
     trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
 
     # Enable flakes
