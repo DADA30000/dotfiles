@@ -131,7 +131,7 @@ in
                     local -a suggestions
                     suggestions=( ''${suggestions_first[@]} ''${suggestions_second_unique[@]} )
                     suggestions=( "''${(@)suggestions/#''${attr_prefix}/}" )
-                    compadd -a suggestions
+                    compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=* r:|=*' -a suggestions
                   fi
                 else
                   shift processed_words
