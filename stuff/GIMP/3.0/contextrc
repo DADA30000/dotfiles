@@ -1,6 +1,6 @@
 # GIMP user context
 
-(tool "gimp-rect-select-tool")
+(tool "gimp-paintbrush-tool")
 (paint-info "gimp-paintbrush")
 (brush "2. Hardness 050")
 (dynamics "Pressure Size")
@@ -9,6 +9,6 @@
 (gradient "Skyline")
 (palette "Standard")
 (font "Sans-serif")
-(tool-preset "Virtual core pointer")
+(tool-preset "Core Pointer")
 
 # end of user context
