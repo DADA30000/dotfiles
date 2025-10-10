@@ -119,9 +119,6 @@ in
   # Enable systemd coredumps
   systemd.coredump.enable = false;
 
-  # Enable generation of NixOS documentation for modules (slows down builds)
-  documentation.nixos.enable = false;
-
   # Enable NetworkManager
   systemd.services = {
     NetworkManager-wait-online.enable = false;
