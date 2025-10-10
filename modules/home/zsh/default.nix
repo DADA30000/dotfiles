@@ -177,6 +177,9 @@ in
               _ns-eval () {
                 _ns_completer eval
               }
+              _ns-build () {
+                _ns_completer build
+              }
               compdef _ns ns
               compdef _ns-dev ns-dev
               compdef _ns-py ns-py
@@ -220,6 +223,16 @@ in
                 done
               
                 nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
+              }
+              # ad-hoc nix build expr
+              ns-eval () {
+                local flags=()
+                local pkgs=()
+                for arg in "$@"; do
+                  [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
+                done
+              
+                nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
             '';
             zshEarly = mkOrder 500 ''
