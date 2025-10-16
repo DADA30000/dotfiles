@@ -85,8 +85,6 @@ in
   # Enable OpenTabletDriver
   hardware.opentabletdriver.enable = true;
 
-  programs.corectrl.enable = true;
-
   programs.gamemode.enable = true;
 
   # Places /tmp in RAM
