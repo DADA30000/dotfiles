@@ -97,6 +97,7 @@ in
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
           "$mod, Q, exec, app2unit -- kitty"
           "$mod, C, killactive,"
+          "$mod, B, exec, uuctl"
           "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
           "$mod, E, exec, app2unit -- nautilus -w"
           "$mod, V, togglefloating,"
@@ -192,6 +193,7 @@ in
           #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
           #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
           "app2unit -- wl-paste --watch cliphist store"
+          "fumon"
           "hyprctl setcursor Bibata-Modern-Classic 24"
         ];
         input = {
