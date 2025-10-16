@@ -8,20 +8,23 @@ with lib;
 let
   cfg = config.umu;
   runtime = pkgs.fetchurl {
-    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/SteamLinuxRuntime_sniper.tar.xz";
-    hash = "sha256-QIWdJqVGqN3PYh1FxO9ewHJPk3PIQ6hOol+9oh4rb6s=";
+    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/umu.tar.zstd";
+    hash = "sha256-uMAAWUGNEp5UYGs3hBtWXtf0BnaqEPzcX1yJ105vB1w=";
   };
   umu-tar = (pkgs.writeShellScriptBin "umu-tar" ''
-    if [[ ! -d "${config.home.homeDirectory}/.local/share/umu/steamrt3" ]]; then
-      ${pkgs.coreutils-full}/bin/mkdir -p "${config.home.homeDirectory}/.local/share/umu/steamrt3"
-      ${pkgs.coreutils-full}/bin/touch "${config.home.homeDirectory}/.local/share/umu/pfx.lock"
-      ${pkgs.coreutils-full}/bin/touch "${config.home.homeDirectory}/.local/share/umu/umu.lock"
-      cd "$(${pkgs.coreutils-full}/bin/mktemp -d)"
-      ${pkgs.gnutar}/bin/tar xaf "${runtime}"
-      ${pkgs.coreutils-full}/bin/cp -a SteamLinuxRuntime_sniper/* "${config.home.homeDirectory}/.local/share/umu/steamrt3"
-      ${pkgs.coreutils-full}/bin/rm -rf "$PWD"
+    HOME="${config.home.homeDirectory}"
+    PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin"
+    TEMPDIR="$(mktemp -d)"
+    cd "$TEMPDIR"
+    if [[ ! -d "$HOME/.local/share/umu" ]]; then
+      mkdir -p "$HOME/.local/share"
+      tar xaf "${runtime}"
+      mv ./umu "$HOME/.local/share"
+      cd "$HOME"
     fi
-    PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher-unwrapped}/bin/umu-run winetricks sandbox
+    UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run winetricks sandbox
+    wait
+    rm -rf "$TEMPDIR"
   '');
 in
 {
@@ -32,7 +35,10 @@ in
   config = mkIf cfg.enable {
     systemd.user.services.umu-check = {
       Install.WantedBy = [ "graphical-session.target" ];
-      Service.ExecStart = "${umu-tar}/bin/umu-tar";
+      Service = {
+        ExecStart = "${umu-tar}/bin/umu-tar";
+        Type = "oneshot";
+      };
     };
     xdg.mimeApps.defaultApplications = {
       "application/vnd.microsoft.portable-executable" = "umu.desktop";
@@ -40,7 +46,7 @@ in
       "application/x-msdownload" = "umu.desktop";
     };
     xdg.desktopEntries.umu.settings = {
-      Exec = "umu-run-wrapper-secure %f";
+      Exec = "umu-run-wrapper %f";
       MimeType = "application/vnd.microsoft.portable-executable;application/x-msi;application/x-msdownload";
       Name = "Quickly run windows apps";
       StartupWMClass = "umu";
@@ -51,7 +57,7 @@ in
       while systemctl --user is-active --quiet umu-check.service; do
         sleep 0.2
       done
-      PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run "$1"
+      UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run $*
     '')
       (pkgs.writeShellScriptBin "umu-run-wrapper-secure" '' 
       cleanup() {

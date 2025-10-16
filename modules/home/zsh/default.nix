@@ -184,6 +184,7 @@ in
               compdef _ns-dev ns-dev
               compdef _ns-py ns-py
               compdef _ns-eval ns-eval
+              compdef _ns-build ns-build
               # Ad-hoc python with modules env
               ns-py () {
                 local flags=()
@@ -202,7 +203,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; mkShell { buildInputs = [ ''${pkgs[*]} ]; }"
+                nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; mkShell rec { buildInputs = [ ''${pkgs[*]} ]; LD_LIBRARY_PATH = \"\''${lib.makeLibraryPath buildInputs}\"; }" -c zsh
               }
               # Pure nix-shell -p alternative
               ns () {
@@ -225,7 +226,7 @@ in
                 nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
               # ad-hoc nix build expr
-              ns-eval () {
+              ns-build () {
                 local flags=()
                 local pkgs=()
                 for arg in "$@"; do
@@ -244,7 +245,7 @@ in
             zshEarly
           ];
         shellAliases = {
-          umu-run = "umu-run-wrapper-secure";
+          umu-run = "umu-run-wrapper";
           ls = "lsd";
           ll = "ls -l";
           # Dirty ass workaround for getting ad-hoc stuff working in pure mode
