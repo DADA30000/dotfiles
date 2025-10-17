@@ -4,7 +4,9 @@ if [ -f ./check ]; then
   git pull
   sudo rm -rf /etc/nixos/*
   rm ./stuff/repo.tar.gz
+  ./complete.sh
   sudo cp -r ./machines ./modules ./stuff ./flake.lock ./flake.nix /etc/nixos/
+  sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst.part*
   sudo mv /tmp/config-aaaa /etc/nixos/stuff/singbox/config.json
   echo "Файлы успешно скопированы"
 else
