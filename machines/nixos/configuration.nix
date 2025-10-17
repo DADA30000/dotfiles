@@ -25,6 +25,11 @@ in
     ../../modules/system
   ];
 
+  programs.appimage = {
+    enable = true;
+    binfmt = true;
+  };
+
   #services.udev.packages = [ pkgs.steam-devices-udev-rules ];
 
   boot.kernel.sysctl."net.core.default_qdisc" = "cake";
