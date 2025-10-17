@@ -25,6 +25,8 @@ in
     ../../modules/system
   ];
 
+  nix.gc.automatic = false;
+
   programs.appimage = {
     enable = true;
     binfmt = true;
@@ -285,7 +287,7 @@ in
     auto-optimise-store = true;
 
     # Change cache providers (lower priority number = higher priority)
-    substituters = [ "https://hyprland.cachix.org" "http://cache.nixos.org?priority=1" ];
+    substituters = [ "https://hyprland.cachix.org" "https://cache.nixos.org?priority=1" ];
     trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
 
     # Enable flakes
@@ -404,6 +406,8 @@ in
   };
 
   environment = {
+
+    etc."determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
 
     pathsToLink = [ "/share/zsh" "/share/xdg-desktop-portal" "/share/applications" ];
 

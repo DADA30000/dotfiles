@@ -73,6 +73,8 @@ in
   imports = [
     ../nixos/configuration.nix
   ];
+
+  systemd.user.services.replays.wantedBy = lib.mkForce [];
   
   warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
 
