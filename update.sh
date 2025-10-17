@@ -15,10 +15,10 @@ if [ -f ./check ]; then
   read -r name
   if [ -n "$name" ]; then
     git commit -m "$name"
-    git push -fu
+    git push --set-upstream origin main -fu
   else
     git commit -m "lil update"
-    git push -fu
+    git push --set-upstream origin main -fu
   fi
 else
   echo "change your working directory to dotfiles already"
