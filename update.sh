@@ -9,7 +9,6 @@ if [ -f ./check ]; then
   ./complete.sh
   git add . --all
   git add .gitignore
-  git rm --cached ./stuff/nixpkgs.tar.zst
   echo "You can terminate now"
   echo "Enter commit name (enter to default)"
   read -r name
