@@ -9,6 +9,7 @@ if [ -f ./check ]; then
   ./complete.sh
   git add . --all
   git add .gitignore
+  git add .gitattributes
   echo "You can terminate now"
   echo "Enter commit name (enter to default)"
   read -r name
