@@ -1,2 +1,2 @@
-stuff/* linguist-vendored
+stuff/** linguist-vendored
 *.nix linguist-language=Nix

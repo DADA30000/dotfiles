@@ -8,6 +8,4 @@
 
   flatpak.enable = lib.mkForce false;
 
-  systemd.user.services.replays.enable = false;
-
  }
