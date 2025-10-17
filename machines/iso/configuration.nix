@@ -84,7 +84,7 @@ in
       deps = [ "specialfs" ];
 
       text = ''
-        PATH=$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin
+        PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin"
         mkdir /repo
         tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
         chown root:root -R /repo 
@@ -97,13 +97,16 @@ in
       deps = [ "specialfs" ];
 
       text = ''
-        PATH=$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin
-        ln -sf ${../../stuff/singbox/config.json} /config.json
+        PATH="$PATH:${pkgs.coreutils}/bin"
+        cp ${../../stuff/singbox/config.json} /config.json
+        chmod 400 /config.json
       '';
         
     };
 
   };
+
+  boot.kernel.sysctl."vm.swappiness" = 200;
 
   #remove this as this was causing problem with "Attribute 'python' missing"
   #nixpkgs.overlays = [

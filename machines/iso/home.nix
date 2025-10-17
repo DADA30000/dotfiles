@@ -6,4 +6,8 @@
 
   firefox.enable = lib.mkForce true;
 
+  flatpak.enable = lib.mkForce false;
+
+  systemd.user.services.replays.enable = false;
+
  }

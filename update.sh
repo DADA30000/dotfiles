@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 if [ -f ./check ]; then
-  git lfs prune
-  git rm ./stuff/nixpkgs.tar.zst
-  rm ./stuff/nixpkgs.tar.zst
+  echo "Critical step, do not terminate script now"
+  ./clean_prev.sh
   rm -rf ./machines ./modules ./stuff ./flake.nix ./flake.lock
   cp -r /etc/nixos/* ./
-  #rm ./stuff/singbox/config.json
+  split -b 45M -d -a 3 ./stuff/nixpkgs.tar.zst ./stuff/nixpkgs.tar.zst.part
   ./archive.sh
+  ./complete.sh
   git add . --all
   git add .gitattributes
+  git rm --cached ./stuff/nixpkgs.tar.zst
+  echo "You can terminate now"
   echo "Enter commit name (enter to default)"
   read -r name
   if [ -n "$name" ]; then
