@@ -99,7 +99,6 @@ in
       text = ''
         PATH=$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin
         ln -sf ${../../stuff/singbox/config.json} /config.json
-        ln -sf ${pkgs.python3.withPackages (ps: with ps; [ tkinter ])} /python
       '';
         
     };
@@ -152,6 +151,7 @@ in
     lolcat
     openssl
     gparted
+    (python3.withPackages(ps: with ps; [ tkinter ]))
     (writeShellScriptBin "nix-install" nix-install)
   ];
   environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO

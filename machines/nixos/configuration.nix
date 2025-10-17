@@ -120,6 +120,11 @@ in
   # Enable NetworkManager
   systemd.services = {
     NetworkManager-wait-online.enable = false;
+    systemd-bsod = {
+      enable = true;
+      wantedBy = [ "sysinit.target" ];
+      serviceConfig.ExecStart = "${pkgs.systemd}/lib/systemd/systemd-bsod --continuous";
+    };
   };
   networking.networkmanager = {
     enable = true;
