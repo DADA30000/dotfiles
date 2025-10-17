@@ -35,8 +35,6 @@ let
       HOME="${config.home.homeDirectory}"
       LOCAL_DIR="$HOME/.local/share/umu"
       PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin:${ratarmount}/bin/ratarmount"
-      TEMPDIR="$(mktemp -d)"
-      cd "$TEMPDIR"
       if umount "umu"; then
         ratarmount --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
       else
@@ -45,8 +43,6 @@ let
         ratarmount --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
       fi
       UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run winetricks sandbox
-      wait
-      rm -rf "$TEMPDIR"
     ''
   );
 in
@@ -58,6 +54,7 @@ in
   config = mkIf cfg.enable {
     systemd.user.services.umu-check = {
       Install.WantedBy = [ "graphical-session.target" ];
+      Unit.After = [ "graphical-session.target" ];
       Service = {
         ExecStart = "${umu-tar}/bin/umu-tar";
         Type = "oneshot";
