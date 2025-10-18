@@ -12,14 +12,7 @@
   imports = [
     ../../modules/home
     inputs.nix-index-database.homeModules.nix-index
-    #inputs.hyprpanel.homeManagerModules.hyprpanel
   ];
-
-  #programs.hyprpanel = {
-  #  enable = false;
-  #  systemd.enable = true;
-  #  overwrite.enable = true;
-  #};
 
   umu.enable = true;
 

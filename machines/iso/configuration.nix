@@ -75,6 +75,8 @@ in
   ];
 
   systemd.user.services.replays.wantedBy = lib.mkForce [];
+
+  systemd.services.singbox.wantedBy = lib.mkForce [];
   
   warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
 
@@ -159,5 +161,5 @@ in
     (python3.withPackages(ps: with ps; [ tkinter ]))
     (writeShellScriptBin "nix-install" nix-install)
   ];
-  environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO
+  # environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO # Not needed for now
 }
