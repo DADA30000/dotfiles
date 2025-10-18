@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 with lib;
@@ -260,7 +261,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import <nixpkgs> { }";
+                  expr = "import (builtins.getFlake \"git+file://${config.home.sessionVariables.NIX_PATHH}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];

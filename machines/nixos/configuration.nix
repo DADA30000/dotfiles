@@ -460,6 +460,7 @@ in
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
       ]
       ++ (if !min-flag then [
+        scanmem
         kdePackages.qtdeclarative
         rust-analyzer
         comma
@@ -472,6 +473,9 @@ in
         rustc
         moonlight-qt
         osu-lazer-bin
+        mindustry
+        superTux
+        superTuxKart
         pavucontrol
         prismlauncher
         qalculate-gtk
