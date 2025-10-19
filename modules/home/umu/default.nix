@@ -33,16 +33,15 @@ let
   umu-tar = (
     pkgs.writeShellScriptBin "umu-tar" ''
       HOME="${config.home.homeDirectory}"
-      LOCAL_DIR="$HOME/.local/share/umu"
+      LOCAL_DIR="$HOME/.local/share"
       PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin:${ratarmount}/bin/ratarmount"
-      if umount "umu"; then
-        ratarmount --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
+      if umount "$LOCAL_DIR/umu"; then
+        ratarmount -o modules=subdir,subdir=umu/ --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
       else
         mkdir -p "$LOCAL_DIR"
         rm -rf "$LOCAL_DIR/umu"
-        ratarmount --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
+        ratarmount -o modules=subdir,subdir=umu/ --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
       fi
-      UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run winetricks sandbox
     ''
   );
 in
@@ -57,7 +56,7 @@ in
       Unit.After = [ "graphical-session.target" ];
       Service = {
         ExecStart = "${umu-tar}/bin/umu-tar";
-        Type = "oneshot";
+        Type = "forking";
       };
     };
     xdg.mimeApps.defaultApplications = {
@@ -75,10 +74,10 @@ in
     home.packages = [
       ratarmount # as a bonus
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
-        if systemctl --user is-active --quiet umu-check.service; then
+        if [[ ! -e ~/.local/share/umu ]]; then
           ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
         fi
-        while systemctl --user is-active --quiet umu-check.service; do
+        while [[ ! -e ~/.local/share/umu ]]; do
           sleep 0.2
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"

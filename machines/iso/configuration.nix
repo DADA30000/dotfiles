@@ -5,6 +5,7 @@
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
   user,
+  config,
   ...
 }:
 let
@@ -18,8 +19,7 @@ let
     fi
     setfont cyr-sun16
     clear
-    # if gum confirm "Провести оффлайн установку?"; then
-    if false; then
+    if gum confirm "Провести оффлайн установку?"; then
       cd /repo
       exec ./start.sh offline
     else
@@ -63,6 +63,7 @@ let
       exec nix-install
     fi
   '';
+  install-offline = "nixos-install -v --system '${config.system.build.toplevel}' --impure";
 in
 {
   home-manager.users."${user}" = import ./home.nix;
@@ -75,6 +76,8 @@ in
   ];
 
   systemd.user.services.replays.wantedBy = lib.mkForce [];
+
+  systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [];
 
   systemd.services.singbox.wantedBy = lib.mkForce [];
   
@@ -91,7 +94,9 @@ in
         PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin"
         mkdir /repo
         tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
-        chown root:root -R /repo 
+        chown root:root -R /repo
+        cd /repo
+        cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock
       '';
 
     };
@@ -160,6 +165,7 @@ in
     gparted
     (python3.withPackages(ps: with ps; [ tkinter ]))
     (writeShellScriptBin "nix-install" nix-install)
+    (writeShellScriptBin "install-offline" install-offline)
   ];
   # environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO # Not needed for now
 }
