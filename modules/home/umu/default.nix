@@ -38,7 +38,7 @@ let
       if [[ ! -d "$LOCAL_DIR/umu" ]]; then
         mkdir -p "$LOCAL_DIR"
         umount -qf "$LOCAL_DIR/umu"
-        rf -rf "$LOCAL_DIR/umu"
+        rm -rf "$LOCAL_DIR/umu"
         tar -xaf "${runtime}" -C "$LOCAL_DIR"
       fi
     ''
