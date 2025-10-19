@@ -39,7 +39,7 @@ let
         mkdir -p "$LOCAL_DIR"
         umount -qf "$LOCAL_DIR/umu"
         rf -rf "$LOCAL_DIR/umu"
-        tar -xaf "${runtime}" "$LOCAL_DIR"
+        tar -xaf "${runtime}" -C "$LOCAL_DIR"
       fi
     ''
   );
