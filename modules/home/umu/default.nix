@@ -76,6 +76,7 @@ in
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
         if [[ ! -e ~/.local/share/umu ]]; then
           ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
+          systemctl --user start umu-check.service
         fi
         while [[ ! -e ~/.local/share/umu ]]; do
           sleep 0.2
