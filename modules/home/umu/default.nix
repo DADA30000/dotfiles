@@ -34,13 +34,12 @@ let
     pkgs.writeShellScriptBin "umu-tar" ''
       HOME="${config.home.homeDirectory}"
       LOCAL_DIR="$HOME/.local/share"
-      PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin:${ratarmount}/bin/ratarmount"
-      if umount "$LOCAL_DIR/umu"; then
-        ratarmount -o modules=subdir,subdir=umu/ --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
-      else
+      PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin"
+      if [[ ! -d "$LOCAL_DIR/umu" ]]; then
         mkdir -p "$LOCAL_DIR"
-        rm -rf "$LOCAL_DIR/umu"
-        ratarmount -o modules=subdir,subdir=umu/ --write-overlay "$LOCAL_DIR/umu-overlay" "${runtime}" "$LOCAL_DIR/umu"
+        umount -qf "$LOCAL_DIR/umu"
+        rf -rf "$LOCAL_DIR/umu"
+        tar -xaf "${runtime}" "$LOCAL_DIR"
       fi
     ''
   );
@@ -56,7 +55,7 @@ in
       Unit.After = [ "graphical-session.target" ];
       Service = {
         ExecStart = "${umu-tar}/bin/umu-tar";
-        Type = "forking";
+        Type = "oneshot";
       };
     };
     xdg.mimeApps.defaultApplications = {
@@ -74,11 +73,11 @@ in
     home.packages = [
       ratarmount # as a bonus
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
-        if [[ ! -e ~/.local/share/umu ]]; then
+        if [[ ! -d ~/.local/share/umu ]]; then
           ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
           systemctl --user start umu-check.service
         fi
-        while [[ ! -e ~/.local/share/umu ]]; do
+        while [[ ! -d ~/.local/share/umu ]]; do
           sleep 0.2
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
