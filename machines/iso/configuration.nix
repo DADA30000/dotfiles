@@ -1,18 +1,17 @@
 {
   pkgs,
   lib,
-  user-hash,
-  min-flag, # Needed for minimal ISO version
-  avg-flag, # Needed for 8G ISO version
   user,
   config,
+  wrapped,
+  orig,
   ...
 }:
 let
-  bundle = pkgs.fetchurl {
-    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
-    hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
-  };
+  #bundle = pkgs.fetchurl {
+  #  url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
+  #  hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
+  #};
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
@@ -63,7 +62,7 @@ let
       exec nix-install
     fi
   '';
-  install-offline = "nixos-install -v --system '${config.system.build.toplevel}' --impure";
+  install-offline = if wrapped then "nixos-install -v --system '${orig.config.system.build.toplevel}' --impure" else "echo can't install twice :(; exit 1";
 in
 {
   home-manager.users."${user}" = import ./home.nix;

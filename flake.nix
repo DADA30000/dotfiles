@@ -105,6 +105,19 @@
       ...
     }@inputs:
     let
+      #iso-wrapper = (orig_name: system: 
+      #  builtins.listToAttrs [
+      #    { name = orig_name; value = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { recursion-breaker = true; }; }); }
+      #    { name = "${orig_name}_orig"; value = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { recursion-breaker = false; }; }); }
+      #  ]
+      #);
+      # Needed for offline installation, so that I could access config.system.build.toplevel without causing infinite recursion
+      iso-wrapper = (system: 
+        let
+          orig_system = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { wrapped = false; orig = {}; }; });
+        in
+          nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { wrapped = true; orig = orig_system; }; })
+      );
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
@@ -143,7 +156,7 @@
             { home-manager.users."${user}" = import ./machines/nixos/home.nix; }
           ];
         };
-        iso = nixpkgs.lib.nixosSystem {
+        iso = iso-wrapper {
           specialArgs = {
             user = user_iso;
             user-hash = null;
@@ -157,7 +170,7 @@
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
         };
-        iso8G = nixpkgs.lib.nixosSystem {
+        iso8G = iso-wrapper {
           specialArgs = {
             user = user_iso;
             user-hash = null;
@@ -171,7 +184,7 @@
             "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ];
         };
-        isoMIN = nixpkgs.lib.nixosSystem {
+        isoMIN = iso-wrapper {
           specialArgs = {
             user = user_iso;
             user-hash = null;
