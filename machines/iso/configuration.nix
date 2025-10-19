@@ -106,7 +106,7 @@ in
 
     };
 
-    singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json) {
+    singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json && wrapped) {
 
       deps = [ "specialfs" ];
 
