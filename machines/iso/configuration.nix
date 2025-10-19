@@ -96,7 +96,8 @@ in
         tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
         chown root:root -R /repo
         cd /repo
-        cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock
+        mkdir -p /etc/nixos
+        cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
       '';
 
     };
