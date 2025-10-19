@@ -134,23 +134,44 @@ tZXxn9qc34vndv7Nyuoe0g=="
     mv /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/machines/nixos/
     mkdir /mnt/persistent/etc
     cp -r /mnt/etc/nixos /mnt/persistent/etc
-    if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
-      printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
-      for i in {1..9}; do
+    if [[ "$1" == "offline" ]]; then
+      if install-offline; then
+        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+        for i in {1..9}; do
+          sleep 0.25
+          printf "%s" "$i"
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+        done
         sleep 0.25
-        printf "%s" "$i"
-        sleep 0.25
-        printf "."
-        sleep 0.25
-        printf "."
-        sleep 0.25
-        printf "."
-      done
-      sleep 0.25
-      printf "10\n"
-      reboot
+        printf "10\n"
+        reboot
+      else
+        printf "\e[31mОшибка установки :(\e[0m\n"
+      fi
     else
-      printf "\e[31mОшибка установки :(\e[0m\n"
+      if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
+        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+        for i in {1..9}; do
+          sleep 0.25
+          printf "%s" "$i"
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+          sleep 0.25
+          printf "."
+        done
+        sleep 0.25
+        printf "10\n"
+        reboot
+      else
+        printf "\e[31mОшибка установки :(\e[0m\n"
+      fi
     fi
   fi
 else
