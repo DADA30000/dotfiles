@@ -63,10 +63,9 @@ let
     fi
   '';
   install-offline = if wrapped then ''
-    # ${orig.config.system.build.toplevel} Include it just in case
-    nixos-install -v --system '${orig.config.system.build.toplevel.drvPath}' --impure
+    nixos-install -v --system '${orig.config.system.build.toplevel}' --impure
   '' else ''
-    echo can't install twice :(
+    echo "can't install twice :("
     exit 1
   '';
 in
