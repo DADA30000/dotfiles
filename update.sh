@@ -14,10 +14,10 @@ if [ -f ./check ]; then
   echo "Enter commit name (enter to default)"
   read -r name
   if [ -n "$name" ]; then
-    git commit -m "$name"
+    git commit -am "$name"
     git push --set-upstream origin main -fu
   else
-    git commit -m "lil update"
+    git commit -am "lil update"
     git push --set-upstream origin main -fu
   fi
 else
