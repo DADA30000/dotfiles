@@ -12,5 +12,6 @@
     ./mlocate
     ./singbox
     ./plymouth
+    ./cape
   ];
 }
