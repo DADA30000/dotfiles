@@ -36,13 +36,14 @@ jobs:
         run: |
           df -h
           lscpu
-          sudo rm -rf /opt/hostedtoolcache
           sudo docker system prune -af; sudo docker volume prune -f; sudo docker builder prune --all -f
           docker system prune -af; docker volume prune -f; docker builder prune --all -f
           npm cache clean --force
           sudo npm cache clean --force
-          sudo rm -rf /usr/local/lib/node_modules
           sudo rm -rf /usr/local
+          sudo rm -rf /usr/lib/jvm /usr/lib/google-cloud-sdk /usr/lib/llvm-* /usr/lib/firefox /usr/lib/gcc
+          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/share/miniconda /usr/share/az_* /usr/share/gradle-*
+          sudo rm -rf /opt
           sudo apt install nodejs
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
