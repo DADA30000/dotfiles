@@ -203,7 +203,9 @@ in
           repeat_rate = 35;
           follow_mouse = 1;
           touchpad = {
-            natural_scroll = false;
+            natural_scroll = true;
+            scroll_factor = 0.5;
+            disable_while_typing = false;
           };
           sensitivity = 1;
           accel_profile = "flat";

@@ -530,6 +530,17 @@ in
 
     openssh.enable = true;
 
+    udisks2 = {
+      enable = true;
+      settings."mount_options.conf".defaults = {
+        vfat_defaults="sync";
+        exfat_defaults="sync";
+        ntfs_defaults="sync";
+        "ntfs:ntfs_defaults"="sync";
+        "ntfs:ntfs3_defaults"="sync";
+      };
+    };
+
     pipewire = {
       enable = true;
       alsa.enable = true;
