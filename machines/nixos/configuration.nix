@@ -6,24 +6,24 @@
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
   lib,
+  umport,
   ...
 }:
 let
-  bundle = pkgs.fetchurl {
-    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
-    hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
-  };
-  vmware-package = pkgs.vmware-workstation.overrideAttrs {
-    src = bundle;
-  };
-  hash = builtins.hashFile "sha256" "${inputs.nixpkgs}/nixos/modules/virtualisation/vmware-host.nix";
-  checker = if hash == "71d417c40302bce51887cf5c790084f0638aff6e61077c6c09b887b6ea505fe9" then true else throw "vmware module has been updated, update hash and src in package, current hash is ${hash}"; #It's needed so that I wouldn't miss an vmware update
+  # bundle = pkgs.fetchurl {
+  #   url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
+  #   hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
+  # };
+  # vmware-package = pkgs.vmware-workstation.overrideAttrs {
+  #   src = bundle;
+  # };
+  # hash = builtins.hashFile "sha256" "${inputs.nixpkgs}/nixos/modules/virtualisation/vmware-host.nix";
+  # checker = if hash == "71d417c40302bce51887cf5c790084f0638aff6e61077c6c09b887b6ea505fe9" then true else throw "vmware module has been updated, update hash and src in package, current hash is ${hash}"; #It's needed so that I wouldn't miss an vmware update
 in
 {
   imports = [
     ./hardware-configuration.nix
-    ../../modules/system
-  ];
+  ] ++ umport { paths = [ ../../modules/system ]; recursive = false; };
 
   nix.gc.automatic = false;
 
@@ -72,6 +72,19 @@ in
   # Enable RAM compression
   zramSwap.enable = true;
 
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu = {
+      verbatimConfig = ''
+        max_core = 0
+      '';
+      swtpm.enable = true;
+    };
+  };
+
+# Enable USB redirection (optional)
+virtualisation.spiceUSBRedirection.enable = true;
+
   # Enable IOMMU
   boot.kernelParams = [
     "iommu=pt"
@@ -111,13 +124,18 @@ in
   boot.initrd.systemd.enable = true;
 
   # Disable usual coredumps (I hate them)
-  security.pam.loginLimits = [
-    {
-      domain = "*";
-      item = "core";
-      value = "0";
-    }
-  ];
+  #security.pam.loginLimits = [
+  #  {
+  #    domain = "*";
+  #    item = "core";
+  #    value = "0";
+  #  }
+  #  {
+  #    domain = "l0lk3k";
+  #    item = "core";
+  #    value = "-1"; # -1 means unlimited
+  #  }
+  #];
 
   programs.firejail.enable = true;
 
@@ -266,6 +284,7 @@ in
       "wheel"
       "uinput"
       "mlocate"
+      "libvirtd"
       "nginx"
       "input"
       "kvm"
@@ -277,6 +296,7 @@ in
   };
 
   nix.settings = {
+
 
     eval-cores = 0;
 
@@ -426,6 +446,7 @@ in
     systemPackages =
       with pkgs; 
       [
+        gnome-boxes
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
         lsd
@@ -444,7 +465,6 @@ in
         screen
         unrar
         zip
-        mpv
         adwaita-icon-theme
         nvtopPackages.amd
         any-nix-shell
@@ -499,8 +519,7 @@ in
         inputs.zen-browser.packages.${system}.twilight
         heroic
         gsettings-desktop-schemas
-      ] else [])
-      ++ (import ../../modules/system/stuff { inherit pkgs user; }).scripts;
+      ] else []);
 
   };
 

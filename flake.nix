@@ -118,6 +118,7 @@
         in
           nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { wrapped = true; orig = orig_system; }; })
       );
+      umport = (import ./modules/umport.nix {inherit (nixpkgs) lib;}).umport;
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
@@ -125,7 +126,7 @@
         {
           home-manager = {
             extraSpecialArgs = {
-              inherit inputs self;
+              inherit inputs self umport;
             };
             backupFileExtension = "backup";
             useGlobalPkgs = true;
@@ -146,6 +147,7 @@
               user
               user-hash
               self
+              umport
               ;
             min-flag = false;
             avg-flag = false;
@@ -162,7 +164,7 @@
             user-hash = null;
             min-flag = false;
             avg-flag = false;
-            inherit inputs self;
+            inherit inputs self umport;
           };
           modules = modules-list ++ [
             { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = false; }; }
@@ -176,7 +178,7 @@
             user-hash = null;
             min-flag = false;
             avg-flag = true;
-            inherit inputs self;
+            inherit inputs self umport;
           };
           modules = modules-list ++ [
             { home-manager.extraSpecialArgs = { avg-flag = true; min-flag = false; }; }
@@ -190,7 +192,7 @@
             user-hash = null;
             min-flag = true;
             avg-flag = false;
-            inherit inputs self;
+            inherit inputs self umport;
           };
           modules = modules-list ++ [
             { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = true; }; }
