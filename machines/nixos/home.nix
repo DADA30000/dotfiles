@@ -4,15 +4,15 @@
   config,
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
+  umport,
   ...
 }:
 {
 
   # Import other modules
   imports = [
-    ../../modules/home
     inputs.nix-index-database.homeModules.nix-index
-  ];
+  ] ++ umport { paths = [ ../../modules/home ]; recursive = false; };
 
   umu.enable = true;
 

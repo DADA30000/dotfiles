@@ -1,5 +1,5 @@
-{ pkgs, user }:
-{
+{ pkgs, user, ... }:
+let
   scripts = [
     (pkgs.writers.writePython3Bin "krisp-patcher"
       {
@@ -426,4 +426,7 @@
       fi
     '')
   ];
+in
+{
+  environment.systemPackages = scripts;
 }
