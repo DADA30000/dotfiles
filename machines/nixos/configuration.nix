@@ -435,9 +435,7 @@ in
         nixd
         (firefox.override {
           nativeMessagingHosts = [
-            (inputs.pipewire-screenaudio.packages.${pkgs.system}.default.overrideAttrs (
-              finalAttrs: previousAttrs: { cargoHash = "sha256-H/Uf6Yo8z6tZduXh1zKxiOqFP8hW7Vtqc7p5GM8QDws="; }
-            ))
+            (inputs.pipewire-screenaudio.packages.${pkgs.system}.default)
           ];
         })
         wget
