@@ -25,19 +25,19 @@
       url = "github:Gerg-L/spicetify-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    hypr-dynamic-cursors = {
-      url = "github:VirtCode/hypr-dynamic-cursors";
-      inputs.hyprland.follows = "hyprland";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    #hypr-dynamic-cursors = {
+    #  url = "github:VirtCode/hypr-dynamic-cursors";
+    #  inputs.hyprland.follows = "hyprland";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpak = {
-      url = "github:nixpak/nixpak";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    #nixpak = {
+    #  url = "github:nixpak/nixpak";
+    #  inputs.nixpkgs.follows = "nixpkgs";
+    #};
     #fabric = {
     #  url = "github:Fabric-Development/fabric";
     #  inputs.nixpkgs.follows = "nixpkgs";
