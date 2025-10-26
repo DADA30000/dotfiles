@@ -252,6 +252,18 @@ in
           u-full = "(cd /etc/nixos/stuff; sudo rm -rf nixpkgs.tar.zst; sudo git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5; sudo tar -cv --zstd -f nixpkgs.tar.zst nixpkgs; sudo rm -rf nixpkgs; sudo nix flake update --flake /etc/nixos; nh os switch /etc/nixos)";
           u = "nh os switch /etc/nixos";
           nsl-full = "${inputs.nix-index-database.packages.${pkgs.system}.default}/bin/nix-locate";
+          nss = 
+          let 
+            index = pkgs.runCommand "index" {} ''
+              PATH=$PATH:${config.nix.package}/bin
+              mkdir fake-state-dir
+              mkdir -p "$out"
+              HOME="$out" NIX_STATE_DIR="$(pwd)/fake-state-dir" NIX_PATH="nixpkgs=${inputs.nixpkgs}" ${inputs.nix-search.packages.${pkgs.system}.default}/bin/nix-search -i -v 3
+              mv "$out/.cache/nix-search/index-v4" "$out" 
+              rm -rf "$out/.cache"
+            '';
+          in
+            "nix-search --index-path \"${index}\"";
           #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
           u-test = "nh os test /etc/nixos";
           u-boot = "nh os boot /etc/nixos";
