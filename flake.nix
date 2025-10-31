@@ -25,6 +25,25 @@
       url = "github:Gerg-L/spicetify-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    cape = {
+      url = "github:kevoreilly/CAPEv2";
+      flake = false;
+    };
     #hypr-dynamic-cursors = {
     #  url = "github:VirtCode/hypr-dynamic-cursors";
     #  inputs.hyprland.follows = "hyprland";
@@ -122,7 +141,7 @@
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
-        inputs.determinate.nixosModules.default
+        # inputs.determinate.nixosModules.default
         {
           home-manager = {
             extraSpecialArgs = {

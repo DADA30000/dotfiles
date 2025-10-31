@@ -72,18 +72,15 @@ in
   # Enable RAM compression
   zramSwap.enable = true;
 
-  virtualisation.libvirtd = {
+  cape = {
     enable = true;
-    qemu = {
-      verbatimConfig = ''
-        max_core = 0
-      '';
-      swtpm.enable = true;
-    };
+    users = [ "l0lk3k" ];
   };
 
-# Enable USB redirection (optional)
-virtualisation.spiceUSBRedirection.enable = true;
+  virtualisation.libvirtd.qemu.verbatimConfig = ''max_core = 0'';
+
+  # Enable USB redirection (optional)
+  virtualisation.spiceUSBRedirection.enable = true;
 
   # Enable IOMMU
   boot.kernelParams = [
@@ -297,11 +294,10 @@ virtualisation.spiceUSBRedirection.enable = true;
 
   nix.settings = {
 
-
-    eval-cores = 0;
+    # eval-cores = 0;
 
     # Disable IFD to speed up evaluation
-    allow-import-from-derivation = false;
+    # allow-import-from-derivation = false;
 
     # Deduplicates stuff in /nix/store
     auto-optimise-store = true;
@@ -353,6 +349,8 @@ virtualisation.spiceUSBRedirection.enable = true;
 
       # Enable nginx
       enable = true;
+
+      cape.enable = true;
 
       # Enable my goofy website
       website.enable = true;
@@ -446,6 +444,7 @@ virtualisation.spiceUSBRedirection.enable = true;
     systemPackages =
       with pkgs; 
       [
+        xonotic
         gnome-boxes
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
