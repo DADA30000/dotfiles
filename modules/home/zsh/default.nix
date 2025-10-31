@@ -268,6 +268,8 @@ in
           u-test = "nh os test /etc/nixos";
           u-boot = "nh os boot /etc/nixos";
           u-build = "nh os build /etc/nixos";
+          u-debug =  "nix build /etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try";
+          ns-repl = ''nix repl --expr "import (builtins.getFlake \"git+file://$NIX_PATHH?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }"'';
           nsl = "nix-locate";
           #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
           fastfetch = "fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
