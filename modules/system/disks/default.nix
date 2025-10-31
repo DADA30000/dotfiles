@@ -110,8 +110,26 @@ in
           "/website"
           "/etc/nixos"
           "/var/lib/libvirt"
-          "/var/lib/acme"
           "/var/lib/flatpak"
+          "/var/db"
+          { 
+            directory = "/var/lib/acme";
+            user = "acme";
+            group = "acme";
+            mode = "u=rwx,g=rx,o=rx";
+          }
+          { 
+            directory = "/var/lib/cape";
+            user = "cape";
+            group = "cape";
+            mode = "u=rwx,g=,o=";
+          }
+          {
+            directory = "/var/lib/postgresql";
+            user = "postgres";
+            group = "postgres";
+            mode = "u=rwx,g=rx,o=";
+          }
         ];
         files = [
           "/config.json"

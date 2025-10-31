@@ -145,6 +145,8 @@ in
 
   my-services.nginx.enable = lib.mkForce false;
 
+  cape.enable = lib.mkForce false;
+
   boot.loader.timeout = lib.mkForce 10;
 
   graphics.nvidia.enable = lib.mkForce true;

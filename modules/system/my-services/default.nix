@@ -53,6 +53,7 @@ in
       enable = mkEnableOption "Enable nginx";
       website.enable = mkEnableOption "Enable my goofy website";
       nextcloud.enable = mkEnableOption "Enable nextcloud";
+      cape.enable = mkEnableOption "Enable integration with CAPEv2 sandbox";
       hostName = mkOption {
         type = types.str;
         default = "sanic.space";
@@ -73,6 +74,7 @@ in
     };
     services.nginx = {
       enable = true;
+      recommendedProxySettings = true;
       virtualHosts = mkMerge [
         (mkIf cfg.nginx.nextcloud.enable {
           ${config.services.nextcloud.hostName} = {
@@ -83,6 +85,24 @@ in
         (mkIf cfg.nginx.website.enable {
           "${cfg.nginx.hostName}" = shared-config;
           "ip.${cfg.nginx.hostName}" = shared-config;
+        })
+        (mkIf cfg.nginx.cape.enable {
+          "cape.${cfg.nginx.hostName}" = {
+            forceSSL = true;
+            enableACME = true;
+            locations = {
+              "/guac/" = {
+                proxyPass = "http://127.0.0.1:8008";
+                proxyWebsockets = true;
+                recommendedProxySettings = true;
+              };
+              "/" = {
+                proxyPass = "http://127.0.0.1:8000";
+                proxyWebsockets = true;
+                recommendedProxySettings = true;
+              };
+            };
+          };
         })
       ];
       appendConfig = ''
@@ -117,6 +137,9 @@ in
           "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
           "ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
         })
+        (mkIf cfg.nginx.cape.enable {
+          "cape.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
+        })
       ];
     };
     systemd.services = {
@@ -128,7 +151,16 @@ in
         after = lib.mkForce [ "graphical.target" "acme-setup.service" "acme-ip.sanic.space.service" ];
         wantedBy = lib.mkForce [ "graphical.target" ];
       };
+      "acme-order-renew-cape.sanic.space" = {
+        after = lib.mkForce [ "graphical.target" "acme-setup.service" "acme-ip.sanic.space.service" ];
+        wantedBy = lib.mkForce [ "graphical.target" ];
+      };
       "acme-ip.sanic.space" = {
+        after = [ "graphical.target" ];
+        before = lib.mkForce [];
+        wantedBy = lib.mkForce [ "graphical.target" ];
+      };
+      "acme-cape.sanic.space" = {
         after = [ "graphical.target" ];
         before = lib.mkForce [];
         wantedBy = lib.mkForce [ "graphical.target" ];

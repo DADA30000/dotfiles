@@ -227,6 +227,7 @@ in
         };
         cursor = {
           no_hardware_cursors = false;
+          zoom_disable_aa = true;
         };
         decoration = {
           rounding = 10;
