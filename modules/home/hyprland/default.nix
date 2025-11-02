@@ -47,26 +47,26 @@ in
     ];
     wayland.windowManager.hyprland = {
       #portalPackage = mkMerge [
-      #  (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland)
-      #  (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.xdg-desktop-portal-hyprland)
+      #  (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
+      #  (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
       #];
       portalPackage = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland)
-        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.xdg-desktop-portal-hyprland)
+        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
+        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
       ];
       package = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.system}.hyprland)
-        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.system}.hyprland)
+        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland)
+        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
       ];
       plugins =
         lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
           pkgs.hyprlandPlugins.hyprtrails
         ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
-          inputs.hyprland-plugins.packages.${pkgs.system}.hyprtrails
+          inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
         ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
-          inputs.unstable.legacyPackages.${pkgs.system}.hyprlandPlugins.hyprtrails
+          inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
         ];
       enable = true;
       settings = {
@@ -153,6 +153,7 @@ in
           "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
           "opacity 0.99 override 0.99 override, class:^(mpv)$"
           "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
+          "opacity 0.99 override 0.99 override, class:^(die)$"
         ];
         permission = [
           "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"

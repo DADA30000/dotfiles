@@ -1,0 +1,109 @@
+diff --git a/src/main.rs b/src/main.rs
+index 0d4d588..f0c4c63 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -8,6 +8,7 @@ use tracing::debug;
+ 
+ mod app;
+ use app::App;
++use strum::VariantArray;
+ mod logging;
+ mod opt_data;
+ mod opt_display;
+@@ -15,6 +16,19 @@ mod search;
+ mod tui;
+ 
+ fn main() {
++    match std::env::var("NOX_PREFETCH_CACHE_PATH") {
++        Ok(val) => {
++            let path = std::path::PathBuf::from(val);
++            for i in search::Source::VARIANTS {
++                let path_curr = path.join(format!("{i}.zst"));
++                println!("prefetching cache for {}", path_curr.display());
++                let _ = search::Source::store_cache_to(&i.get_online_data().ok().unwrap(), &path_curr);
++                println!("prefetched cache for {}", path_curr.display());
++            }
++            return
++        },
++        Err(_) => {}
++    }
+     let res = init_and_run();
+     if let Err(e) = tui::restore() {
+         eprintln!("{e:#?}");
+diff --git a/src/opt_display.rs b/src/opt_display.rs
+index 4e1274d..214670a 100644
+--- a/src/opt_display.rs
++++ b/src/opt_display.rs
+@@ -95,7 +95,7 @@ impl OptListItem {
+         } else if context.index.is_multiple_of(2) {
+             Style::default()
+         } else {
+-            Style::default().bg(Color::Indexed(236))
++            Style::default()
+         };
+         self.full_height(context.cross_axis_size)
+     }
+diff --git a/src/search.rs b/src/search.rs
+index 0accef5..72ed342 100644
+--- a/src/search.rs
++++ b/src/search.rs
+@@ -206,7 +206,7 @@ impl Source {
+         cache_dir().clone().join(format!("{self}.zst"))
+     }
+ 
+-    fn store_cache_to(data: &SourceData, path: &PathBuf) -> Result<()> {
++    pub fn store_cache_to(data: &SourceData, path: &PathBuf) -> Result<()> {
+         let bitdata = bitcode::encode(data);
+         let zstddata =
+             zstd::stream::encode_all(bitdata.as_slice(), Source::ZSTD_COMPRESSION_LEVEL)?;
+@@ -251,15 +251,23 @@ impl Source {
+         ))
+     }
+ 
+-    fn get_online_data(self) -> Result<SourceData> {
+-        let html = ureq::get(self.url())
+-            .call()?
+-            .body_mut()
+-            .with_config()
+-            // 30 MB reading limit.
+-            // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
+-            .limit(30 * 1024 * 1024)
+-            .read_to_string()?;
++    pub fn get_online_data(self) -> Result<SourceData> {
++        let html: String = match std::env::var(String::from(format!("NOX_HTML_{}",self.to_string().replace(" ", "_").replace("-","_")))) {
++            Ok(val) => {
++                println!("offline fetch from {val}");
++                std::fs::read_to_string(&std::path::PathBuf::from(val)).ok().unwrap()
++            },
++            Err(_) => {
++                ureq::get(self.url())
++                    .call()?
++                    .body_mut()
++                    .with_config()
++                    // 30 MB reading limit.
++                    // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
++                    .limit(30 * 1024 * 1024)
++                    .read_to_string()?
++            }
++        };
+         let dom = tl::parse(&html, tl::ParserOptions::default())?;
+ 
+         Ok(SourceData {
+@@ -270,7 +278,7 @@ impl Source {
+         })
+     }
+ 
+-    // We could return a Result or Option to account for possible failure modes, but currently I'm not sure what I'd use it for.
++    // We could return a Result or Optiopub n to account for possible failure modes, but currently I'm not sure what I'd use it for.
+     // Maybe if we return a semantically meaningful error, we can retry HTTP requests occassionally on failure? Exponential backoff
+     fn get_data(self) -> Result<SourceData> {
+         let cache_validity = self.cache_is_current();
+@@ -314,7 +322,7 @@ impl fmt::Display for Source {
+ }
+ 
+ #[derive(Clone, Debug, Encode, Decode, PartialEq)]
+-struct SourceData {
++pub struct SourceData {
+     source: Source,
+     opts: Vec<OptText>,
+     version: String,

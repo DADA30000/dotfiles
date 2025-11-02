@@ -7,7 +7,7 @@
 }:
 with lib;
 let
-  spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.system};
+  spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.stdenv.hostPlatform.system};
   pmparser = pkgs.stdenv.mkDerivation {
     pname = "pmparser";
     version = "1.0";

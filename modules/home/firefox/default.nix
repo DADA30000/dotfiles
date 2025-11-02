@@ -8,7 +8,7 @@
 with lib;
 let
   vencord-web = (
-    inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon {
+    inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon {
       pname = "vencord-web";
       version = "1.10.9";
       addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
@@ -27,10 +27,10 @@ in
   config = mkIf cfg.enable {
     programs.firefox = {
       enable = true;
-      nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.system}.default ];
+      nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default ];
       profiles.kek = {
         extensions = {
-          packages = with inputs.nur.legacyPackages.${pkgs.system}.repos.rycee.firefox-addons; [
+          packages = with inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons; [
             bitwarden
             ublock-origin
             privacy-badger

@@ -1,6 +1,7 @@
 {
   pkgs,
   inputs,
+  config,
   user-hash,
   user,
   min-flag, # Needed for minimal ISO version
@@ -10,6 +11,17 @@
   ...
 }:
 let
+  man-cache = pkgs.runCommand "generate-man-cache" {
+      MAN_NIX = "${config.system.build.manual.nixos-configuration-reference-manpage}/share/man/man5/configuration.nix.5.gz";
+      MAN_HOME = "${inputs.home-manager.packages.${pkgs.stdenv.hostPlatform.system}.docs-manpages}/share/man/man5/home-configuration.nix.5";
+    } ''
+    mkdir -p $out
+    MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_NIX" /dev/null > $out/configuration.nix.cache
+    MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_HOME" /dev/null > $out/home-configuration.nix.cache
+  '';
+  imports = [
+    ./hardware-configuration.nix
+  ] ++ umport { paths = [ ../../modules/system ]; recursive = false; };
   # bundle = pkgs.fetchurl {
   #   url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
   #   hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
@@ -21,11 +33,21 @@ let
   # checker = if hash == "71d417c40302bce51887cf5c790084f0638aff6e61077c6c09b887b6ea505fe9" then true else throw "vmware module has been updated, update hash and src in package, current hash is ${hash}"; #It's needed so that I wouldn't miss an vmware update
 in
 {
-  imports = [
-    ./hardware-configuration.nix
-  ] ++ umport { paths = [ ../../modules/system ]; recursive = false; };
+  imports = imports;
+
+  documentation.nixos = {
+    includeAllModules = true;
+    extraModules = builtins.map (x: builtins.toPath x) imports;
+  };
 
   nix.gc.automatic = false;
+
+  # Enable option search (increases eval time by a lot)
+  nos.enable = false;
+
+  #systemd.user.extraConfig = ''
+  #  DefaultTimeoutStopSec=5s
+  #'';
 
   programs.appimage = {
     enable = true;
@@ -191,7 +213,7 @@ in
     hyprland = {
       prettyName = "Hyprland";
       comment = "Hyprland compositor managed by UWSM";
-      binPath = "${inputs.hyprland.packages.${pkgs.system}.default}/bin/Hyprland";
+      binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland";
     };
   };
 
@@ -430,6 +452,17 @@ in
     pathsToLink = [ "/share/zsh" "/share/xdg-desktop-portal" "/share/applications" ];
 
     variables = {
+      # Yes, additional H is intentional
+      NIX_PATHH = pkgs.runCommand "kekma" {
+        src = ../../stuff/nixpkgs.tar.zst;
+      } ''
+        PATH=$PATH:${pkgs.zstd}/bin
+        mkdir $out
+        tar --strip-components=1 -xvf $src -C $out
+      '';
+      NIX_PATHH_REV = inputs.nixpkgs.rev;
+      MAN_NIX = "${man-cache}/configuration.nix.cache";
+      MAN_HOME = "${man-cache}/home-configuration.nix.cache";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
       GTK_THEME = "Fluent-Dark";
@@ -442,9 +475,9 @@ in
     };
 
     systemPackages =
-      with pkgs; 
+      with pkgs; with inputs;
+      # Keep in every ISO
       [
-        xonotic
         gnome-boxes
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
@@ -455,7 +488,7 @@ in
         nixd
         (firefox.override {
           nativeMessagingHosts = [
-            (inputs.pipewire-screenaudio.packages.${pkgs.system}.default)
+            (pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default)
           ];
         })
         wget
@@ -470,12 +503,13 @@ in
         wl-clipboard
         networkmanager_dmenu
         neovide
-        p7zip
-        inputs.quickshell.packages.${system}.default
-        inputs.nix-alien.packages.${system}.nix-alien
-        inputs.nix-search.packages.${system}.default
+        _7zz-rar
+        quickshell.packages.${system}.default
+        nix-alien.packages.${system}.nix-alien
+        nix-search.packages.${system}.default
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
       ]
+      # Remove from 4G ISO
       ++ (if !min-flag then [
         scanmem
         kdePackages.qtdeclarative
@@ -491,6 +525,7 @@ in
         moonlight-qt
         osu-lazer-bin
         mindustry
+        xonotic
         superTux
         superTuxKart
         pavucontrol
@@ -514,6 +549,7 @@ in
           withVencord = true;
         })
       ] else [])
+      # Remove from 8G ISO
       ++ (if !(avg-flag || min-flag) then [
         inputs.zen-browser.packages.${system}.twilight
         heroic
@@ -536,7 +572,7 @@ in
 
   };
 
-  #nix.package = pkgs.nixVersions.latest;
+  nix.package = pkgs.nixVersions.latest;
 
   services = {
 

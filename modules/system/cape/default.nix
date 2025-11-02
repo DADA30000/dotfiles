@@ -88,7 +88,8 @@ let
     dontFixup = true;
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "sha256-QiWO6ZmivlegIBgY06b5eE/FmsxYURuYvhSRV6w9zP4=";
+    # This is not reproducible, need to later either upstream github action, or make a fork with an action 
+    outputHash = "sha256-v/SXFUxAPTEliO64ccRxnxdcq8+7Vq0/WF8CTgpfFZA=";
   };
   hacks = pkgs.callPackage inputs.pyproject-nix.build.hacks { };
   add_setuptools =
@@ -190,6 +191,7 @@ let
     sqlite
     tmux
     net-tools
+    detect-it-easy
     checkinstall
     graphviz
     psmisc
@@ -317,6 +319,18 @@ let
 
             crudini --set conf/processing.conf behavior ram_boost yes
 
+            crudini --set conf/processing.conf die enabled yes
+
+            crudini --set conf/processing.conf die binary "${pkgs.detect-it-easy}/bin/diec"
+
+            crudini --set conf/processing.conf suricata 7zbin "${pkgs._7zz-rar}/bin/7zz"
+
+            crudini --set conf/processing.conf suricata enabled yes
+
+            crudini --set conf/processing.conf suricata bin "${pkgs.suricata}/bin/suricata"
+
+            crudini --set conf/processing.conf suricata conf "${config.services.suricata.configFile}"
+
             substituteInPlace web/web/settings.py \
         --replace 'ALLOWED_HOSTS = ["*"]' \
                   'ALLOWED_HOSTS = ["*", "cape.sanic.space"]'
@@ -374,7 +388,6 @@ let
       runHook preInstall
       mkdir -p $out
       cp -R . $out/
-      cp "${pkgs._7zz-rar}/bin/7zz" "$out/data/7zz"
     '';
   };
   mongoCnf =
@@ -755,6 +768,7 @@ in
       services = {
         suricata.enable = false;
         guacamole-server.wantedBy = mkForce [ "cape.service" ];
+        suricata-update.wantedBy = mkForce [ "cape.service" ];
         guac-web = {
           description = "Guacamole ASGI app for CAPE";
           wantedBy = [ "cape.service" ];
