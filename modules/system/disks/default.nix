@@ -119,6 +119,12 @@ in
             mode = "u=rwx,g=rx,o=rx";
           }
           { 
+            directory = "/var/lib/suricata";
+            user = "suricata";
+            group = "suricata";
+            mode = "u=rwx,g=rx,o=rx";
+          }
+          { 
             directory = "/var/lib/cape";
             user = "cape";
             group = "cape";

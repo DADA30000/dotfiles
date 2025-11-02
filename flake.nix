@@ -29,6 +29,10 @@
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nos = {
+      url = "github:madsbv/nix-options-search";
+      flake = false;
+    };
     uv2nix = {
       url = "github:pyproject-nix/uv2nix";
       inputs.pyproject-nix.follows = "pyproject-nix";
@@ -85,6 +89,10 @@
       url = "github:IceDBorn/pipewire-screenaudio";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-darwin = {
+      url = "github:LnL7/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     hazy = {
       url = "github:Astromations/Hazy";
       flake = false;
@@ -111,6 +119,7 @@
       url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.05";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
     impermanence.url = "github:nix-community/impermanence";
@@ -150,6 +159,7 @@
             backupFileExtension = "backup";
             useGlobalPkgs = true;
             useUserPackages = true;
+            users.root = import ./machines/nixos/home-root.nix;
           };
         }
       ];

@@ -195,7 +195,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [ bash-language-server shellcheck shfmt asm-lsp ];
+    home.packages = with pkgs; [ bash-language-server shellcheck shfmt asm-lsp rustfmt ];
     programs.neovim = {
       coc.enable = true;
       enable = true;
@@ -261,7 +261,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://${config.home.sessionVariables.NIX_PATHH}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.system}\"; config.allowUnfree = true; }";
+                  expr = "import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];
@@ -290,7 +290,9 @@ in
             colorscheme onedark
             highlight Normal guifg=#bbddff
             map! <S-Insert> <C-R>+
-            map !aa :tabnew +Ex /etc/nixos<cr>
+            map !aa :tabnew /etc/nixos<cr>
+            map !hh :silent! tabnew +Man! $MAN_HOME<cr>
+            map !nn :silent! tabnew +Man! $MAN_NIX<cr>
             nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
             set number
             highlight EndOfBuffer ctermbg=none guibg=none
