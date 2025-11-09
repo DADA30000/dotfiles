@@ -1,5 +1,5 @@
 diff --git a/src/main.rs b/src/main.rs
-index 0d4d588..f0c4c63 100644
+index 0d4d588..9858217 100644
 --- a/src/main.rs
 +++ b/src/main.rs
 @@ -8,6 +8,7 @@ use tracing::debug;
@@ -10,7 +10,7 @@ index 0d4d588..f0c4c63 100644
  mod logging;
  mod opt_data;
  mod opt_display;
-@@ -15,6 +16,19 @@ mod search;
+@@ -15,6 +16,20 @@ mod search;
  mod tui;
  
  fn main() {
@@ -20,7 +20,8 @@ index 0d4d588..f0c4c63 100644
 +            for i in search::Source::VARIANTS {
 +                let path_curr = path.join(format!("{i}.zst"));
 +                println!("prefetching cache for {}", path_curr.display());
-+                let _ = search::Source::store_cache_to(&i.get_online_data().ok().unwrap(), &path_curr);
++                let data = i.get_online_data().unwrap();
++                let _ = search::Source::store_cache_to(&data, &path_curr);
 +                println!("prefetched cache for {}", path_curr.display());
 +            }
 +            return
@@ -44,7 +45,7 @@ index 4e1274d..214670a 100644
          self.full_height(context.cross_axis_size)
      }
 diff --git a/src/search.rs b/src/search.rs
-index 0accef5..72ed342 100644
+index 0accef5..97fd200 100644
 --- a/src/search.rs
 +++ b/src/search.rs
 @@ -206,7 +206,7 @@ impl Source {
@@ -56,7 +57,33 @@ index 0accef5..72ed342 100644
          let bitdata = bitcode::encode(data);
          let zstddata =
              zstd::stream::encode_all(bitdata.as_slice(), Source::ZSTD_COMPRESSION_LEVEL)?;
-@@ -251,15 +251,23 @@ impl Source {
+@@ -231,17 +231,17 @@ impl Source {
+ 
+     /// Returns Ok(bool) if and only if there is a readable cache file. The value of the bool depends on the last modified time of the file, as reported by the file system.
+     fn cache_is_current(self) -> Result<bool> {
+-        let f = std::fs::File::open(self.cache_path())?;
+-        let last_modified = f.metadata()?.modified()?;
+-        let age = last_modified.elapsed()?;
+-        Ok(age < Source::CACHE_MAX_AGE)
++        Ok(true)
+     }
+ 
+     fn get_version(self) -> Result<String> {
+-        let html = ureq::get(self.version_url())
+-            .call()?
+-            .body_mut()
+-            .read_to_string()?;
++        let html = match std::env::var("NOX_PREFETCH_CACHE_PATH") {
++            Err(_) => ureq::get(self.version_url())
++                .call()?
++                .body_mut()
++                .read_to_string()?,
++            Ok(_) => return Ok(String::from("custom-unstable"))
++        };
+ 
+         let dom = tl::parse(&html, tl::ParserOptions::default())?;
+ 
+@@ -251,15 +251,22 @@ impl Source {
          ))
      }
  
@@ -75,21 +102,20 @@ index 0accef5..72ed342 100644
 +                println!("offline fetch from {val}");
 +                std::fs::read_to_string(&std::path::PathBuf::from(val)).ok().unwrap()
 +            },
-+            Err(_) => {
-+                ureq::get(self.url())
-+                    .call()?
-+                    .body_mut()
-+                    .with_config()
-+                    // 30 MB reading limit.
-+                    // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
-+                    .limit(30 * 1024 * 1024)
-+                    .read_to_string()?
-+            }
++            Err(_) => ureq::get(self.url())
++                .call()?
++                .body_mut()
++                .with_config()
++                // 30 MB reading limit.
++                // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
++                .limit(30 * 1024 * 1024)
++                .read_to_string()?
++            
 +        };
          let dom = tl::parse(&html, tl::ParserOptions::default())?;
  
          Ok(SourceData {
-@@ -270,7 +278,7 @@ impl Source {
+@@ -270,7 +277,7 @@ impl Source {
          })
      }
  
@@ -98,7 +124,7 @@ index 0accef5..72ed342 100644
      // Maybe if we return a semantically meaningful error, we can retry HTTP requests occassionally on failure? Exponential backoff
      fn get_data(self) -> Result<SourceData> {
          let cache_validity = self.cache_is_current();
-@@ -314,7 +322,7 @@ impl fmt::Display for Source {
+@@ -314,7 +321,7 @@ impl fmt::Display for Source {
  }
  
  #[derive(Clone, Debug, Encode, Decode, PartialEq)]

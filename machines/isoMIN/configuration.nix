@@ -5,6 +5,6 @@
 }:
 {
   imports = [ ../iso/configuration.nix ];
-  home-manager.users."${user}" = import ./home.nix;
+  home-manager.users.${user} = import ./home.nix;
   networking.hostName = lib.mkForce "isoMIN";
 }

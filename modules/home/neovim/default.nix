@@ -1,13 +1,21 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
-  inputs,
+  kekma,
   ...
 }:
 with lib;
 let
   cfg = config.neovim;
+  nix-path = pkgs.runCommand "kekma" {
+    src = ../../../stuff/nixpkgs.tar.zst;
+  } ''
+    PATH=$PATH:${pkgs.zstd}/bin
+    mkdir $out
+    tar --strip-components=1 -xvf $src -C $out
+  '';
   coc_cfg = ''
     -- https://raw.githubusercontent.com/neoclide/coc.nvim/master/doc/coc-example-config.lua
     
@@ -195,7 +203,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [ bash-language-server shellcheck shfmt asm-lsp rustfmt ];
+    home.packages = with pkgs; [ bash-language-server shellcheck shfmt asm-lsp rustfmt tmux ];
     programs.neovim = {
       coc.enable = true;
       enable = true;
@@ -261,7 +269,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
+                  expr = "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];
@@ -285,14 +293,15 @@ in
             enable = true,
           },
           vim.cmd([[
+            autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
             let g:onedark_config = { 'style': 'deep', }
             let g:netrw_keepdir = 0
             colorscheme onedark
             highlight Normal guifg=#bbddff
             map! <S-Insert> <C-R>+
-            map !aa :tabnew /etc/nixos<cr>
-            map !hh :silent! tabnew +Man! $MAN_HOME<cr>
-            map !nn :silent! tabnew +Man! $MAN_NIX<cr>
+            map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
+            map !hh :silent! tabnew +Man! ${kekma.home}<cr>
+            map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
             nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
             set number
             highlight EndOfBuffer ctermbg=none guibg=none
@@ -324,6 +333,30 @@ in
           -- Paste from system clipboard (Insert mode)
           vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
         end
+
+        local function open_nos_terminal()
+          vim.cmd("tab term tmux new-session -s my-tui 'tmux set-option status off; nos; tmux kill-session -t my-tui'")
+          vim.b.auto_terminal_mode = true
+          vim.cmd('startinsert')
+        end
+
+        vim.api.nvim_create_user_command('Hh', open_nos_terminal, {
+          desc = 'Open `nos` in a smart terminal',
+        })
+        
+        vim.keymap.set('n', '!nos', ':Hh<CR>', { desc = 'Open nos terminal', noremap = true, silent = true })
+        
+        vim.api.nvim_create_autocmd("BufEnter", {
+          pattern = "*",
+          callback = function()
+            if vim.bo.buftype == "terminal" and vim.b.auto_terminal_mode == true then
+              vim.cmd("startinsert")
+            end
+          end,
+        })
+
+        vim.keymap.set('t', '<C-PageDown>', '<C-\\><C-n>:tabnext<CR>', { desc = 'Next Tab', noremap = true, silent = true })
+        vim.keymap.set('t', '<C-PageUp>',   '<C-\\><C-n>:tabprevious<CR>', { desc = 'Previous Tab', noremap = true, silent = true })
         vim.opt.undofile = true
         local undodir = vim.fn.expand('~/.config/nvim/undodir')
         vim.opt.undodir = undodir

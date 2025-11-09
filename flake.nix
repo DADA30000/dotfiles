@@ -1,9 +1,5 @@
 {
   inputs = {
-    determinate = {
-      url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -48,35 +44,10 @@
       url = "github:kevoreilly/CAPEv2";
       flake = false;
     };
-    #hypr-dynamic-cursors = {
-    #  url = "github:VirtCode/hypr-dynamic-cursors";
-    #  inputs.hyprland.follows = "hyprland";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    #nixpak = {
-    #  url = "github:nixpak/nixpak";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
-    #fabric = {
-    #  url = "github:Fabric-Development/fabric";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
-    #fabric-gray = {
-    #  url = "github:Fabric-Development/gray";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
-    #fabric-cli = {
-    #  url = "github:HeyImKyu/fabric-cli";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
-    #hyprpanel = {
-    #  url = "github:DADA30000/HyprPanel/json";
-    #  inputs.nixpkgs.follows = "nixpkgs";
-    #};
     anicli-ru = {
       url = "github:vypivshiy/ani-cli-ru";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -133,36 +104,60 @@
       ...
     }@inputs:
     let
-      #iso-wrapper = (orig_name: system: 
-      #  builtins.listToAttrs [
-      #    { name = orig_name; value = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { recursion-breaker = true; }; }); }
-      #    { name = "${orig_name}_orig"; value = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { recursion-breaker = false; }; }); }
-      #  ]
-      #);
       # Needed for offline installation, so that I could access config.system.build.toplevel without causing infinite recursion
-      iso-wrapper = (system: 
+      iso-wrapper = (
+        system:
         let
-          orig_system = nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { wrapped = false; orig = {}; }; });
+          orig_system = nixpkgs.lib.nixosSystem (
+            system
+            // {
+              specialArgs = system.specialArgs // {
+                wrapped = false;
+                orig = { };
+              };
+            }
+          );
         in
-          nixpkgs.lib.nixosSystem (system // { specialArgs = system.specialArgs // { wrapped = true; orig = orig_system; }; })
+        nixpkgs.lib.nixosSystem (
+          system
+          // {
+            specialArgs = system.specialArgs // {
+              wrapped = true;
+              orig = orig_system;
+              user = user_iso;
+              user-hash = null;
+              inherit inputs self umport system-modules home-modules;
+            };
+            modules = system.modules ++ [
+              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            ];
+          }
+        )
       );
-      umport = (import ./modules/umport.nix {inherit (nixpkgs) lib;}).umport;
+
+      umport = (import ./modules/umport.nix { inherit (nixpkgs) lib; }).umport;
+
+      system-modules = umport { paths = [ ./modules/system ]; recursive = false; };
+
+      home-modules = umport { paths = [ ./modules/home ]; recursive = false; } ++ [ inputs.nix-index-database.homeModules.nix-index ];
+
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
         home-manager.nixosModules.home-manager
-        # inputs.determinate.nixosModules.default
         {
           home-manager = {
             extraSpecialArgs = {
-              inherit inputs self umport;
+              inherit inputs self umport home-modules;
             };
             backupFileExtension = "backup";
+            overwriteBackup = true;
             useGlobalPkgs = true;
             useUserPackages = true;
             users.root = import ./machines/nixos/home-root.nix;
           };
         }
-      ];
+      ] ++ system-modules;
+
       user = "l0lk3k";
       user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
       user_iso = "nixos";
@@ -177,57 +172,34 @@
               user-hash
               self
               umport
+              system-modules
+              home-modules
               ;
             min-flag = false;
             avg-flag = false;
           };
-          modules = modules-list ++ [
-            ./machines/nixos/configuration.nix
-            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = false; }; }
-            { home-manager.users."${user}" = import ./machines/nixos/home.nix; }
-          ];
+          modules = modules-list ++ [ ./machines/nixos/configuration.nix  ./machines/nixos/hardware-configuration.nix ];
         };
         iso = iso-wrapper {
           specialArgs = {
-            user = user_iso;
-            user-hash = null;
             min-flag = false;
             avg-flag = false;
-            inherit inputs self umport;
           };
-          modules = modules-list ++ [
-            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = false; }; }
-            ./machines/iso/configuration.nix
-            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          ];
+          modules = modules-list ++ [ ./machines/iso/configuration.nix ];
         };
         iso8G = iso-wrapper {
           specialArgs = {
-            user = user_iso;
-            user-hash = null;
             min-flag = false;
             avg-flag = true;
-            inherit inputs self umport;
           };
-          modules = modules-list ++ [
-            { home-manager.extraSpecialArgs = { avg-flag = true; min-flag = false; }; }
-            ./machines/iso8G/configuration.nix
-            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          ];
+          modules = modules-list ++ [ ./machines/iso8G/configuration.nix ];
         };
         isoMIN = iso-wrapper {
           specialArgs = {
-            user = user_iso;
-            user-hash = null;
             min-flag = true;
             avg-flag = false;
-            inherit inputs self umport;
           };
-          modules = modules-list ++ [
-            { home-manager.extraSpecialArgs = { avg-flag = false; min-flag = true; }; }
-            ./machines/isoMIN/configuration.nix
-            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          ];
+          modules = modules-list ++ [ ./machines/isoMIN/configuration.nix ];
         };
       };
     };

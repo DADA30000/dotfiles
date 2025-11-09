@@ -1,60 +1,43 @@
 {
   pkgs,
   inputs,
-  config,
   user-hash,
   user,
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
   lib,
-  umport,
+  config,
   ...
 }:
-let
-  man-cache = pkgs.runCommand "generate-man-cache" {
-      MAN_NIX = "${config.system.build.manual.nixos-configuration-reference-manpage}/share/man/man5/configuration.nix.5.gz";
-      MAN_HOME = "${inputs.home-manager.packages.${pkgs.stdenv.hostPlatform.system}.docs-manpages}/share/man/man5/home-configuration.nix.5";
-    } ''
-    mkdir -p $out
-    MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_NIX" /dev/null > $out/configuration.nix.cache
-    MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_HOME" /dev/null > $out/home-configuration.nix.cache
-  '';
-  imports = [
-    ./hardware-configuration.nix
-  ] ++ umport { paths = [ ../../modules/system ]; recursive = false; };
-  # bundle = pkgs.fetchurl {
-  #   url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
-  #   hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
-  # };
-  # vmware-package = pkgs.vmware-workstation.overrideAttrs {
-  #   src = bundle;
-  # };
-  # hash = builtins.hashFile "sha256" "${inputs.nixpkgs}/nixos/modules/virtualisation/vmware-host.nix";
-  # checker = if hash == "71d417c40302bce51887cf5c790084f0638aff6e61077c6c09b887b6ea505fe9" then true else throw "vmware module has been updated, update hash and src in package, current hash is ${hash}"; #It's needed so that I wouldn't miss an vmware update
-in
 {
-  imports = imports;
 
-  documentation.nixos = {
-    includeAllModules = true;
-    extraModules = builtins.map (x: builtins.toPath x) imports;
+  home-manager = {
+    users.${user} = import ./home.nix;
+    extraSpecialArgs = {
+      inherit avg-flag min-flag;
+      kekma = {
+        nix = config.docs.man-cache-nix;
+        home = config.docs.man-cache-home;
+      };
+    };
+  };
+
+  # Enable custom man page generation and nix-option-search
+  # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
+  # Darwin and stable cause additional eval time, around 10-15 seconds
+  docs = {
+    enable = true;
+    nos.enable = true;
+    nos.darwin = false;
+    nos.stable = false;
   };
 
   nix.gc.automatic = false;
-
-  # Enable option search (increases eval time by a lot)
-  nos.enable = false;
-
-  #systemd.user.extraConfig = ''
-  #  DefaultTimeoutStopSec=5s
-  #'';
 
   programs.appimage = {
     enable = true;
     binfmt = true;
   };
-
-  #services.udev.packages = [ pkgs.steam-devices-udev-rules ];
 
   boot.kernel.sysctl."net.core.default_qdisc" = "cake";
 
@@ -65,10 +48,14 @@ in
     scheduler = "scx_bpfland";
   };
 
-  virtualisation.podman = if !(avg-flag || min-flag) then {
-    enable = true;
-    dockerCompat = true;
-  } else {};
+  virtualisation.podman =
+    if !(avg-flag || min-flag) then
+      {
+        enable = true;
+        dockerCompat = true;
+      }
+    else
+      { };
 
   programs.git = {
     enable = true;
@@ -116,7 +103,7 @@ in
 
   # Enable portals
   #xdg.portal.enable = true;
-  #xdg.portal.extraPortals = [ 
+  #xdg.portal.extraPortals = [
   #  pkgs.xdg-desktop-portal-gtk
   #];
   #xdg.portal.config.common.default = "*";
@@ -264,17 +251,21 @@ in
 
   };
 
-  flatpak = if !(avg-flag || min-flag) then {
+  flatpak =
+    if !(avg-flag || min-flag) then
+      {
 
-    # Enable system flatpak (currently breaks xdg portals)
-    enable = false;
+        # Enable system flatpak (currently breaks xdg portals)
+        enable = false;
 
-    # Packages to install from flatpak
-    packages = [
-      "io.github.Soundux"
-    ];
+        # Packages to install from flatpak
+        packages = [
+          "io.github.Soundux"
+        ];
 
-  } else {};
+      }
+    else
+      { };
 
   fonts = {
 
@@ -325,26 +316,34 @@ in
     auto-optimise-store = true;
 
     # Change cache providers (lower priority number = higher priority)
-    substituters = [ "https://hyprland.cachix.org" "https://cache.nixos.org?priority=1" ];
+    substituters = [
+      "https://hyprland.cachix.org"
+      "https://cache.nixos.org?priority=1"
+    ];
     trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
 
     # Enable flakes
     experimental-features = [
       "nix-command"
+      "ca-derivations"
       "flakes"
     ];
 
   };
 
-  obs = if !(avg-flag || min-flag) then {
+  obs =
+    if !(avg-flag || min-flag) then
+      {
 
-    # Enable OBS
-    enable = true;
+        # Enable OBS
+        enable = true;
 
-    # Enable virtual camera
-    virt-cam = false;
+        # Enable virtual camera
+        virt-cam = false;
 
-  } else {};
+      }
+    else
+      { };
 
   graphics = {
 
@@ -362,30 +361,34 @@ in
 
   };
 
-  my-services = if !(avg-flag || min-flag) then {
+  my-services =
+    if !(avg-flag || min-flag) then
+      {
 
-    # Enable automatic Cloudflare DDNS
-    cloudflare-ddns.enable = true;
+        # Enable automatic Cloudflare DDNS
+        cloudflare-ddns.enable = true;
 
-    nginx = {
+        nginx = {
 
-      # Enable nginx
-      enable = true;
+          # Enable nginx
+          enable = true;
 
-      cape.enable = true;
+          cape.enable = true;
 
-      # Enable my goofy website
-      website.enable = true;
+          # Enable my goofy website
+          website.enable = true;
 
-      # Enable nextcloud
-      nextcloud.enable = false;
+          # Enable nextcloud
+          nextcloud.enable = false;
 
-      # Website domain
-      hostName = "sanic.space";
+          # Website domain
+          hostName = "sanic.space";
 
-    };
+        };
 
-  } else {};
+      }
+    else
+      { };
 
   disks = {
 
@@ -449,20 +452,13 @@ in
 
     etc."determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
 
-    pathsToLink = [ "/share/zsh" "/share/xdg-desktop-portal" "/share/applications" ];
+    pathsToLink = [
+      "/share/zsh"
+      "/share/xdg-desktop-portal"
+      "/share/applications"
+    ];
 
     variables = {
-      # Yes, additional H is intentional
-      NIX_PATHH = pkgs.runCommand "kekma" {
-        src = ../../stuff/nixpkgs.tar.zst;
-      } ''
-        PATH=$PATH:${pkgs.zstd}/bin
-        mkdir $out
-        tar --strip-components=1 -xvf $src -C $out
-      '';
-      NIX_PATHH_REV = inputs.nixpkgs.rev;
-      MAN_NIX = "${man-cache}/configuration.nix.cache";
-      MAN_HOME = "${man-cache}/home-configuration.nix.cache";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
       GTK_THEME = "Fluent-Dark";
@@ -475,9 +471,11 @@ in
     };
 
     systemPackages =
-      with pkgs; with inputs;
+      with pkgs;
+      with inputs;
       # Keep in every ISO
       [
+        mpv
         gnome-boxes
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
@@ -510,51 +508,61 @@ in
         (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
       ]
       # Remove from 4G ISO
-      ++ (if !min-flag then [
-        scanmem
-        kdePackages.qtdeclarative
-        rust-analyzer
-        comma
-        remmina
-        cargo
-        mangohud
-        steam
-        android-tools
-        jdk23
-        rustc
-        moonlight-qt
-        osu-lazer-bin
-        mindustry
-        xonotic
-        superTux
-        superTuxKart
-        pavucontrol
-        prismlauncher
-        qalculate-gtk
-        inputs.anicli-ru.packages.${system}.default
-        distrobox
-        bottles
-        qbittorrent
-        ayugram-desktop
-        gdb
-        gcc
-        nodejs
-        libreoffice
-        protonplus
-        gimp3-with-plugins
-        gamescope
-        ccls
-        (discord.override {
-          withOpenASAR = true;
-          withVencord = true;
-        })
-      ] else [])
+      ++ (
+        if !min-flag then
+          [
+            scanmem
+            kdePackages.qtdeclarative
+            rust-analyzer
+            comma
+            remmina
+            cargo
+            mangohud
+            steam
+            android-tools
+            jdk23
+            rustc
+            moonlight-qt
+            osu-lazer-bin
+            mindustry
+            xonotic
+            superTux
+            superTuxKart
+            pavucontrol
+            prismlauncher
+            qalculate-gtk
+            inputs.anicli-ru.packages.${system}.default
+            distrobox
+            bottles
+            qbittorrent
+            ayugram-desktop
+            gdb
+            gcc
+            nodejs
+            libreoffice
+            protonplus
+            gimp3-with-plugins
+            gamescope
+            ccls
+            (discord.override {
+              withOpenASAR = true;
+              withVencord = true;
+            })
+          ]
+        else
+          [ ]
+      )
       # Remove from 8G ISO
-      ++ (if !(avg-flag || min-flag) then [
-        inputs.zen-browser.packages.${system}.twilight
-        heroic
-        gsettings-desktop-schemas
-      ] else []);
+      ++ (
+        if !(avg-flag || min-flag) then
+          [
+            inputs.zen-browser.packages.${system}.twilight
+            heroic
+            gsettings-desktop-schemas
+          ]
+        else
+          [ ]
+      );
 
   };
 
@@ -582,16 +590,16 @@ in
 
     openssh.enable = true;
 
-    udisks2 = {
-      enable = true;
-      settings."mount_options.conf".defaults = {
-        vfat_defaults="sync";
-        exfat_defaults="sync";
-        ntfs_defaults="sync";
-        "ntfs:ntfs_defaults"="sync";
-        "ntfs:ntfs3_defaults"="sync";
-      };
-    };
+    #udisks2 = {
+    #  enable = true;
+    #  settings."mount_options.conf".defaults = {
+    #    vfat_defaults="sync";
+    #    exfat_defaults="sync";
+    #    ntfs_defaults="sync";
+    #    "ntfs:ntfs_defaults"="sync";
+    #    "ntfs:ntfs3_defaults"="sync";
+    #  };
+    #};
 
     pipewire = {
       enable = true;
@@ -599,7 +607,7 @@ in
       alsa.support32Bit = true;
       jack.enable = true;
       pulse.enable = true;
-    };    
+    };
   };
 
   security = {
