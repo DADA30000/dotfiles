@@ -4,14 +4,16 @@
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
   umport,
+  home-modules,
   ...
 }:
 {
 
-  # Import other modules
-  imports = [
-    inputs.nix-index-database.homeModules.nix-index
-  ] ++ umport { paths = [ ../../modules/home ]; recursive = false; };
+  # Import other modulessss
+  imports = home-modules;
+
+  # Docs are generated in NixOS conf
+  manual.manpages.enable = false;
 
   umu.enable = true;
 

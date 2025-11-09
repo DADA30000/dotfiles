@@ -70,7 +70,7 @@ let
   '';
 in
 {
-  home-manager.users."${user}" = import ./home.nix;
+  home-manager.users.${user} = import ./home.nix;
   boot.supportedFilesystems.zfs = lib.mkForce false;
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless.enable = false;

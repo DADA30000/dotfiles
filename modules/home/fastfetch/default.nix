@@ -13,8 +13,9 @@ in
     zsh-start = mkEnableOption "Enable fastfetch printing when zsh starts up";
     logo-path = mkOption {
       type = types.path;
+      defaultText = "../../stuff/logo.png";
       default = ../../stuff/logo.png;
-      example = ./logo.png;
+      example = "./logo.png";
       description = "Path to the logo that fastfetch will output";
     };
   };

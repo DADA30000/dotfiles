@@ -8,6 +8,13 @@
 with lib;
 let
   cfg = config.zsh;
+  nix-path = pkgs.runCommand "kekma" {
+    src = ../../../stuff/nixpkgs.tar.zst;
+  } ''
+    PATH=$PATH:${pkgs.zstd}/bin
+    mkdir $out
+    tar --strip-components=1 -xvf $src -C $out
+  '';
 in
 {
   options.zsh = {
@@ -77,7 +84,7 @@ in
                       local packages_string
                       packages_string=$(nix eval --raw --expr "
                         let
-                          pkgs = import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") {
+                          pkgs = import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") {
                             system = \"x86_64-linux\";
                             config.allowUnfree = true;
                           };
@@ -98,7 +105,7 @@ in
                       packages_string=$(nix eval --raw --expr "
                         builtins.concatStringsSep \"\n\" (
                           builtins.attrNames (
-                            import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") {
+                            import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") {
                               system = \"x86_64-linux\";
                               config.allowUnfree = true;
                             }
@@ -193,7 +200,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
+                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
               }
               # Ad-hoc nix-develop devShell
               ns-dev () {
@@ -203,7 +210,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { 
+                nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { 
                   system = \"${pkgs.stdenv.hostPlatform.system}\"; 
                   config.allowUnfree = true; 
                 }; mkShell rec { 
@@ -224,7 +231,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ]"
+                nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ]"
               }
               # ad-hoc nix eval expr
               ns-eval () {
@@ -234,7 +241,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
+                nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
               # ad-hoc nix build expr
               ns-build () {
@@ -244,7 +251,7 @@ in
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
               
-                nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
+                nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
             '';
             zshEarly = mkOrder 500 ''
@@ -277,13 +284,11 @@ in
             "nix-search --index-path \"${index}\"";
           #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
           "7z" = "7zz";
-          man-nix = "nvim -c 'silent! e +Man! $MAN_NIX'";
-          man-home = "nvim -c 'silent! e +Man! $MAN_HOME'";
           u-test = "nh os test /etc/nixos";
           u-boot = "nh os boot /etc/nixos";
           u-build = "nh os build /etc/nixos";
           u-debug =  "nix build /etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try";
-          ns-repl = ''nix repl --expr "import (builtins.getFlake \"git+file://$NIX_PATHH?rev=$NIX_PATHH_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }"'';
+          ns-repl = ''nix repl --expr "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }"'';
           nsl = "nix-locate";
           #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";
           fastfetch = "fastfetch --logo-color-1 'blue' --logo-color-2 'blue'";
