@@ -253,6 +253,49 @@ in
               
                 nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
+              u-full () {
+                echo "Updating locks, switching"
+                (
+                  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.ssdeep}/lib:${pkgs.graphviz}/lib
+                  export PATH=$PATH:${pkgs.migrate-to-uv}/bin:${pkgs.uv}/bin
+                  export PYTHONPATH=${pkgs.python312}/lib/python3.12/site-packages
+                  export UV_PYTHON=${pkgs.python312}/bin/python
+                  export UV_NO_MANAGED_PYTHON=true
+                  export UV_SYSTEM_PYTHON=true
+                  export TEMPDIR=$(${pkgs.coreutils-full}/bin/mktemp -d)
+                  export GIT_LFS_SKIP_SMUDGE=1
+                  sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst
+                  sudo rm /etc/nixos/modules/system/cape/uv.lock
+                  sudo rm /etc/nixos/modules/system/cape/pyproject.toml
+                  git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5 $TEMPDIR/nixpkgs
+                  git clone https://github.com/kevoreilly/CAPEv2 --depth 1 $TEMPDIR/cape
+                  (
+                    cd $TEMPDIR/cape
+                    migrate-to-uv
+                    uv add -r extra/optional_dependencies.txt
+                    uv lock
+                    mkdir dummy
+                    echo "print(\"Hello World\")" > dummy/kek.py
+                    echo "
+                    [tool.hatch.build.targets.wheel]
+                    packages = [
+                      \"dummy\"
+                    ]
+                    " >> pyproject.toml
+                    mkdir nix_workspace
+                    mv pyproject.toml nix_workspace
+                    mv uv.lock nix_workspace
+                    mv dummy nix_workspace
+                  )
+                  tar -cv --zstd -f $TEMPDIR/nixpkgs.tar.zst $TEMPDIR/nixpkgs
+                  sudo cp $TEMPDIR/cape/uv.lock /etc/nixos/modules/system/cape
+                  sudo cp $TEMPDIR/cape/pyproject.toml /etc/nixos/modules/system/cape
+                  sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
+                  rm -rf $TEMPDIR
+                  sudo nix flake update --flake /etc/nixos
+                  nh os switch /etc/nixos
+                )
+              }
             '';
             zshEarly = mkOrder 500 ''
               DISABLE_MAGIC_FUNCTIONS=true
@@ -267,7 +310,6 @@ in
           ls = "lsd";
           ll = "ls -l";
           # Dirty ass workaround for getting ad-hoc stuff working in pure mode
-          u-full = "(cd /etc/nixos/stuff; sudo rm -rf nixpkgs.tar.zst; sudo git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5; sudo tar -cv --zstd -f nixpkgs.tar.zst nixpkgs; sudo rm -rf nixpkgs; sudo nix flake update --flake /etc/nixos; nh os switch /etc/nixos)";
           u = "nh os switch /etc/nixos";
           nsl-full = "${inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-locate";
           nss = 

@@ -1,0 +1,212 @@
+[project]
+name = "CAPEv2"
+version = "0.1.0"
+description = "CAPE: Malware Configuration And Payload Extraction"
+authors = [
+    { name = "Kevin O'Reilly", email = "kev@capesandbox.com" },
+    { name = "doomedraven", email = "doomedraven@capesandbox.com" },
+]
+requires-python = ">=3.10, <4.0"
+license = "MIT"
+dependencies = [
+    "alembic==1.9.4",
+    "gevent==24.2.1",
+    "greenlet==3.0.3",
+    "Pebble==5.1.0",
+    "cryptography>=44.0.1",
+    "requests[security, socks]==2.32.4",
+    "pefile",
+    "tldextract>=5.1.2",
+    "oletools==0.60.2",
+    "olefile==0.47",
+    "capstone==5.0.5",
+    "pycryptodomex>=3.20.0",
+    "requests-file>=1.5.1",
+    "orjson>=3.9.15",
+    "SFlock2[shellcode, linux]>=0.3.76",
+    "pyzipper==0.3.6",
+    "flare-capa==9.1.0",
+    "Cython==3.0.11",
+    "Django>=4.2.18",
+    "SQLAlchemy==2.0.41",
+    "SQLAlchemy-Utils==0.41.1",
+    "Jinja2>=3.1.6,<4",
+    "chardet==4.0.0",
+    "pygal==2.4.0",
+    "dpkt==1.9.6",
+    "dnspython==2.7.0",
+    "pytz==2021.1",
+    "maxminddb==2.6.3",
+    "Pillow>=8.2.0",
+    "python-whois==0.9.5",
+    "bs4==0.0.1",
+    "pydeep2==0.5.1",
+    "django-recaptcha==4.0.0",
+    "django-crispy-forms==2.3",
+    "crispy-bootstrap4==2024.10",
+    "django-settings-export==1.2.1",
+    "django-csp==3.8",
+    "django-extensions==3.2.3",
+    "django-ratelimit==4.1.0",
+    "python-tlsh==4.5.0",
+    "djangorestframework==3.15.2",
+    "yara-python==4.5.1",
+    "pymongo>=4.0.1",
+    "LnkParse3==1.5.0",
+    "cachetools>=5.5.1,<6",
+    "django-allauth==65.3.1",
+    "psycopg2-binary>=2.9.10,<3",
+    "ruff>=0.7.2",
+    "paramiko==3.5.0",
+    "psutil==6.1.1",
+    "peepdf-3==5.0.0",
+    "pyre2-updated>=0.3.8",
+    "Werkzeug==3.1.3",
+    "packaging==24.2",
+    "setuptools==78.1.1",
+    "crudini==0.9.5",
+    "python-dateutil==2.9.0.post0",
+    "pyguacamole>=0.11,<0.12",
+    "uvicorn[standard]>=0.18.2,<0.19",
+    "gunicorn>=23.0.0,<24",
+    "channels>=3.0.5,<4",
+    "setproctitle==1.3.2",
+    "CAPE-parsers>=0.1.36",
+    "imagehash>=4.3.2",
+    "deepdiff>=8.6.1",
+    "flask>=3.1.2",
+    "flask-restful>=0.3.10",
+    "flask-sqlalchemy==3.0.5",
+    "pyasyncore>=1.0.4",
+    "graphviz>=0.8.4",
+    "mmh3>=5.2.0",
+    "networkx[default,extra]>=2.1",
+    "pyclamd>=0.4.0",
+    "pydot>=1.2.4",
+    "regex>=2025.11.3",
+    "scp>=0.15.0",
+    "urlextract==1.5.0",
+    "pdfminer==20191125",
+    "pg-activity>=3.6.1",
+    "bingraph",
+    "httpreplay",
+    "socks5man",
+    "xlmmacrodeobfuscator",
+    "batch-deobfuscator",
+    "pyattck",
+]
+
+[project.optional-dependencies]
+maco = ["maco==1.1.8"]
+
+[dependency-groups]
+dev = [
+    "black>=24.3.0,<25",
+    "isort>=5.10.1,<6",
+    "mypy==1.14.1",
+    "pytest==7.2.2",
+    "pytest-pretty==1.1.0",
+    "pytest-cov==3.0.0",
+    "pytest-mock==3.7.0",
+    "pytest-django==4.5.2",
+    "pytest_asyncio==0.18.3",
+    "pytest-xdist==3.6.1",
+    "pytest-asyncio==0.18.3",
+    "pytest-freezer==0.4.8",
+    "tenacity==8.1.0",
+    "types-requests~=2.32",
+    "httpretty>=1.1.4,<2",
+    "func-timeout>=4.3.5,<5",
+    "pre-commit>=2.19.0,<3",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+bingraph = { git = "https://github.com/CAPESandbox/binGraph" }
+httpreplay = { git = "https://github.com/CAPESandbox/httpreplay" }
+socks5man = { git = "https://github.com/CAPESandbox/socks5man" }
+xlmmacrodeobfuscator = { git = "https://github.com/DissectMalware/XLMMacroDeobfuscator.git" }
+batch-deobfuscator = { git = "https://github.com/DissectMalware/batch_deobfuscator" }
+peepdf-3 = { git = "https://github.com/digitalsleuth/peepdf-3" }
+pyattck = { git = "https://github.com/CAPESandbox/pyattck/" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 132
+include = "\\.py(_disabled)?$"
+
+[tool.isort]
+profile = "black"
+no_lines_before = ["FUTURE", "STDLIB"]
+line_length = 132
+supported_extensions = ["py", "py_disabled"]
+
+[tool.flake8]
+max-line-length = 132
+exclude = ".git,__pycache__,.cache,.venv"
+
+[tool.pytest.ini_options]
+django_find_project = false
+DJANGO_SETTINGS_MODULE = "web.settings"
+pythonpath = [".", "web"]
+testpaths = ["tests", "agent"]
+norecursedirs = "tests/zip_compound"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 132
+exclude = [
+    "./analyzer/linux/dbus_next",
+]
+
+[tool.ruff.lint]
+select = [
+	"F",       # pyflakes
+	"E",       # pycodestyle errors
+	"W",       # pycodestyle warnings
+	# "I",       # isort
+	# "N",       # pep8-naming
+	"G",       # flake8-logging-format
+]
+
+ignore = [
+    "E501",    # ignore due to conflict with formatter
+    "N818",    # exceptions don't need the Error suffix
+    "E741",    # allow ambiguous variable names
+    "E402",
+    "W605",    # ToDo to fix - Invalid escape sequence
+]
+
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"stubs/*" = [
+    "N",       # naming conventions don't matter in stubs
+    "F403",    # star imports are okay in stubs
+    "F405",    # star imports are okay in stubs
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["libqtile", "test"]
+default-section = "third-party"
+
+[tool.mypy]
+warn_unused_configs = true
+files = [
+    "agent/**/*.py",
+]
+[tool.hatch.build.targets.wheel]
+packages = [
+  "dummy"
+]

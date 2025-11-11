@@ -59,19 +59,59 @@ in
       };
     };
     xdg.mimeApps.defaultApplications = {
-      "application/vnd.microsoft.portable-executable" = "umu.desktop";
-      "application/x-msi" = "umu.desktop";
-      "application/x-msdownload" = "umu.desktop";
+      "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
+      "application/x-msi" = "run-exe.desktop";
+      "application/x-msdownload" = "run-exe.desktop";
+      "application/x-ms-shortcut" = "run-exe.desktop";
+      "application/x-mswinurl" = "run-exe.desktop";
+      "application/x-ms-dos-executable" = "run-exe.desktop";
+      "application/x-bat" = "run-exe.desktop";
     };
-    xdg.desktopEntries.umu.settings = {
-      Exec = "umu-run-wrapper %f";
-      MimeType = "application/vnd.microsoft.portable-executable;application/x-msi;application/x-msdownload";
-      Name = "Quickly run windows apps";
-      StartupWMClass = "umu";
+    xdg.desktopEntries.run-exe.settings = {
+      Exec = "run-exe %f";
+      MimeType = "application/vnd.microsoft.portable-executable;application/x-msi;application/x-msdownload;application/x-ms-shortcut;application/x-bat;application/x-ms-dos-executable;application/x-mswinurl";
+      Name = "Execute Windows file";
+      StartupWMClass = "run-exe";
       Type = "Application";
+      Icon = "wine";
     };
     home.packages = [
       ratarmount # as a bonus
+      soda
+      pkgs.zenity
+      (pkgs.writeShellScriptBin "run-exe" ''
+        if [[ ! -n "$1" ]]; then
+          selected_file=$(zenity --file-selection --title="Выберите файл для запуска")
+          if [ -n "$selected_file" ]; then
+            run-exe "$selected_file"
+          fi
+          exit 0
+        fi
+        choice=$(zenity --info \
+          --title="run-exe" \
+          --text="Запустить $1 через:" \
+          --ok-label="soda" \
+          --extra-button="umu (не работает)" \
+          --extra-button="Выбрать другой файл")
+
+        exit_code=$?
+
+        case $exit_code in
+          0)
+            ${soda}/bin/wine64 "$1";;
+          1)
+            case "$choice" in
+              "umu")
+                umu-run-wrapper "$1";;
+              "Выбрать другой файл")
+                selected_file=$(zenity --file-selection --title="Выберите файл для запуска")
+                if [ -n "$selected_file" ]; then
+                  run-exe "$selected_file"
+                fi;;
+            esac
+            ;;
+        esac
+      '')
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
         if [[ ! -d ~/.local/share/umu ]]; then
           ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
@@ -81,7 +121,7 @@ in
           sleep 0.2
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
-        UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=~/.umu ${pkgs.umu-launcher}/bin/umu-run $*
+        UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=$HOME/.umu ${pkgs.umu-launcher}/bin/umu-run $*
       '')
       (pkgs.writeShellScriptBin "umu-run-wrapper-secure" ''
         cleanup() {

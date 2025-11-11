@@ -30,67 +30,27 @@ let
       arch = "x64";
     };
   };
-  cape_with_uv = pkgs.stdenv.mkDerivation {
-    pname = "cape_with_uv";
-    version = inputs.cape.rev;
-    src = inputs.cape;
-
-    # Use consistent Python package set
-    nativeBuildInputs = with pkgs; [
-      python312
-      python312Packages.uv
-      python312Packages.pip
-      python312Packages.setuptools
-      python312Packages.wheel
-      migrate-to-uv
-      rsync
-      git
-      gnused
-      cacert
-      pkg-config
-      libffi
-      zlib
-      openssl
-      findutils
-    ];
-
-    buildInputs = with pkgs; [
-      graphviz
-      ssdeep
-    ];
-
-    buildPhase = ''
-      mkdir -p "$out"
-      rsync -a --no-links ./. "$out"
-      cd "$out"
-      sed -i "/#.*/d" extra/optional_dependencies.txt
-      export PYTHONPATH="${pkgs.python312.sitePackages}"
-      export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-      export UV_PYTHON="${pkgs.python312}/bin/python"
-      export HOME="$(mktemp -d)"
-      export UV_NO_MANAGED_PYTHON=true
-      export UV_SYSTEM_PYTHON=true
-      migrate-to-uv
-      uv add -r extra/optional_dependencies.txt
-      uv lock
-      mkdir dummy
-      echo "print(\"Hello World\")" > dummy/kek.py
-      echo "
-      [tool.hatch.build.targets.wheel]
-      packages = [
-        \"dummy\"
-      ]
-      " >> pyproject.toml
-      rm -rf .[^.]*
-    '';
-
-    dontInstall = true;
-    dontFixup = true;
-    outputHashAlgo = "sha256";
-    outputHashMode = "recursive";
-    # This is not reproducible, need to later either upstream github action, or make a fork with an action 
-    outputHash = "sha256-v/SXFUxAPTEliO64ccRxnxdcq8+7Vq0/WF8CTgpfFZA=";
-  };
+  #cape_with_uv = pkgs.runCommand "patch_cape" {} ''
+  #  mkdir -p "$out"
+  #  TEMPDIR=$(mktemp -d)
+  #  ${pkgs.rsync}/bin/rsync -r --no-links ${inputs.cape}/. "$TEMPDIR"
+  #  cd "$TEMPDIR"
+  #  chmod -R u+w .
+  #  rm pyproject.toml
+  #  cp ${./pyproject.toml} $TEMPDIR
+  #  cp ${./uv.lock} $TEMPDIR/uv.lock
+  #  chmod -R u+w .
+  #  mkdir dummy
+  #  echo "print(\"Hello World\")" > dummy/kek.py
+  #  echo "
+  #  [tool.hatch.build.targets.wheel]
+  #  packages = [
+  #    \"dummy\"
+  #  ]
+  #  " >> pyproject.toml
+  #  rm -rf .[^.]*
+  #  mv $TEMPDIR/* $out
+  #'';
   hacks = pkgs.callPackage inputs.pyproject-nix.build.hacks { };
   add_setuptools =
     final: prev: list:
@@ -102,17 +62,14 @@ let
         });
       }) list
     );
-  add_from_nixpkgs =
-    list:
-    builtins.listToAttrs (
-      builtins.map (x: {
-        name = x;
-        value = hacks.nixpkgsPrebuilt {
-          from = pkgs.python312Packages.${x};
-        };
-      }) list
-    );
-  workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = cape_with_uv; };
+  add_from_nixpkgs = [
+    "libvirt"
+    "certvalidator"
+    "asn1crypto"
+    "mscerts"
+    "gunicorn"
+  ];
+  workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./nix_workspace; };
   overlay = workspace.mkPyprojectOverlay {
     sourcePreference = "wheel";
     environ = {
@@ -147,6 +104,7 @@ let
     }
     // add_setuptools final prev [
       "django-allauth"
+      "bingraph"
       "django-settings-export"
       "ida-settings"
       "intervaltree"
@@ -167,21 +125,25 @@ let
       "httpreplay"
       "batch-deobfuscator"
     ]
-    // add_from_nixpkgs [
-      "libvirt"
-      "certvalidator"
-      "asn1crypto"
-      "mscerts"
-      "gunicorn"
-    ];
+    // builtins.listToAttrs (
+      builtins.map (x: {
+        name = x;
+        value = hacks.nixpkgsPrebuilt {
+          from = pkgs.python312Packages.${x};
+        };
+      }) add_from_nixpkgs
+    );
 
   pySet = ((python_set.overrideScope inputs.pyproject-build-systems.overlays.wheel).overrideScope overlay).overrideScope overrides;
 
   cape_python_venv = pySet.mkVirtualEnv "cape_with_uv-env" (
     workspace.deps.all
-    // {
-      libvirt = [ ];
-    }
+    // builtins.listToAttrs (
+      builtins.map (x: {
+        name = x;
+        value = [];
+      }) add_from_nixpkgs
+    )
   );
   additional_path = with pkgs; [
     git
@@ -230,7 +192,7 @@ let
   cape-env = pkgs.stdenv.mkDerivation {
     pname = "cape-env";
     version = inputs.cape.rev;
-    src = cape_with_uv;
+    src = inputs.cape;
 
     nativeBuildInputs = [
       pkgs.crudini
@@ -387,7 +349,8 @@ let
     installPhase = ''
       runHook preInstall
       mkdir -p $out
-      cp -R . $out/
+      rm -rf .[^.]*
+      ${pkgs.rsync}/bin/rsync -a --no-links . $out/
     '';
   };
   mongoCnf =
