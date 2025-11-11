@@ -77,7 +77,7 @@ in
     };
     home.packages = [
       ratarmount # as a bonus
-      soda
+      #soda
       pkgs.zenity
       (pkgs.writeShellScriptBin "run-exe" ''
         if [[ ! -n "$1" ]]; then
@@ -90,15 +90,15 @@ in
         choice=$(zenity --info \
           --title="run-exe" \
           --text="Запустить $1 через:" \
-          --ok-label="soda" \
-          --extra-button="umu (не работает)" \
+          --ok-label="soda (не работает)" \
+          --extra-button="umu" \
           --extra-button="Выбрать другой файл")
 
         exit_code=$?
 
         case $exit_code in
           0)
-            ${soda}/bin/wine64 "$1";;
+            ${"soda"}/bin/wine64 "$1";;
           1)
             case "$choice" in
               "umu")

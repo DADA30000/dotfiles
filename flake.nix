@@ -106,8 +106,18 @@
     let
       # Needed for offline installation, so that I could access config.system.build.toplevel without causing infinite recursion
       iso-wrapper = (
-        system:
+        prev_system:
         let
+          system = prev_system // {
+            modules = prev_system.modules ++ [
+              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            ];
+            specialArgs = prev_system.specialArgs // {
+              user = user_iso;
+              user-hash = null;
+              inherit inputs self umport system-modules home-modules;
+            };
+          };
           orig_system = nixpkgs.lib.nixosSystem (
             system
             // {
@@ -124,13 +134,7 @@
             specialArgs = system.specialArgs // {
               wrapped = true;
               orig = orig_system;
-              user = user_iso;
-              user-hash = null;
-              inherit inputs self umport system-modules home-modules;
             };
-            modules = system.modules ++ [
-              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-            ];
           }
         )
       );
