@@ -135,6 +135,10 @@ in
   #  })
   #];
 
+  docs.enable = lib.mkForce false;
+  docs.man-cache-nix = "kek";
+  docs.man-cache-home = "kek";
+
   services.ollama.enable = lib.mkForce false;
 
   graphics.amdgpu.pro = lib.mkForce false;
