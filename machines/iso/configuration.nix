@@ -2,7 +2,6 @@
   pkgs,
   lib,
   user,
-  config,
   wrapped,
   orig,
   ...
@@ -70,113 +69,101 @@ let
   '';
 in
 {
-  home-manager.users.${user} = import ./home.nix;
-  boot.supportedFilesystems.zfs = lib.mkForce false;
-  nixpkgs.hostPlatform = "x86_64-linux";
-  networking.wireless.enable = false;
-  networking.hostName = "iso";
   imports = [
     ../nixos/configuration.nix
   ];
-
-  systemd.user.services.replays.wantedBy = lib.mkForce [];
-
-  systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [];
-
-  systemd.services.singbox.wantedBy = lib.mkForce [];
+  config = lib.mkMerge [
+    (lib.mkIf wrapped {
+      home-manager.users.${user} = import ./home.nix;
+      boot.supportedFilesystems.zfs = lib.mkForce false;
+      networking.hostName = "iso";
   
-  warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
+      systemd.user.services.replays.wantedBy = lib.mkForce [];
+  
+      systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [];
+  
+      systemd.services.singbox.wantedBy = lib.mkForce [];
+      
+      warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
+  
+      system.activationScripts = {
+  
+        repo = {
+  
+          # Run after /dev has been mounted
+          deps = [ "specialfs" ];
+  
+          text = ''
+            PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils-full}/bin:${pkgs.gnutar}/bin"
+            mkdir /repo
+            tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+            rm /repo/stuff/nixpkgs.tar.zst
+            cp "${../../stuff/nixpkgs.tar.zst}" /repo/stuff
+            chown root:root -R /repo
+            cd /repo
+            mkdir -p /etc/nixos
+            cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
+          '';
+  
+        };
+  
+        singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json && wrapped) {
+  
+          deps = [ "specialfs" ];
+  
+          text = ''
+            PATH="$PATH:${pkgs.coreutils}/bin"
+            cp ${../../stuff/singbox/config.json} /config.json
+            chmod 400 /config.json
+          '';
+            
+        };
+  
+      };
+  
+      boot.kernel.sysctl."vm.swappiness" = 200;
+  
+      services.ollama.enable = lib.mkForce false;
+  
+      graphics.amdgpu.pro = lib.mkForce false;
+  
+      disks.enable = lib.mkForce false;
+  
+      my-services.cloudflare-ddns.enable = lib.mkForce false;
+  
+      my-services.nginx.enable = lib.mkForce false;
+  
+      cape.enable = lib.mkForce false;
+  
+      boot.loader.timeout = lib.mkForce 10;
+  
+      boot.initrd.systemd.enable = lib.mkForce false;
 
-  system.activationScripts = {
+      fonts.fontconfig.enable = true;
 
-    repo = {
+      xdg = {
+        mime.enable = true;
+        icons.enable = true;
+        autostart.enable = true;
+      };
 
-      # Run after /dev has been mounted
-      deps = [ "specialfs" ];
-
-      text = ''
-        PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils}/bin:${pkgs.gnutar}/bin"
-        mkdir /repo
-        tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
-        chown root:root -R /repo
-        cd /repo
-        mkdir -p /etc/nixos
-        cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
-      '';
-
-    };
-
-    singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json && wrapped) {
-
-      deps = [ "specialfs" ];
-
-      text = ''
-        PATH="$PATH:${pkgs.coreutils}/bin"
-        cp ${../../stuff/singbox/config.json} /config.json
-        chmod 400 /config.json
-      '';
-        
-    };
-
-  };
-
-  boot.kernel.sysctl."vm.swappiness" = 200;
-
-  #remove this as this was causing problem with "Attribute 'python' missing"
-  #nixpkgs.overlays = [
-  #  (final: prev: {
-  #    python313Packages.deal-solver = prev.python313Packages.deal-solver.overrideAttrs {
-  #      disabledTests = [
-  #        "test_expr_asserts_ok"
-  #        "test_fuzz_math_floats"
-  #        "test_timeout"
-  #      ];
-  #    };
-  #  })
-  #];
-
-  docs.enable = lib.mkForce false;
-  docs.man-cache-nix = "kek";
-  docs.man-cache-home = "kek";
-
-  services.ollama.enable = lib.mkForce false;
-
-  graphics.amdgpu.pro = lib.mkForce false;
-
-  disks.enable = lib.mkForce false;
-
-  my-services.cloudflare-ddns.enable = lib.mkForce false;
-
-  my-services.nginx.enable = lib.mkForce false;
-
-  cape.enable = lib.mkForce false;
-
-  boot.loader.timeout = lib.mkForce 10;
-
-  graphics.nvidia.enable = lib.mkForce true;
-
-  boot.initrd.systemd.enable = lib.mkForce false;
-
-  fonts.fontconfig.enable = true;
-
-  xdg = {
-
-    mime.enable = true;
-
-    icons.enable = true;
-
-    autostart.enable = true;
-
-  };
-
-  environment.systemPackages = with pkgs; [
-    gum
-    lolcat
-    openssl
-    gparted
-    (python3.withPackages(ps: with ps; [ tkinter ]))
-    (writeShellScriptBin "nix-install" nix-install)
-    (writeShellScriptBin "install-offline" install-offline)
+      networking.wireless.enable = false;
+  
+      environment.systemPackages = with pkgs; [
+        gum
+        lolcat
+        openssl
+        gparted
+        (python3.withPackages(ps: with ps; [ tkinter ]))
+        (writeShellScriptBin "nix-install" nix-install)
+        (writeShellScriptBin "install-offline" install-offline)
+      ];
+    })
+    {
+      nixpkgs.hostPlatform = "x86_64-linux";
+      hardware.enableAllHardware = true;
+      hardware.enableRedistributableFirmware = true;
+      graphics.nvidia.enable = lib.mkForce true;
+    }
   ];
-  # environment.etc."vmware-bundle-keeper".source = if !(avg-flag || min-flag) then bundle else ../../stuff/theme.rasi; # This is needed to keep the bundle file in ISO # Not needed for now
 }

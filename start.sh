@@ -135,24 +135,23 @@ tZXxn9qc34vndv7Nyuoe0g=="
     mkdir /mnt/persistent/etc
     cp -r /mnt/etc/nixos /mnt/persistent/etc
     if [[ "$1" == "offline" ]]; then
-      if install-offline; then
-        printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
-        for i in {1..9}; do
-          sleep 0.25
-          printf "%s" "$i"
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-          sleep 0.25
-          printf "."
-        done
+      until install-offline; do
+        echo "Игнорируйте эту ошибку, она ничего не значит, просто ждите :)"
+      done
+      printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
+      for i in {1..9}; do
         sleep 0.25
-        printf "10\n"
-        reboot
-      else
-        printf "\e[31mОшибка установки :(\e[0m\n"
-      fi
+        printf "%s" "$i"
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+        sleep 0.25
+        printf "."
+      done
+      sleep 0.25
+      printf "10\n"
+      reboot
     else
       if nixos-install -v --flake "/mnt/etc/nixos#${host}" --impure; then
         printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
