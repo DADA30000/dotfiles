@@ -83,7 +83,7 @@
 
   cape = {
     enable = true;
-    users = [ "l0lk3k" ];
+    users = [ user ];
   };
 
   virtualisation.libvirtd.qemu.verbatimConfig = ''max_core = 0'';
@@ -137,7 +137,7 @@
   #    value = "0";
   #  }
   #  {
-  #    domain = "l0lk3k";
+  #    domain = user;
   #    item = "core";
   #    value = "-1"; # -1 means unlimited
   #  }
@@ -238,7 +238,7 @@
     systemd.user.services.mpvpaper.enable = false;
     virtualisation = {
       qemu.options = [
-        "-display gtk,gl=on"
+        "-display sdl,gl=on"
         "-device virtio-vga-gl"
         "-enable-kvm"
         "-audio driver=sdl,model=virtio"

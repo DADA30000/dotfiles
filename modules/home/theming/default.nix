@@ -48,8 +48,18 @@ in
     home.file.".themes".source = ../../../stuff/.themes;
     xdg.configFile = {
         "Kvantum".source = ../../../stuff/Kvantum;
-        "qt5ct".source = ../../../stuff/qt5ct;
-        "qt6ct".source = ../../../stuff/qt6ct;
+        "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt5ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+        '';
+        "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt6ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+        '';
         "GIMP_fake".source = ../../../stuff/GIMP;
       } 
       //

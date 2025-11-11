@@ -109,12 +109,9 @@
         prev_system:
         let
           system = prev_system // {
-            modules = prev_system.modules ++ [
-              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-            ];
             specialArgs = prev_system.specialArgs // {
-              user = user_iso;
               user-hash = null;
+              user = user_iso;
               inherit inputs self umport system-modules home-modules;
             };
           };
@@ -135,6 +132,9 @@
               wrapped = true;
               orig = orig_system;
             };
+            modules = system.modules ++ [
+              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            ];
           }
         )
       );
