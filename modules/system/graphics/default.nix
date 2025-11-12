@@ -30,9 +30,9 @@ in
       nvidia = mkIf cfg.nvidia.enable {
         modesetting.enable = true;
         powerManagement.enable = true;
-        open = false;
-        nvidiaSettings = false;
-        package = config.boot.kernelPackages.nvidiaPackages.beta;
+        open = true;
+        nvidiaSettings = true;
+        #package = config.boot.kernelPackages.nvidiaPackages.beta;
       };
     };
     services.xserver.videoDrivers = mkMerge [

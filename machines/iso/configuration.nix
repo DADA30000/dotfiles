@@ -62,7 +62,7 @@ let
     fi
   '';
   install-offline = if wrapped then ''
-    nixos-install -v --system '${orig.config.system.build.toplevel}' --impure
+    nixos-install -v --system '${orig.config.system.build.toplevel}' --keep-going --impure
   '' else ''
     echo "can't install twice :("
     exit 1
