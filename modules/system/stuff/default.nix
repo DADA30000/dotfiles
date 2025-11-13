@@ -380,10 +380,10 @@ let
       DISPLAY_VAR="$DISPLAY"
       XAUTHORITY_VAR="$XAUTHORITY"
       XDG_RUNTIME_DIR_VAR="$XDG_RUNTIME_DIR"
-    
+
       pkexec unshare -m --propagation slave -- bash -c '
         MOUNT_POINT="$9"
-    
+
         cleanup() {
           if findmnt -M "$MOUNT_POINT" > /dev/null; then
             umount "$MOUNT_POINT"
@@ -392,13 +392,13 @@ let
             rmdir "$MOUNT_POINT"
           fi
         }
-    
+
         trap cleanup EXIT
-    
+
         mkdir -p "$MOUNT_POINT"
         chown "$1:$2" "$MOUNT_POINT"
         bindfs --force-user=$1 --force-group=$2 /etc/nixos "$MOUNT_POINT"
-    
+
         runuser -u "$3" -- \
           env \
             HOME="$4" \
@@ -408,7 +408,7 @@ let
             XDG_RUNTIME_DIR="$8" \
             NEOVIDE_MOUNT_POINT="$MOUNT_POINT" \
             neovide "$MOUNT_POINT"
-    
+
       ' bash "$USER_ID" "$GROUP_ID" "$USER_NAME" "$USER_HOME" "$WAYLAND_DISPLAY_VAR" "$DISPLAY_VAR" "$XAUTHORITY_VAR" "$XDG_RUNTIME_DIR_VAR" "$THE_MOUNT_POINT"
     '')
     (pkgs.writeShellScriptBin "finder.sh" ''
@@ -454,7 +454,46 @@ let
       beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400
     '')
     (pkgs.writeShellScriptBin "update-damn-nixos" ''
-      notify-send "Обновление" "Обновление системы, пожалуйста, выключайте компьютер когда угодно :)"; if pkexec nixos-rebuild switch -v > /home/${user}/.cache/nixos-rebuild.log 2>&1; then notify-send "Успех" "Обновление завершено без ошибок"; else notify-send "Ошибка" "Во время обновления произошла ошибка, лог обновления находится в /home/$1/.cache/nixos-rebuild.log"; fi
+      LOG_FILE="$HOME/.cache/nixos-rebuild.log"
+      rm -f "$LOG_FILE"
+      NOTIFY_ID=$(notify-send -p "Обновление" "Ожидание ввода пароля...")
+      
+      if [ -z "$NOTIFY_ID" ]; then
+        echo "Could not create notification. Aborting." >&2
+        exit 1
+      fi
+      
+      pkexec nixos-rebuild switch -v &> "$LOG_FILE" &
+      REBUILD_PID=$!
+      time=0
+      while [[ -d "/proc/$REBUILD_PID" ]]; do
+        if [[ -s "$LOG_FILE" ]]; then
+          notify-send -r "$NOTIFY_ID" "Обновление" "Обновление началось, прошло $time секунд"
+          sleep 1
+          time=$((time + 1))
+        else
+          sleep 0.1
+        fi
+      done
+      
+      wait "$REBUILD_PID"
+      EXIT_CODE=$?
+      
+      kek() {
+        if [[ $(notify-send -u critical -A "openlog=Открыть логи" "$1" "$2") == "openlog" ]]; then
+          neovide -- -c "normal! G" "$LOG_FILE"
+        fi
+      }
+      
+      if [ $EXIT_CODE -eq 0 ]; then
+        notify-send "Успех" "Система успешно обновлена."
+      elif [ $EXIT_CODE -eq 1 ]; then
+        kek "Ошибка сборки" "Произошла ошибка во время сборки. Лог: $LOG_FILE"
+      elif [ $EXIT_CODE -eq 2 ]; then
+        kek "Ошибка активации" "Сборка прошла успешно, но активация не удалась. Лог: $LOG_FILE"
+      else
+        kek "Неизвестная ошибка" "Произошла ошибка с кодом $EXIT_CODE. Лог: $LOG_FILE"
+      fi
     '')
     (pkgs.writeShellScriptBin "toggle-restriction" ''
       if grep '    power_cap: 125.0' "/etc/lact/config.yaml"; then

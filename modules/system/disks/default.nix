@@ -112,19 +112,19 @@ in
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/db"
-          { 
+          {
             directory = "/var/lib/acme";
             user = "acme";
             group = "acme";
             mode = "u=rwx,g=rx,o=rx";
           }
-          { 
+          {
             directory = "/var/lib/suricata";
             user = "suricata";
             group = "suricata";
             mode = "u=rwx,g=rx,o=rx";
           }
-          { 
+          {
             directory = "/var/lib/cape";
             user = "cape";
             group = "cape";
@@ -142,7 +142,8 @@ in
           "/etc/machine-id"
           "/cloudflare1.conf"
           "/cloudflare2.conf"
-        ] ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];
+        ]
+        ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];
       })
     ];
 

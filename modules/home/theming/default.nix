@@ -7,15 +7,15 @@
 with lib;
 let
   cfg = config.theming;
-  mkSourcePrefix = prefix: attrs:
+  mkSourcePrefix =
+    prefix: attrs:
     builtins.listToAttrs (
-      lib.mapAttrsToList (name: value:
-        {
-          name  = "${prefix}/${name}";
-          value = { source = value; };
-        }
-      )
-      attrs
+      lib.mapAttrsToList (name: value: {
+        name = "${prefix}/${name}";
+        value = {
+          source = value;
+        };
+      }) attrs
     );
 in
 {
@@ -47,37 +47,34 @@ in
     };
     home.file.".themes".source = ../../../stuff/.themes;
     xdg.configFile = {
-        "Kvantum".source = ../../../stuff/Kvantum;
-        "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
-          mkdir -p $out
-          cp -r $conf/* $out
-          chmod u+w $out/qt5ct.conf
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
-        '';
-        "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
-          mkdir -p $out
-          cp -r $conf/* $out
-          chmod u+w $out/qt6ct.conf
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
-        '';
-        "GIMP_fake".source = ../../../stuff/GIMP;
-      } 
-      //
-      (mkSourcePrefix "gtk-4.0" { 
-        "assets" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
-        "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
-        "icons" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
-      })
-      //
-      (mkSourcePrefix "vesktop" {
-        "settings" = ../../../stuff/vesktop/settings;
-        "settings.json" = ../../../stuff/vesktop/settings.json;
-        "themes" = ../../../stuff/vesktop/themes;
-      })
-      //
-      (mkSourcePrefix "Vencord" {
-        "settings" = ../../../stuff/vesktop/settings;
-        "themes" = ../../../stuff/vesktop/themes;
+      "Kvantum".source = ../../../stuff/Kvantum;
+      "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
+        mkdir -p $out
+        cp -r $conf/* $out
+        chmod u+w $out/qt5ct.conf
+        ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+      '';
+      "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
+        mkdir -p $out
+        cp -r $conf/* $out
+        chmod u+w $out/qt6ct.conf
+        ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+      '';
+      "GIMP_fake".source = ../../../stuff/GIMP;
+    }
+    // (mkSourcePrefix "gtk-4.0" {
+      "assets" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
+      "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
+      "icons" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
+    })
+    // (mkSourcePrefix "vesktop" {
+      "settings" = ../../../stuff/vesktop/settings;
+      "settings.json" = ../../../stuff/vesktop/settings.json;
+      "themes" = ../../../stuff/vesktop/themes;
+    })
+    // (mkSourcePrefix "Vencord" {
+      "settings" = ../../../stuff/vesktop/settings;
+      "themes" = ../../../stuff/vesktop/themes;
     });
     xdg.desktopEntries.discord.settings = {
       Exec = "discord --ozone-platform-hint=auto %U";

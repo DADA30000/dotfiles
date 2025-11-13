@@ -33,7 +33,7 @@ let
     '';
   };
   hazy_orig = inputs.hazy;
-  hazy = pkgs.runCommand "patch-theme.js" {} ''
+  hazy = pkgs.runCommand "patch-theme.js" { } ''
     cp -r ${hazy_orig} $out
     chmod +w $out/theme.js
     echo "setTimeout(() => {
@@ -61,8 +61,9 @@ in
 
   imports = [ inputs.spicetify-nix.homeManagerModules.default ];
   config = mkIf cfg.enable {
-    home.packages = [ (config.programs.spicetify.spicedSpotify.overrideAttrs {
-      fixupPhase = ''
+    home.packages = [
+      (config.programs.spicetify.spicedSpotify.overrideAttrs {
+        fixupPhase = ''
           runHook preFixup
 
           wrapProgramShell $out/share/spotify/spotify \
@@ -79,7 +80,8 @@ in
 
           runHook postFixup
         '';
-    }) ];
+      })
+    ];
     programs.spicetify = {
       alwaysEnableDevTools = true;
       enabledExtensions = with spicePkgs.extensions; [

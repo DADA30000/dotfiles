@@ -36,6 +36,8 @@ in
       brightnessctl
       imv
       myxer
+      ffmpeg-full
+      gpu-screen-recorder
       ffmpegthumbnailer
       bun
       esbuild
@@ -46,17 +48,21 @@ in
       wttrbar
     ];
     wayland.windowManager.hyprland = {
-      #portalPackage = mkMerge [
-      #  (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
-      #  (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
-      #];
       portalPackage = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
-        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
+        (mkIf (
+          !cfg.stable && !cfg.from-unstable
+        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
+        (mkIf (
+          cfg.from-unstable && !cfg.stable
+        ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
       ];
       package = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland)
-        (mkIf (cfg.from-unstable && !cfg.stable) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
+        (mkIf (
+          !cfg.stable && !cfg.from-unstable
+        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland)
+        (mkIf (
+          cfg.from-unstable && !cfg.stable
+        ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
       ];
       plugins =
         lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
@@ -191,8 +197,6 @@ in
           "animation slide left, swaync-control-center"
         ];
         exec-once = [
-          #"pactl load-module module-null-sink sink_name=audiorelay-virtual-mic-sink sink_properties=device.description=Virtual-Mic-Sink; pactl load-module module-remap-source master=audiorelay-virtual-mic-sink.monitor source_name=audiorelay-virtual-mic-sink source_properties=device.description=Virtual-Mic"
-          #"firefox & sleep 1; firefox --new-window https://discord.com/channels/@me"
           "app2unit -- wl-paste --watch cliphist store"
           "fumon"
           "hyprctl setcursor Bibata-Modern-Classic 24"
@@ -324,21 +328,6 @@ in
         StartLimitInterval = 0;
       };
     };
-    #systemd.user.services.custom_sink = {
-    #  Install = {
-    #    WantedBy = [ "pipewire-pulse.service" ];
-    #  };
-    #  Unit = {
-    #    After = [ "pipewire-pulse.service" ];
-    #  };
-    #  Service = {
-    #    Type = "oneshot";
-    #    ExecStart = [
-    #      "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-null-sink sink_name=custom_sink sink_properties=device.description='Custom_Sink'"
-    #      "${pkgs.pulseaudio}/.bin-unwrapped/pactl load-module module-loopback source=custom_sink.monitor sink=alsa_output.usb-3142_fifine_Headset-00.analog-stereo"
-    #    ];
-    #  };
-    #};
     xdg.portal = {
       enable = true;
       extraPortals = [
@@ -352,25 +341,26 @@ in
         background = [
           {
             monitor = "";
-            color = "rgba(0, 0, 0, 0.7)";
+            color = "rgba(0, 0, 0, 1)";
           }
         ];
 
         input-field = [
           {
             monitor = "";
-            size = "200, 50";
-            outline_thickness = 1;
+            size = "12.5%, 5%";
+            outline_thickness = 2;
             dots_size = 0.2;
             dots_spacing = 0.15;
             dots_center = true;
             outer_color = "rgb(000000)";
-            inner_color = "rgb(100, 100, 100)";
-            font_color = "rgb(10, 10, 10)";
+            inner_color = "rgb(000000)";
+            font_color = "rgb(255, 255, 255)";
             fade_on_empty = true;
-            placeholder_text = "<i>Введите пароль...</i>";
+            fail_text = "";
+            placeholder_text = "";
             hide_input = false;
-            position = "0, -20";
+            position = "0%, 0%";
             halign = "center";
             valign = "center";
           }
@@ -379,11 +369,31 @@ in
         label = [
           {
             monitor = "";
-            text = "Введите пароль от пользователя $USER $TIME $ATTEMPTS";
-            color = "rgba(200, 200, 200, 1.0)";
+            text = "$TIME";
+            color = "rgb(255, 255, 255)";
+            font_size = 50;
+            font_family = "Noto Sans";
+            position = "0%, 30%";
+            halign = "center";
+            valign = "center";
+          }
+          {
+            monitor = "";
+            text = "Введите пароль от пользователя $USER";
+            color = "rgb(255, 255, 255)";
             font_size = 25;
             font_family = "Noto Sans";
-            position = "0, 200";
+            position = "0%, 15%";
+            halign = "center";
+            valign = "center";
+          }
+          {
+            monitor = "";
+            text = "$ATTEMPTS[]";
+            color = "rgb(255, 255, 255, 0.05)";
+            font_size = 25;
+            font_family = "Noto Sans";
+            position = "-48%, -48%";
             halign = "center";
             valign = "center";
           }
@@ -456,8 +466,8 @@ in
         	background-color: rgba(0, 0, 0, 0);
         }
         button {
-            color: #FFFFFF;
-                border-style: solid;
+          color: #FFFFFF;
+          border-style: solid;
         	border-radius: 15px;
         	border-width: 3px;
         	background-color: rgba(0, 0, 0, 0);
@@ -472,19 +482,19 @@ in
         }
 
         #lock {
-            background-image: image(url("${../../../stuff/lock.png}"));
+            background-image: image(url("${../../../stuff/wlogout/lock.png}"));
         }
 
         #logout {
-            background-image: image(url("${../../../stuff/logout.png}"));
+            background-image: image(url("${../../../stuff/wlogout/logout.png}"));
         }
 
         #shutdown {
-            background-image: image(url("${../../../stuff/shutdown.png}"));
+            background-image: image(url("${../../../stuff/wlogout/shutdown.png}"));
         }
 
         #reboot {
-            background-image: image(url("${../../../stuff/reboot.png}"));
+            background-image: image(url("${../../../stuff/wlogout/reboot.png}"));
         }
       '';
     };

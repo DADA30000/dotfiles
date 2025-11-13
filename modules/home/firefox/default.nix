@@ -8,14 +8,15 @@
 with lib;
 let
   vencord-web = (
-    inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon {
-      pname = "vencord-web";
-      version = "1.10.9";
-      addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
-      url = "https://github.com/DADA30000/dotfiles/raw/refs/heads/main/stuff/vencord-sth.xpi";
-      sha256 = "0774c1ee50a9e06ec86e7cafd423980964e6120b0bd92fbf18ec75553e870798";
-      meta = { };
-    }
+    inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons.buildFirefoxXpiAddon
+      {
+        pname = "vencord-web";
+        version = "1.10.9";
+        addonId = "{ccb34031-d8e9-49c0-a795-60560b0db6c9}";
+        url = "https://github.com/DADA30000/dotfiles/raw/refs/heads/main/stuff/vencord-sth.xpi";
+        sha256 = "0774c1ee50a9e06ec86e7cafd423980964e6120b0bd92fbf18ec75553e870798";
+        meta = { };
+      }
   );
   cfg = config.firefox;
 in
@@ -27,17 +28,20 @@ in
   config = mkIf cfg.enable {
     programs.firefox = {
       enable = true;
-      nativeMessagingHosts = [ inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+      nativeMessagingHosts = [
+        inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default
+      ];
       profiles.kek = {
         extensions = {
-          packages = with inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons; [
-            bitwarden
-            ublock-origin
-            privacy-badger
-            sponsorblock
-            darkreader
-            vencord-web
-          ];
+          packages =
+            with inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system}.repos.rycee.firefox-addons; [
+              bitwarden
+              ublock-origin
+              privacy-badger
+              sponsorblock
+              darkreader
+              vencord-web
+            ];
         };
         userChrome = ''
                     /* imports */
@@ -730,108 +734,107 @@ in
           "extensions.autoDisableScopes" = 0;
           "intl.regional_prefs.use_os_locales" = true;
         };
-        bookmarks = [
-          {
-            url = "https://mail.google.com/mail/u/0/#inbox";
-            name = "first gmail";
-          }
-          {
-            url = "https://mail.google.com/mail/u/1/#inbox";
-            name = "second gmail";
-          }
-          {
-            url = "https://home-manager-options.extranix.com/";
-            name = "Home Manager - Option Search";
-          }
-          {
-            url = "https://search.nixos.org/options";
-            name = "NixOS Search - Options";
-          }
-          {
-            url = "https://nixpk.gs/pr-tracker.html";
-            name = "Nixpkgs PR status";
-          }
-          {
-            url = "https://youtube.com";
-            name = "";
-          }
-          {
-            url = "https://cartoonsub.com/";
-            name = "";
-          }
-          {
-            url = "https://diakov.net/";
-            name = "";
-          }
-          {
-            url = "https://d-obmen.cc/CreateOrder.aspx?s=ADVC-RUB&t=QIWI-RUB";
-            name = "";
-          }
-          {
-            url = "https://unix.stackexchange.com/questions/48235/can-i-watch-the-progress-of-a-sync-operation";
-            name = "";
-          }
-          {
-            url = "https://ggntw.com/steam";
-            name = "";
-          }
-          {
-            url = "https://freevpn4you.net/ru/locations/sweden.php";
-            name = "";
-          }
-          {
-            url = "https://forums.unraid.net/topic/127639-easy-anti-cheat-launch-error-cannot-run-under-virtual-machine/";
-            name = "";
-          }
-          {
-            url = "https://auto.creavite.co/animated-banners";
-            name = "";
-          }
-          {
-            url = "https://positiverecords.ru/";
-            name = "";
-          }
-          {
-            url = "https://github.com/Codeusa/Borderless-Gaming/releases";
-            name = "";
-          }
-          {
-            url = "https://free-mp3-download.net/";
-            name = "";
-          }
-          {
-            url = "https://www.reddit.com/r/LinuxCrackSupport/comments/13vorsd/comment/jtfas0n/";
-            name = "";
-          }
-          {
-            url = "https://minecraft-serverlist.com/tools/offline-uuid";
-            name = "";
-          }
-          {
-            url = "https://use10.thegood.cloud/apps/files/?dir=/&fileid=10482827";
-            name = "";
-          }
-          {
-            url = "https://discourse.nixos.org/t/set-default-application-for-mime-type-with-home-manager/17190";
-            name = "";
-          }
-          {
-            url = "https://ryantm.github.io/nixpkgs/using/overlays/#chap-overlays";
-            name = "";
-          }
-          {
-            url = "https://ryantm.github.io/nixpkgs/using/overrides/#chap-overrides";
-            name = "";
-          }
-          {
-            url = "https://nixos.wiki/index.php?title=Ubuntu_vs._NixOS&useskin=vector";
-            name = "";
-          }
-          {
-            url = "https://www.3dgifmaker.com/ClockwiseSpin";
-            name = "";
-          }
-        ];
+        bookmarks = {
+          force = true;
+          settings = [
+            {
+              url = "https://nixos.org/manual/nixpkgs/unstable/";
+              name = "Nixpkgs manual";
+            }
+            {
+              url = "https://home-manager-options.extranix.com/?query=&release=master";
+              name = "HM options";
+            }
+            {
+              url = "https://search.nixos.org/options?channel=unstable&";
+              name = "NixOS options";
+            }
+            {
+              url = "https://nixpk.gs/pr-tracker.html";
+              name = "Nixpkgs PR status";
+            }
+            {
+              url = "https://youtube.com";
+              name = "";
+            }
+            {
+              url = "https://cartoonsub.com/";
+              name = "";
+            }
+            {
+              url = "https://diakov.net/";
+              name = "";
+            }
+            {
+              url = "https://d-obmen.cc/CreateOrder.aspx?s=ADVC-RUB&t=QIWI-RUB";
+              name = "";
+            }
+            {
+              url = "https://unix.stackexchange.com/questions/48235/can-i-watch-the-progress-of-a-sync-operation";
+              name = "";
+            }
+            {
+              url = "https://ggntw.com/steam";
+              name = "";
+            }
+            {
+              url = "https://freevpn4you.net/ru/locations/sweden.php";
+              name = "";
+            }
+            {
+              url = "https://forums.unraid.net/topic/127639-easy-anti-cheat-launch-error-cannot-run-under-virtual-machine/";
+              name = "";
+            }
+            {
+              url = "https://auto.creavite.co/animated-banners";
+              name = "";
+            }
+            {
+              url = "https://positiverecords.ru/";
+              name = "";
+            }
+            {
+              url = "https://github.com/Codeusa/Borderless-Gaming/releases";
+              name = "";
+            }
+            {
+              url = "https://free-mp3-download.net/";
+              name = "";
+            }
+            {
+              url = "https://www.reddit.com/r/LinuxCrackSupport/comments/13vorsd/comment/jtfas0n/";
+              name = "";
+            }
+            {
+              url = "https://minecraft-serverlist.com/tools/offline-uuid";
+              name = "";
+            }
+            {
+              url = "https://use10.thegood.cloud/apps/files/?dir=/&fileid=10482827";
+              name = "";
+            }
+            {
+              url = "https://discourse.nixos.org/t/set-default-application-for-mime-type-with-home-manager/17190";
+              name = "";
+            }
+            {
+              url = "https://ryantm.github.io/nixpkgs/using/overlays/#chap-overlays";
+              name = "";
+            }
+            {
+              url = "https://ryantm.github.io/nixpkgs/using/overrides/#chap-overrides";
+              name = "";
+            }
+            {
+              url = "https://nixos.wiki/index.php?title=Ubuntu_vs._NixOS&useskin=vector";
+              name = "";
+            }
+            {
+              url = "https://www.3dgifmaker.com/ClockwiseSpin";
+              name = "";
+            }
+          ];
+        };
       };
     };
   };

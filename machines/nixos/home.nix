@@ -91,17 +91,21 @@
 
   };
 
-  flatpak = if !(avg-flag || min-flag) then {
+  flatpak =
+    if !(avg-flag || min-flag) then
+      {
 
-    # Enable system flatpak
-    enable = true;
+        # Enable system flatpak
+        enable = true;
 
-    # Packages to install from flatpak
-    packages = [
-      "io.github.Soundux"
-    ];
+        # Packages to install from flatpak
+        packages = [
+          "io.github.Soundux"
+        ];
 
-  } else {};
+      }
+    else
+      { };
 
   hyprland = {
 

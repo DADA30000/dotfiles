@@ -8,13 +8,16 @@
 with lib;
 let
   cfg = config.zsh;
-  nix-path = pkgs.runCommand "kekma" {
-    src = ../../../stuff/nixpkgs.tar.zst;
-  } ''
-    PATH=$PATH:${pkgs.zstd}/bin
-    mkdir $out
-    tar --strip-components=1 -xvf $src -C $out
-  '';
+  nix-path =
+    pkgs.runCommand "kekma"
+      {
+        src = ../../../stuff/nixpkgs.tar.zst;
+      }
+      ''
+        PATH=$PATH:${pkgs.zstd}/bin
+        mkdir $out
+        tar --strip-components=1 -xvf $src -C $out
+      '';
 in
 {
   options.zsh = {
@@ -31,7 +34,8 @@ in
       nix-index = {
         enable = true;
         enableZshIntegration = true;
-        package = inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.nix-index-with-small-db;
+        package =
+          inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.nix-index-with-small-db;
       };
       starship = {
         enable = true;
@@ -116,17 +120,17 @@ in
                       local -a packages
                       packages=(''${(f)packages_string})
                     fi
-              
+
                     local -a suggestions_first
                     suggestions_first=( ''${(M)packages:#"$curr_word"*} )
                     local -a suggestions_second
                     suggestions_second=( ''${(M)packages:#*"$curr_word"*} )
-              
+
                     typeset -A seen
                     for item in "''${suggestions_first[@]}"; do
                       seen[$item]=1
                     done
-              
+
                     local -a suggestions_second_unique
                     suggestions_second_unique=()
                     for item in "''${suggestions_second[@]}"; do
@@ -134,7 +138,7 @@ in
                         suggestions_second_unique+=("$item")
                       fi
                     done
-              
+
                     local -a suggestions
                     suggestions=( ''${suggestions_first[@]} ''${suggestions_second_unique[@]} )
                     suggestions=( "''${(@)suggestions/#''${attr_prefix}/}" )
@@ -199,7 +203,7 @@ in
                 for arg in "$@"; do
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-              
+
                 nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
               }
               # Ad-hoc nix-develop devShell
@@ -209,7 +213,7 @@ in
                 for arg in "$@"; do
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-              
+
                 nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { 
                   system = \"${pkgs.stdenv.hostPlatform.system}\"; 
                   config.allowUnfree = true; 
@@ -230,7 +234,7 @@ in
                 for arg in "$@"; do
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-              
+
                 nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ]"
               }
               # ad-hoc nix eval expr
@@ -240,7 +244,7 @@ in
                 for arg in "$@"; do
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-              
+
                 nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
               # ad-hoc nix build expr
@@ -250,7 +254,7 @@ in
                 for arg in "$@"; do
                   [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
                 done
-              
+
                 nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
               }
               u-full () {
@@ -311,25 +315,29 @@ in
           ll = "ls -l";
           # Dirty ass workaround for getting ad-hoc stuff working in pure mode
           u = "nh os switch /etc/nixos";
-          nsl-full = "${inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-locate";
-          nss = 
-          let 
-            index = pkgs.runCommand "index" {} ''
-              PATH=$PATH:${config.nix.package}/bin
-              mkdir fake-state-dir
-              mkdir -p "$out"
-              HOME="$out" NIX_STATE_DIR="$(pwd)/fake-state-dir" NIX_PATH="nixpkgs=${inputs.nixpkgs}" ${inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-search -i -v 3
-              mv "$out/.cache/nix-search/index-v4" "$out" 
-              rm -rf "$out/.cache"
-            '';
-          in
+          nsl-full = "${
+            inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
+          }/bin/nix-locate";
+          nss =
+            let
+              index = pkgs.runCommand "index" { } ''
+                PATH=$PATH:${config.nix.package}/bin
+                mkdir fake-state-dir
+                mkdir -p "$out"
+                HOME="$out" NIX_STATE_DIR="$(pwd)/fake-state-dir" NIX_PATH="nixpkgs=${inputs.nixpkgs}" ${
+                  inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default
+                }/bin/nix-search -i -v 3
+                mv "$out/.cache/nix-search/index-v4" "$out" 
+                rm -rf "$out/.cache"
+              '';
+            in
             "nix-search --index-path \"${index}\"";
           #update-nvidia = "sudo nixos-rebuild switch --specialisation nvidia;update-desktop-database -v ~/.local/share/applications";
           "7z" = "7zz";
           u-test = "nh os test /etc/nixos";
           u-boot = "nh os boot /etc/nixos";
           u-build = "nh os build /etc/nixos";
-          u-debug =  "nix build /etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try";
+          u-debug = "nix build /etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try";
           ns-repl = ''nix repl --expr "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }"'';
           nsl = "nix-locate";
           #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";

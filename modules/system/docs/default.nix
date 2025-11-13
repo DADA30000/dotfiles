@@ -5,12 +5,12 @@
 with lib;
 {
   options.docs = {
-    man-cache-home = mkOption { 
+    man-cache-home = mkOption {
       type = types.str;
       visible = false;
     };
     man-cache-nix = mkOption {
-      type = types.str; 
+      type = types.str;
       visible = false;
     };
     hm-html = mkOption {

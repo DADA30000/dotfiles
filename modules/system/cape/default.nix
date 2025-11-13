@@ -141,7 +141,7 @@ let
     // builtins.listToAttrs (
       builtins.map (x: {
         name = x;
-        value = [];
+        value = [ ];
       }) add_from_nixpkgs
     )
   );
@@ -735,7 +735,10 @@ in
         guac-web = {
           description = "Guacamole ASGI app for CAPE";
           wantedBy = [ "cape.service" ];
-          after = [ "guacamole-server.service" "cape-prepare-env.service" ];
+          after = [
+            "guacamole-server.service"
+            "cape-prepare-env.service"
+          ];
           wants = [ "guacamole-server.service" ];
           serviceConfig = {
             User = "cape";
@@ -775,8 +778,16 @@ in
           description = "CAPE Sandbox Service";
           path = additional_path;
           wantedBy = [ "graphical.target" ];
-          after = [ "cape-prepare-env.service" "graphical.target" ];
-          wants = [ "cape-rooter.service" "cape-processor.service" "cape-web.service" "cape-prepare-env.service" ];
+          after = [
+            "cape-prepare-env.service"
+            "graphical.target"
+          ];
+          wants = [
+            "cape-rooter.service"
+            "cape-processor.service"
+            "cape-web.service"
+            "cape-prepare-env.service"
+          ];
           serviceConfig = {
             User = "cape";
             Group = "cape";
@@ -795,7 +806,10 @@ in
           path = additional_path;
           after = [ "cape-rooter.service" ];
           before = [ "cape-prepare-env.service" ];
-          wants = [ "cape.service" "cape-prepare-env.service" ];
+          wants = [
+            "cape.service"
+            "cape-prepare-env.service"
+          ];
           serviceConfig = {
             User = "cape";
             Group = "cape";
@@ -829,7 +843,10 @@ in
           path = additional_path;
           before = [ "cape-prepare-env.service" ];
           after = [ "cape-rooter.service" ];
-          wants = [ "cape-rooter.service" "cape-prepare-env.service" ];
+          wants = [
+            "cape-rooter.service"
+            "cape-prepare-env.service"
+          ];
           serviceConfig = {
             User = "cape";
             Group = "cape";
