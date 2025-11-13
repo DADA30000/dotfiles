@@ -61,12 +61,16 @@ let
       exec nix-install
     fi
   '';
-  install-offline = if wrapped then ''
-    nixos-install -v --system '${orig.config.system.build.toplevel}' --keep-going --impure
-  '' else ''
-    echo "can't install twice :("
-    exit 1
-  '';
+  install-offline =
+    if wrapped then
+      ''
+        nixos-install -v --system '${orig.config.system.build.toplevel}' --keep-going --impure
+      ''
+    else
+      ''
+        echo "can't install twice :("
+        exit 1
+      '';
 in
 {
   imports = [
@@ -77,22 +81,24 @@ in
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
-  
-      systemd.user.services.replays.wantedBy = lib.mkForce [];
-  
-      systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [];
-  
-      systemd.services.singbox.wantedBy = lib.mkForce [];
-      
-      warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [ "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled." ];
-  
+
+      systemd.user.services.replays.wantedBy = lib.mkForce [ ];
+
+      systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [ ];
+
+      systemd.services.singbox.wantedBy = lib.mkForce [ ];
+
+      warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [
+        "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled."
+      ];
+
       system.activationScripts = {
-  
+
         repo = {
-  
+
           # Run after /dev has been mounted
           deps = [ "specialfs" ];
-  
+
           text = ''
             PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils-full}/bin:${pkgs.gnutar}/bin"
             mkdir /repo
@@ -104,39 +110,39 @@ in
             mkdir -p /etc/nixos
             cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
           '';
-  
+
         };
-  
+
         singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json && wrapped) {
-  
+
           deps = [ "specialfs" ];
-  
+
           text = ''
             PATH="$PATH:${pkgs.coreutils}/bin"
             cp ${../../stuff/singbox/config.json} /config.json
             chmod 400 /config.json
           '';
-            
+
         };
-  
+
       };
-  
+
       boot.kernel.sysctl."vm.swappiness" = 200;
-  
+
       services.ollama.enable = lib.mkForce false;
-  
+
       graphics.amdgpu.pro = lib.mkForce false;
-  
+
       disks.enable = lib.mkForce false;
-  
+
       my-services.cloudflare-ddns.enable = lib.mkForce false;
-  
+
       my-services.nginx.enable = lib.mkForce false;
-  
+
       cape.enable = lib.mkForce false;
-  
+
       boot.loader.timeout = lib.mkForce 10;
-  
+
       boot.initrd.systemd.enable = lib.mkForce false;
 
       fonts.fontconfig.enable = true;
@@ -148,13 +154,13 @@ in
       };
 
       networking.wireless.enable = false;
-  
+
       environment.systemPackages = with pkgs; [
         gum
         lolcat
         openssl
         gparted
-        (python3.withPackages(ps: with ps; [ tkinter ]))
+        (python3.withPackages (ps: with ps; [ tkinter ]))
         (writeShellScriptBin "nix-install" nix-install)
         (writeShellScriptBin "install-offline" install-offline)
       ];

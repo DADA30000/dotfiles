@@ -112,7 +112,13 @@
             specialArgs = prev_system.specialArgs // {
               user-hash = null;
               user = user_iso;
-              inherit inputs self umport system-modules home-modules;
+              inherit
+                inputs
+                self
+                umport
+                system-modules
+                home-modules
+                ;
             };
           };
           orig_system = nixpkgs.lib.nixosSystem (
@@ -141,9 +147,17 @@
 
       umport = (import ./modules/umport.nix { inherit (nixpkgs) lib; }).umport;
 
-      system-modules = umport { paths = [ ./modules/system ]; recursive = false; };
+      system-modules = umport {
+        paths = [ ./modules/system ];
+        recursive = false;
+      };
 
-      home-modules = umport { paths = [ ./modules/home ]; recursive = false; } ++ [ inputs.nix-index-database.homeModules.nix-index ];
+      home-modules =
+        umport {
+          paths = [ ./modules/home ];
+          recursive = false;
+        }
+        ++ [ inputs.nix-index-database.homeModules.nix-index ];
 
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
@@ -151,7 +165,12 @@
         {
           home-manager = {
             extraSpecialArgs = {
-              inherit inputs self umport home-modules;
+              inherit
+                inputs
+                self
+                umport
+                home-modules
+                ;
             };
             backupFileExtension = "backup";
             overwriteBackup = true;
@@ -160,7 +179,8 @@
             users.root = import ./machines/nixos/home-root.nix;
           };
         }
-      ] ++ system-modules;
+      ]
+      ++ system-modules;
 
       user = "l0lk3k";
       user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
@@ -182,7 +202,10 @@
             min-flag = false;
             avg-flag = false;
           };
-          modules = modules-list ++ [ ./machines/nixos/configuration.nix  ./machines/nixos/hardware-configuration.nix ];
+          modules = modules-list ++ [
+            ./machines/nixos/configuration.nix
+            ./machines/nixos/hardware-configuration.nix
+          ];
         };
         iso = iso-wrapper {
           specialArgs = {
