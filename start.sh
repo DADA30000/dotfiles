@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-if [ -f ./check ]; then
+if [[ -f ./check ]]; then
   ./complete.sh
   clear
-  if gum confirm --default=false "Использовать встроенное в скрипт разделение диска на разделы? (Использует весь диск, если нажать нет, будет открыт GParted с инструкциями)"; then
+  if gum confirm --default=true "Использовать встроенное в скрипт разделение диска на разделы? (Использует весь диск, если нажать нет, будет открыт GParted с инструкциями)"; then
     echo -e "\e[34mВыберите диск на котором будет расположена \e[4;34mСИСТЕМА\e[0m"
     echo -e "\e[32mСовет: вы всегда можете перезапустить скрипт нажав Ctrl+C (желательно не во время этапа установки)\e[0m"
     fdisk -l | grep -i -E "^(Диск|Disk|/)"
@@ -31,27 +31,29 @@ if [ -f ./check ]; then
     read -r
     sudo -E gparted
   fi
-  if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
-    echo "Введите пароль"
-    passtemp=$(mkpasswd)
-    echo "Введите имя пользователя"
-    read -r usertemp
-    sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./flake.nix
-    sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./flake.nix
-  fi
-  if gum confirm --default=false "Отредактировать файл конфигурации?"; then
-    nvim ./machines/nixos/configuration.nix
-  fi
-  host="nixos"
-  if gum confirm --default=false "Клонировать профиль Firefox? (Это сделано для МЕНЯ, создателя образа, и вам это не нужно, тыкайте no)"; then
-    encoded="U2FsdGVkX18I8ki4i/keJu8eCSXpVWpZxyiL5zLrPxw7KC3SR46FKRjx5xZPCpLF
-tZXxn9qc34vndv7Nyuoe0g=="
-    pass=$(gum input --header="Пароль для расшифровки токена" --placeholder="Вводи сцука" --password --no-show-help)
-    decoded=$(echo "$encoded" | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:"${pass}")
-    myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
-  fi
-  if gum confirm --default=false "Изменить имя хоста в flake.nix для установки (по умолчанию nixos)?"; then
-    host=$(gum input --header="Имя хоста" --placeholder="Вводи сцука" --no-show-help)
+  if [[ "$1" != "offline" ]]; then
+    if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
+      echo "Введите пароль"
+      passtemp=$(mkpasswd)
+      echo "Введите имя пользователя"
+      read -r usertemp
+      sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./flake.nix
+      sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./flake.nix
+    fi
+    if gum confirm --default=false "Отредактировать файл конфигурации?"; then
+      nvim ./machines/nixos/configuration.nix
+    fi
+    host="nixos"
+    if gum confirm --default=false "Клонировать профиль Firefox? (Это сделано для МЕНЯ, создателя образа, и вам это не нужно, тыкайте no)"; then
+      encoded="U2FsdGVkX18I8ki4i/keJu8eCSXpVWpZxyiL5zLrPxw7KC3SR46FKRjx5xZPCpLF
+tZ  Xxn9qc34vndv7Nyuoe0g=="
+      pass=$(gum input --header="Пароль для расшифровки токена" --placeholder="Вводи сцука" --password --no-show-help)
+      decoded=$(echo "$encoded" | openssl aes-256-cbc -pbkdf2 -d -a -pass pass:"${pass}")
+      myuser=$(gum input --header="Имя пользователя указанное в flake.nix" --placeholder="Миша гей" --no-show-help --value="l0lk3k")
+    fi
+    if gum confirm --default=false "Изменить имя хоста в flake.nix для установки (по умолчанию nixos)?"; then
+      host=$(gum input --header="Имя хоста" --placeholder="Вводи сцука" --no-show-help)
+    fi
   fi
   if [[ -n "$disk_games" ]]; then
     echo "Вы хотите установить СИСТЕМУ на $disk_system, и использовать в качестве ДОПОЛНИТЕЛЬНОГО ДИСКА $disk_games (предупреждение: он отформатируется)"
@@ -81,10 +83,10 @@ tZXxn9qc34vndv7Nyuoe0g=="
       fi
       if [[ -n "$disk_system" ]]; then
         echo -e "\n\e[34mФорматирование разделов...\e[0m\n"
-        if [ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]; then
+        if [[ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]]; then
           disk_games="${disk_games}p"
         fi
-        if [ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]; then
+        if [[ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]]; then
           disk_system="${disk_system}p"
         fi
         mkdir -p /mnt
