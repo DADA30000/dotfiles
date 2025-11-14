@@ -104,7 +104,7 @@ in
             mkdir /repo
             tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
             rm /repo/stuff/nixpkgs.tar.zst
-            cp "${../../stuff/nixpkgs.tar.zst}" /repo/stuff
+            cp -f "${../../stuff/nixpkgs.tar.zst}" /repo/stuff/nixpkgs.tar.zst
             chown root:root -R /repo
             cd /repo
             mkdir -p /etc/nixos
