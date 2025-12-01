@@ -206,7 +206,9 @@ warn_unused_configs = true
 files = [
     "agent/**/*.py",
 ]
-[tool.hatch.build.targets.wheel]
-packages = [
-  "dummy"
-]
+
+      [tool.hatch.build.targets.wheel]
+      packages = [
+        "dummy"
+      ]
+      

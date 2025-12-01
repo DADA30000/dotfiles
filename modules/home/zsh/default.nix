@@ -269,8 +269,7 @@ in
                   export TEMPDIR=$(${pkgs.coreutils-full}/bin/mktemp -d)
                   export GIT_LFS_SKIP_SMUDGE=1
                   sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst
-                  sudo rm /etc/nixos/modules/system/cape/uv.lock
-                  sudo rm /etc/nixos/modules/system/cape/pyproject.toml
+                  sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
                   git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5 $TEMPDIR/nixpkgs
                   git clone https://github.com/kevoreilly/CAPEv2 --depth 1 $TEMPDIR/cape
                   (
@@ -291,9 +290,8 @@ in
                     mv uv.lock nix_workspace
                     mv dummy nix_workspace
                   )
-                  tar -cv --zstd -f $TEMPDIR/nixpkgs.tar.zst $TEMPDIR/nixpkgs
-                  sudo cp $TEMPDIR/cape/uv.lock /etc/nixos/modules/system/cape
-                  sudo cp $TEMPDIR/cape/pyproject.toml /etc/nixos/modules/system/cape
+                  tar -cv --zstd -f $TEMPDIR/nixpkgs.tar.zst -C $TEMPDIR nixpkgs
+                  sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
                   sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
                   rm -rf $TEMPDIR
                   sudo nix flake update --flake /etc/nixos
@@ -310,6 +308,7 @@ in
             zshEarly
           ];
         shellAliases = {
+          detach-from-nixos = "patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2";
           umu-run = "umu-run-wrapper";
           ls = "lsd";
           ll = "ls -l";
