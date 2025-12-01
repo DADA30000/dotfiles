@@ -43,8 +43,6 @@
 
   boot.kernel.sysctl."net.core.default_qdisc" = "cake";
 
-  services.preload.enable = true;
-
   services.scx = {
     enable = true;
     scheduler = "scx_bpfland";
