@@ -34,7 +34,7 @@ in
       libnotify
       swappy
       brightnessctl
-      imv
+      qimgv
       myxer
       ffmpeg-full
       gpu-screen-recorder
@@ -149,17 +149,17 @@ in
           "$mod, mouse:273, resizewindow"
         ];
         windowrule = [
-          "nomaxsize, class:^(polkit-mate-authentication-agent-1)$"
-          "pin, class:^(polkit-mate-authentication-agent-1)$"
-          "fullscreenstate 0 2, class:(firefox), title:^(.*Discord.* — Mozilla Firefox.*)$"
-          "opacity 0.99 override 0.99 override, title:^(QDiskInfo)$"
-          "opacity 0.99 override 0.99 override, title:^(MainPicker)$"
-          "opacity 0.99 override 0.99 override, class:^(thunderbird)$"
-          "opacity 0.99 override 0.99 override, class:^(spotify)$"
-          "opacity 0.99 override 0.99 override, class:^(org.prismlauncher.PrismLauncher)$"
-          "opacity 0.99 override 0.99 override, class:^(mpv)$"
-          "opacity 0.99 override 0.99 override, class:^(org.qbittorrent.qBittorrent)$"
-          "opacity 0.99 override 0.99 override, class:^(die)$"
+          "no_max_size on, match:class polkit-mate-authentication-agent-1"
+          "pin on, match:class polkit-mate-authentication-agent-1"
+          "fullscreen_state 0 2, match:class (firefox), match:title ^(.*Discord.* — Mozilla Firefox.*)$"
+          "opacity 0.99 override 0.99 override, match:title QDiskInfo"
+          "opacity 0.99 override 0.99 override, match:title MainPicker"
+          "opacity 0.99 override 0.99 override, match:class thunderbird"
+          "opacity 0.99 override 0.99 override, match:class spotify"
+          "opacity 0.99 override 0.99 override, match:class org.prismlauncher.PrismLauncher"
+          "opacity 0.99 override 0.99 override, match:class mpv"
+          "opacity 0.99 override 0.99 override, match:class org.qbittorrent.qBittorrent"
+          "opacity 0.99 override 0.99 override, match:class die"
         ];
         permission = [
           "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"
@@ -168,33 +168,24 @@ in
           "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
         ];
         layerrule = [
-          "blur, waybar"
-          "blur, rofi"
-          "blur, wofi"
-          "blur, launcher"
-          "blur, logout_dialog"
-          "blur, notifications"
-          "blur, gtk-layer-shell"
-          "blur, swaync-control-center"
-          "blur, swaync-notification-window"
-          "blur, .*"
-          "blurpopups, .*"
-          "noanim, selection"
-          "noanim, hyprpicker"
-          "ignorealpha 0.9, selection"
-          "ignorezero, corner0"
-          "ignorezero, overview"
-          "ignorezero, indicator0"
-          "ignorezero, datemenu"
-          "ignorezero, launcher"
-          "ignorezero, quicksettings"
-          "ignorezero, swaync-control-center"
-          "ignorezero, rofi"
-          "ignorezero, waybar"
-          "ignorezero, swaync-notification-window"
-          "animation popin 90%, rofi"
-          "animation popin 90%, logout_dialog"
-          "animation slide left, swaync-control-center"
+          "blur on, match:namespace .*"
+          "blur_popups on, match:namespace .*"
+          "no_anim on, match:namespace selection"
+          "no_anim on, match:namespace hyprpicker"
+          "ignore_alpha 0.9, match:namespace selection"
+          "ignore_alpha 0, match:namespace corner0"
+          "ignore_alpha 0, match:namespace overview"
+          "ignore_alpha 0, match:namespace indicator0"
+          "ignore_alpha 0, match:namespace datemenu"
+          "ignore_alpha 0, match:namespace launcher"
+          "ignore_alpha 0, match:namespace quicksettings"
+          "ignore_alpha 0, match:namespace swaync-control-center"
+          "ignore_alpha 0, match:namespace rofi"
+          "ignore_alpha 0, match:namespace waybar"
+          "ignore_alpha 0, match:namespace swaync-notification-window"
+          "animation popin 90%, match:namespace rofi"
+          "animation popin 90%, match:namespace logout_dialog"
+          "animation slide left, match:namespace swaync-control-center"
         ];
         exec-once = [
           "app2unit -- wl-paste --watch cliphist store"

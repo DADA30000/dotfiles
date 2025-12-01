@@ -9,6 +9,12 @@
 with lib;
 let
   cfg = config.neovim;
+  python = pkgs.python3.withPackages (
+    ps: with ps; [
+      tkinter
+      debugpy
+    ]
+  );
   nix-path =
     pkgs.runCommand "kekma"
       {
@@ -206,13 +212,36 @@ in
   };
 
   config = mkIf cfg.enable {
+    xdg.configFile."ruff/ruff.toml".source = (pkgs.formats.toml { }).generate "ruff.toml" {
+      line-length = 79;
+      lint = {
+        select = [
+          "E"
+          "W"
+          "F"
+          "C90"
+        ];
+        preview = true;
+        ignore = [ ];
+        mccabe.max-complexity = 10;
+      };
+    };
     home.packages = with pkgs; [
+      delve
+      vscode-extensions.vadimcn.vscode-lldb
+      hexpatch
+      tinyxxd
       bash-language-server
       shellcheck
       shfmt
       asm-lsp
       rustfmt
       tmux
+      tree-sitter
+      ripgrep
+      ruff
+      basedpyright
+      python
     ];
     programs.neovim = {
       coc.enable = true;
@@ -222,21 +251,19 @@ in
       vimAlias = true;
       vimdiffAlias = true;
       plugins = with pkgs.vimPlugins; [
+        nvim-dap
+        nvim-dap-ui
+        nvim-dap-virtual-text
+        nvim-nio
+        nvim-dap-go
+        nvim-dap-python
         indent-blankline-nvim
         nvim-web-devicons
-        (nvim-treesitter.withPlugins (
-          p: with p; [
-            qmljs
-            cpp
-            nix
-            javascript
-          ]
-        ))
-        coc-ultisnips
+        nvim-treesitter.withAllGrammars
         (pkgs.callPackage ./cord-nvim.nix { })
         coc-snippets
+        vim-snippets
         coc-json
-        coc-basedpyright
         coc-sh
         coc-css
         coc-html
@@ -247,7 +274,44 @@ in
         auto-save-nvim
       ];
       coc.settings = {
+        diagnostic = {
+          enable = true;
+          virtualText = true;
+          virtualTextCurrentLineOnly = true;
+        };
+        rust-analyzer = {
+          serverPath = "rust-analyzer";
+          checkOnSave.command = "check";
+        };
         languageserver = {
+          basedpyright = {
+            command = "basedpyright-langserver";
+            args = [ "--stdio" ];
+            filetypes = [ "python" ];
+            rootPatterns = [
+              "pyproject.toml"
+              "setup.py"
+              ".git"
+              ".venv"
+            ];
+            settings = {
+              basedpyright.analysis = {
+                typeCheckingMode = "standard";
+                autoImportCompletions = true;
+              };
+            };
+          };
+          ruff = {
+            command = "ruff";
+            args = [ "server" ];
+            filetypes = [ "python" ];
+            rootPatterns = [
+              "pyproject.toml"
+              "ruff.toml"
+              ".git"
+            ];
+            settings.logLevel = "debug";
+          };
           asm = {
             command = "asm-lsp";
             filetypes = [
@@ -290,7 +354,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}_REV&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
+                  expr = "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];
@@ -309,37 +373,78 @@ in
         };
       };
       extraLuaConfig = ''
+        local dap = require("dap")
+        local dapui = require("dapui")
+        dapui.setup()
+        require("nvim-dap-virtual-text").setup()
+        dap.listeners.before.attach.dapui_config = function() dapui.open() end
+        dap.listeners.before.launch.dapui_config = function() dapui.open() end
+        dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
+        dap.listeners.before.event_exited.dapui_config = function() dapui.close() end
+        require('dap-go').setup()
+        require('dap-python').setup('${python}/bin/python3')
+        dap.adapters.codelldb = {
+          type = 'server',
+          port = "${"\${port}"}",
+          executable = {
+            -- POINT THIS TO THE NIX PATH
+            -- This path finds the adapter inside the VSCode extension
+            command = '${pkgs.vscode-extensions.vadimcn.vscode-lldb}/share/vscode/extensions/vadimcn.vscode-lldb/adapter/codelldb',
+            args = {"--port", "${"\${port}"}"},
+          }
+        }
+
+        dap.configurations.rust = {
+          {
+            name = "Debug Launch",
+            type = "codelldb",
+            request = "launch",
+            program = function()
+              -- This asks you to select the executable to debug from /target/debug
+              return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/target/debug/', 'file')
+            end,
+            cwd = '${"\${workspaceFolder}"}',
+            stopOnEntry = false,
+          },
+        }
+
+        -- === KEYMAPS ===
+        vim.keymap.set('n', '<F5>', function() dap.continue() end, { desc = "Debug: Start" })
+        vim.keymap.set('n', '<F10>', function() dap.step_over() end, { desc = "Debug: Step Over" })
+        vim.keymap.set('n', '<F11>', function() dap.step_into() end, { desc = "Debug: Step Into" })
+        vim.keymap.set('n', '<F12>', function() dap.step_out() end, { desc = "Debug: Step Out" })
+        vim.keymap.set('n', '<leader>b', function() dap.toggle_breakpoint() end, { desc = "Debug: Breakpoint" })
         require'nvim-treesitter.configs'.setup {
           highlight = {
             enable = true,
           },
-          vim.cmd([[
-            autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
-            let g:onedark_config = { 'style': 'deep', }
-            let g:netrw_keepdir = 0
-            colorscheme onedark
-            highlight Normal guifg=#bbddff
-            map! <S-Insert> <C-R>+
-            map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
-            map !hh :silent! tabnew +Man! ${kekma.home}<cr>
-            map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
-            nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
-            set number
-            highlight EndOfBuffer ctermbg=none guibg=none
-            highlight SignColumn ctermbg=none guibg=none
-            highlight Normal guibg=none
-            highlight NonText guibg=none
-            highlight Normal ctermbg=none
-            highlight NonText ctermbg=none
-            highlight StatusLine guibg=none
-            set tabstop=2
-            set softtabstop=2
-            set shiftwidth=2
-            set expandtab
-            set autoindent
-            set smartindent
-          ]])
         }
+        vim.cmd([[
+          autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
+          let g:onedark_config = { 'style': 'deep', }
+          let g:netrw_keepdir = 0
+          colorscheme onedark
+          highlight Normal guifg=#bbddff
+          map! <S-Insert> <C-R>+
+          map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
+          map !hh :silent! tabnew +Man! ${kekma.home}<cr>
+          map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
+          nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
+          set number
+          highlight EndOfBuffer ctermbg=none guibg=none
+          highlight SignColumn ctermbg=none guibg=none
+          highlight Normal guibg=none
+          highlight NonText guibg=none
+          highlight Normal ctermbg=none
+          highlight NonText ctermbg=none
+          highlight StatusLine guibg=none
+          set tabstop=2
+          set softtabstop=2
+          set shiftwidth=2
+          set expandtab
+          set autoindent
+          set smartindent
+        ]])
         require("ibl").setup {
           indent = { char = "│" },  -- Vertical indentation line
           scope = { enabled = true, show_start = true, show_end = true }, -- Enable scope guides

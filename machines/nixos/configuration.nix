@@ -22,6 +22,8 @@
     };
   };
 
+  wivrn.enable = true;
+
   # Enable custom man page generation and nix-option-search
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
   # Darwin and stable cause additional eval time, around 10-15 seconds
@@ -130,18 +132,18 @@
   boot.initrd.systemd.enable = true;
 
   # Disable usual coredumps (I hate them)
-  #security.pam.loginLimits = [
-  #  {
-  #    domain = "*";
-  #    item = "core";
-  #    value = "0";
-  #  }
-  #  {
-  #    domain = user;
-  #    item = "core";
-  #    value = "-1"; # -1 means unlimited
-  #  }
-  #];
+  security.pam.loginLimits = [
+    {
+      domain = "*";
+      item = "core";
+      value = "0";
+    }
+    #{
+    #  domain = user;
+    #  item = "core";
+    #  value = "-1"; # -1 means unlimited
+    #}
+  ];
 
   programs.firejail.enable = true;
 
@@ -475,6 +477,12 @@
       with inputs;
       # Keep in every ISO
       [
+        sidequest
+        libsForQt5.qt5ct
+        rustfmt
+        rustup
+        patchelf
+        file
         mpv
         gnome-boxes
         libsForQt5.qtstyleplugin-kvantum
@@ -484,11 +492,6 @@
         nixfmt
         gdu
         nixd
-        (firefox.override {
-          nativeMessagingHosts = [
-            (pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default)
-          ];
-        })
         wget
         zenity
         killall
@@ -505,7 +508,27 @@
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
-        (aria2.overrideAttrs { patches = [ ../../stuff/max-connection-to-unlimited.patch ]; })
+        (firefox.override {
+          nativeMessagingHosts = [
+            (pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default)
+          ];
+        })
+        (kdePackages.qt6ct.overrideAttrs (prev: {
+          patches = prev.patches or [ ] ++ [ ../../stuff/qt6ct-shenanigans.patch ];
+          buildInputs =
+            prev.buildInputs or [ ]
+            ++ (with kdePackages; [
+              kconfig
+              kcolorscheme
+              kiconthemes
+              qqc2-desktop-style
+              breeze
+              breeze-icons
+            ]);
+        }))
+        (aria2.overrideAttrs (prev: {
+          patches = prev.patches or [ ] ++ [ ../../stuff/max-connection-to-unlimited.patch ];
+        }))
       ]
       # Remove from 4G ISO
       ++ (
@@ -520,7 +543,7 @@
             mangohud
             steam
             android-tools
-            jdk23
+            jdk25
             rustc
             moonlight-qt
             osu-lazer-bin
@@ -557,6 +580,7 @@
         if !(avg-flag || min-flag) then
           [
             inputs.zen-browser.packages.${system}.twilight
+            ungoogled-chromium
             heroic
             gsettings-desktop-schemas
           ]
@@ -584,7 +608,20 @@
 
   services = {
 
-    printing.enable = true;
+    printing = {
+      enable = true;
+      drivers = with pkgs; [
+        cups-filters
+        cups-browsed
+        hplipWithPlugin
+      ];
+    };
+
+    avahi = {
+      enable = true;
+      nssmdns4 = true;
+      openFirewall = true;
+    };
 
     gvfs.enable = true;
 

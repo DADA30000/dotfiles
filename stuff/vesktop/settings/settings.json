@@ -4,7 +4,7 @@
     "useQuickCss": true,
     "themeLinks": [],
     "eagerPatches": false,
-    "enabledThemes": [ "BasicBackground.theme.css" ],
+    "enabledThemes": [],
     "enableReactDevtools": false,
     "frameless": true,
     "transparent": true,

@@ -859,7 +859,7 @@ in
         };
 
         mongodb.serviceConfig = {
-          ExecStart = lib.mkForce "${pkgs.numactl}/bin/numactl --interleave=all ${pkgs.mongodb}/bin/mongod --config ${mongoCnf config.services.mongodb} --fork --pidfilepath ${config.services.mongodb.pidFile} --setParameter tcmallocReleaseRate=5.0";
+          ExecStart = lib.mkForce "${pkgs.numactl}/bin/numactl --interleave=all ${pkgs.mongodb-ce}/bin/mongod --config ${mongoCnf config.services.mongodb} --fork --pidfilepath ${config.services.mongodb.pidFile} --setParameter tcmallocReleaseRate=5.0";
           LimitNOFILE = 1048576;
           Environment = "GLIBC_TUNABLES=glibc.pthread.rseq=0";
         };
@@ -994,7 +994,10 @@ in
           file-store.enabled = "yes";
         };
       };
-      mongodb.enable = true;
+      mongodb = {
+        package = pkgs.mongodb-ce;
+        enable = true;
+      };
       tor = {
         enable = true;
         settings = {

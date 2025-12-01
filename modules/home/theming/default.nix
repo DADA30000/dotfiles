@@ -7,6 +7,57 @@
 with lib;
 let
   cfg = config.theming;
+  # https://github.com/Vendicated/Vencord/blob/main/src/api/Settings.ts
+  vencord_settings = (pkgs.formats.json {}).generate "settings.json" {
+    autoUpdate = true;
+    autoUpdateNotification = true;
+    useQuickCss = true;
+    enabledThemes = [];
+    frameless = true;
+    transparent = true;
+    disableMinSize = true;
+    winNativeTitleBar = true;
+    plugins = {
+      CommandsAPI.enabled = true;
+      MessageAccessoriesAPI.enabled = true;
+      UserSettingsAPI.enabled = true;
+      CrashHandler.enabled = true;
+      FakeNitro.enabled = true;
+      MessageLogger.enabled = true;
+      RoleColorEverywhere.enabled = true;
+      ShowHiddenChannels.enabled = true;
+      ShowHiddenThings.enabled = true;
+      SpotifyCrack.enabled = true;
+      Translate.enabled = true;
+      VoiceDownload.enabled = true;
+      VoiceMessages.enabled = true;
+      VolumeBooster.enabled = true;
+      YoutubeAdblock.enabled = true;
+      BadgeAPI.enabled = true;
+    };
+    notifications = {
+        timeout = 5000;
+        position = "bottom-right";
+        useNative = "not-focused";
+        logLimit = 50;
+    };
+    cloud = {
+        authenticated = false;
+        url = "https://api.vencord.dev/";
+        settingsSync = false;
+        settingsSyncVersion = 1744986831158;
+    };
+  };
+  # https://github.com/Vencord/Vesktop/blob/main/src/shared/settings.d.ts
+  vesktop_settings = (pkgs.formats.json {}).generate "settings.json" {
+    discordBranch = "stable";
+    minimizeToTray = true;
+    arRPC = false;
+    splashColor = "rgb(222, 222, 222)";
+    splashBackground = "rgba(0, 0, 0, 0.2)";
+    splashTheming = true;
+    spellCheckLanguages = [ "en" "ru" "ru-RU" "en-US" ];
+  };
   mkSourcePrefix =
     prefix: attrs:
     builtins.listToAttrs (
@@ -46,46 +97,53 @@ in
       '';
     };
     home.file.".themes".source = ../../../stuff/.themes;
-    xdg.configFile = {
-      "Kvantum".source = ../../../stuff/Kvantum;
-      "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
-        mkdir -p $out
-        cp -r $conf/* $out
-        chmod u+w $out/qt5ct.conf
-        ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
-      '';
-      "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
-        mkdir -p $out
-        cp -r $conf/* $out
-        chmod u+w $out/qt6ct.conf
-        ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
-      '';
-      "GIMP_fake".source = ../../../stuff/GIMP;
-    }
-    // (mkSourcePrefix "gtk-4.0" {
-      "assets" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
-      "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
-      "icons" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
-    })
-    // (mkSourcePrefix "vesktop" {
-      "settings" = ../../../stuff/vesktop/settings;
-      "settings.json" = ../../../stuff/vesktop/settings.json;
-      "themes" = ../../../stuff/vesktop/themes;
-    })
-    // (mkSourcePrefix "Vencord" {
-      "settings" = ../../../stuff/vesktop/settings;
-      "themes" = ../../../stuff/vesktop/themes;
-    });
-    xdg.desktopEntries.discord.settings = {
-      Exec = "discord --ozone-platform-hint=auto %U";
-      Categories = "Network;InstantMessaging;Chat";
-      GenericName = "All-in-one cross-platform voice and text chat for gamers";
-      Icon = "discord";
-      MimeType = "x-scheme-handler/discord";
-      Keywords = "discord;vencord;electron;chat";
-      Name = "Discord";
-      StartupWMClass = "discord";
-      Type = "Application";
+    xdg = {
+      dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
+      configFile = {
+        "Kvantum".source = ../../../stuff/Kvantum;
+        "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt5ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+        '';
+        "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt6ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+        '';
+        "GIMP_fake".source = ../../../stuff/GIMP;
+      }
+      // (mkSourcePrefix "qimgv" {
+        "qimgv.conf" = ../../../stuff/qimgv/qimgv.conf;
+        "theme.conf" = ../../../stuff/qimgv/theme.conf;
+      })
+      // (mkSourcePrefix "gtk-4.0" {
+        assets = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
+        icons = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
+        "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
+      })
+      // (mkSourcePrefix "vesktop" {
+        themes = ./themes;
+        "settings/settings.json" = vencord_settings;
+        "settings.json" = vesktop_settings;
+      })
+      // (mkSourcePrefix "Vencord" {
+        themes = ./themes;
+        "settings/settings.json" = vencord_settings;
+      });
+      desktopEntries.discord.settings = {
+        Exec = "discord --ozone-platform-hint=auto %U";
+        Categories = "Network;InstantMessaging;Chat";
+        GenericName = "All-in-one cross-platform voice and text chat for gamers";
+        Icon = "discord";
+        MimeType = "x-scheme-handler/discord";
+        Keywords = "discord;vencord;electron;chat";
+        Name = "Discord";
+        StartupWMClass = "discord";
+        Type = "Application";
+      };
     };
     dconf.settings = {
       "org/nemo/preferences" = {
@@ -103,17 +161,19 @@ in
     };
     qt = {
       enable = true;
-      platformTheme.name = "qtct";
+      #platformTheme.name = "qtct";
     };
-    home.pointerCursor = {
-      gtk.enable = true;
-      x11.enable = true;
-      package = pkgs.runCommand "moveUp" { } ''
-        mkdir -p $out/share/icons
-        ln -s ${../../../stuff/Bibata-Modern} $out/share/icons/Bibata-Modern
-      '';
-      name = "Bibata-Modern";
-      size = 24;
+    home = {
+      pointerCursor = {
+        gtk.enable = true;
+        x11.enable = true;
+        package = pkgs.runCommand "moveUp" { } ''
+          mkdir -p $out/share/icons
+          ln -s ${../../../stuff/Bibata-Modern} $out/share/icons/Bibata-Modern
+        '';
+        name = "Bibata-Modern";
+        size = 24;
+      };
     };
     gtk = {
       enable = true;
@@ -127,5 +187,6 @@ in
       font.name = "Noto Sans Medium";
       font.size = 11;
     };
+
   };
 }
