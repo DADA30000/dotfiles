@@ -41,6 +41,7 @@ in
         enable = true;
         enableZshIntegration = true;
         settings = {
+          nix_shell.symbol = "❄️ ";
           directory = {
             style = "bold blue";
           };
@@ -225,10 +226,10 @@ in
                     buildInputs_prev ++ buildInputs_dev;
                   LD_LIBRARY_PATH = \"\''${lib.makeLibraryPath buildInputs}\";
                   PKG_CONFIG_PATH = \"\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
-                }" -c zsh
+                }"
               }
               # Pure nix-shell -p alternative
-              ns () {
+              ns-old () {
                 local flags=()
                 local pkgs=()
                 for arg in "$@"; do
@@ -298,6 +299,7 @@ in
                   nh os switch /etc/nixos
                 )
               }
+              ${pkgs.any-nix-shell}/bin/any-nix-shell zsh | source /dev/stdin
             '';
             zshEarly = mkOrder 500 ''
               DISABLE_MAGIC_FUNCTIONS=true
@@ -337,6 +339,7 @@ in
           u-boot = "nh os boot /etc/nixos";
           u-build = "nh os build /etc/nixos";
           u-debug = "nix build /etc/nixos#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try";
+          ns = "ns-dev";
           ns-repl = ''nix repl --expr "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }"'';
           nsl = "nix-locate";
           #update-home = "home-manager switch;update-desktop-database -v ~/.local/share/applications";

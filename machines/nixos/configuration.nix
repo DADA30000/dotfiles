@@ -43,8 +43,6 @@
 
   boot.kernel.sysctl."net.core.default_qdisc" = "cake";
 
-  services.preload.enable = true;
-
   services.scx = {
     enable = true;
     scheduler = "scx_bpfland";
@@ -307,30 +305,33 @@
 
   };
 
-  nix.settings = {
+  nix = {
+    package = pkgs.nixVersions.latest;
 
-    # eval-cores = 0;
+    settings = {
 
-    # Disable IFD to speed up evaluation
-    # allow-import-from-derivation = false;
+      # eval-cores = 0;
 
-    # Deduplicates stuff in /nix/store
-    auto-optimise-store = true;
+      # Disable IFD to speed up evaluation
+      # allow-import-from-derivation = false;
 
-    # Change cache providers (lower priority number = higher priority)
-    substituters = [
-      "https://hyprland.cachix.org"
-      "https://cache.nixos.org?priority=1"
-    ];
-    trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
+      # Deduplicates stuff in /nix/store
+      auto-optimise-store = true;
 
-    # Enable flakes
-    experimental-features = [
-      "nix-command"
-      "ca-derivations"
-      "flakes"
-    ];
+      # Change cache providers (lower priority number = higher priority)
+      substituters = [
+        "https://hyprland.cachix.org"
+        "https://cache.nixos.org?priority=1"
+      ];
+      trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
 
+      # Enable flakes
+      experimental-features = [
+        "nix-command"
+        "ca-derivations"
+        "flakes"
+      ];
+    };
   };
 
   obs =
@@ -452,7 +453,9 @@
 
   environment = {
 
-    etc."determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+    etc = {
+      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+    };
 
     pathsToLink = [
       "/share/zsh"
@@ -500,7 +503,6 @@
         zip
         adwaita-icon-theme
         nvtopPackages.amd
-        any-nix-shell
         wl-clipboard
         networkmanager_dmenu
         neovide
@@ -603,8 +605,6 @@
     timeout = 0;
 
   };
-
-  nix.package = pkgs.nixVersions.latest;
 
   services = {
 

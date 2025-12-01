@@ -44,6 +44,10 @@
       url = "github:kevoreilly/CAPEv2";
       flake = false;
     };
+    xrizer = {
+      url = "github:Supreeeme/xrizer";
+      flake = false;
+    };
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
