@@ -480,6 +480,7 @@
       with inputs;
       # Keep in every ISO
       [
+        mtkclient
         sidequest
         libsForQt5.qt5ct
         rustfmt
@@ -510,11 +511,6 @@
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
-        (firefox.override {
-          nativeMessagingHosts = [
-            (pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default)
-          ];
-        })
         (kdePackages.qt6ct.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../stuff/qt6ct-shenanigans.patch ];
           buildInputs =
@@ -581,7 +577,6 @@
       ++ (
         if !(avg-flag || min-flag) then
           [
-            inputs.zen-browser.packages.${system}.twilight
             ungoogled-chromium
             heroic
             gsettings-desktop-schemas

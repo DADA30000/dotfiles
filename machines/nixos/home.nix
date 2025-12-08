@@ -1,9 +1,7 @@
 {
-  inputs,
   config,
   min-flag, # Needed for minimal ISO version
   avg-flag, # Needed for 8G ISO version
-  umport,
   home-modules,
   ...
 }:
@@ -24,8 +22,10 @@
 
   services.easyeffects.enable = true;
 
+  zen.enable = true;
+
   # Enable firefox customization
-  firefox.enable = false; # Reminder for dumb me to change it later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  firefox.enable = false;
 
   # Version at which home-manager was first configured (Don't change it)
   home.stateVersion = "25.05";

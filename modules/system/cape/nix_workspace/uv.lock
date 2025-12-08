@@ -647,7 +647,7 @@ dev = [
     { name = "pytest-pretty", specifier = "==1.1.0" },
     { name = "pytest-xdist", specifier = "==3.6.1" },
     { name = "tenacity", specifier = "==8.1.0" },
-    { name = "types-requests", specifier = "~=2.32" },
+    { name = "types-requests", specifier = ">=2.32,<3" },
 ]
 
 [[package]]
