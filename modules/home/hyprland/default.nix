@@ -102,6 +102,8 @@ in
           "$mod, F2, exec, app2unit -- sheesh.sh"
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
           "$mod, Q, exec, app2unit -- kitty"
+          "$mod, Z, exec, app2unit -- zen"
+          "$mod, D, exec, app2unit -- discord"
           "$mod, C, killactive,"
           "$mod, B, exec, uuctl"
           "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
