@@ -1,17 +1,10 @@
 {
-  inputs,
-  umport,
+  home-modules,
   ...
 }:
 {
 
-  imports = [
-    inputs.nix-index-database.homeModules.nix-index
-  ]
-  ++ umport {
-    paths = [ ../../modules/home ];
-    recursive = false;
-  };
+  imports = home-modules;
   home.stateVersion = "25.05";
   neovim.enable = true;
   zsh.enable = true;

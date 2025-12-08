@@ -13,8 +13,8 @@
       inputs.hyprland.follows = "hyprland";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nur = {
-      url = "github:nix-community/NUR";
+    firefox-addons = {
+      url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     spicetify-nix = {
@@ -88,7 +88,22 @@
     };
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        home-manager.follows = "home-manager";
+      };
+    };
+    fx-autoconfig = {
+      url = "github:MrOtherGuy/fx-autoconfig";
+      flake = false;
+    };
+    sine = {
+      url = "github:CosmoCreeper/Sine";
+      flake = false;
+    };
+    nebula-zen = {
+      url = "github:JustAdumbPrsn/Zen-Nebula";
+      flake = false;
     };
     nix-search = {
       url = "github:diamondburned/nix-search";
@@ -161,7 +176,10 @@
           paths = [ ./modules/home ];
           recursive = false;
         }
-        ++ [ inputs.nix-index-database.homeModules.nix-index ];
+        ++ [ 
+          inputs.nix-index-database.homeModules.nix-index
+          inputs.zen-browser.homeModules.twilight
+        ];
 
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
