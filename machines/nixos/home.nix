@@ -10,6 +10,8 @@
   # Import other modulessss
   imports = home-modules;
 
+  xdg.configFile."bookmarks.html".source = ../../stuff/bookmarks.html;
+  
   # Docs are generated in NixOS conf
   manual.manpages.enable = false;
 
