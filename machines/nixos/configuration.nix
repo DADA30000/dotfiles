@@ -22,6 +22,17 @@
     };
   };
 
+  services.earlyoom = {
+    enable = true;
+    enableNotifications = true;
+  };
+
+  services.systembus-notify.enable = true;
+
+  programs.seahorse.enable = true;
+
+  services.gnome.gnome-keyring.enable = true;
+
   wivrn.enable = true;
 
   # Enable custom man page generation and nix-option-search
@@ -29,7 +40,7 @@
   # Darwin and stable cause additional eval time, around 10-15 seconds
   docs = {
     enable = true;
-    nos.enable = true;
+    nos.enable = false;
     nos.darwin = false;
     nos.stable = false;
   };
@@ -200,7 +211,7 @@
     hyprland = {
       prettyName = "Hyprland";
       comment = "Hyprland compositor managed by UWSM";
-      binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland";
+      binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
     };
   };
 
@@ -274,6 +285,8 @@
 
     # Add some fonts
     packages = with pkgs; [
+      vista-fonts
+      corefonts
       noto-fonts
       nerd-fonts.jetbrains-mono
     ];
@@ -342,7 +355,7 @@
         enable = true;
 
         # Enable virtual camera
-        virt-cam = false;
+        virt-cam = true;
 
       }
     else
@@ -440,7 +453,7 @@
       partition = {
 
         # Enable swap partition
-        enable = true;
+        enable = false;
 
         # Label of swap partition
         label = "swap";
@@ -480,11 +493,10 @@
       with inputs;
       # Keep in every ISO
       [
+        ente-auth
         mtkclient
         sidequest
         libsForQt5.qt5ct
-        rustfmt
-        rustup
         patchelf
         file
         mpv
@@ -520,8 +532,6 @@
               kcolorscheme
               kiconthemes
               qqc2-desktop-style
-              breeze
-              breeze-icons
             ]);
         }))
         (aria2.overrideAttrs (prev: {
@@ -534,15 +544,12 @@
           [
             scanmem
             kdePackages.qtdeclarative
-            rust-analyzer
             comma
             remmina
-            cargo
             mangohud
             steam
             android-tools
             jdk25
-            rustc
             moonlight-qt
             osu-lazer-bin
             mindustry
@@ -554,7 +561,6 @@
             qalculate-gtk
             inputs.anicli-ru.packages.${system}.default
             distrobox
-            bottles
             qbittorrent
             ayugram-desktop
             gdb
@@ -565,7 +571,10 @@
             gimp3-with-plugins
             gamescope
             ccls
-            (discord.override {
+            (bottles.override {
+              removeWarningPopup = true;
+            })
+            (discord-canary.override {
               withOpenASAR = true;
               withVencord = true;
             })

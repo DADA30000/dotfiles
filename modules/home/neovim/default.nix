@@ -15,6 +15,30 @@ let
       debugpy
     ]
   );
+  rust-toolchain = pkgs.symlinkJoin {
+    name = "nixos-system-toolchain";
+    paths = with pkgs; [
+      rustc-unwrapped
+      rustc
+      cargo
+      rustfmt
+      clippy
+      rust-analyzer
+    ];
+  };
+  rustupInitScript = pkgs.writeShellScript "rustup-init" ''
+    export PATH="${lib.makeBinPath [ pkgs.rustup pkgs.gnugrep pkgs.coreutils ]}:$PATH"
+    
+    TOOLCHAIN_PATH="${config.xdg.dataHome}/nix-system-toolchain"
+    
+    if ! rustup toolchain list | grep -q "nix-system"; then
+      rustup toolchain link nix-system "$TOOLCHAIN_PATH"
+    fi
+
+    if ! rustup show active-toolchain >/dev/null 2>&1; then
+      rustup default nix-system
+    fi
+  '';
   nix-path =
     pkgs.runCommand "kekma"
       {
@@ -212,30 +236,50 @@ in
   };
 
   config = mkIf cfg.enable {
-    xdg.configFile."ruff/ruff.toml".source = (pkgs.formats.toml { }).generate "ruff.toml" {
-      line-length = 79;
-      lint = {
-        select = [
-          "E"
-          "W"
-          "F"
-          "C90"
-        ];
-        preview = true;
-        ignore = [ ];
-        mccabe.max-complexity = 10;
+    xdg = {
+      configFile."ruff/ruff.toml".source = (pkgs.formats.toml { }).generate "ruff.toml" {
+        line-length = 79;
+        lint = {
+          select = [
+            "E"
+            "W"
+            "F"
+            "C90"
+          ];
+          preview = true;
+          ignore = [ ];
+          mccabe.max-complexity = 10;
+        };
+      };
+      dataFile.nix-system-toolchain.source = rust-toolchain;
+    };
+    systemd.user.services.rustup-init = {
+      Unit = {
+        Description = "Initialize rustup with system toolchain";
+        After = [ "network.target" ];
+      };
+
+      Service = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${rustupInitScript}";
+      };
+
+      Install = {
+        WantedBy = [ "default.target" ];
       };
     };
     home.packages = with pkgs; [
       delve
+      rustup
       vscode-extensions.vadimcn.vscode-lldb
       hexpatch
       tinyxxd
       bash-language-server
       shellcheck
+      gcc
       shfmt
       asm-lsp
-      rustfmt
       tmux
       tree-sitter
       ripgrep
@@ -281,7 +325,10 @@ in
         };
         rust-analyzer = {
           serverPath = "rust-analyzer";
-          checkOnSave.command = "check";
+          check = {
+            command = "clippy";
+            extraArgs = [ "--" "-W" "clippy::all" "-W" "clippy::pedantic" ];
+          };
         };
         languageserver = {
           basedpyright = {

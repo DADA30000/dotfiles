@@ -28,6 +28,9 @@ in
       serviceConfig = {
         Restart = "always";
       };
+      unitConfig = {
+        StartLimitIntervalSec = 0;
+      };
     };
     programs.gpu-screen-recorder.enable = true;
   };

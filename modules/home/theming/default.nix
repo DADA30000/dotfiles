@@ -133,14 +133,25 @@ in
         themes = ./themes;
         "settings/settings.json" = vencord_settings;
       });
-      desktopEntries.discord.settings = {
-        Exec = "discord --ozone-platform-hint=auto %U";
+      #desktopEntries.discord.settings = {
+      #  Exec = "discord --ozone-platform-hint=auto %U";
+      #  Categories = "Network;InstantMessaging;Chat";
+      #  GenericName = "All-in-one cross-platform voice and text chat for gamers";
+      #  Icon = "discord";
+      #  MimeType = "x-scheme-handler/discord";
+      #  Keywords = "discord;vencord;electron;chat";
+      #  Name = "Discord";
+      #  StartupWMClass = "discord";
+      #  Type = "Application";
+      #};
+      desktopEntries.discord-canary.settings = {
+        Exec = "DiscordCanary --ozone-platform-hint=auto %U";
         Categories = "Network;InstantMessaging;Chat";
         GenericName = "All-in-one cross-platform voice and text chat for gamers";
-        Icon = "discord";
+        Icon = "discord-canary";
         MimeType = "x-scheme-handler/discord";
         Keywords = "discord;vencord;electron;chat";
-        Name = "Discord";
+        Name = "Discord Canary";
         StartupWMClass = "discord";
         Type = "Application";
       };
@@ -182,6 +193,13 @@ in
       iconTheme = {
         name = "MoreWaita";
         package = pkgs.morewaita-icon-theme;
+        #name = "Papirus-Dark";
+        #package = pkgs.runCommand "Papirus" {} ''
+        #  cp -r ${pkgs.papirus-icon-theme} $out
+        #  chmod -R +w $out/*
+        #  rm $out/share/icons/{breeze,breeze-dark}
+        #  ${pkgs.gnused}/bin/sed -i 's/Inherits=breeze,hicolor/Inherits=hicolor/g' $out/share/icons/Papirus-Dark/index.theme
+        #'';
       };
       theme.name = "Fluent-Dark";
       font.name = "Noto Sans Medium";
