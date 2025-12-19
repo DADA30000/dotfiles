@@ -127,7 +127,7 @@
       },
       {
         "process_path_regex": [
-          "^.*(.Discord-wrapped|TeamSpeak)$"
+          "^.*(.Discord-wrapped|.DiscordCanary-wrapped|DiscordCanary|Discord|TeamSpeak)$"
         ],
         "outbound": "proxy"
       },

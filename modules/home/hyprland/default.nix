@@ -24,6 +24,10 @@ in
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      libsForQt5.qtsvg
+      kdePackages.qtsvg
+      kdePackages.dolphin
+      kdePackages.ark
       app2unit
       hyprshot
       pulseaudio

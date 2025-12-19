@@ -26,6 +26,10 @@ in
 
   config = mkIf cfg.enable {
     programs = {
+      zoxide = {
+        enable = true;
+        enableZshIntegration = true;
+      };
       direnv = {
         enable = true;
         enableZshIntegration = true;
