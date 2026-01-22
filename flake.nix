@@ -1,5 +1,13 @@
 {
   inputs = {
+    wivrn = {
+      url = "github:WiVRn/WiVRn";
+      flake = false;
+    };
+    nixpkgs-xr = {
+      url = "github:nix-community/nixpkgs-xr";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -52,10 +60,6 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    anicli-ru = {
-      url = "github:vypivshiy/ani-cli-ru";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     hyprland = {
       url = "github:hyprwm/Hyprland";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -93,12 +97,12 @@
         home-manager.follows = "home-manager";
       };
     };
-    fx-autoconfig = {
-      url = "github:MrOtherGuy/fx-autoconfig";
-      flake = false;
-    };
     sine = {
       url = "github:CosmoCreeper/Sine";
+      flake = false;
+    };
+    sine-bootloader = {
+      url = "github:sineorg/bootloader";
       flake = false;
     };
     nebula-zen = {

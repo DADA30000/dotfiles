@@ -11,6 +11,13 @@
     fg3:    #969696;
 }
 
+configuration {
+   drun {
+      /** Disable DBusActivatable */
+      DBusActivatable: false;
+   }
+}
+
 window {
     location:       center;
     width:          1000;

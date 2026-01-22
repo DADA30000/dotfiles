@@ -63,7 +63,7 @@ in
       package = mkMerge [
         (mkIf (
           !cfg.stable && !cfg.from-unstable
-        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland)
+        ) (inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs { patches = [ ../../../stuff/temp_fix_hyprland.patch ]; }))
         (mkIf (
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
@@ -147,7 +147,7 @@ in
         ];
         monitor = [ ", preferred, auto, 1" ];
         bindr = [
-          "$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
+          ''$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "n=$(echo \"{cmd}\" | sed \"s/env //g; s/[^ ]*=[^ ]* //g\" | awk \"{print \$1}\" | xargs basename); app2unit -a \"$n\" -- {cmd}"' ''
           "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
         ];
         bindm = [
@@ -402,10 +402,11 @@ in
       settings = {
         ipc = "on";
         splash = false;
-        preload = [ "${../../../stuff/wallpaper.jpg}" ];
-        wallpaper = [
-          ",${../../../stuff/wallpaper.jpg}"
-        ];
+        wallpaper = {
+	  monitor = "";
+          path = "${../../../stuff/wallpaper.jpg}";
+          fit_mode = "cover";
+        };
       };
     };
     #systemd.user.services.hyprpaper.Service.ExecStartPre = mkIf (cfg.hyprpaper && !cfg.mpvpaper) "${pkgs.coreutils-full}/bin/sleep 1.8";

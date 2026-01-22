@@ -52,6 +52,7 @@ in
         };
       };
       zsh = {
+        dotDir = "${config.home.homeDirectory}/.zsh";
         oh-my-zsh.enable = true;
         oh-my-zsh.plugins = [ "sudo" ];
         syntaxHighlighting.enable = true;
@@ -122,7 +123,19 @@ in
           }
           u-full () {
             echo "Updating locks, switching"
+            setopt LOCAL_OPTIONS
             (
+              setopt LOCAL_OPTIONS
+              printf "Enable pipefail? [Y/n]: "
+              read -k 1 response
+              echo
+              if [[ "$response" == [nN] ]]; then
+                  unsetopt ERR_EXIT NO_UNSET PIPE_FAIL
+                  echo "Pipefail disabled."
+              else
+                  setopt ERR_EXIT NO_UNSET PIPE_FAIL
+                  echo "Pipefail enabled."
+              fi
               export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.ssdeep}/lib:${pkgs.graphviz}/lib
               export PATH=$PATH:${pkgs.migrate-to-uv}/bin:${pkgs.uv}/bin
               export PYTHONPATH=${pkgs.python312}/lib/python3.12/site-packages
@@ -131,32 +144,35 @@ in
               export UV_SYSTEM_PYTHON=true
               export TEMPDIR=$(${pkgs.coreutils-full}/bin/mktemp -d)
               export GIT_LFS_SKIP_SMUDGE=1
-              sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst
-              sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
-              git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 5 $TEMPDIR/nixpkgs
+              git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 1 $TEMPDIR/nixpkgs
               git clone https://github.com/kevoreilly/CAPEv2 --depth 1 $TEMPDIR/cape
               (
                 cd $TEMPDIR/cape
-                migrate-to-uv
-                uv add -r extra/optional_dependencies.txt
-                uv lock
-                mkdir dummy
-                echo "print(\"Hello World\")" > dummy/kek.py
+                mkdir capev2
+                sed -i '/package-mode/d' pyproject.toml
+                sed -i '/tool.poetry/d' pyproject.toml
+                echo "print(\"Hello World\")" > capev2/__init__.py
                 echo "
                 [tool.hatch.build.targets.wheel]
                 packages = [
                   \"dummy\"
                 ]
                 " >> pyproject.toml
+                uv add -r extra/optional_dependencies.txt
+                uv lock
                 mkdir nix_workspace
                 mv pyproject.toml nix_workspace
                 mv uv.lock nix_workspace
-                mv dummy nix_workspace
+                mv capev2 nix_workspace
               )
               tar -cv --zstd -f $TEMPDIR/nixpkgs.tar.zst -C $TEMPDIR nixpkgs
+              sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst
+              sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
               sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
               sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
               rm -rf $TEMPDIR
+              mkdir -p ~/.cache/flake-lock-backups
+              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos
             )
@@ -164,7 +180,7 @@ in
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
           umu-run() { umu-run-wrapper $@ }
           u() { nh os switch /etc/nixos $@ }
-          nsl-full() { ${inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-locate }
+          nsl-full() { ${inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-locate $@ }
           nss() { ${
             let
               index = pkgs.runCommand "index" { } ''

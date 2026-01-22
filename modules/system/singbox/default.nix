@@ -22,12 +22,27 @@ in
         ExecStart = "${pkgs.sing-box}/bin/sing-box -c /config.json run";
       };
     };
-    services.resolved = {
-      enable = true;
-      extraConfig = ''
-        [Resolve]
-        DNSStubListenerExtra=127.0.0.1
-      '';
+    #services.resolved = {
+    #  enable = true;
+    #  settings.Resolve.DNSStubListenerExtra = "127.0.0.1";
+    #};
+    services = {
+      resolved.enable = false;
+      dnsmasq = {
+        enable = true;
+        resolveLocalQueries = false;
+        settings = {
+          port = 5353;
+          server = [ "1.1.1.1" ];
+          cache-size = 10000;
+          interface = "lo";
+          bind-interfaces = true;
+        };
+      };
+    };
+    networking = {
+      nameservers = [ "198.18.0.55" ];
+      networkmanager.dns = "none";
     };
   };
 }

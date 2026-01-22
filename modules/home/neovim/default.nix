@@ -420,6 +420,12 @@ in
         };
       };
       extraLuaConfig = ''
+        vim.api.nvim_create_autocmd('FileType', {
+          pattern = '*',
+          callback = function()
+            pcall(vim.treesitter.start)
+          end,
+        })
         local dap = require("dap")
         local dapui = require("dapui")
         dapui.setup()
@@ -461,11 +467,6 @@ in
         vim.keymap.set('n', '<F11>', function() dap.step_into() end, { desc = "Debug: Step Into" })
         vim.keymap.set('n', '<F12>', function() dap.step_out() end, { desc = "Debug: Step Out" })
         vim.keymap.set('n', '<leader>b', function() dap.toggle_breakpoint() end, { desc = "Debug: Breakpoint" })
-        require'nvim-treesitter.configs'.setup {
-          highlight = {
-            enable = true,
-          },
-        }
         vim.cmd([[
           autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
           let g:onedark_config = { 'style': 'deep', }
