@@ -53,17 +53,25 @@ in
     ];
     wayland.windowManager.hyprland = {
       portalPackage = mkMerge [
-        (mkIf (
-          !cfg.stable && !cfg.from-unstable
-        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
+        (mkIf (!cfg.stable && !cfg.from-unstable) (
+          inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland.override {
+            hyprland = (
+              inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs {
+                patches = [ ../../../stuff/temp_fix_hyprland.patch ];
+              }
+            );
+          }
+        ))
         (mkIf (
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
       ];
       package = mkMerge [
-        (mkIf (
-          !cfg.stable && !cfg.from-unstable
-        ) (inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs { patches = [ ../../../stuff/temp_fix_hyprland.patch ]; }))
+        (mkIf (!cfg.stable && !cfg.from-unstable) (
+          inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs {
+            patches = [ ../../../stuff/temp_fix_hyprland.patch ];
+          }
+        ))
         (mkIf (
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
@@ -403,7 +411,7 @@ in
         ipc = "on";
         splash = false;
         wallpaper = {
-	  monitor = "";
+          monitor = "";
           path = "${../../../stuff/wallpaper.jpg}";
           fit_mode = "cover";
         };

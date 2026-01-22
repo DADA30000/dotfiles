@@ -1050,15 +1050,16 @@
     "sine": {
       "flake": false,
       "locked": {
-        "lastModified": 1767965254,
-        "narHash": "sha256-/rIGN0nWc/hi4wfbYEigYRyT25vEIgLnZc8cLy2wuFs=",
+        "lastModified": 1769106237,
+        "narHash": "sha256-ltRbOfSvn2DknxWdi3wmIPsv+Wbtb4ipo0NSjYfH81k=",
         "owner": "CosmoCreeper",
         "repo": "Sine",
-        "rev": "39f0b26212943f38d2c8d07b4b872a1b761f9b6c",
+        "rev": "9624352a18640a0a34ecce99087990ba447930c1",
         "type": "github"
       },
       "original": {
         "owner": "CosmoCreeper",
+        "ref": "cosine",
         "repo": "Sine",
         "type": "github"
       }

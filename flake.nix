@@ -98,7 +98,7 @@
       };
     };
     sine = {
-      url = "github:CosmoCreeper/Sine";
+      url = "github:CosmoCreeper/Sine/cosine";
       flake = false;
     };
     sine-bootloader = {
