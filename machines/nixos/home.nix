@@ -118,7 +118,7 @@
     from-unstable = false;
 
     # Use Hyprland package from nixpkgs
-    stable = true;
+    stable = false;
 
     # Enable Hyprland plugins
     enable-plugins = false;
