@@ -7,25 +7,7 @@
 with lib;
 let
   cfg = config.umu;
-  ratarmount =
-    (pkgs.ratarmount.override {
-      ratarmountcore = pkgs.python3Packages.ratarmountcore.overridePythonAttrs { doCheck = false; };
-    }).overridePythonAttrs
-      (prev: {
-        dependencies = prev.dependencies ++ [
-          (pkgs.python3Packages.buildPythonPackage rec {
-            pname = "mfusepy";
-            version = "1.0.0";
-            pyproject = true;
-            propagatedBuildInputs = [ pkgs.fuse ];
-            build-system = [ pkgs.python3Packages.setuptools ];
-            src = pkgs.fetchPypi {
-              inherit pname version;
-              hash = "sha256-vpIjTLMw4l3wBPsR8uK9wghNTRD7awDy9TRUC8ZsGKI=";
-            };
-          })
-        ];
-      });
+  ratarmount = pkgs.ratarmount;
   runtime = pkgs.fetchurl {
     url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/umu.tar.zstd";
     hash = "sha256-uMAAWUGNEp5UYGs3hBtWXtf0BnaqEPzcX1yJ105vB1w=";

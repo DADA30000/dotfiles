@@ -111,6 +111,7 @@ in
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/db"
+          "/var/lib/zerotier-one"
           {
             directory = "/var/lib/acme";
             user = "acme";

@@ -22,6 +22,17 @@
     };
   };
 
+  services.tailscale.enable = true;
+
+  services.zerotierone.enable = true;
+
+  services.sunshine = {
+    autoStart = true;
+    enable = true;
+    capSysAdmin = true;
+    openFirewall = true;
+  };
+
   services.earlyoom = {
     enable = true;
     enableNotifications = true;
@@ -33,7 +44,12 @@
 
   services.gnome.gnome-keyring.enable = true;
 
-  wivrn.enable = true;
+  programs.alvr = {
+    enable = true;
+    openFirewall = true;
+  };
+
+  # wivrn.enable = true;
 
   # Enable custom man page generation and nix-option-search
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
@@ -93,7 +109,7 @@
   zramSwap.enable = true;
 
   cape = {
-    enable = true;
+    enable = false;
     users = [ user ];
   };
 
@@ -171,6 +187,16 @@
   networking.networkmanager = {
     enable = true;
     wifi.backend = "iwd";
+    plugins = with pkgs; [
+      networkmanager-fortisslvpn
+      networkmanager-iodine
+      networkmanager-l2tp
+      networkmanager-openconnect
+      networkmanager-openvpn
+      networkmanager-sstp
+      networkmanager-strongswan
+      networkmanager-vpnc
+    ];
   };
 
   # Allow making users through useradd
@@ -204,14 +230,16 @@
     };
   };
 
-  programs.uwsm.enable = true;
-
   # Configure UWSM to launch Hyprland from a display manager like SDDM
-  programs.uwsm.waylandCompositors = {
-    hyprland = {
-      prettyName = "Hyprland";
-      comment = "Hyprland compositor managed by UWSM";
-      binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
+  programs.uwsm = {
+    enable = true;
+    package = pkgs.uwsm.overrideAttrs { patches = ../../stuff/uwsm_uuctl.patch; };
+    waylandCompositors = {
+      hyprland = {
+        prettyName = "Hyprland";
+        comment = "Hyprland compositor managed by UWSM";
+        binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs { patches = [ ../../stuff/temp_fix_hyprland.patch ]; }}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
+      };
     };
   };
 
@@ -376,6 +404,7 @@
     };
 
   };
+  
 
   my-services =
     if !(avg-flag || min-flag) then
@@ -548,7 +577,6 @@
             remmina
             mangohud
             steam
-            android-tools
             jdk25
             moonlight-qt
             osu-lazer-bin
@@ -559,7 +587,6 @@
             pavucontrol
             prismlauncher
             qalculate-gtk
-            inputs.anicli-ru.packages.${system}.default
             distrobox
             qbittorrent
             ayugram-desktop
@@ -571,6 +598,7 @@
             gimp3-with-plugins
             gamescope
             ccls
+            android-tools
             (bottles.override {
               removeWarningPopup = true;
             })
@@ -662,8 +690,6 @@
   programs = {
 
     dconf.enable = true;
-
-    adb.enable = true;
 
     nh.enable = true;
 

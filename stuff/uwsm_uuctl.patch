@@ -1,0 +1,79 @@
+diff --git a/scripts/uuctl.sh b/scripts/uuctl.sh
+index be682cf..c62df06 100755
+--- a/scripts/uuctl.sh
++++ b/scripts/uuctl.sh
+@@ -46,6 +46,36 @@ showhelp() {
+ 	EOH
+ }
+ 
++get_resource_lines() {
++	while IFS='=' read -r key value; do
++		case "$key" in
++		CPUUsageNSec)
++			if [ "$value" != "[not set]" ]; then
++				sec=$((value / 1000000000))
++				printf 'CPU Time: %02dm %02ds\n' $((sec / 60)) $((sec % 60))
++			fi
++			;;
++		MemoryCurrent)
++			if [ "$value" != "[not set]" ]; then
++				if command -v numfmt > /dev/null; then
++					val=$(numfmt --to=iec "$value")
++				else
++					val="$value bytes"
++				fi
++				printf 'Memory: %s\n' "$val"
++			fi
++			;;
++		TasksCurrent)
++			if [ "$value" != "[not set]" ]; then
++				printf 'Tasks: %s\n' "$value"
++			fi
++			;;
++		esac
++	done <<- EOF
++		$(systemctl --user show --property MemoryCurrent,CPUUsageNSec,TasksCurrent "$UNIT")
++	EOF
++}
++
+ dirempty() {
+ 	# check if dir $1 is empty based purely on glob expansion
+ 	case "$(printf '%s;' "$1"/* "$1"/.*)" in
+@@ -389,10 +419,12 @@ ACTIONS=''
+ DISABLE_ACTIONS=''
+ DISABLE_ACTIONS_SHOW=''
+ ENABLE_ACTIONS=''
+-for ACTION in start reload restart stop kill reset-failed enable disable freeze thaw silence unsilence mask unmask; do
++for ACTION in start reload restart stop kill reset-failed enable disable freeze thaw silence unsilence mask unmask resources; do
+ 	: "${ACTION}+++type:${UNIT_TYPE:-unknown}+as:${ACTIVE_STATE:-unknown}+fs:${FREEZER_STATE:-unknown}+cstart:${CAN_START:-unknown}+creload:${CAN_RELOAD:-unknown}+cstop:${CAN_STOP:-unknown}+cfreeze:${CAN_FREEZE:-unknown}+rmstart:${RM_START:-unknown}+rmstop:${RM_STOP:-unknown}+ufs:${UNIT_FILE_STATE}+silent:${SILENT_STATE}+install:${WANTED_BY}${REQUIRED_BY}${UPHELD_BY}+++"
+ 	case "${ACTION}+++type:${UNIT_TYPE:-unknown}+as:${ACTIVE_STATE:-unknown}+fs:${FREEZER_STATE:-unknown}+cstart:${CAN_START:-unknown}+creload:${CAN_RELOAD:-unknown}+cstop:${CAN_STOP:-unknown}+cfreeze:${CAN_FREEZE:-unknown}+rmstart:${RM_START:-unknown}+rmstop:${RM_STOP:-unknown}+ufs:${UNIT_FILE_STATE}+silent:${SILENT_STATE}+install:${WANTED_BY}${REQUIRED_BY}${UPHELD_BY}+++" in
+ 	## skip various combinations
++  # resources for inactive units
++	resources+*+as:failed+* | resources+*+as:inactive+* | resources+*+as:deactivating+* | resources+*+ufs:masked+*) continue ;;
+ 	# actions unsuited for scopes
+ 	start+*+type:scope+* | restart+*+type:scope+* | reload+*+type:scope+* | enable+*+type:scope+* | disable+*+type:scope+* | silence+*+type:scope+* | unsilence+*+type:scope+*) continue ;;
+ 	# actions unsuited for sockets
+@@ -543,6 +575,23 @@ unsilence)
+ 	) || cancel_exit
+ 	report "$RESTART"
+ 	;;
++resources)
++	# this is the last menu invocation
++	MENU_STAGE='end'
++
++	# Generate the lines
++	RLINES=$(get_resource_lines)
++
++	# Show the menu. We don't save the result variable because
++	# picking an item just closes the view.
++	"$@" "Resources for ${DESCRIPTION#*=}: " <<- EOF
++		$RLINES
++	EOF
++
++	# Clean exit immediately
++	"$DMENU_CLEANUP"
++	exit 0
++	;;
+ esac
+ 
+ # no more menus at this point

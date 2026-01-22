@@ -124,6 +124,7 @@ let
       "peepdf-3"
       "httpreplay"
       "batch-deobfuscator"
+      "ruamel-yaml-clibz"
     ]
     // builtins.listToAttrs (
       builtins.map (x: {
@@ -178,7 +179,7 @@ let
     mono
     nfs-utils
     iptables
-    privoxy
+    #privoxy
     openvpn
     wireguard-tools
     tcpdump
