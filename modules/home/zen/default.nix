@@ -15,7 +15,7 @@ let
 
     installPhase = ''
       #mkdir -p $out
-      #cp -r ${../../../stuff/sine/JS} $out/JS
+      #cp -r ''${../../../stuff/sine/JS} $out/JS
       mkdir -p $out/JS
       cp -r $src/{sine.sys.mjs,engine} $out/JS
       cp -r $src_2/profile/utils $out
