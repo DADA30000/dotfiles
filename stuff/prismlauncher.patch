@@ -1,0 +1,33 @@
+diff --git a/launcher/minecraft/auth/MinecraftAccount.h b/launcher/minecraft/auth/MinecraftAccount.h
+index 95f76ec..afa7eca 100644
+--- a/launcher/minecraft/auth/MinecraftAccount.h
++++ b/launcher/minecraft/auth/MinecraftAccount.h
+@@ -116,7 +116,7 @@ class MinecraftAccount : public QObject, public Usable {
+ 
+     AccountType accountType() const noexcept { return data.type; }
+ 
+-    bool ownsMinecraft() const { return data.type != AccountType::Offline && data.minecraftEntitlement.ownsMinecraft; }
++    bool ownsMinecraft() const { return true; }
+ 
+     bool hasProfile() const { return data.profileId().size() != 0; }
+ 
+diff --git a/launcher/ui/pages/global/AccountListPage.cpp b/launcher/ui/pages/global/AccountListPage.cpp
+index 65e622b..ebee3d7 100644
+--- a/launcher/ui/pages/global/AccountListPage.cpp
++++ b/launcher/ui/pages/global/AccountListPage.cpp
+@@ -141,13 +141,13 @@ void AccountListPage::on_actionAddMicrosoft_triggered()
+ 
+ void AccountListPage::on_actionAddOffline_triggered()
+ {
+-    if (!m_accounts->anyAccountIsValid()) {
++    /* if (!m_accounts->anyAccountIsValid()) {
+         QMessageBox::warning(this, tr("Error"),
+                              tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."
+                                 "<br><br>"
+                                 "If you have lost your account you can contact Microsoft for support."));
+         return;
+-    }
++    } */
+ 
+     ChooseOfflineNameDialog dialog(tr("Please enter your desired username to add your offline account."), this);
+     if (dialog.exec() != QDialog::Accepted) {

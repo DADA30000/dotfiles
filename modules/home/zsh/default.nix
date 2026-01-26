@@ -68,14 +68,20 @@ in
               [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
             done
 
-            nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
+            ns-dev "''${flags[@]}" "python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
           }
           # Ad-hoc nix-develop devShell
           ns-dev () {
             local flags=()
             local pkgs=()
+            local pkgs_text=()
             for arg in "$@"; do
-              [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
+              if [[ "$arg" == -* ]]; then
+                flags+=("$arg")
+              else
+                pkgs+=("($arg)")
+                pkgs_text+=("$arg")
+              fi
             done
 
             nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { 
@@ -87,6 +93,7 @@ in
                 buildInputs_dev = builtins.map (x: if (x ? dev) then x.dev else x) buildInputs_prev;
               in
                 buildInputs_prev ++ buildInputs_dev;
+              name = \"ns_dev_''${pkgs_text[*]}\";
               LD_LIBRARY_PATH = \"\''${lib.makeLibraryPath buildInputs}\";
               PKG_CONFIG_PATH = \"\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
             }"
@@ -120,6 +127,9 @@ in
             done
 
             nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
+          }
+          proxify () {
+            SOCKS_SERVER=127.0.0.1:2080 socksify $@
           }
           u-full () {
             echo "Updating locks, switching"

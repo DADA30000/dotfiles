@@ -20,7 +20,10 @@ jobs:
     steps:
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: experimental-features = flakes nix-command ca-derivations
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
@@ -58,8 +61,7 @@ jobs:
         run: |
           ./complete.sh
           git add -f stuff/nixpkgs.tar.zst
-          nix build .#nixosConfigurations.isoMIN.config.system.build.isoImage --fallback --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true --option extra-substituters https://install.determinate.systems --option extra-trusted-public-keys cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM= --option extra-experimental-features ca-derivations & sleep 2400; pkill -f "^nix build"
-          nix build .#nixosConfigurations.isoMIN.config.system.build.isoImage --fallback --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true --option extra-substituters https://install.determinate.systems --option extra-trusted-public-keys cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM= --option extra-experimental-features ca-derivations
+          nix build .#nixosConfigurations.isoMIN.config.system.build.isoImage --fallback --max-substitution-jobs 32 -j 32 --option allow-import-from-derivation true --option extra-substituters https://install.determinate.systems --option extra-trusted-public-keys cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM=
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:

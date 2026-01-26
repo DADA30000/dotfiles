@@ -87,14 +87,14 @@ in
           fi
         fi
       '';
-      prismLauncher = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ ! -z DRY_RUN ]]; then
-          if [[ ! -f ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json ]]; then
-            mkdir -p $VERBOSE_ARG "${config.home.homeDirectory}/.local/share/PrismLauncher"
-            echo '{"accounts": [{"entitlement": {"canPlayMinecraft": true,"ownsMinecraft": true},"type": "MSA"}],"formatVersion": 3}' > ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json
-          fi
-        fi
-      '';
+      #prismLauncher = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      #  if [[ ! -z DRY_RUN ]]; then
+      #    if [[ ! -f ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json ]]; then
+      #      mkdir -p $VERBOSE_ARG "${config.home.homeDirectory}/.local/share/PrismLauncher"
+      #      echo '{"accounts": [{"entitlement": {"canPlayMinecraft": true,"ownsMinecraft": true},"type": "MSA"}],"formatVersion": 3}' > ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json
+      #    fi
+      #  fi
+      #'';
     };
     home.file.".themes".source = ../../../stuff/.themes;
     xdg = {
