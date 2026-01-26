@@ -8,6 +8,34 @@
 with lib;
 let
   cfg = config.hyprland;
+  read-text = pkgs.writeShellScript "read-text-hyprland" ''
+    # Arguments:
+    # $1 = Hyprshot Mode (e.g., "region", "window", "output")
+    # $2 = Languages (e.g., "eng+rus", "jpn+osd")
+    
+    # 1. Take the shot
+    img="/tmp/ocr_snap.png"
+    rm -f $img
+    XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m "$1" -o /tmp -f ocr_snap.png
+
+    if [[ ! -s "$img" ]]; then
+      exit 0
+    fi
+    
+    # 2. Universal Pre-processing (Solves the "Small Text" issue)
+    magick "$img" -resize 400% -colorspace gray -sharpen 0x1 "$img"
+    
+    # 3. OCR and Display
+    # We use a specific title so Hyprland rules can catch it
+    tesseract "$img" stdout -l "$2" --psm 1 | \
+    zenity --text-info \
+           --title="Извлечённый текст" \
+           --editable \
+           --width=800 --height=500
+    
+    # 4. Cleanup
+    rm "$img"
+  '';
 in
 {
   options.hyprland = {
@@ -24,6 +52,8 @@ in
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      tesseract
+      imagemagick
       libsForQt5.qtsvg
       kdePackages.qtsvg
       kdePackages.dolphin
@@ -95,6 +125,12 @@ in
           ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
           "SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
           "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+          ", MENU, exec, app2unit -- ${read-text} region eng+rus+osd"
+          "SUPER, MENU, exec, app2unit -- ${read-text} window eng+rus+osd"
+          "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+rus+osd"
+          "CTRL, MENU, exec, app2unit -- ${read-text} region jpn+chi_sim+kor+osd"
+          "SUPER, MENU, exec, app2unit -- ${read-text} window jpn+chi_sim+kor+osd"
+          "SHIFT, MENU, exec, app2unit -- ${read-text} output jpn+chi_sim+kor+osd"
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
           "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
           "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
@@ -115,7 +151,7 @@ in
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
           "$mod, Q, exec, app2unit -- kitty"
           "$mod, Z, exec, app2unit -- zen"
-          "$mod, D, exec, app2unit -- discord"
+          "$mod, D, exec, app2unit -- discordcanary || app2unit -- discord"
           "$mod, C, killactive,"
           "$mod, B, exec, uuctl"
           "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
@@ -163,6 +199,7 @@ in
           "$mod, mouse:273, resizewindow"
         ];
         windowrule = [
+          "float on, match:title ^(Извлечённый текст)$"
           "no_max_size on, match:class polkit-mate-authentication-agent-1"
           "pin on, match:class polkit-mate-authentication-agent-1"
           "fullscreen_state 0 2, match:class (firefox), match:title ^(.*Discord.* — Mozilla Firefox.*)$"
