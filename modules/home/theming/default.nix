@@ -100,6 +100,7 @@ in
     xdg = {
       dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
       configFile = {
+        "networkmanager-dmenu".source = ../../../stuff/networkmanager-dmenu;
         "Kvantum".source = ../../../stuff/Kvantum;
         "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
           mkdir -p $out
