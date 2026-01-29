@@ -80,9 +80,11 @@ let
     keyset("i", "<TAB>", 'coc#pum#visible() ? coc#pum#next(1) : v:lua.check_back_space() ? "<TAB>" : coc#refresh()', opts)
     keyset("i", "<S-TAB>", [[coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"]], opts)
 
-    -- Make <CR> to accept selected completion item or notify coc.nvim to format
-    -- <C-g>u breaks current undo, please make your own choice
-    keyset("i", "<cr>", [[coc#pum#visible() ? coc#pum#confirm() : "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"]], opts)
+    -- 1. Map Shift + Enter to accept completion
+    keyset("i", "<S-CR>", [[coc#pum#visible() ? coc#pum#confirm() : "\<S-CR>"]], opts)
+    
+    -- 2. Keep Enter for new lines and auto-format (without accepting completion)
+    keyset("i", "<cr>", [[ "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"]], opts)
 
     -- Use <c-j> to trigger snippets
     keyset("i", "<c-j>", "<Plug>(coc-snippets-expand-jump)")
