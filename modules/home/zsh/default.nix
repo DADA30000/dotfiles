@@ -1,4 +1,4 @@
-{
+
   config,
   lib,
   inputs,
@@ -60,74 +60,90 @@ in
         enable = true;
         shellAliases.ls = "lsd";
         envExtra = ''
-          # Ad-hoc python with modules env
-          ns-py () {
-            local flags=()
-            local pkgs=()
-            for arg in "$@"; do
-              [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
+          local NIX_FLAKE_PREAMBLE='import (builtins.getFlake "git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1") { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
+          _ns_parse_args() {
+            flags=() pkgs=() pkgs_raw=()
+            while (( $# > 0 )); do
+              case "$1" in
+                --max-jobs|-j|--cores|--builders|--substituters|--impure-env|-I|--override-input|--arg|--argstr|-o|--output)
+                  flags+=("$1" "$2")
+                  shift 2
+                  ;;
+                -*)
+                  flags+=("$1")
+                  shift 1
+                  ;;
+                *)
+                  pkgs+=("($1)")
+                  pkgs_raw+=("$1")
+                  shift 1
+                  ;;
+              esac
             done
-
-            ns-dev "''${flags[@]}" "python3.withPackages (ps: with ps; [ ''${pkgs[*]} ])"
           }
+          _zsh_nix_bridge() {
+            if [[ -n "$stdenv" ]]; then
+              local funcs=($(bash -c 'source $stdenv/setup; declare -F | cut -d" " -f3'))
+              for f in $funcs; do
+                if ! builtin type "$f" >/dev/null 2>&1; then
+                  eval "$f() { bash -c \"source \$stdenv/setup; $f \$*\" }"
+                fi
+              done
+              unsetopt NOMATCH
+            fi
+          }
+
           # Ad-hoc nix-develop devShell
           ns-dev () {
-            local flags=()
-            local pkgs=()
-            local pkgs_text=()
-            for arg in "$@"; do
-              if [[ "$arg" == -* ]]; then
-                flags+=("$arg")
-              else
-                pkgs+=("($arg)")
-                pkgs_text+=("$arg")
-              fi
-            done
-
-            nix develop "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { 
-              system = \"${pkgs.stdenv.hostPlatform.system}\"; 
-              config.allowUnfree = true; 
-            }; mkShell rec { 
-              buildInputs = let 
-                buildInputs_prev = [ ''${pkgs[*]} ]; 
-                buildInputs_dev = builtins.map (x: if (x ? dev) then x.dev else x) buildInputs_prev;
-              in
-                buildInputs_prev ++ buildInputs_dev;
-              name = \"ns_dev_''${pkgs_text[*]}\";
+            _ns_parse_args "$@"
+            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+              buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
+              name = \"ns_dev_''${pkgs_raw[*]}\";
               LD_LIBRARY_PATH = \"\''${lib.makeLibraryPath buildInputs}\";
               PKG_CONFIG_PATH = \"\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
             }"
           }
-          # Pure nix-shell -p alternative
-          ns-old () {
-            local flags=()
-            local pkgs=()
-            for arg in "$@"; do
-              [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
-            done
 
-            nix shell "''${flags[@]}" --expr "with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ]"
+          # Enter shell with build dependencies and build phases for 1 package
+          ns-build-env () {
+            _ns_parse_args "$@"
+          
+            local count=''${#pkgs_raw[@]}
+          
+            if [[ $count -eq 0 ]]; then
+              echo "Error: No target specified. Usage: ns-build-env [flags] <package>"
+              return 1
+            elif [[ $count -gt 1 ]]; then
+              echo "Error: Only 1 target allowed. Found $count targets: ''${pkgs_raw[*]}"
+              return 1
+            fi
+          
+            local target="''${pkgs_raw[1]}"
+            
+            echo "❄️ Entering build environment for: $target"
+            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; $target"
           }
+
+          # Ad-hoc python with modules env
+          ns-py () {
+            _ns_parse_args "$@"
+            local py_pkgs=()
+            for p in "''${pkgs_raw[@]}"; do py_pkgs+=("ps.$p"); done
+            ns-dev "''${flags[@]}" "python3.withPackages (ps: [ ''${py_pkgs[*]} ])"
+          }
+
+          # Pure nix-shell -p alternative
+          ns-old () { _ns_parse_args "$@"; nix shell "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+
+          # ad-hoc nix build expr
+          ns-build () { _ns_parse_args "$@"; nix build "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+
           # ad-hoc nix eval expr
           ns-eval () {
-            local flags=()
-            local pkgs=()
-            for arg in "$@"; do
-              [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
-            done
-
-            nix eval "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
+            _ns_parse_args "$@"
+            nix eval "''${flags[@]}" --raw --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])"
           }
-          # ad-hoc nix build expr
-          ns-build () {
-            local flags=()
-            local pkgs=()
-            for arg in "$@"; do
-              [[ "$arg" == -* ]] && flags+=("$arg") || pkgs+=("($arg)")
-            done
 
-            nix build "''${flags[@]}" --expr "builtins.concatStringsSep \"\n\" (with import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }; [ ''${pkgs[*]} ])"
-          }
           proxify () {
             SOCKS_SERVER=127.0.0.1:2080 socksify $@
           }
@@ -182,7 +198,7 @@ in
               sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
-              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
+              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos
             )
@@ -235,6 +251,7 @@ in
           record() { gpu-screen-recorder -w screen -f 60 -a 'default_output|default_input' -o $@ }
           fzfd() { fzf | xargs xdg-open $@ }
           ${pkgs.any-nix-shell}/bin/any-nix-shell zsh | source /dev/stdin
+          _zsh_nix_bridge
         '';
         initContent =
           let
@@ -273,7 +290,7 @@ in
                       packages_string=$(nix eval --raw --expr "
                         let
                           pkgs = import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") {
-                            system = \"x86_64-linux\";
+                            system = \"${pkgs.stdenv.hostPlatform.system}\";
                             config.allowUnfree = true;
                           };
                           startAttr = pkgs.''${curr_word%.*};
@@ -326,7 +343,7 @@ in
                     local -a suggestions
                     suggestions=( ''${suggestions_first[@]} ''${suggestions_second_unique[@]} )
                     suggestions=( "''${(@)suggestions/#''${attr_prefix}/}" )
-                    compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=* r:|=*' -a suggestions
+                    compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=*' -a suggestions
                   fi
                 else
                   shift processed_words
@@ -360,26 +377,21 @@ in
                   compadd -J nix "''${args[@]}" -a suggestions
                 fi
               }
-              _ns-py () {
-                _ns_completer shell python3Packages.
-              }
-              _ns () {
-                _ns_completer shell
-              }
-              _ns-dev () {
-                _ns_completer develop
-              }
-              _ns-eval () {
-                _ns_completer eval
-              }
-              _ns-build () {
-                _ns_completer build
-              }
+              _ns-old () { _ns_completer shell }
+              _ns-py () { _ns_completer develop python3Packages. }
+              _ns () { _ns_completer develop }
+              _ns-dev () { _ns_completer develop }
+              _ns-eval () { _ns_completer eval }
+              _ns-build () { _ns_completer build }
+              _ns-build-env () { _ns_completer develop }
+
+              compdef _ns-old ns-old
               compdef _ns ns
               compdef _ns-dev ns-dev
               compdef _ns-py ns-py
               compdef _ns-eval ns-eval
               compdef _ns-build ns-build
+              compdef _ns-build-env ns-build-env
             '';
             zshEarly = mkOrder 500 ''
               DISABLE_MAGIC_FUNCTIONS=true

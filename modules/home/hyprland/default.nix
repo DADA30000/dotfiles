@@ -125,12 +125,12 @@ in
           ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
           "SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
           "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
-          ", MENU, exec, app2unit -- ${read-text} region eng+rus+osd"
-          "SUPER, MENU, exec, app2unit -- ${read-text} window eng+rus+osd"
-          "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+rus+osd"
-          "CTRL, MENU, exec, app2unit -- ${read-text} region jpn+chi_sim+kor+osd"
-          "SUPER, MENU, exec, app2unit -- ${read-text} window jpn+chi_sim+kor+osd"
-          "SHIFT, MENU, exec, app2unit -- ${read-text} output jpn+chi_sim+kor+osd"
+          ", MENU, exec, app2unit -- ${read-text} region eng+osd"
+          "SUPER, MENU, exec, app2unit -- ${read-text} window eng+osd"
+          "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+osd"
+          "CTRL, MENU, exec, app2unit -- ${read-text} region jpn+chi_sim+kor+rus+osd"
+          "SUPER, MENU, exec, app2unit -- ${read-text} window jpn+chi_sim+kor+rus+osd"
+          "SHIFT, MENU, exec, app2unit -- ${read-text} output jpn+chi_sim+kor+rus+osd"
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
           "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
           "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
@@ -191,7 +191,7 @@ in
         ];
         monitor = [ ", preferred, auto, 1" ];
         bindr = [
-          ''$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "n=$(echo \"{cmd}\" | sed \"s/env //g; s/[^ ]*=[^ ]* //g\" | awk \"{print \$1}\" | xargs basename); app2unit -a \"$n\" -- {cmd}"' ''
+          ''$mod, $mod_L, exec,  pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"{cmd}\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- {cmd}"' ''
           "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
         ];
         bindm = [

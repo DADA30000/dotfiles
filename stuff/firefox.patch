@@ -1,0 +1,15 @@
+diff --git a/widget/gtk/nsWindow.cpp b/widget/gtk/nsWindow.cpp
+index e8cef42106..5bde550931 100644
+--- a/widget/gtk/nsWindow.cpp
++++ b/widget/gtk/nsWindow.cpp
+@@ -6315,9 +6315,7 @@ nsresult nsWindow::Create(nsIWidget* aParent, const LayoutDeviceIntRect& aRect,
+ 
+ #ifdef MOZ_WAYLAND
+   if (GdkIsWaylandDisplay()) {
+-    mSurface = new WaylandSurface(
+-        parentnsWindow ? MOZ_WL_SURFACE(parentnsWindow->GetMozContainer())
+-                       : nullptr);
++    mSurface = new WaylandSurface(nullptr);
+   }
+   container = moz_container_new(this, mSurface);
+ #else
