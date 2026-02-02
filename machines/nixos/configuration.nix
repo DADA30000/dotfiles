@@ -106,7 +106,10 @@
   plymouth.enable = true;
 
   # Enable RAM compression
-  zramSwap.enable = true;
+  zramSwap = {
+    enable = true;
+    memoryPercent = 100;
+  };
 
   cape = {
     enable = false;
@@ -325,7 +328,7 @@
 
   };
 
-  services.userborn.enable = true;
+  # services.userborn.enable = true;
 
   users = {
 
@@ -414,6 +417,8 @@
     enable = true;
 
     nvidia.enable = false;
+
+    vulkan_video = true;
 
     amdgpu = {
 

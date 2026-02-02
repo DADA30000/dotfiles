@@ -98,13 +98,15 @@ in
             _ns_parse_args "$@"
             nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
               buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
-              name = \"ns_dev_''${pkgs_raw[*]}\";
-              LD_LIBRARY_PATH = \"\''${lib.makeLibraryPath buildInputs}\";
-              PKG_CONFIG_PATH = \"\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
+              name = \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
+              shellHook = '''
+                export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\''${lib.makeLibraryPath buildInputs}\";
+                export PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH:\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
+              ''';
             }"
           }
 
-          # Enter shell with build dependencies and build phases for 1 package
+          # Enter shell with build dependencies and build phases for 1 package (nix-shell -E)
           ns-build-env () {
             _ns_parse_args "$@"
           
@@ -128,8 +130,19 @@ in
           ns-py () {
             _ns_parse_args "$@"
             local py_pkgs=()
-            for p in "''${pkgs_raw[@]}"; do py_pkgs+=("ps.$p"); done
-            ns-dev "''${flags[@]}" "python3.withPackages (ps: [ ''${py_pkgs[*]} ])"
+            local pkgs_new=()
+            for p in "''${pkgs_raw[@]}"; do py_pkgs+=("(ps.$p)"); pkgs_new+=("(python3Packages.$p)"); done
+
+            pkgs_new+=("(python3.withPackages (ps: [ ''${py_pkgs[*]} ]))")
+
+            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+              buildInputs = let p = [ ''${pkgs_new[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
+              name = \"ns_py_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 1) buildInputs))}\";
+              shellHook = '''
+                export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\''${lib.makeLibraryPath buildInputs}\";
+                export PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH:\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";
+              ''';
+            }"
           }
 
           # Pure nix-shell -p alternative
@@ -252,6 +265,9 @@ in
           fzfd() { fzf | xargs xdg-open $@ }
           ${pkgs.any-nix-shell}/bin/any-nix-shell zsh | source /dev/stdin
           _zsh_nix_bridge
+          if [ -f /run/.containerenv ]; then
+            export PATH=$(echo $PATH | tr ':' '\n' | tac | tr '\n' ':' | sed 's/:$//')
+          fi
         '';
         initContent =
           let
