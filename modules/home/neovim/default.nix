@@ -421,7 +421,7 @@ in
           };
         };
       };
-      extraLuaConfig = ''
+      initLua = ''
         vim.api.nvim_create_autocmd('FileType', {
           pattern = '*',
           callback = function()

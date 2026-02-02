@@ -116,6 +116,9 @@ in
         '';
         "GIMP_fake".source = ../../../stuff/GIMP;
       }
+      // (mkSourcePrefix "easyeffects/db" {
+        "graphrc" = ../../../stuff/graphrc;
+      })
       // (mkSourcePrefix "qimgv" {
         "qimgv.conf" = ../../../stuff/qimgv/qimgv.conf;
         "theme.conf" = ../../../stuff/qimgv/theme.conf;
