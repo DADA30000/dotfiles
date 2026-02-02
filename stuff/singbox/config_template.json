@@ -2,31 +2,8 @@
   "log": {
     "level": "debug"
   },
-  "dns": {
-    "servers": [
-      {
-        "type": "quic",
-        "server": "your_dns.dns.nextdns.io",
-        "tag": "nextdns",
-        "domain_resolver": "cloudflare"
-      },
-      {
-        "type": "tcp",
-        "tag": "cloudflare",
-        "server": "1.1.1.1"
-      }
-    ],
-    "rules": [
-      {
-        "inbound": "any",
-        "outbound": "any",
-        "server": "nextdns"
-      }
-    ]
-  },
   "inbounds": [
     {
-      "domain_strategy": "",
       "listen": "127.0.0.1",
       "listen_port": 2080,
       "tag": "mixed-in",
@@ -35,10 +12,15 @@
     {
       "type": "tun",
       "tag": "tun-in",
+      "sniff": true,
       "auto_route": true,
+      "strict_route": true,
       "interface_name": "tun0",
-      "address": "172.19.0.1/28",
-      "mtu": 28160,
+      "address": "172.19.0.1/30",
+      "route_exclude_address": [
+        "1.1.1.1/32",
+        "127.0.0.1/32"
+      ],
       "stack": "system"
     }
   ],
@@ -52,16 +34,16 @@
     {
       "system": true,
       "name": "wg0",
-      "address": "10.0.0.0/32",
-      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "address": "10.8.1.5/32",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       "type": "wireguard",
       "tag": "proxy",
       "peers": [
         {
-          "address": "255.255.255.255",
-          "port": 1234,
-          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "pre_shared_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "address": "AAA.AAA.AAA.AAA",
+          "port": 99999,
+          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pre_shared_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
           "allowed_ips": [
             "0.0.0.0/0",
             "::/0"
@@ -75,17 +57,16 @@
     "auto_detect_interface": true,
     "rules": [
       {
-        "action": "sniff"
+        "inbound": [ "mixed-in" ],
+        "outbound": "proxy"
       },
       {
-        "inbound": [
-          "mixed-in"
-        ],
+        "source_ip_cidr": [ "10.200.0.0/24" ], 
         "outbound": "proxy"
       },
       {
         "process_path_regex": [
-          "^.*(wget|git|electron|node)$"
+          "Battle.net.exe", ".AyuGram-wrapped", ".Discord-wrapped", ".DiscordCanary-wrapped", "TeamSpeak"
         ],
         "outbound": "proxy"
       },
@@ -121,19 +102,18 @@
           "animego.bz",
           "aniboom.one",
           "ya-ligh.com",
-          "jut.su"
+          "jut.su",
+          "aistudio.google.com",
+          "chatgpt.com",
+          "ai.google.dev",
+          "generativelanguage.googleapis.com",
+          "content-generativelanguage.googleapis.com",
+          "makersuite.google.com",
+          "alkalimakersuite-pa.clients6.google.com",
+          "hyprland.cachix.org",
+          "s3.dualstack.us-east-2.amazonaws.com"
         ],
         "outbound": "proxy"
-      },
-      {
-        "process_path_regex": [
-          "^.*(.Discord-wrapped|.DiscordCanary-wrapped|DiscordCanary|Discord|TeamSpeak)$"
-        ],
-        "outbound": "proxy"
-      },
-      {
-        "protocol": "dns",
-        "action": "hijack-dns"
       }
     ]
   }
