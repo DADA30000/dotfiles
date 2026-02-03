@@ -34,6 +34,12 @@ let
       cp $src_1/JS/Nebula.uc.js $out/JS/Nebula_Nebula.uc.js
       cp $src_1/README.md $out/sine-mods/Nebula/readme.md
       cp -r $src_1/{Nebula,userChrome.css,userContent.css,preferences.json} $out/sine-mods/Nebula
+      chmod +w $out/sine-mods/Nebula/Nebula/modules
+      cp ${pkgs.nixos-icons}/share/icons/hicolor/1024x1024/apps/nix-snowflake.png $out/sine-mods/Nebula/Nebula/modules
+      chmod +w $out/sine-mods/Nebula/Nebula/modules/Topbar-buttons.css
+      substituteInPlace $out/sine-mods/Nebula/Nebula/modules/Topbar-buttons.css \
+        --replace-fail "url(\"chrome://branding/content/about-logo.svg\")" "url(\"nix-snowflake.png\")" \
+        --replace-fail "scale: 1.7;" "scale: 1.5;" \
     '';
   };
   zen-package = (inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight-unwrapped.override {
