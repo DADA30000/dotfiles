@@ -254,6 +254,7 @@ in
             scroll_factor = 0.5;
             disable_while_typing = false;
           };
+          touchdevice.enabled = true;
           sensitivity = 1;
           accel_profile = "flat";
         };
