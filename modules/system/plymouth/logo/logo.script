@@ -43,6 +43,7 @@ progress_meter_image = Image("progress-meter.png");
 progress_fade_image = Image("progress-fade.png");
 fsck_progress_meter_image = Image("progress-meter.png");
 fsck_progress_fade_image = Image("fsck-fade.png");
+spinner_source_image = Image("spinner.png");
 
 /**/
 
@@ -78,6 +79,8 @@ passw_dialog_input_sprite = Sprite(passw_dialog_input_image);
 passw_lbl_sprite = Sprite();
 
 msg_label_sprite = Sprite();
+
+spinner_sprite = Sprite();
 
 /**/
 
@@ -122,11 +125,11 @@ fun debugOutput(str) {
 /*
  * Setup the graphics properties */
 logotype_sprite.SetPosition(screen_x + (screen_width / 2) - (logotype_image.GetWidth() / 2), screen_y + (screen_height / 2) - (logotype_image.GetHeight() / 2));
-fsck_progress_meter_sprite.SetPosition(screen_x + (screen_width / 2) - (progress_meter_image.GetWidth() / 2), screen_y + (screen_height / 2) + (logotype_image.GetHeight() / 2) + 25);
-fsck_progress_fade_sprite.SetPosition(screen_x + (screen_width / 2) - (progress_meter_image.GetWidth() / 2), screen_y + (screen_height / 2) + (logotype_image.GetHeight() / 2) + 25);
+fsck_progress_meter_sprite.SetPosition(screen_x + (screen_width / 2) - (progress_meter_image.GetWidth() / 2), screen_y + (screen_height * 0.8) + (logotype_image.GetHeight() / 2) + 25);
+fsck_progress_fade_sprite.SetPosition(screen_x + (screen_width / 2) - (progress_meter_image.GetWidth() / 2), screen_y + (screen_height * 0.8) + (logotype_image.GetHeight() / 2) + 25);
 fsck_progress_meter_sprite.SetOpacity(0);
 fsck_progress_fade_sprite.SetOpacity(0);
-passw_dialog_input_sprite.SetPosition(screen_x + (screen_width / 2) - (passw_dialog_input_image.GetWidth() / 2), screen_y + (screen_height / 2) + (logotype_image.GetHeight() / 2) + 70);
+passw_dialog_input_sprite.SetPosition(screen_x + (screen_width / 2) - (passw_dialog_input_image.GetWidth() / 2), screen_y + (screen_height * 0.8) + (logotype_image.GetHeight() / 2) + 70);
 passw_dialog_input_sprite.SetOpacity(0);
 passw_lbl_sprite.SetOpacity(0);
 
@@ -185,11 +188,13 @@ fun refreshHandler() {
 		spinner_sprite.SetOpacity(0);
 	
 	} else {
-	
-		spinner = Image("spinner.png");
-		spinner = spinner.Rotate(spin);
-		spinner_sprite = Sprite(spinner);
-		spinner_sprite.SetPosition(screen_x + (screen_width / 2) - (spinner.GetWidth() / 2), screen_y + (screen_height / 2) - (spinner.GetHeight() / 2) + 80);	
+
+    rotated_spinner = spinner_source_image.Rotate(spin);
+    spinner_sprite.SetImage(rotated_spinner);
+    
+    /* Re-center and show */
+    spinner_sprite.SetPosition(screen_x + (screen_width / 2) - (rotated_spinner.GetWidth() / 2), screen_y + (screen_height * 0.7) - (rotated_spinner.GetHeight() / 2) + 80);      
+    spinner_sprite.SetOpacity(1);
 	
 	}
 	
@@ -256,7 +261,7 @@ fun showPasswordHandler(prompt, stars) {
 	tmp_prompt_image = Image.Text(prompt, 1, 1, 1);
 
 	passw_lbl_sprite.SetImage(tmp_prompt_image);
-	passw_lbl_sprite.SetPosition(screen_x + (screen_width / 2) - (tmp_prompt_image.GetWidth() / 2), screen_y + (screen_height / 2) + (logotype_image.GetHeight() / 2) + 50);
+	passw_lbl_sprite.SetPosition(screen_x + (screen_width / 2) - (tmp_prompt_image.GetWidth() / 2), screen_y + (screen_height * 0.8) + (logotype_image.GetHeight() / 2) + 50);
 	
 	for(i = 0; i < stars_n; i++)  {
 	
@@ -269,7 +274,7 @@ fun showPasswordHandler(prompt, stars) {
 	for(i = 0; (i < stars) && (i < 15); i++) {
 		
 		stars_array[i] = Sprite(bullet_image);
-		stars_array[i].SetPosition(screen_x + (((screen_width / 2) - (passw_dialog_input_image.GetWidth() / 2)) + (18 * i)) + 8, screen_y + (screen_height / 2) + (logotype_image.GetHeight() / 2) + 80);
+		stars_array[i].SetPosition(screen_x + (((screen_width / 2) - (passw_dialog_input_image.GetWidth() / 2)) + (18 * i)) + 8, screen_y + (screen_height * 0.8) + (logotype_image.GetHeight() / 2) + 80);
 		stars_n++;
 		
 	}
