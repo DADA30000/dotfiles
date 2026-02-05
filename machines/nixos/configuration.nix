@@ -44,12 +44,12 @@
 
   services.gnome.gnome-keyring.enable = true;
 
-  programs.alvr = {
-    enable = true;
-    openFirewall = true;
-  };
+  # programs.alvr = {
+  #   enable = true;
+  #   openFirewall = true;
+  # };
 
-  # wivrn.enable = true;
+  wivrn.enable = true;
 
   # Enable custom man page generation and nix-option-search
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
@@ -571,7 +571,7 @@
         unrar
         zip
         adwaita-icon-theme
-        nvtopPackages.amd
+        vmpk
         wl-clipboard
         networkmanager_dmenu
         neovide
@@ -579,6 +579,7 @@
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
+        (nvtopPackages.full.override { nvidia = false; })
         (kdePackages.qt6ct.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../stuff/qt6ct-shenanigans.patch ];
           buildInputs =

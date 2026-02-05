@@ -172,12 +172,9 @@ in
         enable = true;
         resolveLocalQueries = false;
         settings = {
-          port = 53;
           server = [ dns ];
           neg-ttl = 1;
           cache-size = 10000;
-          interface = [ "lo" "veth_host" ];
-          bind-interfaces = true;
         };
       };
     };

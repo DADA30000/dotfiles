@@ -89,7 +89,7 @@ in
       systemd.services.singbox.wantedBy = lib.mkForce [ ];
 
       warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [
-        "singbox-wg module: config.json doesn't exist, singbox-wg WON'T be enabled."
+        "singbox module: config.json doesn't exist, singbox config file won't be copied."
       ];
 
       system.activationScripts = {
