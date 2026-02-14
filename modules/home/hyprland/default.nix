@@ -12,7 +12,7 @@ let
     # Arguments:
     # $1 = Hyprshot Mode (e.g., "region", "window", "output")
     # $2 = Languages (e.g., "eng+rus", "jpn+osd")
-    
+
     # 1. Take the shot
     img="/tmp/ocr_snap.png"
     rm -f $img
@@ -21,10 +21,10 @@ let
     if [[ ! -s "$img" ]]; then
       exit 0
     fi
-    
+
     # 2. Universal Pre-processing (Solves the "Small Text" issue)
     magick "$img" -resize 400% -colorspace gray -sharpen 0x1 "$img"
-    
+
     # 3. OCR and Display
     # We use a specific title so Hyprland rules can catch it
     tesseract "$img" stdout -l "$2" --psm 1 | \
@@ -32,7 +32,7 @@ let
            --title="Извлечённый текст" \
            --editable \
            --width=800 --height=500
-    
+
     # 4. Cleanup
     rm "$img"
   '';
@@ -83,25 +83,17 @@ in
     ];
     wayland.windowManager.hyprland = {
       portalPackage = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) (
-          inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland.override {
-            hyprland = (
-              inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs {
-                patches = [ ../../../stuff/temp_fix_hyprland.patch ];
-              }
-            );
-          }
-        ))
+        (mkIf (
+          !cfg.stable && !cfg.from-unstable
+        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
         (mkIf (
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
       ];
       package = mkMerge [
-        (mkIf (!cfg.stable && !cfg.from-unstable) (
-          inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs {
-            patches = [ ../../../stuff/temp_fix_hyprland.patch ];
-          }
-        ))
+        (mkIf (
+          !cfg.stable && !cfg.from-unstable
+        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default)
         (mkIf (
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)

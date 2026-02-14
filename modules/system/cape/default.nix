@@ -661,13 +661,11 @@ in
   };
 
   config = mkIf cfg.enable {
-    virtualisation = {
-      libvirtd = {
-        enable = true;
-        qemu = {
-          package = qemu_pkg;
-          swtpm.enable = true;
-        };
+    virtualisation.libvirtd = {
+      enable = true;
+      qemu = {
+        package = qemu_pkg;
+        swtpm.enable = true;
       };
     };
     environment.systemPackages = additional_path;
