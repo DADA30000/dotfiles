@@ -252,8 +252,10 @@
   };
 
   services.displayManager = {
-    sessionData.autologinSession = "hyprland-uwsm";
     defaultSession = "hyprland-uwsm";
+    sessionPackages = lib.filter (
+      p: lib.hasInfix "uwsm" (p.name or "") && lib.hasInfix "hyprland" (p.name or "")
+    ) config.environment.systemPackages;
     autoLogin = {
       user = user;
       enable = true;
@@ -548,7 +550,7 @@
       with inputs;
       # Keep in every ISO
       [
-        (callPackage ../../modules/system/stuff/kek.nix { })
+        bs-manager
         xhost
         dante
         ente-auth

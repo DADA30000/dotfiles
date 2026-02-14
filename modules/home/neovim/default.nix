@@ -314,7 +314,6 @@ in
         coc-css
         coc-html
         coc-prettier
-        coc-tsserver
         onedark-nvim
         coc-rust-analyzer
         auto-save-nvim
