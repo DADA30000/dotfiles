@@ -116,6 +116,11 @@
     users = [ user ];
   };
 
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu.swtpm.enable = true;
+  };
+
   virtualisation.libvirtd.qemu.verbatimConfig = "max_core = 0";
 
   # Enable USB redirection (optional)
@@ -241,11 +246,7 @@
       hyprland = {
         prettyName = "Hyprland";
         comment = "Hyprland compositor managed by UWSM";
-        binPath = "${
-          inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs {
-            patches = [ ../../stuff/temp_fix_hyprland.patch ];
-          }
-        }/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
+        binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
       };
     };
   };
@@ -334,9 +335,9 @@
 
     groups.${user}.gid = config.users.users.${user}.uid;
 
-    users ={
-  
-        ${user} = {
+    users = {
+
+      ${user} = {
 
         # Marks user as real, human user
         isNormalUser = true;
@@ -345,7 +346,7 @@
         hashedPassword = user-hash;
 
         group = user;
-        
+
         uid = 1000;
 
         initialPassword = if user-hash == null then "1234" else null;
@@ -547,6 +548,7 @@
       with inputs;
       # Keep in every ISO
       [
+        (callPackage ../../modules/system/stuff/kek.nix { })
         xhost
         dante
         ente-auth

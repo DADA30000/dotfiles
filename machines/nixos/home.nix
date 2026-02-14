@@ -71,15 +71,15 @@
     createDirectories = true;
     enable = true;
 
-    documents = "/home/${config.home.username}/Документы";
+    documents = "/home/${config.home.username}/Documents";
 
-    download = "/home/${config.home.username}/Загрузки";
+    download = "/home/${config.home.username}/Downloads";
 
-    music = "/home/${config.home.username}/Музыка";
+    music = "/home/${config.home.username}/Music";
 
-    pictures = "/home/${config.home.username}/Изображения";
+    pictures = "/home/${config.home.username}/Pictures";
 
-    videos = "/home/${config.home.username}/Видео";
+    videos = "/home/${config.home.username}/Videos";
 
   };
 
