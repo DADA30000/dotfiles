@@ -13,6 +13,7 @@ let
     ps: with ps; [
       tkinter
       debugpy
+      pynvim
     ]
   );
   rust-toolchain = pkgs.symlinkJoin {
@@ -299,12 +300,19 @@ in
       cmake-language-server
     ];
     programs.neovim = {
+      withPython3 = true;
+      withRuby = true;
+      withPerl = true;
+      withNodeJs = true;
       coc.enable = true;
       enable = true;
       viAlias = true;
       defaultEditor = true;
       vimAlias = true;
       vimdiffAlias = true;
+      extraPython3Packages = ps: with ps; [
+        pynvim
+      ];
       plugins = with pkgs.vimPlugins; [
         netrw-nvim
         nvim-dap
@@ -600,7 +608,8 @@ in
         vim.opt.undodir = undodir
         require("cord").setup({})
         require("auto-save").setup({})
-        require("netrw").setup({})
+        -- Temporary workaround for https://github.com/NixOS/nixpkgs/pull/492172
+        vim.g.python3_host_prog = '${python}/bin/python3'
       ''
       + coc_cfg;
       extraConfig = ''

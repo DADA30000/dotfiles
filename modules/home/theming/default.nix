@@ -98,11 +98,12 @@ in
             mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
             touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
             BOOKMARKS="
-              file:///home/l0lk3k/bottles/Games/drive_c drive_c
-              file:///home/l0lk3k/Pictures Изображения
-              file:///home/l0lk3k/Music Музыка
-              file:///home/l0lk3k/Documents Документы
-              file:///home/l0lk3k/Downloads Загрузки
+              file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
+              file://${config.xdg.userDirs.pictures} Изображения
+              File://${config.xdg.userDirs.music} Музыка
+              file://${config.xdg.userDirs.documents} Документы
+              file://${config.xdg.userDirs.download} Загрузки
+              file://${config.xdg.userDirs.videos} Видео
               admin:/// / (корень, от рута)
               file:/// / (корень)
             "
@@ -120,6 +121,15 @@ in
       #'';
     };
     home.file.".themes".source = ../../../stuff/.themes;
+    xdg.userDirs = {
+      createDirectories = true;
+      enable = true;
+      documents = "${config.home.homeDirectory}/Documents";
+      download = "${config.home.homeDirectory}/Downloads";
+      music = "${config.home.homeDirectory}/Music";
+      pictures = "${config.home.homeDirectory}/Pictures";
+      videos = "${config.home.homeDirectory}/Videos";
+    };
     xdg = {
       dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
       configFile = {
