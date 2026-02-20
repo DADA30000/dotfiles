@@ -582,10 +582,10 @@ in
         };
         cpu2 = mkOption {
           type = types.enum [
-            ''AMD/AMD''
-            ''INTEL/INTEL''
+            "AMD/AMD"
+            "INTEL/INTEL"
           ];
-          default = ''AMD/AMD'';
+          default = "AMD/AMD";
           description = ''
             BIOS CPU to spoof in SeaBIOS (default is AMD/AMD)
           '';

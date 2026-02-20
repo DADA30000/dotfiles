@@ -17,7 +17,7 @@ main() {
     clear
     if gum confirm --default=false "Установить /boot на другой раздел?"; then
       fdisk -l
-      echo "Введите полный путь до раздела"
+      printf "Введите полный путь до раздела: "
       read -r bootpart
     fi
     partitioned=false

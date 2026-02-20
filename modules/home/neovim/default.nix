@@ -27,10 +27,16 @@ let
     ];
   };
   rustupInitScript = pkgs.writeShellScript "rustup-init" ''
-    export PATH="${lib.makeBinPath [ pkgs.rustup pkgs.gnugrep pkgs.coreutils ]}:$PATH"
-    
+    export PATH="${
+      lib.makeBinPath [
+        pkgs.rustup
+        pkgs.gnugrep
+        pkgs.coreutils
+      ]
+    }:$PATH"
+
     TOOLCHAIN_PATH="${config.xdg.dataHome}/nix-system-toolchain"
-    
+
     if ! rustup toolchain list | grep -q "nix-system"; then
       rustup toolchain link nix-system "$TOOLCHAIN_PATH"
     fi
@@ -82,7 +88,7 @@ let
 
     -- 1. Map Shift + Enter to accept completion
     keyset("i", "<S-CR>", [[coc#pum#visible() ? coc#pum#confirm() : "\<S-CR>"]], opts)
-    
+
     -- 2. Keep Enter for new lines and auto-format (without accepting completion)
     keyset("i", "<cr>", [[ "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"]], opts)
 
@@ -274,12 +280,11 @@ in
     home.packages = with pkgs; [
       delve
       rustup
-      vscode-extensions.vadimcn.vscode-lldb
+      vscode-extensions.ms-vscode.cpptools
       hexpatch
       tinyxxd
       bash-language-server
       shellcheck
-      gcc
       shfmt
       asm-lsp
       tmux
@@ -288,6 +293,10 @@ in
       ruff
       basedpyright
       python
+      cmake-lint
+      clang-tools
+      clang
+      cmake-language-server
     ];
     programs.neovim = {
       coc.enable = true;
@@ -297,6 +306,7 @@ in
       vimAlias = true;
       vimdiffAlias = true;
       plugins = with pkgs.vimPlugins; [
+        netrw-nvim
         nvim-dap
         nvim-dap-ui
         nvim-dap-virtual-text
@@ -328,7 +338,13 @@ in
           serverPath = "rust-analyzer";
           check = {
             command = "clippy";
-            extraArgs = [ "--" "-W" "clippy::all" "-W" "clippy::pedantic" ];
+            extraArgs = [
+              "--"
+              "-W"
+              "clippy::all"
+              "-W"
+              "clippy::pedantic"
+            ];
           };
         };
         languageserver = {
@@ -373,8 +389,18 @@ in
             filetypes = [ "qml" ];
             args = [ "-E" ];
           };
-          ccls = {
-            command = "ccls";
+          cmake = {
+            command = "cmake-language-server";
+            filetypes = [ "cmake" ];
+            rootPatterns = [ "build/" ];
+            initializationOptions.buildDirectory = "build";
+          };
+          clangd = {
+            command = "clangd";
+            rootPatterns = [
+              "compile_flags.txt"
+              "compile_commands.json"
+            ];
             filetypes = [
               "c"
               "cc"
@@ -383,17 +409,6 @@ in
               "objc"
               "objcpp"
             ];
-            rootPatterns = [
-              ".ccls"
-              "compile_commands.json"
-              ".git/"
-              ".hg/"
-            ];
-            initializationOptions = {
-              cache = {
-                directory = "/tmp/ccls";
-              };
-            };
           };
           nixd = {
             command = "nixd";
@@ -435,31 +450,79 @@ in
         dap.listeners.before.launch.dapui_config = function() dapui.open() end
         dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
         dap.listeners.before.event_exited.dapui_config = function() dapui.close() end
+        dap.defaults.fallback.switch_into_active_window = true
         require('dap-go').setup()
         require('dap-python').setup('${python}/bin/python3')
-        dap.adapters.codelldb = {
-          type = 'server',
-          port = "${"\${port}"}",
-          executable = {
-            -- POINT THIS TO THE NIX PATH
-            -- This path finds the adapter inside the VSCode extension
-            command = '${pkgs.vscode-extensions.vadimcn.vscode-lldb}/share/vscode/extensions/vadimcn.vscode-lldb/adapter/codelldb',
-            args = {"--port", "${"\${port}"}"},
-          }
+        local function pick_binary(path)
+          return coroutine.create(function(dap_run)
+            local files = vim.fn.glob(path .. '*', 0, 1)
+            local executables = vim.tbl_filter(function(f)
+              return vim.fn.executable(f) == 1 and vim.fn.isdirectory(f) == 0
+                     and not f:match("%.cpp$") and not f:match("%.c$") and not f:match("%.rs$")
+            end, files)
+
+            if #executables == 0 then
+              print("No executables found in " .. path)
+              coroutine.resume(dap_run, vim.fn.input('Path to executable: ', path, 'file'))
+            else
+              vim.ui.select(executables, {
+                prompt = 'Select executable to debug:',
+                format_item = function(item) return vim.fn.fnamemodify(item, ":t") end,
+              }, function(choice)
+                coroutine.resume(dap_run, choice)
+              end)
+            end
+          end)
+        end
+
+        dap.adapters.cppdbg = {
+          id = 'cppdbg',
+          type = 'executable',
+          command = '${pkgs.vscode-extensions.ms-vscode.cpptools}/share/vscode/extensions/ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7',
         }
 
-        dap.configurations.rust = {
+        dap.configurations.cpp = {
           {
-            name = "Debug Launch",
-            type = "codelldb",
+            name = "Launch file",
+            type = "cppdbg",
             request = "launch",
-            program = function()
-              -- This asks you to select the executable to debug from /target/debug
-              return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/target/debug/', 'file')
-            end,
+            program = function() return pick_binary(vim.fn.getcwd() .. '/') end,
             cwd = '${"\${workspaceFolder}"}',
-            stopOnEntry = false,
+            stopAtEntry = false,
+            setupCommands = {
+              {
+                text = 'settings set target.process.thread.step-in-avoid-nodebug true',
+                description = 'ignore runtime code',
+                ignoreFailures = true
+              },
+              {
+                text = '-enable-pretty-printing',
+                description = 'enable pretty printing',
+                ignoreFailures = false
+              },
+              {
+                text = 'handle SIGSTOP noprint nostop pass',
+                description = 'ignore SIGSTOP',
+                ignoreFailures = true
+              },
+            },
+            logging = {
+              engineLogging = false,
+            },
+            externalConsole = false,
+            MIMode = 'gdb',
+            miDebuggerPath = '${pkgs.gdb}/bin/gdb',
           },
+        }
+        
+        dap.configurations.c = dap.configurations.cpp
+        dap.configurations.rust = {
+          vim.tbl_extend("force", dap.configurations.cpp[1], {
+            name = "Launch Rust (target/debug)",
+            program = function()
+              return pick_binary(vim.fn.getcwd() .. '/target/debug/')
+            end,
+          })
         }
 
         -- === KEYMAPS ===
@@ -537,6 +600,7 @@ in
         vim.opt.undodir = undodir
         require("cord").setup({})
         require("auto-save").setup({})
+        require("netrw").setup({})
       ''
       + coc_cfg;
       extraConfig = ''

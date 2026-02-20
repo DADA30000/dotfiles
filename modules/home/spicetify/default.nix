@@ -73,9 +73,9 @@ in
             --prefix PATH : "${lib.getBin pkgs.zenity}/bin" \
             ${
               if config.programs.spicetify.wayland != false then
-                ''--add-flags '--enable-features=UseOzonePlatform --ozone-platform=wayland --enable-wayland-ime=true' ''
+                "--add-flags '--enable-features=UseOzonePlatform --ozone-platform=wayland --enable-wayland-ime=true' "
               else
-                ''--add-flags '--disable-features=UseOzonePlatform --ozone-platform=x11 --enable-wayland-ime=false' ''
+                "--add-flags '--disable-features=UseOzonePlatform --ozone-platform=x11 --enable-wayland-ime=false' "
             }
 
           runHook postFixup

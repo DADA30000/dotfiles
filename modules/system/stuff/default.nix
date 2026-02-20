@@ -453,95 +453,97 @@ let
     (pkgs.writeShellScriptBin "startup-sound" ''
       beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400
     '')
-    (pkgs.writers.writePython3Bin "notify_trunc" {
-      libraries = [
-        pkgs.python3Packages.pygobject3
-      ];
-      flakeIgnore = [
-        "E402" # module level import not at top of file (needed for gi.require_version)
-        "W293" # blank line contains whitespace
-        "E501" # line too long
-        "E302" # expected 2 blank lines
-        "E305" # expected 2 blank lines after class/function
-        "E261" # at least two spaces before inline comment
-      ];
-      makeWrapperArgs = [
-        "--prefix GI_TYPELIB_PATH : ${pkgs.harfbuzz.out}/lib/girepository-1.0"
-        "--prefix GI_TYPELIB_PATH : ${pkgs.pango.out}/lib/girepository-1.0"
-        "--prefix GI_TYPELIB_PATH : ${pkgs.gobject-introspection.out}/lib/girepository-1.0"
-      ];
-    }
-    ''
-      import sys
-      import gi
-      import cairo  # We import the actual python module, not via gi
-      
-      # Fix the warning by specifying versions first
-      gi.require_version('Pango', '1.0')
-      gi.require_version('PangoCairo', '1.0')
-      
-      from gi.repository import Pango, PangoCairo
-      
-      def truncate_to_fit(text, font_desc, max_width_px):
-          # Use the 'cairo' module directly for the surface
-          surface = cairo.ImageSurface(cairo.Format.ARGB32, 0, 0)
-          context = cairo.Context(surface)
-          
-          layout = PangoCairo.create_layout(context)
-          layout.set_font_description(Pango.FontDescription(font_desc))
-          
-          # Check full width first
-          layout.set_text(text, -1)
-          width, _ = layout.get_pixel_size()
-          
-          # Pango pixels are 1024 units. We convert to standard pixels for comparison.
-          # However, get_pixel_size returns device units (standard pixels),
-          # so we compare directly.
-          if width <= max_width_px:
-              return text
-      
-          # Binary search for the perfect cut point
-          low = 0
-          high = len(text)
-          best_fit = text[:1] + "..." # Default fallback
-          
-          while low <= high:
-              mid = (low + high) // 2
-              candidate = text[:mid] + "..."
-              layout.set_text(candidate, -1)
-              w, _ = layout.get_pixel_size()
-              
-              if w <= max_width_px:
-                  best_fit = candidate
-                  low = mid + 1
-              else:
-                  high = mid - 1
-                  
-          return best_fit
-      
-      if __name__ == "__main__":
-          # Simple usage check
-          if len(sys.argv) < 3:
-              print("Usage: ./script.py <MAX_PX> <FONT> <LINE1> [LINE2 ...]")
-              sys.exit(1)
-      
-          max_px = int(sys.argv[1])
-          font = sys.argv[2]
-          
-          # Process all remaining arguments as separate lines
-          for line in sys.argv[3:]:
-              print(truncate_to_fit(line, font, max_px))
-    '')
+    (pkgs.writers.writePython3Bin "notify_trunc"
+      {
+        libraries = [
+          pkgs.python3Packages.pygobject3
+        ];
+        flakeIgnore = [
+          "E402" # module level import not at top of file (needed for gi.require_version)
+          "W293" # blank line contains whitespace
+          "E501" # line too long
+          "E302" # expected 2 blank lines
+          "E305" # expected 2 blank lines after class/function
+          "E261" # at least two spaces before inline comment
+        ];
+        makeWrapperArgs = [
+          "--prefix GI_TYPELIB_PATH : ${pkgs.harfbuzz.out}/lib/girepository-1.0"
+          "--prefix GI_TYPELIB_PATH : ${pkgs.pango.out}/lib/girepository-1.0"
+          "--prefix GI_TYPELIB_PATH : ${pkgs.gobject-introspection.out}/lib/girepository-1.0"
+        ];
+      }
+      ''
+        import sys
+        import gi
+        import cairo  # We import the actual python module, not via gi
+
+        # Fix the warning by specifying versions first
+        gi.require_version('Pango', '1.0')
+        gi.require_version('PangoCairo', '1.0')
+
+        from gi.repository import Pango, PangoCairo
+
+        def truncate_to_fit(text, font_desc, max_width_px):
+            # Use the 'cairo' module directly for the surface
+            surface = cairo.ImageSurface(cairo.Format.ARGB32, 0, 0)
+            context = cairo.Context(surface)
+            
+            layout = PangoCairo.create_layout(context)
+            layout.set_font_description(Pango.FontDescription(font_desc))
+            
+            # Check full width first
+            layout.set_text(text, -1)
+            width, _ = layout.get_pixel_size()
+            
+            # Pango pixels are 1024 units. We convert to standard pixels for comparison.
+            # However, get_pixel_size returns device units (standard pixels),
+            # so we compare directly.
+            if width <= max_width_px:
+                return text
+
+            # Binary search for the perfect cut point
+            low = 0
+            high = len(text)
+            best_fit = text[:1] + "..." # Default fallback
+            
+            while low <= high:
+                mid = (low + high) // 2
+                candidate = text[:mid] + "..."
+                layout.set_text(candidate, -1)
+                w, _ = layout.get_pixel_size()
+                
+                if w <= max_width_px:
+                    best_fit = candidate
+                    low = mid + 1
+                else:
+                    high = mid - 1
+                    
+            return best_fit
+
+        if __name__ == "__main__":
+            # Simple usage check
+            if len(sys.argv) < 3:
+                print("Usage: ./script.py <MAX_PX> <FONT> <LINE1> [LINE2 ...]")
+                sys.exit(1)
+
+            max_px = int(sys.argv[1])
+            font = sys.argv[2]
+            
+            # Process all remaining arguments as separate lines
+            for line in sys.argv[3:]:
+                print(truncate_to_fit(line, font, max_px))
+      ''
+    )
     (pkgs.writeShellScriptBin "update-damn-nixos" ''
       LOG_FILE="$HOME/.cache/nixos-rebuild.log"
       rm -f "$LOG_FILE"
       NOTIFY_ID=$(notify-send -p "Обновление" "Ожидание ввода пароля...")
-      
+
       if [ -z "$NOTIFY_ID" ]; then
         echo "Could not create notification. Aborting." >&2
         exit 1
       fi
-      
+
       pkexec nixos-rebuild switch -v &> "$LOG_FILE" &
       REBUILD_PID=$!
 
@@ -565,16 +567,16 @@ let
         notify-send -r "$NOTIFY_ID" "Обновление" "Прошло $((CURR_TIME - START_TIME)) секунд \n\n$TRUNCATED_LINES"
         sleep 0.1
       done
-      
+
       wait "$REBUILD_PID"
       EXIT_CODE=$?
-      
+
       kek() {
         if [[ $(notify-send -u critical -A "openlog=Открыть логи" "$1" "$2") == "openlog" ]]; then
           neovide -- -c "normal! G" "$LOG_FILE"
         fi
       }
-      
+
       if [ $EXIT_CODE -eq 0 ]; then
         notify-send "Успех" "Система успешно обновлена."
       elif [ $EXIT_CODE -eq 1 ]; then
@@ -597,5 +599,8 @@ let
   ];
 in
 {
-  environment.systemPackages = scripts ++ [ pkgs.bindfs pkgs.imagemagick ];
+  environment.systemPackages = scripts ++ [
+    pkgs.bindfs
+    pkgs.imagemagick
+  ];
 }

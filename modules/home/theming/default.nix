@@ -8,11 +8,11 @@ with lib;
 let
   cfg = config.theming;
   # https://github.com/Vendicated/Vencord/blob/main/src/api/Settings.ts
-  vencord_settings = (pkgs.formats.json {}).generate "settings.json" {
+  vencord_settings = (pkgs.formats.json { }).generate "settings.json" {
     autoUpdate = true;
     autoUpdateNotification = true;
     useQuickCss = true;
-    enabledThemes = [];
+    enabledThemes = [ ];
     frameless = true;
     transparent = true;
     disableMinSize = true;
@@ -36,27 +36,32 @@ let
       BadgeAPI.enabled = true;
     };
     notifications = {
-        timeout = 5000;
-        position = "bottom-right";
-        useNative = "not-focused";
-        logLimit = 50;
+      timeout = 5000;
+      position = "bottom-right";
+      useNative = "not-focused";
+      logLimit = 50;
     };
     cloud = {
-        authenticated = false;
-        url = "https://api.vencord.dev/";
-        settingsSync = false;
-        settingsSyncVersion = 1744986831158;
+      authenticated = false;
+      url = "https://api.vencord.dev/";
+      settingsSync = false;
+      settingsSyncVersion = 1744986831158;
     };
   };
   # https://github.com/Vencord/Vesktop/blob/main/src/shared/settings.d.ts
-  vesktop_settings = (pkgs.formats.json {}).generate "settings.json" {
+  vesktop_settings = (pkgs.formats.json { }).generate "settings.json" {
     discordBranch = "stable";
     minimizeToTray = true;
     arRPC = false;
     splashColor = "rgb(222, 222, 222)";
     splashBackground = "rgba(0, 0, 0, 0.2)";
     splashTheming = true;
-    spellCheckLanguages = [ "en" "ru" "ru-RU" "en-US" ];
+    spellCheckLanguages = [
+      "en"
+      "ru"
+      "ru-RU"
+      "en-US"
+    ];
   };
   mkSourcePrefix =
     prefix: attrs:
@@ -78,12 +83,30 @@ in
 
     home.activation = {
       gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ ! -z DRY_RUN ]]; then
+        if [[ -z "''${DRY_RUN:-}" ]]; then
           if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
             mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
             cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
             find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
             find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+          fi
+        fi
+      '';
+      bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [[ -z "''${DRY_RUN:-}" ]]; then
+          if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
+            mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
+            touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
+            BOOKMARKS="
+              file:///home/l0lk3k/bottles/Games/drive_c drive_c
+              file:///home/l0lk3k/Pictures Изображения
+              file:///home/l0lk3k/Music Музыка
+              file:///home/l0lk3k/Documents Документы
+              file:///home/l0lk3k/Downloads Загрузки
+              admin:/// / (корень, от рута)
+              file:/// / (корень)
+            "
+            echo "$BOOKMARKS" | sed 's/^[[:space:]]*//' | sed '/^$/d' > "${config.xdg.configHome}/gtk-3.0/bookmarks"
           fi
         fi
       '';
@@ -107,12 +130,14 @@ in
           cp -r $conf/* $out
           chmod u+w $out/qt5ct.conf
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
         '';
         "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
           mkdir -p $out
           cp -r $conf/* $out
           chmod u+w $out/qt6ct.conf
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
         '';
         "GIMP_fake".source = ../../../stuff/GIMP;
       }

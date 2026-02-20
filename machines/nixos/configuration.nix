@@ -253,9 +253,6 @@
 
   services.displayManager = {
     defaultSession = "hyprland-uwsm";
-    sessionPackages = lib.filter (
-      p: lib.hasInfix "uwsm" (p.name or "") && lib.hasInfix "hyprland" (p.name or "")
-    ) config.environment.systemPackages;
     autoLogin = {
       user = user;
       enable = true;
@@ -550,6 +547,7 @@
       with inputs;
       # Keep in every ISO
       [
+        wayvr
         bs-manager
         xhost
         dante
@@ -628,7 +626,6 @@
             protonplus
             gimp3-with-plugins
             gamescope
-            ccls
             android-tools
             (prismlauncher.override {
               prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
@@ -674,7 +671,22 @@
 
   };
 
+  systemd.services.quest-adb-reverse = {
+    description = "Quest 3S ADB Reverse (Root)";
+    serviceConfig = {
+      Type = "forking";
+      Restart = "no";
+      Environment = "HOME=/root";
+      ExecStartPre = "${pkgs.bash}/bin/bash -c \"${pkgs.psmisc}/bin/killall adb || true\"";
+      ExecStart = "${pkgs.android-tools}/bin/adb reverse tcp:9757 tcp:9757";
+    };
+  };
+
   services = {
+
+    udev.extraRules = ''
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2833", ATTR{idProduct}=="5013", RUN+="${pkgs.systemd}/bin/systemctl restart quest-adb-reverse.service"
+    '';
 
     printing = {
       enable = true;
