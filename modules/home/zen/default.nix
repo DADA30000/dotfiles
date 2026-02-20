@@ -9,6 +9,14 @@ with lib;
 let
   cfg_orig = config.programs.zen-browser;
   cfg = config.zen;
+  xulstore_json = toJSON {
+    "chrome://browser/content/browser.xhtml" = {
+      navigator-toolbox = {
+        style = "width: 280px; max-width: 500px; --actual-zen-sidebar-width: 301px; --zen-sidebar-width: 280px;";
+        width = "280px";
+      };
+    };
+  };
   combined_chrome = pkgs.stdenv.mkDerivation {
     pname = "chrome-zen";
     version = "1.0";
@@ -75,6 +83,10 @@ in
         if [[ -z "''${DRY_RUN:-}" ]]; then
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userChrome.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/chrome.css
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userContent.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/content.css
+          if [[ ! -f ${config.xdg.configHome}/zen/default/check-do_not_delete_this ]]; then
+            touch ${config.xdg.configHome}/zen/default/check-do_not_delete_this
+            echo '${xulstore_json}' > ${config.xdg.configHome}/zen/default/xulstore.json
+          fi
         fi
       '';
     };
@@ -115,29 +127,52 @@ in
         isDefault = true;
         search.default = "google";
         settings = {
-          "nebula-nogaps-mod" = true;
-          "nebula-tab-loading-animation" = 0;
+          gfx.webrender.all = true;
+          sine.engine.auto-update = false;
+          nebula-nogaps-mod = true;
+          nebula-tab-loading-animation = 0;
+          network.http.max-persistent-connections-per-server = 15;
+          var-nebula-border-radius = "13px";
+          var-nebula-color-glass-dark = "rgba(0, 0, 0, 0.4)";
+          var-nebula-color-glass-light = "rgba(255, 255, 255, 0.4)";
+          var-nebula-color-shadow-dark = "rgba(0, 0, 0, 0.55)";
+          var-nebula-color-shadow-light = "rgba(255, 255, 255, 0.055)";
+          var-nebula-essentials-width = "60px";
+          var-nebula-glass-blur = "32px";
+          var-nebula-glass-saturation = "140%";
+          var-nebula-tabs-default-dark = "rgba(0,0,0,0.35)";
+          var-nebula-tabs-default-light = "rgba(255,255,255,0.25)";
+          var-nebula-tabs-hover-dark = "rgba(0,0,0,0.45)";
+          var-nebula-tabs-hover-light = "rgba(255,255,255,0.35)";
+          var-nebula-tabs-minimum-dark = "rgba(0, 0, 0, 0.2)";
+          var-nebula-tabs-minimum-light = "rgba(255, 255, 255, 0.1)";
+          var-nebula-tabs-selected-dark = "rgba(0,0,0,0.55)";
+          var-nebula-tabs-selected-light = "rgba(255,255,255,0.45)";
+          var-nebula-ui-tint-dark = "rgba(0,0,0,0.2)";
+          var-nebula-ui-tint-light = "rgba(255,255,255,0.2)";
+          var-nebula-website-tint-dark = "rgba(0,0,0,0)";
+          var-nebula-website-tint-light = "rgba(255,255,255,0)";
+          var-nebula-workspace-grayscale = "100%";
           "browser.tabs.allow_transparent_browser" = true;
+          "browser.tabs.unloadOnLowMemory" = true;
           "zen.widget.linux.transparency" = true;
-          "sine.engine.auto-update" = false;
           "zen.welcome-screen.seen" = true;
-          # "nebula-tab-switch-animation" = 0;
+          "zen.view.use-single-toolbar" = true;
+          "zen.view.compact.enable-at-startup" = true;
         };
-        extensions = {
-          packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
-            adnauseam
-            darkreader
-            bitwarden
-            foxyproxy-standard
-            user-agent-string-switcher
-            enhanced-h264ify
-            github-file-icons
-            redirector
-            return-youtube-dislikes
-            sponsorblock
-            zen-internet
-          ];
-        };
+        extensions.packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
+          adnauseam
+          darkreader
+          bitwarden
+          foxyproxy-standard
+          user-agent-string-switcher
+          enhanced-h264ify
+          github-file-icons
+          redirector
+          return-youtube-dislikes
+          sponsorblock
+          zen-internet
+        ];
       };
     };
   };

@@ -65,24 +65,6 @@
   # Enable btop process manager
   btop.enable = true;
 
-  xdg.userDirs = {
-
-    # Create folders like Downloads, Documents automatically
-    createDirectories = true;
-    enable = true;
-
-    documents = "/home/${config.home.username}/Documents";
-
-    download = "/home/${config.home.username}/Downloads";
-
-    music = "/home/${config.home.username}/Music";
-
-    pictures = "/home/${config.home.username}/Pictures";
-
-    videos = "/home/${config.home.username}/Videos";
-
-  };
-
   mpd = {
 
     # Enable mpd music daemon
