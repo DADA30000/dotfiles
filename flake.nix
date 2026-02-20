@@ -98,7 +98,7 @@
       };
     };
     sine = {
-      url = "github:CosmoCreeper/Sine/cosine";
+      url = "github:CosmoCreeper/Sine";
       flake = false;
     };
     sine-bootloader = {
@@ -180,7 +180,7 @@
           paths = [ ./modules/home ];
           recursive = false;
         }
-        ++ [ 
+        ++ [
           inputs.nix-index-database.homeModules.nix-index
           inputs.zen-browser.homeModules.twilight
         ];

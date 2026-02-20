@@ -51,8 +51,8 @@ let
         MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_NIX" /dev/null > $out/configuration.nix.cache
         MANPAGER=cat ${pkgs.util-linux}/bin/script -q -c "${pkgs.man-db}/bin/man $MAN_HOME" /dev/null > $out/home-configuration.nix.cache
       '';
-  man-nix = pkgs.writeShellScriptBin "man-nix" ''nvim -c 'silent! e +Man! ${man-cache}/configuration.nix.cache' '';
-  man-home = pkgs.writeShellScriptBin "man-home" ''nvim -c 'silent! e +Man! ${man-cache}/home-configuration.nix.cache' '';
+  man-nix = pkgs.writeShellScriptBin "man-nix" "nvim -c 'silent! e +Man! ${man-cache}/configuration.nix.cache' ";
+  man-home = pkgs.writeShellScriptBin "man-home" "nvim -c 'silent! e +Man! ${man-cache}/home-configuration.nix.cache' ";
 
   nos-cache =
     (pkgs.runCommand "nos-cache" { } ''

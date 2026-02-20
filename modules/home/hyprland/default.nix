@@ -142,7 +142,7 @@ in
           "$mod, F2, exec, app2unit -- sheesh.sh"
           "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
           "$mod, Q, exec, app2unit -- kitty"
-          "$mod, Z, exec, app2unit -- zen"
+          "$mod, Z, exec, app2unit -- zen-twilight"
           "$mod, D, exec, app2unit -- discordcanary || app2unit -- discord"
           "$mod, C, killactive,"
           "$mod, B, exec, uuctl"
@@ -181,7 +181,7 @@ in
           "$mod, mouse_down, workspace, e+1"
           "$mod, mouse_up, workspace, e-1"
         ];
-        monitor = [ ", preferred, auto, 1" ];
+        monitor = [ ", highres, auto, 1" ];
         bindr = [
           ''$mod, $mod_L, exec,  pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"{cmd}\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- {cmd}"' ''
           "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
@@ -206,6 +206,7 @@ in
         ];
         permission = [
           "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"
+          "${lib.escapeRegex (lib.getExe pkgs.wayvr)}, screencopy, allow"
           "${lib.escapeRegex (lib.getExe pkgs.grim)}, screencopy, allow"
           "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}, screencopy, allow"
           "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
@@ -310,6 +311,7 @@ in
           preserve_split = true;
         };
         misc = {
+          disable_watchdog_warning = true;
           disable_hyprland_logo = true;
           background_color = "0x000000";
           enable_swallow = true;
@@ -358,7 +360,7 @@ in
         WantedBy = [ "hyprland-session.target" ];
       };
       Service = {
-        ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
+        ExecStart = "${pkgs.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
         Restart = "always";
         StartLimitInterval = 0;
       };

@@ -22,42 +22,42 @@ let
       #include <fcntl.h>
       #include <sys/types.h>
       #include <stdlib.h>
-      
+
       extern char **environ;
-      
+
       int main(int argc, char **argv) {
         if (argc < 2) {
             fprintf(stderr, "usage: vpnify <cmd> [args...]\n");
             return 1;
         }
-      
+
         /* save environment early */
         char **saved_env = environ;
-      
+
         int fd = open("/var/run/netns/vpn_wrapper", O_RDONLY);
         if (fd < 0) {
             perror("open netns");
             return 1;
         }
-      
+
         /* enter network namespace */
         if (setns(fd, CLONE_NEWNET) != 0) {
             perror("setns(net)");
             return 1;
         }
-      
+
         /* private mount namespace */
         if (unshare(CLONE_NEWNS) != 0) {
             perror("unshare mount ns");
             return 1;
         }
-      
+
         /* stop mount propagation */
         if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) {
             perror("mount private");
             return 1;
         }
-      
+
         /* optional per-netns resolv.conf */
         const char *ns_resolv = "/etc/netns/vpn_wrapper/resolv.conf";
         struct stat st;
@@ -67,16 +67,16 @@ let
                 return 1;
             }
         }
-      
+
         /* drop privileges LAST */
         if (setuid(getuid()) != 0) {
             perror("setuid");
             return 1;
         }
-      
+
         /* restore user environment */
         environ = saved_env;
-      
+
         execvp(argv[1], &argv[1]);
         perror("execvp");
         return 1;
@@ -128,7 +128,7 @@ in
         # 3. Routing Rules (The persistent part)
         ip rule add iif veth_host lookup 2022 priority 2
         ip route add 10.200.0.0/24 dev veth_host table 2022
-        
+
         # 4. Point DNS to the Host (Gateway IP)
         mkdir -p /etc/netns/vpn_wrapper
         echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf

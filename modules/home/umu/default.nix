@@ -103,7 +103,7 @@ in
           sleep 0.2
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
-        UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=$HOME/.umu ${pkgs.umu-launcher}/bin/umu-run $*
+        UMU_RUNTIME_UPDATE=0 PROTONPATH=${pkgs.proton-ge-bin.steamcompattool} WINEPREFIX=$HOME/.umu ${pkgs.umu-launcher}/bin/umu-run "$@"
       '')
       (pkgs.writeShellScriptBin "umu-run-wrapper-secure" ''
         cleanup() {

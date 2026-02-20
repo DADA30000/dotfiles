@@ -109,9 +109,9 @@ in
           # Enter shell with build dependencies and build phases for 1 package (nix-shell -E)
           ns-build-env () {
             _ns_parse_args "$@"
-          
+
             local count=''${#pkgs_raw[@]}
-          
+
             if [[ $count -eq 0 ]]; then
               echo "Error: No target specified. Usage: ns-build-env [flags] <package>"
               return 1
@@ -119,7 +119,7 @@ in
               echo "Error: Only 1 target allowed. Found $count targets: ''${pkgs_raw[*]}"
               return 1
             fi
-          
+
             local target="''${pkgs_raw[1]}"
             
             echo "❄️ Entering build environment for: $target"
@@ -219,7 +219,9 @@ in
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
           umu-run() { umu-run-wrapper $@ }
           u() { nh os switch /etc/nixos $@ }
-          nsl-full() { ${inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/nix-locate $@ }
+          nsl-full() { ${
+            inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
+          }/bin/nix-locate $@ }
           nss() { ${
             let
               index = pkgs.runCommand "index" { } ''
@@ -233,7 +235,8 @@ in
                 rm -rf "$out/.cache"
               '';
             in
-              "nix-search --index-path \"${index}\" $@"}
+            "nix-search --index-path \"${index}\" $@"
+          }
           }
           7z() { 7zz $@ }
           u-test() { nh os test /etc/nixos $@ }
