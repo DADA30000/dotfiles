@@ -183,7 +183,7 @@ in
         ];
         monitor = [ ", highres, auto, 1" ];
         bindr = [
-          ''$mod, $mod_L, exec,  pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"{cmd}\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- {cmd}"' ''
+          ''$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"\$*\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- \"\$@\"" -- {cmd}' ''
           "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
         ];
         bindm = [
@@ -314,7 +314,7 @@ in
           disable_watchdog_warning = true;
           disable_hyprland_logo = true;
           background_color = "0x000000";
-          enable_swallow = true;
+          enable_swallow = false;
           animate_manual_resizes = false;
           animate_mouse_windowdragging = false;
           swallow_regex = "^(kitty|lutris|bottles|alacritty)$";
