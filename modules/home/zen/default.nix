@@ -49,7 +49,41 @@ let
       cp --no-preserve=mode ${pkgs.nixos-icons}/share/icons/hicolor/1024x1024/apps/nix-snowflake.png $out/sine-mods/Nebula/Nebula/modules
       substituteInPlace $out/sine-mods/Nebula/Nebula/modules/Topbar-buttons.css \
         --replace-fail "url(\"chrome://branding/content/about-logo.svg\")" "url(\"nix-snowflake.png\")" \
-        --replace-fail "scale: 1.7;" "scale: 1.5;" \
+        --replace-fail "scale: 1.7;" "scale: 1.5;"
+      TRANSPARENCY_PATCH="
+        panelmultiview, 
+        .panel-subview-body, 
+        .panel-arrowcontent,
+        #appMenu-popup {
+          --panel-background: rgba(0, 0, 0, 0.01) !important;
+          background-color: rgba(0, 0, 0, 0.01) !important;
+          background: rgba(0, 0, 0, 0.01) !important;
+          --panel-shadow: none !important;
+          --panel-shadow-margin: 0px !important;
+          box-shadow: none !important;
+          border: none !important;
+          --panel-border-radius: 12px !important;
+          border-radius: 12px !important;
+          overflow: hidden !important;
+        }
+        #full-page-translations-panel,
+        #full-page-translations-panel-multiview,
+        #full-page-translations-panel .panel-viewcontainer,
+        #full-page-translations-panel .panel-viewstack,
+        .translations-panel-header-wrapper,
+        .translations-panel-footer {
+          background-color: rgba(0, 0, 0, 0.01) !important;
+          background: rgba(0, 0, 0, 0.01) !important;
+          --panel-background: rgba(0, 0, 0, 0.01) !important;
+          box-shadow: none !important;
+          --panel-shadow: none !important;
+          --panel-shadow-margin: 0px !important;
+          border: none !important;
+          filter: none !important; 
+          border-radius: 12px !important;
+        }
+      "
+      echo "$TRANSPARENCY_PATCH" | sed 's/^[[:space:]]*//' | sed '/^$/d' >> "$out/sine-mods/Nebula/userChrome.css"
     '';
   };
   zen-package =
@@ -131,7 +165,6 @@ in
           sine.engine.auto-update = false;
           nebula-nogaps-mod = true;
           nebula-tab-loading-animation = 0;
-          network.http.max-persistent-connections-per-server = 15;
           var-nebula-border-radius = "13px";
           var-nebula-color-glass-dark = "rgba(0, 0, 0, 0.4)";
           var-nebula-color-glass-light = "rgba(255, 255, 255, 0.4)";

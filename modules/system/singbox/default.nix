@@ -110,7 +110,7 @@ in
       '';
 
       postStart = ''
-        PATH=$PATH:${pkgs.procps}/bin:${pkgs.iptables}/bin
+        PATH=$PATH:${pkgs.procps}/bin:${pkgs.iptables}/bin:${pkgs.gawk}/bin
         # 1. Create Namespace & Veth
         ip netns add vpn_wrapper
         ip link add veth_host mtu 1400 type veth peer name veth_peer mtu 1400
@@ -137,6 +137,20 @@ in
         # (NixOS firewall often blocks this by default)
         iptables -I INPUT -i veth_host -p udp --dport 53 -j ACCEPT
         iptables -I INPUT -i veth_host -p tcp --dport 53 -j ACCEPT
+
+        GW_IP=$(ip route show default | awk '/default/ {print $3}')
+        GW_DEV=$(ip route show default | awk '/default/ {print $5}')
+        ip route add default via $GW_IP dev $GW_DEV table 100 || true
+        iptables -t mangle -N BYPASS_CHECK || true
+        iptables -t mangle -F BYPASS_CHECK || true
+        iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN || true
+        iptables -t mangle -A BYPASS_CHECK -i veth_host -j RETURN || true
+        iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN || true
+        iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark 0x1 || true
+        iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK || true
+        iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark || true
+        ip rule add fwmark 0x1 lookup 100 priority 50 || true
+
       '';
       path = [ pkgs.iproute2 ];
       after = [ "network-online.target" ];

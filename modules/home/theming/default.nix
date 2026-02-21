@@ -99,6 +99,7 @@ in
             touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
             BOOKMARKS="
               file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
+              file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
               file://${config.xdg.userDirs.pictures} Изображения
               File://${config.xdg.userDirs.music} Музыка
               file://${config.xdg.userDirs.documents} Документы
