@@ -172,10 +172,10 @@ in
 
     boot.initrd.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
 
-    services.btrfs.autoScrub = {
-      enable = true;
-      interval = "weekly";
-    };
+    # services.btrfs.autoScrub = {
+    #   enable = true;
+    #   interval = "weekly";
+    # };
 
     fileSystems."/" = {
       device = "/dev/disk/by-label/nixos";
