@@ -116,6 +116,7 @@ dependencies = [
 [project.optional-dependencies]
 maco = ["maco"]
 gcp = ["google-cloud-storage", "google-cloud-pubsub"]
+mcp = ["fastmcp", "httpx"]
 
 [dependency-groups]
 dev = [

@@ -11,6 +11,21 @@
 }:
 {
 
+  powerManagement.cpuFreqGovernor = "performance";
+
+  boot.binfmt.registrations.exe = {
+    magicOrExtension = "MZ"; 
+    interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
+    recognitionType = "magic";
+  };
+
+  # boot.binfmt.registrations.lnk = {
+  #   magicOrExtension = "\\x4c\\x00\\x00\\x00\\x01\\x14\\x02\\x00\\x00\\x00\\x00\\x00\\xc0\\x00\\x00\\x00";
+  #   offset = 0;
+  #   interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
+  #   recognitionType = "magic";
+  # };
+
   home-manager = {
     users.${user} = import ./home.nix;
     extraSpecialArgs = {
@@ -606,7 +621,6 @@
             comma
             remmina
             mangohud
-            steam
             jdk25
             moonlight-qt
             osu-lazer-bin
@@ -736,6 +750,8 @@
   };
 
   programs = {
+
+    steam.enable = true;
 
     dconf.enable = true;
 

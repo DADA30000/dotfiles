@@ -63,6 +63,8 @@ in
       pulseaudio
       hyprshot
       nautilus
+      nautilus-python
+      nautilus-open-any-terminal
       file-roller
       cliphist
       libnotify

@@ -121,7 +121,18 @@ in
       #  fi
       #'';
     };
-    home.file.".themes".source = ../../../stuff/.themes;
+    home.file = {
+      ".themes".source = ../../../stuff/.themes;
+      ".local/share/nautilus-python/extensions/nautilus-open-any-terminal.py".source = 
+        "${pkgs.nautilus-open-any-terminal}/share/nautilus-python/extensions/nautilus_open_any_terminal.py";
+      "Templates" = {
+        recursive = true;
+        source = pkgs.runCommand "templates" {} ''
+          mkdir -p $out
+          touch $out/new_file.{py,txt,sh}
+        '';
+      };
+    };
     xdg.userDirs = {
       createDirectories = true;
       enable = true;
@@ -130,6 +141,7 @@ in
       music = "${config.home.homeDirectory}/Music";
       pictures = "${config.home.homeDirectory}/Pictures";
       videos = "${config.home.homeDirectory}/Videos";
+      templates = "${config.home.homeDirectory}/Templates";
     };
     xdg = {
       dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
@@ -209,12 +221,16 @@ in
       "org/gnome/desktop/interface" = {
         color-scheme = "prefer-dark";
       };
+      "com/github/stunkymonkey/nautilus-open-any-terminal" = {
+        terminal = "kitty";
+      };
     };
     qt = {
       enable = true;
       #platformTheme.name = "qtct";
     };
     home = {
+      sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
       pointerCursor = {
         gtk.enable = true;
         x11.enable = true;
