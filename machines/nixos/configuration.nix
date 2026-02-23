@@ -172,9 +172,10 @@
   # Enable SysRQ
   boot.kernel.sysctl."kernel.sysrq" = 1;
 
-  # Restrict amount of annoying cache
-  boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
-  boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
+  # Just use sync I guess
+  # # Restrict amount of annoying cache
+  # boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
+  # boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
 
   # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
   boot.initrd.systemd.enable = true;
@@ -721,16 +722,13 @@
 
     openssh.enable = true;
 
-    #udisks2 = {
-    #  enable = true;
-    #  settings."mount_options.conf".defaults = {
-    #    vfat_defaults="sync";
-    #    exfat_defaults="sync";
-    #    ntfs_defaults="sync";
-    #    "ntfs:ntfs_defaults"="sync";
-    #    "ntfs:ntfs3_defaults"="sync";
-    #  };
-    #};
+    udisks2 = {
+      enable = true;
+      settings."mount_options.conf".defaults = {
+        exfat_defaults = "uid=$UID,gid=$GID,iocharset=utf8,errors=remount-ro,nosuid,nodev,relatime,fmask=0022,dmask=0022,flush";
+        vfat_defaults = "uid=$UID,gid=$GID,shortname=mixed,utf8=1,showexec,nosuid,nodev,relatime,fmask=0022,dmask=0022,flush";
+      };
+    };
 
     pipewire = {
       enable = true;
