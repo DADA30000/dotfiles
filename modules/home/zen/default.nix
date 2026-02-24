@@ -7,6 +7,16 @@
 }:
 with lib;
 let
+  extId = "zen-toggle@nixos.org";
+  vpn-toggler = pkgs.runCommand "vpn-toggler-xpi" {
+    buildInputs = [ pkgs.zip ];
+  } ''
+    mkdir -p $out
+    cp --no-preserve=mode -r ${../../../stuff/vpn-toggler}/* .
+    echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#EF4444"/></svg>' > icon-direct.svg
+    echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#22C55E"/></svg>' > icon-proxy.svg
+    zip -r $out/${extId}.xpi *
+  '';
   cfg_orig = config.programs.zen-browser;
   cfg = config.zen;
   xulstore_json = toJSON {
@@ -146,6 +156,10 @@ in
         NoDefaultBookmarks = true;
         OfferToSaveLogins = false;
         DisableAppUpdate = true;
+        ExtensionSettings.${extId} = {
+          installation_mode = "force_installed";
+          install_url = "file://${vpn-toggler}/${extId}.xpi";
+        };
         EnableTrackingProtection = {
           Value = true;
           Locked = true;
@@ -186,6 +200,7 @@ in
           var-nebula-website-tint-dark = "rgba(0,0,0,0)";
           var-nebula-website-tint-light = "rgba(255,255,255,0)";
           var-nebula-workspace-grayscale = "100%";
+          "xpinstall.signatures.required" = false;
           "browser.tabs.allow_transparent_browser" = true;
           "browser.tabs.unloadOnLowMemory" = true;
           "zen.widget.linux.transparency" = true;
@@ -194,10 +209,10 @@ in
           "zen.view.compact.enable-at-startup" = true;
         };
         extensions.packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
+          vpn-toggler
           adnauseam
           darkreader
           bitwarden
-          foxyproxy-standard
           user-agent-string-switcher
           enhanced-h264ify
           github-file-icons

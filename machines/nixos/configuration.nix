@@ -330,6 +330,7 @@
       with inputs;
       # Keep in every ISO
       [
+        jq
         wayvr
         bs-manager
         xhost
@@ -394,8 +395,8 @@
             osu-lazer-bin
             mindustry
             xonotic
-            superTux
-            superTuxKart
+            # superTux
+            supertuxkart
             pavucontrol
             qalculate-gtk
             distrobox
@@ -545,7 +546,7 @@
 
     sunshine = {
       autoStart = true;
-      enable = true;
+      enable = false;
       capSysAdmin = true;
       openFirewall = true;
     };
