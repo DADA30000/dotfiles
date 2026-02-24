@@ -9,7 +9,7 @@ let
 in
 {
   options.waybar = {
-    enable = mkEnableOption "Enable waybar panel";
+    enable = mkEnableOption "waybar panel";
   };
 
   config = mkIf cfg.enable {

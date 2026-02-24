@@ -48,12 +48,12 @@ let
 in
 {
   options.my-services = {
-    cloudflare-ddns.enable = mkEnableOption "Enable automatic Cloudflare DDNS";
+    cloudflare-ddns.enable = mkEnableOption "automatic Cloudflare DDNS";
     nginx = {
-      enable = mkEnableOption "Enable nginx";
-      website.enable = mkEnableOption "Enable my goofy website";
-      nextcloud.enable = mkEnableOption "Enable nextcloud";
-      cape.enable = mkEnableOption "Enable integration with CAPEv2 sandbox";
+      enable = mkEnableOption "nginx";
+      website.enable = mkEnableOption "my goofy website";
+      nextcloud.enable = mkEnableOption "nextcloud";
+      cape.enable = mkEnableOption "integration with CAPEv2 sandbox";
       hostName = mkOption {
         type = types.str;
         default = "sanic.space";

@@ -9,8 +9,8 @@ let
 in
 {
   options.fastfetch = {
-    enable = mkEnableOption "Enable fastfetch config";
-    zsh-start = mkEnableOption "Enable fastfetch printing when zsh starts up";
+    enable = mkEnableOption "fastfetch config";
+    zsh-start = mkEnableOption "fastfetch printing when zsh starts up";
     logo-path = mkOption {
       type = types.path;
       defaultText = "../../stuff/logo.png";

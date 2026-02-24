@@ -9,7 +9,7 @@ let
 in
 {
   options.thunderbird = {
-    enable = mkEnableOption "Enable thunderbird customization";
+    enable = mkEnableOption "thunderbird customization";
   };
 
   config = mkIf cfg.enable {

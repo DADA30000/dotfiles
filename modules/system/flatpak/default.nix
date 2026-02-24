@@ -11,7 +11,7 @@ let
 in
 {
   options.flatpak = {
-    enable = mkEnableOption "Enable system flatpak";
+    enable = mkEnableOption "system flatpak";
     packages = mkOption {
       type = types.listOf (
         types.oneOf [

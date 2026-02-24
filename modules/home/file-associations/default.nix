@@ -9,7 +9,7 @@ let
 in
 {
   options.file-associations = {
-    enable = mkEnableOption "Enable declarative file associations";
+    enable = mkEnableOption "declarative file associations";
   };
 
   config = mkIf cfg.enable {

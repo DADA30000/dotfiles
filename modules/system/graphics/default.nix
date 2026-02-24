@@ -9,12 +9,12 @@ let
 in
 {
   options.graphics = {
-    enable = mkEnableOption "Enable graphics";
-    nvidia.enable = mkEnableOption "Enable NVIDIA specific stuff (can be used together with AMDGPU)";
-    vulkan_video = mkEnableOption "Enable experimental mesa flags for vulkan video stuff";
+    enable = mkEnableOption "graphics";
+    nvidia.enable = mkEnableOption "NVIDIA specific stuff (can be used together with AMDGPU)";
+    vulkan_video = mkEnableOption "experimental mesa flags for vulkan video stuff";
     amdgpu = {
-      enable = mkEnableOption "Enable some AMDGPU specific stuff (can be used together with NVIDIA)";
-      pro = mkEnableOption "Enable OpenCL and ROCm";
+      enable = mkEnableOption "some AMDGPU specific stuff (can be used together with NVIDIA)";
+      pro = mkEnableOption "OpenCL and ROCm";
     };
   };
 

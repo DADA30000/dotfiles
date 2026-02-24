@@ -461,7 +461,7 @@ let
 in
 {
   options.cape = {
-    enable = mkEnableOption "Enable CAPEv2";
+    enable = mkEnableOption "CAPEv2";
     users = mkOption {
       type = types.listOf types.str;
       description = ''

@@ -11,7 +11,7 @@ let
 in
 {
   options.btop = {
-    enable = mkEnableOption "Enable btop process manager";
+    enable = mkEnableOption "btop process manager";
   };
 
   config = mkIf cfg.enable {

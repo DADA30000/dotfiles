@@ -56,7 +56,7 @@ let
 in
 {
   options.spicetify = {
-    enable = mkEnableOption "Enable spotify with theme";
+    enable = mkEnableOption "spotify with theme";
   };
 
   imports = [ inputs.spicetify-nix.homeManagerModules.default ];

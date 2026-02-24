@@ -71,7 +71,7 @@ let
 in
 {
   options.umu = {
-    enable = mkEnableOption "Enable umu - universal windows apps launcher";
+    enable = mkEnableOption "umu - universal windows apps launcher";
   };
 
   config = mkIf cfg.enable {

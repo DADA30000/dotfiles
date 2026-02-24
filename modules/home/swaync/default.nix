@@ -10,7 +10,7 @@ let
 in
 {
   options.swaync = {
-    enable = mkEnableOption "Enable swaync notification manager";
+    enable = mkEnableOption "swaync notification manager";
   };
 
   config = mkIf cfg.enable {

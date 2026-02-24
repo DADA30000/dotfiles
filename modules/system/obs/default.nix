@@ -10,8 +10,8 @@ let
 in
 {
   options.obs = {
-    enable = mkEnableOption "Enable OBS";
-    virt-cam = mkEnableOption "Enable virtual camera";
+    enable = mkEnableOption "OBS";
+    virt-cam = mkEnableOption "virtual camera";
   };
 
   config = mkIf cfg.enable {

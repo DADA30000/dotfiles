@@ -9,7 +9,7 @@ let
 in
 {
   options.kitty = {
-    enable = mkEnableOption "Enable kitty terminal emulator";
+    enable = mkEnableOption "kitty terminal emulator";
   };
 
   config = mkIf cfg.enable {

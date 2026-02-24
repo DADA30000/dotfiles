@@ -13,114 +13,36 @@
 
   powerManagement.cpuFreqGovernor = "performance";
 
-  boot.binfmt.registrations.exe = {
-    magicOrExtension = "MZ"; 
-    interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
-    recognitionType = "magic";
-  };
+  qt.enable = true;
 
-  # boot.binfmt.registrations.lnk = {
-  #   magicOrExtension = "\\x4c\\x00\\x00\\x00\\x01\\x14\\x02\\x00\\x00\\x00\\x00\\x00\\xc0\\x00\\x00\\x00";
-  #   offset = 0;
-  #   interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
-  #   recognitionType = "magic";
-  # };
+  nixpkgs.config.allowUnfree = true;
 
-  home-manager = {
-    users.${user} = import ./home.nix;
-    extraSpecialArgs = {
-      inherit avg-flag min-flag;
-      kekma = {
-        nix = config.docs.man-cache-nix;
-        home = config.docs.man-cache-home;
-      };
-    };
-  };
+  time.timeZone = "Europe/Moscow";
 
-  services.tailscale.enable = true;
+  i18n.defaultLocale = "ru_RU.UTF-8";
 
-  services.zerotierone.enable = true;
+  console.keyMap = "ru";
 
-  services.sunshine = {
-    autoStart = true;
-    enable = true;
-    capSysAdmin = true;
-    openFirewall = true;
-  };
-
-  services.earlyoom = {
-    enable = true;
-    enableNotifications = true;
-  };
-
-  services.systembus-notify.enable = true;
-
-  programs.seahorse.enable = true;
-
-  services.gnome.gnome-keyring.enable = true;
-
-  # programs.alvr = {
-  #   enable = true;
-  #   openFirewall = true;
-  # };
+  system.stateVersion = "24.11";
 
   wivrn.enable = true;
 
-  # Enable custom man page generation and nix-option-search
-  # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
-  # Darwin and stable cause additional eval time, around 10-15 seconds
-  docs = {
-    enable = true;
-    nos.enable = false;
-    nos.darwin = false;
-    nos.stable = false;
-  };
-
   nix.gc.automatic = false;
 
-  programs.appimage = {
-    enable = true;
-    binfmt = true;
-  };
-
-  boot.kernel.sysctl."net.core.default_qdisc" = "cake";
-
-  services.scx = {
-    enable = true;
-    scheduler = "scx_bpfland";
-  };
-
-  virtualisation.podman =
-    if !(avg-flag || min-flag) then
-      {
-        enable = true;
-        dockerCompat = true;
-      }
-    else
-      { };
-
-  programs.git = {
-    enable = true;
-    config.safe.directory = "*";
-  };
-
-  programs.git.lfs.enable = true;
-
-  programs.ydotool.enable = if !min-flag then true else false;
-
-  # Disable annoying firewall
-  networking.firewall.enable = false;
-
-  # Enable singbox
   singbox.enable = true;
 
-  # Run non-nix apps
-  programs.nix-ld.enable = true;
-
-  # Enable plymouth (boot animation)
   plymouth.enable = true;
 
-  # Enable RAM compression
+  hardware.opentabletdriver.enable = true;
+
+  zapret.enable = false;
+
+  replays.enable = if !min-flag then true else false;
+
+  startup-sound.enable = false;
+
+  zerotier.enable = false;
+
   zramSwap = {
     enable = true;
     memoryPercent = 100;
@@ -131,184 +53,35 @@
     users = [ user ];
   };
 
-  virtualisation.libvirtd = {
+  # Enable custom man page generation and nix-option-search
+  # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
+  # Darwin and stable cause additional eval time, around 10-15 seconds
+  docs = {
     enable = true;
-    qemu.swtpm.enable = true;
+    nos = {
+      enable = false;
+      darwin = false;
+      stable = false;
+    };
   };
 
-  virtualisation.libvirtd.qemu.verbatimConfig = "max_core = 0";
+  networking = {
 
-  # Enable USB redirection (optional)
-  virtualisation.spiceUSBRedirection.enable = true;
+    firewall.enable = false;
 
-  # Enable IOMMU
-  boot.kernelParams = [
-    "iommu=pt"
-    "quiet"
-    "plymouth.use-simpledrm"
-  ];
-
-  # Enable some important system zsh stuff
-  programs.zsh.enable = true;
-
-  # Enable portals
-  #xdg.portal.enable = true;
-  #xdg.portal.extraPortals = [
-  #  pkgs.xdg-desktop-portal-gtk
-  #];
-  #xdg.portal.config.common.default = "*";
-
-  # Enable OpenTabletDriver
-  hardware.opentabletdriver.enable = true;
-
-  programs.gamemode.enable = true;
-
-  # Places /tmp in RAM
-  boot.tmp.useTmpfs = true;
-
-  # Use mainline (or latest stable) kernel instead of LTS kernel
-  boot.kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
-
-  # Enable SysRQ
-  boot.kernel.sysctl."kernel.sysrq" = 1;
-
-  # Just use sync I guess
-  # # Restrict amount of annoying cache
-  # boot.kernel.sysctl."vm.dirty_bytes" = 50000000;
-  # boot.kernel.sysctl."vm.dirty_background_bytes" = 50000000;
-
-  # Adds systemd to initrd (speeds up boot process a little, and makes it prettier)
-  boot.initrd.systemd.enable = true;
-
-  # Disable usual coredumps (I hate them)
-  security.pam.loginLimits = [
-    {
-      domain = "*";
-      item = "core";
-      value = "0";
-    }
-    #{
-    #  domain = user;
-    #  item = "core";
-    #  value = "-1"; # -1 means unlimited
-    #}
-  ];
-
-  programs.firejail.enable = true;
-
-  # Enable systemd coredumps
-  systemd.coredump.enable = false;
-
-  # Enable NetworkManager
-  systemd.services = {
-    NetworkManager-wait-online.enable = false;
-    systemd-bsod = {
+    networkmanager = {
       enable = true;
-      wantedBy = [ "sysinit.target" ];
-      serviceConfig.ExecStart = "${pkgs.systemd}/lib/systemd/systemd-bsod --continuous";
-    };
-  };
-  networking.networkmanager = {
-    enable = true;
-    wifi.backend = "iwd";
-    plugins = with pkgs; [
-      networkmanager-fortisslvpn
-      networkmanager-iodine
-      networkmanager-l2tp
-      networkmanager-openconnect
-      networkmanager-openvpn
-      networkmanager-sstp
-      networkmanager-strongswan
-      networkmanager-vpnc
-    ];
-  };
-
-  # Allow making users through useradd
-  users.mutableUsers = true;
-
-  # Currently specialisations double eval time, and even when empty, still create addiitonal boot entry, not ideal.
-  #specialisation.vm.configuration = if !(avg-flag || min-flag) then {
-  #  virtualisation.libvirtd.enable = true;
-
-  #  virtualisation.spiceUSBRedirection.enable = true;
-
-  #  programs.virt-manager.enable = true;
-
-  #  # Enable TPM emulation (optional)
-  #  virtualisation.libvirtd.qemu = {
-  #    swtpm.enable = true;
-  #    ovmf.packages = [ pkgs.OVMFFull.fd ];
-  #  };
-  #  virtualisation.vmware.host = if (!checker) then {} else {
-  #    enable = true;
-  #    package = vmware-package;
-  #  };
-  #  boot.kernelPackages = pkgs.linuxPackages;
-  #} else {};
-
-  services.xserver = {
-    enable = true;
-    displayManager.lightdm = {
-      enable = true;
-      greeter.enable = false;
-    };
-  };
-
-  # Configure UWSM to launch Hyprland from a display manager like SDDM
-  programs.uwsm = {
-    enable = true;
-    package = pkgs.uwsm.overrideAttrs { patches = ../../stuff/uwsm_uuctl.patch; };
-    waylandCompositors = {
-      hyprland = {
-        prettyName = "Hyprland";
-        comment = "Hyprland compositor managed by UWSM";
-        binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
-      };
-    };
-  };
-
-  services.displayManager = {
-    defaultSession = "hyprland-uwsm";
-    autoLogin = {
-      user = user;
-      enable = true;
-    };
-  };
-
-  # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
-  systemd.services.display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
-  systemd.user.targets.nixos-fake-graphical-session.enable = false;
-
-  # Enable DPI (Deep packet inspection) bypass
-  zapret.enable = false;
-
-  # Enable replays
-  replays.enable = if !min-flag then true else false;
-
-  # Enable startup sound on PC speaker (also plays after rebuilds)
-  startup-sound.enable = false;
-
-  # Enable zerotier
-  zerotier.enable = false;
-
-  # Enable locate (find files on system quickly)
-  services.locate.enable = true;
-
-  virtualisation.vmVariant = {
-
-    # Set options for vm that is built using nixos-rebuild build-vm
-    systemd.user.services.mpvpaper.enable = false;
-    virtualisation = {
-      qemu.options = [
-        "-display sdl,gl=on"
-        "-device virtio-vga-gl"
-        "-enable-kvm"
-        "-audio driver=sdl,model=virtio"
+      wifi.backend = "iwd";
+      plugins = with pkgs; [
+        networkmanager-fortisslvpn
+        networkmanager-iodine
+        networkmanager-l2tp
+        networkmanager-openconnect
+        networkmanager-openvpn
+        networkmanager-sstp
+        networkmanager-strongswan
+        networkmanager-vpnc
       ];
-      cores = 4;
-      diskSize = 1024 * 8;
-      msize = 16384 * 16;
-      memorySize = 1024 * 8;
     };
 
   };
@@ -320,7 +93,6 @@
         # Enable system flatpak (currently breaks xdg portals)
         enable = false;
 
-        # Packages to install from flatpak
         packages = [
           "io.github.Soundux"
         ];
@@ -331,10 +103,8 @@
 
   fonts = {
 
-    # Enable some default fonts
     enableDefaultPackages = true;
 
-    # Add some fonts
     packages = with pkgs; [
       vista-fonts
       corefonts
@@ -344,43 +114,33 @@
 
   };
 
-  # services.userborn.enable = true;
-
   users = {
+
+    defaultUserShell = pkgs.zsh;
+
+    mutableUsers = true;
 
     groups.${user}.gid = config.users.users.${user}.uid;
 
-    users = {
-
-      ${user} = {
-
-        # Marks user as real, human user
-        isNormalUser = true;
-
-        # Sets password for this user using hash generated by mkpasswd
-        hashedPassword = user-hash;
-
-        group = user;
-
-        uid = 1000;
-
-        initialPassword = if user-hash == null then "1234" else null;
-
-        home = "/home/${user}";
-
-        extraGroups = [
-          "wheel"
-          "uinput"
-          "mlocate"
-          "libvirtd"
-          "nginx"
-          "input"
-          "kvm"
-          "ydotool"
-          "adbusers"
-          "video"
-        ];
-      };
+    users.${user} = {
+      isNormalUser = true;
+      hashedPassword = user-hash;
+      group = user;
+      uid = 1000;
+      initialPassword = if user-hash == null then "1234" else null;
+      home = "/home/${user}";
+      extraGroups = [
+        "wheel"
+        "uinput"
+        "mlocate"
+        "libvirtd"
+        "nginx"
+        "input"
+        "kvm"
+        "ydotool"
+        "adbusers"
+        "video"
+      ];
     };
   };
 
@@ -417,13 +177,8 @@
   obs =
     if !(avg-flag || min-flag) then
       {
-
-        # Enable OBS
         enable = true;
-
-        # Enable virtual camera
         virt-cam = true;
-
       }
     else
       { };
@@ -437,11 +192,8 @@
     vulkan_video = true;
 
     amdgpu = {
-
       enable = true;
-
       pro = if !(avg-flag || min-flag) then true else false;
-
     };
 
   };
@@ -450,25 +202,14 @@
     if !(avg-flag || min-flag) then
       {
 
-        # Enable automatic Cloudflare DDNS
         cloudflare-ddns.enable = true;
 
         nginx = {
-
-          # Enable nginx
           enable = true;
-
           cape.enable = true;
-
-          # Enable my goofy website
           website.enable = true;
-
-          # Enable nextcloud
           nextcloud.enable = false;
-
-          # Website domain
           hostName = "sanic.space";
-
         };
 
       }
@@ -482,53 +223,79 @@
 
     impermanence = true;
 
-    # Enable system compression
     compression = true;
 
     second-disk = {
-
-      # Enable additional disk (must be btrfs)
       enable = true;
-
-      # Enable compression on additional disk
       compression = true;
-
-      # Filesystem label of the partition that is used for mounting
       label = "Games";
-
-      # Which subvolume to mount
       subvol = "games";
-
-      # Path to a place where additional disk will be mounted
       path = "/home/${user}/Games";
-
     };
 
     swap = {
 
       file = {
-
-        # Enable swapfile
         enable = false;
-
-        # Path to swapfile
         path = "/var/lib/swapfile";
-
-        # Size of swapfile in MB
         size = 4 * 1024;
-
       };
 
       partition = {
-
-        # Enable swap partition
         enable = false;
-
-        # Label of swap partition
         label = "swap";
-
       };
 
+    };
+
+  };
+
+  home-manager = {
+
+    users.${user} = import ./home.nix;
+
+    extraSpecialArgs = {
+      inherit avg-flag min-flag;
+      kekma = {
+        nix = config.docs.man-cache-nix;
+        home = config.docs.man-cache-home;
+      };
+    };
+
+  };
+
+  boot = {
+
+    tmp.useTmpfs = true;
+
+    kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
+
+    initrd.systemd.enable = true;
+
+    kernelParams = [
+      "iommu=pt"
+      "quiet"
+      "plymouth.use-simpledrm"
+    ];
+
+    kernel.sysctl = {
+      "net.core.default_qdisc" = "cake";
+      "kernel.sysrq" = 1;
+    };
+
+    binfmt.registrations.exe = {
+      magicOrExtension = "MZ";
+      interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
+      recognitionType = "magic";
+    };
+
+    loader = {
+      timeout = 0;
+      efi.canTouchEfiVariables = true;
+      systemd-boot = {
+        enable = true;
+        memtest86.enable = true;
+      };
     };
 
   };
@@ -613,7 +380,7 @@
           patches = prev.patches or [ ] ++ [ ../../stuff/max-connection-to-unlimited.patch ];
         }))
       ]
-      # Remove from 4G ISO
+      # Remove from min ISO
       ++ (
         if !min-flag then
           [
@@ -658,7 +425,7 @@
         else
           [ ]
       )
-      # Remove from 8G ISO
+      # Remove from 8G and min ISO
       ++ (
         if !(avg-flag || min-flag) then
           [
@@ -672,32 +439,129 @@
 
   };
 
-  qt.enable = true;
+  virtualisation = {
 
-  boot.loader = {
+    spiceUSBRedirection.enable = true;
 
-    efi.canTouchEfiVariables = true;
+    # Set options for vm that is built using nixos-rebuild build-vm
+    vmVariant = {
+      systemd.user.services.mpvpaper.enable = false;
+      virtualisation = {
+        qemu.options = [
+          "-display sdl,gl=on"
+          "-device virtio-vga-gl"
+          "-enable-kvm"
+          "-audio driver=sdl,model=virtio"
+        ];
+        cores = 4;
+        diskSize = 1024 * 8;
+        msize = 16384 * 16;
+        memorySize = 1024 * 8;
+      };
+    };
 
-    systemd-boot.enable = true;
+    libvirtd = {
+      enable = true;
+      qemu = {
+        swtpm.enable = true;
+        verbatimConfig = "max_core = 0";
+      };
+    };
 
-    systemd-boot.memtest86.enable = true;
-
-    timeout = 0;
+    podman =
+      if !(avg-flag || min-flag) then
+        {
+          enable = true;
+          dockerCompat = true;
+        }
+      else
+        { };
 
   };
 
-  systemd.services.quest-adb-reverse = {
-    description = "Quest 3S ADB Reverse (Root)";
-    serviceConfig = {
-      Type = "forking";
-      Restart = "no";
-      Environment = "HOME=/root";
-      ExecStartPre = "${pkgs.bash}/bin/bash -c \"${pkgs.psmisc}/bin/killall adb || true\"";
-      ExecStart = "${pkgs.android-tools}/bin/adb reverse tcp:9757 tcp:9757";
+  systemd = {
+
+    # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+    user.targets.nixos-fake-graphical-session.enable = false;
+
+    coredump.enable = false;
+
+    services = {
+
+      # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+      display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
+
+      NetworkManager-wait-online.enable = false;
+
+      quest-adb-reverse = {
+        description = "Quest 3S ADB Reverse (Root)";
+        serviceConfig = {
+          Type = "forking";
+          Restart = "no";
+          Environment = "HOME=/root";
+          ExecStartPre = "${pkgs.bash}/bin/bash -c \"${pkgs.psmisc}/bin/killall adb || true\"";
+          ExecStart = "${pkgs.android-tools}/bin/adb reverse tcp:9757 tcp:9757";
+        };
+      };
+
+      systemd-bsod = {
+        enable = true;
+        wantedBy = [ "sysinit.target" ];
+        serviceConfig.ExecStart = "${pkgs.systemd}/lib/systemd/systemd-bsod --continuous";
+      };
+
     };
+
   };
 
   services = {
+
+    gvfs.enable = true;
+
+    locate.enable = true;
+
+    openssh.enable = true;
+
+    tailscale.enable = true;
+
+    zerotierone.enable = true;
+
+    systembus-notify.enable = true;
+
+    gnome.gnome-keyring.enable = true;
+
+    displayManager = {
+      defaultSession = "hyprland-uwsm";
+      autoLogin = {
+        user = user;
+        enable = true;
+      };
+    };
+
+    scx = {
+      enable = true;
+      scheduler = "scx_bpfland";
+    };
+
+    sunshine = {
+      autoStart = true;
+      enable = true;
+      capSysAdmin = true;
+      openFirewall = true;
+    };
+
+    earlyoom = {
+      enable = true;
+      enableNotifications = true;
+    };
+
+    xserver = {
+      enable = true;
+      displayManager.lightdm = {
+        enable = true;
+        greeter.enable = false;
+      };
+    };
 
     udev.extraRules = ''
       ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2833", ATTR{idProduct}=="5013", RUN+="${pkgs.systemd}/bin/systemctl restart quest-adb-reverse.service"
@@ -718,18 +582,6 @@
       openFirewall = true;
     };
 
-    gvfs.enable = true;
-
-    openssh.enable = true;
-
-    udisks2 = {
-      enable = true;
-      settings."mount_options.conf".defaults = {
-        exfat_defaults = "uid=$UID,gid=$GID,iocharset=utf8,errors=remount-ro,nosuid,nodev,relatime,fmask=0022,dmask=0022,flush";
-        vfat_defaults = "uid=$UID,gid=$GID,shortname=mixed,utf8=1,showexec,nosuid,nodev,relatime,fmask=0022,dmask=0022,flush";
-      };
-    };
-
     pipewire = {
       enable = true;
       alsa.enable = true;
@@ -737,6 +589,7 @@
       jack.enable = true;
       pulse.enable = true;
     };
+
   };
 
   security = {
@@ -745,9 +598,30 @@
 
     polkit.enable = true;
 
+    # Disable usual coredumps (I hate them)
+    pam.loginLimits = [
+      {
+        domain = "*";
+        item = "core";
+        value = "0";
+      }
+    ];
+
   };
 
   programs = {
+
+    firejail.enable = true;
+
+    gamemode.enable = true;
+
+    zsh.enable = true;
+
+    nix-ld.enable = true;
+
+    ydotool.enable = if !min-flag then true else false;
+
+    seahorse.enable = true;
 
     steam.enable = true;
 
@@ -755,16 +629,34 @@
 
     nh.enable = true;
 
-    neovim = {
-
-      defaultEditor = true;
-
-      viAlias = true;
-
-      vimAlias = true;
-
+    uwsm = {
       enable = true;
+      package = pkgs.uwsm.overrideAttrs { patches = ../../stuff/uwsm_uuctl.patch; };
+      waylandCompositors = {
+        hyprland = {
+          prettyName = "Hyprland";
+          comment = "Hyprland compositor managed by UWSM";
+          binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
+        };
+      };
+    };
 
+    git = {
+      enable = true;
+      lfs.enable = true;
+      config.safe.directory = "*";
+    };
+
+    appimage = {
+      enable = true;
+      binfmt = true;
+    };
+
+    neovim = {
+      defaultEditor = true;
+      viAlias = true;
+      vimAlias = true;
+      enable = true;
     };
 
   };
@@ -773,26 +665,10 @@
 
     enable = true;
 
-    settings = {
-
-      default = [
-        "kitty.desktop"
-      ];
-
-    };
+    settings.default = [
+      "kitty.desktop"
+    ];
 
   };
-
-  users.defaultUserShell = pkgs.zsh;
-
-  nixpkgs.config.allowUnfree = true;
-
-  time.timeZone = "Europe/Moscow";
-
-  i18n.defaultLocale = "ru_RU.UTF-8";
-
-  console.keyMap = "ru";
-
-  system.stateVersion = "24.11";
 
 }

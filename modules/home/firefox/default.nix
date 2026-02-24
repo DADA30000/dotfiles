@@ -22,7 +22,7 @@ let
 in
 {
   options.firefox = {
-    enable = mkEnableOption "Enable firefox customization";
+    enable = mkEnableOption "firefox customization";
   };
 
   config = mkIf cfg.enable {

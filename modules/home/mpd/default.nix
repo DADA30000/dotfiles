@@ -10,8 +10,8 @@ let
 in
 {
   options.mpd = {
-    enable = mkEnableOption "Enable mpd music daemon";
-    ncmpcpp = mkEnableOption "Enable ncmpcpp, program to access and control mpd daemon";
+    enable = mkEnableOption "mpd music daemon";
+    ncmpcpp = mkEnableOption "ncmpcpp, program to access and control mpd daemon";
   };
 
   config = mkIf cfg.enable {

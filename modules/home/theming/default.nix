@@ -76,7 +76,7 @@ let
 in
 {
   options.theming = {
-    enable = mkEnableOption "Enable theming stuff like cursor theme, icon theme and etc";
+    enable = mkEnableOption "theming stuff like cursor theme, icon theme and etc";
   };
 
   config = mkIf cfg.enable {

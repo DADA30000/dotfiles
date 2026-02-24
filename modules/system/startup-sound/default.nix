@@ -11,7 +11,7 @@ let
 in
 {
   options.startup-sound = {
-    enable = mkEnableOption "Enable startup sound on PC speaker (also plays after rebuilds)";
+    enable = mkEnableOption "startup sound on PC speaker (also plays after rebuilds)";
   };
 
   config = mkIf cfg.enable {

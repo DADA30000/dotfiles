@@ -89,10 +89,9 @@ in
       man-cache-home = "${man-cache}/home-configuration.nix.cache";
       man-cache-nix = "${man-cache}/configuration.nix.cache";
     };
-    environment.systemPackages = mkIf cfg.nos.enable [
-      nos
+    environment.systemPackages = optionals cfg.enable [
       man-nix
       man-home
-    ];
+    ] ++ optionals (cfg.enable && cfg.nos.enable) [ nos ];
   };
 }

@@ -33,11 +33,11 @@ let
 in
 {
   options.disks = {
-    compression = mkEnableOption "Enable system compression";
-    impermanence = mkEnableOption "Enable impermanence (remove all files except those that are needed)";
+    compression = mkEnableOption "system compression";
+    impermanence = mkEnableOption "impermanence (remove all files except those that are needed)";
     second-disk = {
-      enable = mkEnableOption "Enable additional disk (must be btrfs)";
-      compression = mkEnableOption "Enable compression on additional disk";
+      enable = mkEnableOption "additional disk (must be btrfs)";
+      compression = mkEnableOption "compression on additional disk";
       label = mkOption {
         type = types.str;
         default = "Games";
@@ -59,7 +59,7 @@ in
     };
     swap = {
       file = {
-        enable = mkEnableOption "Enable swapfile";
+        enable = mkEnableOption "swapfile";
         path = mkOption {
           type = types.str;
           default = "/var/lib/swapfile";
@@ -74,7 +74,7 @@ in
         };
       };
       partition = {
-        enable = mkEnableOption "Enable swap partition";
+        enable = mkEnableOption "swap partition";
         label = mkOption {
           type = types.str;
           default = "swap";
@@ -87,7 +87,7 @@ in
       type = types.bool;
       default = true;
       example = false;
-      description = "Enable base disks configuration";
+      description = "base disks configuration";
     };
   };
 

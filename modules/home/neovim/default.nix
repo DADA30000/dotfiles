@@ -241,7 +241,7 @@ let
 in
 {
   options.neovim = {
-    enable = mkEnableOption "Enable neovim, console based text editor";
+    enable = mkEnableOption "neovim, console based text editor";
   };
 
   config = mkIf cfg.enable {
