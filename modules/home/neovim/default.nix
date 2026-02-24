@@ -609,7 +609,7 @@ in
         require("cord").setup({})
         require("auto-save").setup({})
         -- Temporary workaround for https://github.com/NixOS/nixpkgs/pull/492172
-        vim.g.python3_host_prog = '${python}/bin/python3'
+        -- vim.g.python3_host_prog = '${python}/bin/python3'
       ''
       + coc_cfg;
       extraConfig = ''

@@ -4,6 +4,7 @@
   user,
   wrapped,
   orig,
+  config,
   ...
 }:
 let
@@ -11,6 +12,38 @@ let
   #  url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
   #  hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
   #};
+  patchGrubDir =
+    dir:
+    pkgs.runCommand "patched-efi-dir" { } ''
+      cp -r ${dir} $out
+      chmod -R +w $out
+      find $out -name grub.cfg -exec sed -i 's/terminal_output console/# terminal_output console/g' {} +
+    '';
+
+  patchEfiImg =
+    img:
+    pkgs.runCommand "patched-efi-img"
+      {
+        nativeBuildInputs = [ pkgs.mtools ];
+      }
+      ''
+        cp ${img} $out
+        chmod +w $out
+        mcopy -i $out ::/EFI/BOOT/grub.cfg tmp.cfg
+        sed -i 's/terminal_output console/# terminal_output console/g' tmp.cfg
+        mdel -i $out ::/EFI/BOOT/grub.cfg
+        mcopy -i $out tmp.cfg ::/EFI/BOOT/grub.cfg
+      '';
+
+  patchedContents = map (
+    item:
+    if item.target == "/EFI" then
+      item // { source = patchGrubDir item.source; }
+    else if item.target == "/boot/efi.img" then
+      item // { source = patchEfiImg item.source; }
+    else
+      item
+  ) config.isoImage.contents;
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
@@ -78,6 +111,28 @@ in
   ];
   config = lib.mkMerge [
     (lib.mkIf wrapped {
+      system.build.isoImage = lib.mkForce (
+        pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
+          {
+            inherit (config.isoImage) compressImage volumeID;
+            contents = patchedContents; # <--- We inject our patched list here
+            isoName = "${config.image.baseName}.iso";
+            bootable = config.isoImage.makeBiosBootable;
+            bootImage = "/isolinux/isolinux.bin";
+            syslinux = if config.isoImage.makeBiosBootable then pkgs.syslinux else null;
+            squashfsContents = config.isoImage.storeContents;
+            squashfsCompression = config.isoImage.squashfsCompression;
+          }
+          // lib.optionalAttrs (config.isoImage.makeUsbBootable && config.isoImage.makeBiosBootable) {
+            usbBootable = true;
+            isohybridMbrImage = "${pkgs.syslinux}/share/syslinux/isohdpfx.bin";
+          }
+          // lib.optionalAttrs config.isoImage.makeEfiBootable {
+            efiBootable = true;
+            efiBootImage = "boot/efi.img";
+          }
+        )
+      );
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
@@ -141,7 +196,7 @@ in
 
       cape.enable = lib.mkForce false;
 
-      boot.loader.timeout = lib.mkForce 10;
+      boot.loader.timeout = lib.mkForce 0;
 
       boot.initrd.systemd.enable = lib.mkForce false;
 
