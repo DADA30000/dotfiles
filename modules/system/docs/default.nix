@@ -21,9 +21,9 @@ with lib;
       type = types.str;
       visible = false;
     };
-    enable = mkEnableOption "Enable docs generation (manpage, html)";
+    enable = mkEnableOption "docs generation (manpage, html)";
     nos = {
-      enable = mkEnableOption "Enable nix-option-search";
+      enable = mkEnableOption "nix-option-search";
       darwin = mkEnableOption "Render docs for nix-darwin? (Increases eval time)";
       stable = mkEnableOption "Render docs for stable nixpkgs? (Increases eval time)";
     };

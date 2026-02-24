@@ -99,7 +99,7 @@ let
 in
 {
   options.zen = {
-    enable = mkEnableOption "Enable zen-browser with declarative customization";
+    enable = mkEnableOption "zen-browser with declarative customization";
   };
 
   config = mkIf cfg.enable {

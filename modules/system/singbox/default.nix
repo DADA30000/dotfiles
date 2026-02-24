@@ -97,7 +97,7 @@ let
 in
 {
   options.singbox = {
-    enable = mkEnableOption "Enable singbox";
+    enable = mkEnableOption "singbox";
   };
 
   config = mkIf cfg.enable {

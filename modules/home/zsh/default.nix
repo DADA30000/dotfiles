@@ -21,7 +21,7 @@ let
 in
 {
   options.zsh = {
-    enable = mkEnableOption "Enable zsh shell";
+    enable = mkEnableOption "zsh shell";
   };
 
   config = mkIf cfg.enable {
@@ -165,7 +165,7 @@ in
             setopt LOCAL_OPTIONS
             (
               setopt LOCAL_OPTIONS
-              printf "Enable pipefail? [Y/n]: "
+              printf "pipefail? [Y/n]: "
               read -k 1 response
               echo
               if [[ "$response" == [nN] ]]; then

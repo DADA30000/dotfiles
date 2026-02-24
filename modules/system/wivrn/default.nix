@@ -26,7 +26,7 @@ in
 with lib;
 {
   options.wivrn = {
-    enable = mkEnableOption "Enable WiVRn";
+    enable = mkEnableOption "WiVRn";
   };
   config = mkIf cfg.enable {
     services.wivrn = {

@@ -39,15 +39,15 @@ let
 in
 {
   options.hyprland = {
-    enable = mkEnableOption "Enable my Hyprland configuration";
+    enable = mkEnableOption "my Hyprland configuration";
     from-unstable = mkEnableOption "Use Hyprland package from UNSTABLE nixpkgs";
     stable = mkEnableOption "Use Hyprland from nixpkgs";
-    enable-plugins = mkEnableOption "Enable Hyprland plugins";
-    mpvpaper = mkEnableOption "Enable video wallpapers with mpvpaper";
-    hyprpaper = mkEnableOption "Enable image wallpapers with hyprpaper";
-    wlogout = mkEnableOption "Enable power options menu";
-    hyprlock = mkEnableOption "Enable locking program";
-    rofi = mkEnableOption "Enable rofi (used as applauncher and dmenu)";
+    enable-plugins = mkEnableOption "Hyprland plugins";
+    mpvpaper = mkEnableOption "video wallpapers with mpvpaper";
+    hyprpaper = mkEnableOption "image wallpapers with hyprpaper";
+    wlogout = mkEnableOption "power options menu";
+    hyprlock = mkEnableOption "locking program";
+    rofi = mkEnableOption "rofi (used as applauncher and dmenu)";
   };
 
   config = mkIf cfg.enable {

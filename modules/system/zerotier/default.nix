@@ -10,7 +10,7 @@ let
 in
 {
   options.zerotier = {
-    enable = mkEnableOption "Enable zerotier";
+    enable = mkEnableOption "zerotier";
   };
 
   config = mkIf cfg.enable {

@@ -10,7 +10,7 @@ let
 in
 {
   options.zapret = {
-    enable = mkEnableOption "Enable DPI (Deep packet inspection) bypass";
+    enable = mkEnableOption "DPI (Deep packet inspection) bypass";
   };
 
   config = mkIf cfg.enable {

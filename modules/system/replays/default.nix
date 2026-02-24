@@ -10,7 +10,7 @@ let
 in
 {
   options.replays = {
-    enable = mkEnableOption "Enable replays";
+    enable = mkEnableOption "replays";
   };
 
   config = mkIf cfg.enable {

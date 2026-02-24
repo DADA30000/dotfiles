@@ -10,7 +10,7 @@ let
 in
 {
   options.mlocate = {
-    enable = mkEnableOption "Enable mlocate (find files on system quickly)";
+    enable = mkEnableOption "mlocate (find files on system quickly)";
   };
 
   config = mkIf cfg.enable {
