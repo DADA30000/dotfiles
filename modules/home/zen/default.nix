@@ -7,26 +7,98 @@
 }:
 with lib;
 let
+  zen-internet-settings = toJSON {
+    transparentZenSettings = {
+      forceStyling = true;
+      # disableFooter = false;
+      # disableHover = false;
+      autoUpdate = true;
+      # fallbackBackgroundList = [ ];
+      # whitelistMode = false;
+      # whitelistStyleMode = false;
+      enableStyling = true;
+      # lastFetchedTime = 1772049852100;
+      # disableTransparency = false;
+      welcomeShown = true;
+    };
+  };
+  zen-internet-storage = pkgs.stdenv.mkDerivation {
+    pname = "zen-internet-storage";
+    version = "1.0.0";
+    src = inputs.my-internet;
+  
+    nativeBuildInputs = [
+      pkgs.nodejs
+      pkgs.nodePackages.postcss
+      pkgs.jq
+    ];
+  
+    buildPhase = ''
+      runHook preBuild
+      export HOME=$(mktemp -d)
+      mkdir -p node_modules
+      ln -s ${pkgs.nodePackages.postcss}/lib/node_modules/postcss ./node_modules/postcss
+      echo '${zen-internet-settings}' > settings.json
+      node update-styles-json.mjs
+      jq -n \
+        --slurpfile generated styles.json \
+        --slurpfile settings settings.json \
+        '$settings[0] + {styles: $generated[0]} + {stylesMapping: {mapping: $generated[0].mapping}}' \
+        > storage.json
+      runHook postBuild
+    '';
+  
+    installPhase = ''
+      runHook preInstall
+      install -Dm644 storage.json $out
+      runHook postInstall
+    '';
+  };
+  shortcuts = pkgs.writeText "zen-keyboard-shortcuts.json" (toJSON {
+    shortcuts = [
+      {
+        keycode = "";
+        disabled = false;
+        internal = false;
+        l10nId = "zen-close-all-unpinned-tabs-shortcut";
+        modifiers = {
+          accel = false;
+          alt = true;
+          control = false;
+          shift = false;
+          meta = false;
+        };
+        action = "cmd_zenCloseUnpinnedTabs";
+        id = "zen-close-all-unpinned-tabs";
+        key = "w";
+        group = "zen-workspace";
+        reserved = false;
+      }
+    ];
+  });
   extId = "zen-toggle@nixos.org";
-  vpn-toggler = pkgs.runCommand "vpn-toggler-xpi" {
-    buildInputs = [ pkgs.zip ];
-  } ''
-    mkdir -p $out
-    cp --no-preserve=mode -r ${../../../stuff/vpn-toggler}/* .
-    echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#EF4444"/></svg>' > icon-direct.svg
-    echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#22C55E"/></svg>' > icon-proxy.svg
-    zip -r $out/${extId}.xpi *
-  '';
+  vpn-toggler =
+    pkgs.runCommand "vpn-toggler-xpi"
+      {
+        buildInputs = [ pkgs.zip ];
+      }
+      ''
+        mkdir -p $out
+        cp --no-preserve=mode -r ${../../../stuff/vpn-toggler}/* .
+        echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#EF4444"/></svg>' > icon-direct.svg
+        echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#22C55E"/></svg>' > icon-proxy.svg
+        zip -r $out/${extId}.xpi *
+      '';
   cfg_orig = config.programs.zen-browser;
   cfg = config.zen;
-  xulstore_json = toJSON {
+  xulstore_json = pkgs.writeText "xulstore.json" (toJSON {
     "chrome://browser/content/browser.xhtml" = {
       navigator-toolbox = {
-        style = "width: 280px; max-width: 500px; --actual-zen-sidebar-width: 301px; --zen-sidebar-width: 280px;";
+        style = "width: 300px; max-width: 500px; --actual-zen-sidebar-width: 321px; --zen-sidebar-width: 300px;";
         width = "280px";
       };
     };
-  };
+  });
   combined_chrome = pkgs.stdenv.mkDerivation {
     pname = "chrome-zen";
     version = "1.0";
@@ -115,6 +187,8 @@ in
   config = mkIf cfg.enable {
     xdg.configFile = {
       ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
+      "zen/default/zen-keyboard-shortcuts.json".source = shortcuts;
+      "zen/default/xulstore.json".source = xulstore_json;
       "zen/default/chrome" = {
         source = combined_chrome;
         recursive = true;
@@ -127,10 +201,6 @@ in
         if [[ -z "''${DRY_RUN:-}" ]]; then
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userChrome.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/chrome.css
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userContent.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/content.css
-          if [[ ! -f ${config.xdg.configHome}/zen/default/check-do_not_delete_this ]]; then
-            touch ${config.xdg.configHome}/zen/default/check-do_not_delete_this
-            echo '${xulstore_json}' > ${config.xdg.configHome}/zen/default/xulstore.json
-          fi
         fi
       '';
     };
@@ -156,9 +226,31 @@ in
         NoDefaultBookmarks = true;
         OfferToSaveLogins = false;
         DisableAppUpdate = true;
-        ExtensionSettings.${extId} = {
-          installation_mode = "force_installed";
-          install_url = "file://${vpn-toggler}/${extId}.xpi";
+        ExtensionSettings = {
+          "*" = {
+            installation_mode = "allowed";
+          };
+          "sponsorBlocker@ajay.app" = {
+            installation_mode = "allowed";
+            default_area = "menupanel";
+          };
+          "adnauseam@rednoise.org" = {
+            installation_mode = "allowed";
+            default_area = "navbar";
+          };
+          "addon@darkreader.org" = {
+            installation_mode = "allowed";
+            default_area = "navbar";
+          };
+          "{91aa3897-2634-4a8a-9092-279db23a7689}" = {
+            installation_mode = "allowed";
+            default_area = "navbar";
+          };
+          ${extId} = {
+            installation_mode = "force_installed";
+            install_url = "file://${vpn-toggler}/${extId}.xpi";
+            default_area = "navbar";
+          };
         };
         EnableTrackingProtection = {
           Value = true;
@@ -200,6 +292,16 @@ in
           var-nebula-website-tint-dark = "rgba(0,0,0,0)";
           var-nebula-website-tint-light = "rgba(255,255,255,0)";
           var-nebula-workspace-grayscale = "100%";
+          nebula-active-tab-glow = 0;
+          nebula-bookmarks-autohide = 0;
+          nebula-default-sound-style = 1;
+          nebula-glow-gradient = 1;
+          nebula-tab-switch-animation = 1;
+          nebula-urlbar-animation = 1;
+          nebula-workspace-style = 1;
+          "intl.locale.requested" = "ru,en-US";
+          "extensions.postDownloadThirdPartyPrompt" = false;
+          "extensions.autoDisableScopes" = 0;
           "xpinstall.signatures.required" = false;
           "browser.tabs.allow_transparent_browser" = true;
           "browser.tabs.unloadOnLowMemory" = true;
@@ -208,19 +310,70 @@ in
           "zen.view.use-single-toolbar" = true;
           "zen.view.compact.enable-at-startup" = true;
         };
-        extensions.packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
-          vpn-toggler
-          adnauseam
-          darkreader
-          bitwarden
-          user-agent-string-switcher
-          enhanced-h264ify
-          github-file-icons
-          redirector
-          return-youtube-dislikes
-          sponsorblock
-          zen-internet
-        ];
+        extensions = {
+          force = true;
+          settings = {
+            "{91aa3897-2634-4a8a-9092-279db23a7689}".settings = fromJSON (readFile zen-internet-storage);
+            "adnauseam@rednoise.org".settings = {
+              selectedFilterLists = [
+                "user-filters"
+                "adnauseam-filters"
+                "eff-dnt-whitelist"
+                "ublock-filters"
+                "ublock-badware"
+                "ublock-privacy"
+                "ublock-quick-fixes"
+                "ublock-unbreak"
+                "easylist"
+                "easyprivacy"
+                "urlhaus-1"
+                "RUS-0"
+                "RUS-1"
+              ];
+              hidingAds = true;
+              disableClickingForDNT = true;
+              blockingMalware = true;
+              clickingAds = true;
+              firstInstall = false;
+              disableHidingForDNT = false;
+              user-filters = "! 5 янв. 2026 г. https://mangalib.org\nmangalib.org##.size-lg.variant-primary.is-glow.is-outline.is-full-width.is-filled.btn\nmangalib.org###\\30 7cecdc2-bda5-46a6-ab11-4b098ffd8489\nmangalib.org##div.mx_b:nth-of-type(2)";
+            };
+            "redirector@einaregilsson.com".settings.redirects = [
+              {
+                processMatches = "noProcessing";
+                includePattern = "http(s?)://nixos.wiki/wiki/(.*)";
+                redirectUrl = "http$1://wiki.nixos.org/wiki/$2";
+                excludePattern = "";
+                error = null;
+                grouped = false;
+                patternType = "R";
+                disabled = false;
+                patternDesc = "";
+                description = "NixOS Wiki";
+                exampleUrl = "http://nixos.wiki/wiki/Main_Page";
+                appliesTo = [
+                  "main_frame"
+                ];
+                exampleResult = "http://wiki.nixos.org/wiki/Main_Page";
+              }
+            ];
+          };
+          packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
+            youtube-high-definition
+            github-file-icons
+            vpn-toggler
+            adnauseam
+            darkreader
+            bitwarden
+            user-agent-string-switcher
+            enhanced-h264ify
+            github-file-icons
+            redirector
+            return-youtube-dislikes
+            sponsorblock
+            zen-internet
+          ];
+        };
       };
     };
   };
