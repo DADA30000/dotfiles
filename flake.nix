@@ -33,6 +33,10 @@
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    my-internet = {
+      url = "github:sameerasw/my-internet";
+      flake = false;    
+    };
     nos = {
       url = "github:madsbv/nix-options-search";
       flake = false;

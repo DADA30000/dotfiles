@@ -632,6 +632,22 @@
         "type": "github"
       }
     },
+    "my-internet": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1770926638,
+        "narHash": "sha256-MwddbapjD+CnQPo0FaG7nfJ5aFIH8e2uGEuIhSYU2JM=",
+        "owner": "sameerasw",
+        "repo": "my-internet",
+        "rev": "04631295886c9f3b9b02931f7aae55d852f2540e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sameerasw",
+        "repo": "my-internet",
+        "type": "github"
+      }
+    },
     "nebula-zen": {
       "flake": false,
       "locked": {
@@ -1023,6 +1039,7 @@
         "hyprland-plugins": "hyprland-plugins",
         "impermanence": "impermanence",
         "libcef-transparency-linux": "libcef-transparency-linux",
+        "my-internet": "my-internet",
         "nebula-zen": "nebula-zen",
         "nix-alien": "nix-alien",
         "nix-darwin": "nix-darwin",
