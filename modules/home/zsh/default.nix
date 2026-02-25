@@ -176,6 +176,7 @@ in
                   echo "Pipefail enabled."
               fi
               export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.ssdeep}/lib:${pkgs.graphviz}/lib
+              export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:${pkgs.ssdeep}/lib/pkgconfig:${pkgs.graphviz}/lib/pkgconfig
               export PATH=$PATH:${pkgs.migrate-to-uv}/bin:${pkgs.uv}/bin
               export PYTHONPATH=${pkgs.python312}/lib/python3.12/site-packages
               export UV_PYTHON=${pkgs.python312}/bin/python
