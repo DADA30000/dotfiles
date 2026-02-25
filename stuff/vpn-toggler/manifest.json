@@ -1,16 +1,17 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "Zen sing-box Toggle",
-  "version": "1.0",
-  "description": "Toggles sing-box VPN status.",
-  "permissions": [],
-  "host_permissions": [
-    "http://127.0.0.1:9090/*"
+  "version": "2.0",
+  "description": "Persistent connection toggle for sing-box.",
+  "permissions": [
+    "http://127.0.0.1:9090/*",
+    "http://localhost:9090/*"
   ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["background.js"],
+    "persistent": true
   },
-  "action": {
+  "browser_action": {
     "default_title": "Zen Proxy Toggle",
     "default_icon": "icon-direct.svg"
   },
