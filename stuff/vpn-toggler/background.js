@@ -2,14 +2,27 @@ const API_URL = "http://127.0.0.1:9090/proxies/zen-toggle";
 const CONNECTIONS_URL = "http://127.0.0.1:9090/connections";
 
 async function updateIcon(state) {
-    const iconPath = state === "direct" ? "icon-direct.svg" : "icon-proxy.svg";
-    await browser.action.setIcon({ path: iconPath });
-    await browser.action.setTitle({ title: `sing-box: ${state.toUpperCase()}` });
+    const isProxy = (state !== "direct"); 
+    const titleText = isProxy ? "VPN active" : "Direct mode";
+    
+    try {
+        await browser.browserAction.setTitle({ title: titleText });
+    } catch (e) { /* ignore */ }
+
+    try {
+        const svgPath = isProxy ? "icon-proxy.svg" : "icon-direct.svg";
+        await browser.browserAction.setIcon({ path: svgPath });
+    } catch (e1) {
+        try {
+            const pngPath = isProxy ? "icon-proxy.png" : "icon-direct.png";
+            await browser.browserAction.setIcon({ path: pngPath });
+        } catch (e2) { /* ignore */ }
+    }
 }
 
 async function killZenConnections() {
     try {
-        const res = await fetch(CONNECTIONS_URL);
+        const res = await fetch(CONNECTIONS_URL, { cache: "no-store" });
         const data = await res.json();
         const connections = data.connections || [];
         
@@ -19,19 +32,33 @@ async function killZenConnections() {
                                  conn.metadata.processPath.toLowerCase().includes("zen");
             
             if (isZenToggle || isZenProcess) {
-                await fetch(`${CONNECTIONS_URL}/${conn.id}`, { method: 'DELETE' });
+                fetch(`${CONNECTIONS_URL}/${conn.id}`, { method: 'DELETE' }).catch(() => {});
             }
         }
     } catch (e) {
-        console.error("Failed to drop connections:", e);
+        console.error("Connection kill error:", e);
     }
 }
 
-browser.action.onClicked.addListener(async () => {
+async function checkStatus() {
     try {
-        const res = await fetch(API_URL);
+        const res = await fetch(API_URL, { cache: "no-store" });
         const data = await res.json();
-        const newState = data.now === "direct" ? "proxy" : "direct";
+        await updateIcon(data.now);
+    } catch (e) {
+        await updateIcon("direct");
+    }
+}
+
+// Click Handler
+browser.browserAction.onClicked.addListener(async () => {
+    try {
+        const res = await fetch(API_URL, { cache: "no-store" });
+        const data = await res.json();
+        
+        const newState = (data.now === "direct") ? "proxy" : "direct"; 
+
+        await updateIcon(newState);
 
         await fetch(API_URL, {
             method: 'PUT',
@@ -40,14 +67,12 @@ browser.action.onClicked.addListener(async () => {
         });
 
         await killZenConnections();
-
-        updateIcon(newState);
+        
     } catch (e) {
-        console.error("sing-box API offline or unreachable.", e);
+        console.error("Toggle failed:", e);
     }
 });
 
-fetch(API_URL)
-    .then(res => res.json())
-    .then(data => updateIcon(data.now))
-    .catch(() => console.log("sing-box not running yet."));
+checkStatus();
+
+setInterval(checkStatus, 500);
