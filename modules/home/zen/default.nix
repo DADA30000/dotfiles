@@ -54,6 +54,27 @@ let
       runHook postInstall
     '';
   };
+  extensions_json = pkgs.stdenv.mkDerivation {
+    name = "extensions.json";
+    version = "miha_gay_furry";
+
+    src = inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}.darkreader;
+
+    buildInputs = [ pkgs.python3 ];
+
+    buildPhase = ''
+      shopt -s globstar
+      python3 ${./generate_extensions_json.py} \
+        --profile-path ${config.xdg.configHome}/zen/default \
+        --extension "$src"/**/*.xpi \
+        --extension "${inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}.return-youtube-dislikes}"/**/*.xpi
+    '';
+    
+    installPhase = ''
+      cp ./generated_extensions.json $out
+    '';
+
+  };
   shortcuts = pkgs.writeText "zen-keyboard-shortcuts.json" (toJSON {
     shortcuts = [
       {
@@ -76,7 +97,7 @@ let
       }
     ];
   });
-  extId = "zen-toggle@nixos.org";
+  vpn-toggler-extId = "zen-toggle@nixos.org";
   vpn-toggler =
     pkgs.runCommand "vpn-toggler-xpi"
       {
@@ -87,7 +108,7 @@ let
         cp --no-preserve=mode -r ${../../../stuff/vpn-toggler}/* .
         echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#EF4444"/></svg>' > icon-direct.svg
         echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#22C55E"/></svg>' > icon-proxy.svg
-        zip -r $out/${extId}.xpi *
+        zip -r $out/${vpn-toggler-extId}.xpi *
       '';
   cfg_orig = config.programs.zen-browser;
   cfg = config.zen;
@@ -201,6 +222,9 @@ in
         if [[ -z "''${DRY_RUN:-}" ]]; then
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userChrome.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/chrome.css
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userContent.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/content.css
+          if [[ ! -f "${config.xdg.configHome}/zen/default/extensions.json" ]]; then
+            cp --no-preserve=mode ${extensions_json} "${config.xdg.configHome}/zen/default/extensions.json"
+          fi
         fi
       '';
     };
@@ -230,6 +254,17 @@ in
           "*" = {
             installation_mode = "allowed";
           };
+          "{762f9885-5a13-4abd-9c77-433dcd38b8fd}" = {
+            installation_mode = "allowed";
+            managed_storage.showGreetings = false;
+          };
+          "{7b1bf0b6-a1b9-42b0-b75d-252036438bdc}" = {
+            installation_mode = "allowed";
+            managed_storage = {
+              showChangeLog = false;
+              firstRun = false;
+            };
+          };
           "sponsorBlocker@ajay.app" = {
             installation_mode = "allowed";
             default_area = "menupanel";
@@ -246,9 +281,9 @@ in
             installation_mode = "allowed";
             default_area = "navbar";
           };
-          ${extId} = {
+          ${vpn-toggler-extId} = {
             installation_mode = "force_installed";
-            install_url = "file://${vpn-toggler}/${extId}.xpi";
+            install_url = "file://${vpn-toggler}/${vpn-toggler-extId}.xpi";
             default_area = "navbar";
           };
         };
@@ -314,6 +349,11 @@ in
           force = true;
           settings = {
             "{91aa3897-2634-4a8a-9092-279db23a7689}".settings = fromJSON (readFile zen-internet-storage);
+            "sponsorBlocker@ajay.app".settings.alreadyInstalled = true;
+            "{446900e4-71c2-419f-a6a7-df9c091e268b}".settings.global_extensionInitialInstall_extensionInstalled = {
+              __json__ = true;
+              value = "true";
+            };
             "adnauseam@rednoise.org".settings = {
               selectedFilterLists = [
                 "user-filters"
@@ -359,9 +399,7 @@ in
             ];
           };
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
-            youtube-high-definition
-            github-file-icons
-            vpn-toggler
+            youtube-auto-hd-fps
             adnauseam
             darkreader
             bitwarden

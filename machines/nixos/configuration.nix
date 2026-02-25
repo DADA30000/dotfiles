@@ -330,6 +330,7 @@
       with inputs;
       # Keep in every ISO
       [
+        gemini-cli
         jq
         wayvr
         bs-manager
