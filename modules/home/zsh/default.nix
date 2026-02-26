@@ -60,6 +60,8 @@ in
         enable = true;
         shellAliases.ls = "lsd";
         envExtra = ''
+          touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
+          source "${config.home.homeDirectory}"/.zsh/.zshenv_add
           local NIX_FLAKE_PREAMBLE='import (builtins.getFlake "git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1") { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
           _ns_parse_args() {
             flags=() pkgs=() pkgs_raw=()
