@@ -1,8 +1,8 @@
 {
   inputs = {
-    wivrn = {
-      url = "github:WiVRn/WiVRn";
-      flake = false;
+    llm-agents = {
+      url = "github:numtide/llm-agents.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs-xr = {
       url = "github:nix-community/nixpkgs-xr";
