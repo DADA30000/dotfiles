@@ -156,14 +156,18 @@ in
 
           text = ''
             PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils-full}/bin:${pkgs.gnutar}/bin"
-            mkdir /repo
-            tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
-            rm /repo/stuff/nixpkgs.tar.zst
-            cp -f "${../../stuff/nixpkgs.tar.zst}" /repo/stuff/nixpkgs.tar.zst
-            chown root:root -R /repo
-            cd /repo
-            mkdir -p /etc/nixos
-            cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
+            if [[ ! -d /repo ]]; then
+              rm -rf /repo
+              mkdir /repo
+              tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
+              rm /repo/stuff/nixpkgs.tar.zst
+              cp -f "${../../stuff/nixpkgs.tar.zst}" /repo/stuff/nixpkgs.tar.zst
+              chown root:root -R /repo
+              cd /repo
+              mkdir -p /etc/nixos
+              cp ${../../stuff/repo.tar.gz} /repo/stuff/repo.tar.gz
+              cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
+            fi
           '';
 
         };

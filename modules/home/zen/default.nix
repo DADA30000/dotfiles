@@ -217,13 +217,21 @@ in
     };
 
     home = {
-      file.".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
+      file = {
+        ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
+        "${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js".source = zen-internet-storage;
+      };
       activation.zenTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [[ -z "''${DRY_RUN:-}" ]]; then
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userChrome.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/chrome.css
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userContent.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/content.css
           if [[ ! -f "${config.xdg.configHome}/zen/default/extensions.json" ]]; then
             cp --no-preserve=mode ${extensions_json} "${config.xdg.configHome}/zen/default/extensions.json"
+          fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}'
+            echo '{ "global_extensionInitialInstall_extensionInstalled": { "__json__": true, "value": "true" } }' > '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}/storage.js'
           fi
         fi
       '';
@@ -348,12 +356,7 @@ in
         extensions = {
           force = true;
           settings = {
-            "{91aa3897-2634-4a8a-9092-279db23a7689}".settings = fromJSON (readFile zen-internet-storage);
             "sponsorBlocker@ajay.app".settings.alreadyInstalled = true;
-            "{446900e4-71c2-419f-a6a7-df9c091e268b}".settings.global_extensionInitialInstall_extensionInstalled = {
-              __json__ = true;
-              value = "true";
-            };
             "adnauseam@rednoise.org".settings = {
               selectedFilterLists = [
                 "user-filters"
