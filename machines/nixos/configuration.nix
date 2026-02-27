@@ -9,6 +9,27 @@
   config,
   ...
 }:
+let
+  getAllInputs =
+    inputsMap: seen:
+    let
+      newInputs = lib.filterAttrs (name: value: value != null && !(lib.elem name seen)) inputsMap;
+      newNames = lib.attrNames newInputs;
+      currentLevelInputs = lib.mapAttrsToList (name: value: {
+        inherit name;
+        path = value.outPath;
+      }) (lib.filterAttrs (n: v: v ? outPath) newInputs);
+      nextLevelInputsMap = lib.mapAttrs (name: value: value.inputs) (
+        lib.filterAttrs (n: v: v ? inputs) newInputs
+      );
+      recursiveResults = lib.flatten (
+        lib.mapAttrsToList (name: value: getAllInputs value (seen ++ newNames)) nextLevelInputsMap
+      );
+    in
+    currentLevelInputs ++ recursiveResults;
+  allInputs = getAllInputs inputs [ "self" ];
+  inputsFarm = pkgs.linkFarm "flake-inputs" allInputs;
+in
 {
 
   powerManagement.cpuFreqGovernor = "performance";
@@ -59,7 +80,7 @@
   docs = {
     enable = true;
     nos = {
-      enable = false;
+      enable = true;
       darwin = false;
       stable = false;
     };
@@ -304,7 +325,7 @@
 
     etc = {
       "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
-      "profiles/per-user/vpn-${user}".source = "/etc/static/profiles/per-user/${user}";
+      inputs.source = inputsFarm;
     };
 
     pathsToLink = [

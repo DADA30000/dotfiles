@@ -1,135 +1,145 @@
-diff --git a/src/main.rs b/src/main.rs
-index 0d4d588..9858217 100644
---- a/src/main.rs
-+++ b/src/main.rs
-@@ -8,6 +8,7 @@ use tracing::debug;
- 
- mod app;
- use app::App;
-+use strum::VariantArray;
- mod logging;
- mod opt_data;
- mod opt_display;
-@@ -15,6 +16,20 @@ mod search;
- mod tui;
- 
- fn main() {
-+    match std::env::var("NOX_PREFETCH_CACHE_PATH") {
-+        Ok(val) => {
-+            let path = std::path::PathBuf::from(val);
-+            for i in search::Source::VARIANTS {
-+                let path_curr = path.join(format!("{i}.zst"));
-+                println!("prefetching cache for {}", path_curr.display());
-+                let data = i.get_online_data().unwrap();
-+                let _ = search::Source::store_cache_to(&data, &path_curr);
-+                println!("prefetched cache for {}", path_curr.display());
+diff --git a/src/cli.rs b/src/cli.rs
+index 9597aac..a5fc555 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -2,3 +2,5 @@ use crate::{
+     app::App,
++    cache::Cacheable,
+     config::{default_config_file, default_config_toml, AppConfig, UserConfig},
++    source::Source,
+     tui,
+@@ -7,3 +9,3 @@ use clap::{Parser, Subcommand, ValueEnum};
+ use color_eyre::eyre::Result;
+-use std::{io::Write, path::PathBuf};
++use std::{io::Write, path::PathBuf, thread};
+ use tracing::debug;
+@@ -25,2 +27,37 @@ impl Cli {
+     pub(crate) fn run(self, config: &'static AppConfig) -> Result<()> {
++        if config.prewarm_cache {
++            println!("Pre-warming cache for all sources...");
++
++            let sources: Vec<Source> = config.sources.iter().map(Source::from).collect();
++            let mut handles = vec![];
++
++            for source in sources {
++                let cache_path = source.cache_path(config);
++                let handle = thread::spawn(move || {
++                    let res = source.get_expensive();
++                    match res {
++                        Ok(data) => {
++                            if let Some(path) = cache_path {
++                                match Source::store_cache(&data, &path) {
++                                    Ok(_) => println!("Successfully cached '{}'", source),
++                                    Err(e) => {
++                                        eprintln!("Failed to cache '{}': {}", source, e)
++                                    }
++                                }
++                            }
++                        }
++                        Err(e) => eprintln!("Failed to fetch data for '{}': {}", source, e),
++                    }
++                });
++                handles.push(handle);
 +            }
-+            return
-+        },
-+        Err(_) => {}
++
++            for handle in handles {
++                handle.join().unwrap();
++            }
++
++            println!("Cache pre-warming complete.");
++            return Ok(());
++        }
++
+         match self.command {
+diff --git a/src/config/app_config.rs b/src/config/app_config.rs
+index 5b03fc9..1c5ed96 100644
+--- a/src/config/app_config.rs
++++ b/src/config/app_config.rs
+@@ -11,2 +11,3 @@ pub(crate) struct AppConfig {
+     pub(crate) sources: Vec<SourceConfig>,
++    pub(crate) prewarm_cache: bool,
+     pub(crate) cache_duration: Option<std::time::Duration>,
+@@ -21,2 +22,3 @@ impl From<UserConfig> for AppConfig {
+             sources: value.sources,
++            prewarm_cache: value.prewarm_cache,
+             cache_duration: if value.auto_refresh_cache {
+@@ -47,2 +49,3 @@ impl From<AppConfig> for UserConfig {
+             auto_refresh_cache: value.cache_duration.is_some(),
++            prewarm_cache: value.prewarm_cache,
+             cache_duration: value.cache_duration.unwrap_or_default(),
+diff --git a/src/config/user_config.rs b/src/config/user_config.rs
+index 7afe31c..1fc9c55 100644
+--- a/src/config/user_config.rs
++++ b/src/config/user_config.rs
+@@ -23,2 +23,3 @@ pub(crate) struct UserConfig {
+     pub(super) cache_duration: std::time::Duration,
++    pub(super) prewarm_cache: bool,
+     pub(super) cache_dir: PathBuf,
+@@ -49,2 +50,3 @@ impl Default for UserConfig {
+             cache_duration: Duration::from_secs(7 * 24 * 60 * 60),
++            prewarm_cache: false,
+             cache_dir: project_paths::default_cache_dir().clone(),
+@@ -89,2 +91,5 @@ cache_duration = "1week"
+ 
++# If true, update the cache for all sources and exit.
++prewarm_cache = false
++
+ # Directory in which to store cached results
+diff --git a/src/config/user_config/tests.rs b/src/config/user_config/tests.rs
+index c140a8c..9adc8c3 100644
+--- a/src/config/user_config/tests.rs
++++ b/src/config/user_config/tests.rs
+@@ -49,2 +49,3 @@ fn roundtrip_linux_paths() -> Result<()> {
+         cache_duration: Duration::from_secs(7 * 24 * 60 * 60),
++        prewarm_cache: false,
+         cache_dir: PathBuf::from_str("/home/runneradmin/.cache/nox")?,
+@@ -68,2 +69,3 @@ fn parse_toml_linux_paths() -> Result<()> {
+     let toml = r#"
++prewarm_cache = false
+ use_cache = true
+@@ -126,2 +128,3 @@ fn roundtrip_mixed_paths_windows() -> Result<()> {
+         cache_duration: Duration::from_secs(7 * 24 * 60 * 60),
++        prewarm_cache: false,
+         cache_dir: PathBuf::from_str(r"C:\home/runneradmin/.cache/nox")?,
+diff --git a/src/source.rs b/src/source.rs
+index 8218ac9..583fa28 100644
+--- a/src/source.rs
++++ b/src/source.rs
+@@ -1,3 +1,3 @@
+ use crate::cache::Cacheable;
+-use crate::config::SourceConfig;
++use crate::config::{AppConfig, SourceConfig};
+ use crate::parsing::{parse_options, parse_version, OptText};
+@@ -8,5 +8,7 @@ use serde::{Deserialize, Serialize};
+ use std::fmt;
++use std::fs;
++use std::path::{Path, PathBuf};
+ use tracing::{error, instrument};
+ 
+-#[derive(Debug, Clone, Encode, Decode, PartialEq, Deserialize, Serialize)]
++#[derive(Debug, Clone, Encode, Decode, PartialEq, Deserialize,Serialize)]
+ pub(crate) struct Source {
+@@ -41,2 +43,9 @@ impl Source {
+ 
++    pub(crate) fn cache_path(&self, config: &AppConfig) -> Option<PathBuf> {
++        config
++            .cache_dir
++            .as_ref()
++            .map(|d| d.join(format!("{}.zst", self.inner.name)))
 +    }
-     let res = init_and_run();
-     if let Err(e) = tui::restore() {
-         eprintln!("{e:#?}");
-diff --git a/src/opt_display.rs b/src/opt_display.rs
-index 4e1274d..214670a 100644
---- a/src/opt_display.rs
-+++ b/src/opt_display.rs
-@@ -95,7 +95,7 @@ impl OptListItem {
-         } else if context.index.is_multiple_of(2) {
-             Style::default()
-         } else {
--            Style::default().bg(Color::Indexed(236))
-+            Style::default()
-         };
-         self.full_height(context.cross_axis_size)
-     }
-diff --git a/src/search.rs b/src/search.rs
-index 0accef5..97fd200 100644
---- a/src/search.rs
-+++ b/src/search.rs
-@@ -206,7 +206,7 @@ impl Source {
-         cache_dir().clone().join(format!("{self}.zst"))
-     }
- 
--    fn store_cache_to(data: &SourceData, path: &PathBuf) -> Result<()> {
-+    pub fn store_cache_to(data: &SourceData, path: &PathBuf) -> Result<()> {
-         let bitdata = bitcode::encode(data);
-         let zstddata =
-             zstd::stream::encode_all(bitdata.as_slice(), Source::ZSTD_COMPRESSION_LEVEL)?;
-@@ -231,17 +231,17 @@ impl Source {
- 
-     /// Returns Ok(bool) if and only if there is a readable cache file. The value of the bool depends on the last modified time of the file, as reported by the file system.
-     fn cache_is_current(self) -> Result<bool> {
--        let f = std::fs::File::open(self.cache_path())?;
--        let last_modified = f.metadata()?.modified()?;
--        let age = last_modified.elapsed()?;
--        Ok(age < Source::CACHE_MAX_AGE)
-+        Ok(true)
-     }
- 
-     fn get_version(self) -> Result<String> {
--        let html = ureq::get(self.version_url())
--            .call()?
--            .body_mut()
--            .read_to_string()?;
-+        let html = match std::env::var("NOX_PREFETCH_CACHE_PATH") {
-+            Err(_) => ureq::get(self.version_url())
-+                .call()?
-+                .body_mut()
-+                .read_to_string()?,
-+            Ok(_) => return Ok(String::from("custom-unstable"))
-+        };
- 
-         let dom = tl::parse(&html, tl::ParserOptions::default())?;
- 
-@@ -251,15 +251,22 @@ impl Source {
-         ))
-     }
- 
--    fn get_online_data(self) -> Result<SourceData> {
--        let html = ureq::get(self.url())
--            .call()?
--            .body_mut()
--            .with_config()
--            // 30 MB reading limit.
--            // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
--            .limit(30 * 1024 * 1024)
--            .read_to_string()?;
-+    pub fn get_online_data(self) -> Result<SourceData> {
-+        let html: String = match std::env::var(String::from(format!("NOX_HTML_{}",self.to_string().replace(" ", "_").replace("-","_")))) {
-+            Ok(val) => {
-+                println!("offline fetch from {val}");
-+                std::fs::read_to_string(&std::path::PathBuf::from(val)).ok().unwrap()
-+            },
-+            Err(_) => ureq::get(self.url())
-+                .call()?
-+                .body_mut()
-+                .with_config()
-+                // 30 MB reading limit.
-+                // The default is 10MB, but the nixos docs are 20-21MB, at least uncompressed.
-+                .limit(30 * 1024 * 1024)
-+                .read_to_string()?
-+            
-+        };
-         let dom = tl::parse(&html, tl::ParserOptions::default())?;
- 
-         Ok(SourceData {
-@@ -270,7 +277,7 @@ impl Source {
-         })
-     }
- 
--    // We could return a Result or Option to account for possible failure modes, but currently I'm not sure what I'd use it for.
-+    // We could return a Result or Optiopub n to account for possible failure modes, but currently I'm not sure what I'd use it for.
-     // Maybe if we return a semantically meaningful error, we can retry HTTP requests occassionally on failure? Exponential backoff
-     fn get_data(self) -> Result<SourceData> {
-         let cache_validity = self.cache_is_current();
-@@ -314,7 +321,7 @@ impl fmt::Display for Source {
- }
- 
- #[derive(Clone, Debug, Encode, Decode, PartialEq)]
--struct SourceData {
-+pub struct SourceData {
-     source: Source,
-     opts: Vec<OptText>,
-     version: String,
++
+     pub(crate) fn url(&self) -> &str {
+@@ -54,2 +63,6 @@ impl Source {
+     pub(crate) fn get_data_html(&self) -> Result<String> {
++        if self.url().starts_with("file://") {
++            let path = Path::new(self.url().strip_prefix("file://").unwrap());
++            return Ok(fs::read_to_string(path)?);
++        }
+         Ok(ureq::get(self.url())
+@@ -65,2 +78,6 @@ impl Source {
+     pub(crate) fn get_version_html(&self) -> Result<String> {
++        if self.version_url().starts_with("file://") {
++            let path = Path::new(self.version_url().strip_prefix("file://").unwrap());
++            return Ok(fs::read_to_string(path)?);
++        }
+         Ok(ureq::get(self.version_url())
