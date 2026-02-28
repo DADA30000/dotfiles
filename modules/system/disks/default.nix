@@ -219,7 +219,7 @@ in
     };
 
     fileSystems."/boot" = {
-      device = "/dev/disk/by-label/${if boot_label == null then "nixos" else boot_label}";
+      device = "/dev/disk/by-label/${if boot_label == null then "boot" else boot_label}";
       fsType = "vfat";
       options = [
         "noauto"
