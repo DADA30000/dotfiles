@@ -5,10 +5,14 @@
 }:
 with lib;
 let
+  root_label = null;
+  boot_label = null;
+  swap_label = null;
+  second_label = null;
   cfg = config.disks;
   impermanence_subvolume_script = ''
     mkdir /btrfs_tmp
-    mount -L nixos /btrfs_tmp
+    mount -L ${if root_label == null then "nixos" else root_label} /btrfs_tmp
     if [[ -e /btrfs_tmp/root ]]; then
         mkdir -p /btrfs_tmp/old_roots
         timestamp=$(date --date="@$(stat -c %Y /btrfs_tmp/root)" "+%Y-%m-%-d_%H:%M:%S")
@@ -38,12 +42,12 @@ in
     second-disk = {
       enable = mkEnableOption "additional disk (must be btrfs)";
       compression = mkEnableOption "compression on additional disk";
-      label = mkOption {
-        type = types.str;
-        default = "Games";
-        example = "stuff";
-        description = "Filesystem label of the partition that is used for mounting";
-      };
+      # label = mkOption {
+      #   type = types.str;
+      #   default = "Games";
+      #   example = "stuff";
+      #   description = "Filesystem label of the partition that is used for mounting";
+      # };
       path = mkOption {
         type = types.str;
         default = "/mnt/Games";
@@ -75,12 +79,12 @@ in
       };
       partition = {
         enable = mkEnableOption "swap partition";
-        label = mkOption {
-          type = types.str;
-          default = "swap";
-          example = "swappart";
-          description = "Label of swap partition";
-        };
+        # label = mkOption {
+        #   type = types.str;
+        #   default = "swap";
+        #   example = "swappart";
+        #   description = "Label of swap partition";
+        # };
       };
     };
     enable = mkOption {
@@ -178,7 +182,7 @@ in
     # };
 
     fileSystems."/" = {
-      device = "/dev/disk/by-label/nixos";
+      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
       fsType = "btrfs";
       options = [
         "subvol=root"
@@ -187,7 +191,7 @@ in
     };
 
     fileSystems."/persistent" = mkIf cfg.impermanence {
-      device = "/dev/disk/by-label/nixos";
+      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
       neededForBoot = true;
       fsType = "btrfs";
       options = [
@@ -197,7 +201,7 @@ in
     };
 
     fileSystems."/nix" = {
-      device = "/dev/disk/by-label/nixos";
+      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
       fsType = "btrfs";
       options = [
         "subvol=nix"
@@ -206,7 +210,7 @@ in
     };
 
     fileSystems."/home" = {
-      device = "/dev/disk/by-label/nixos";
+      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
       fsType = "btrfs";
       options = [
         "subvol=home"
@@ -215,7 +219,7 @@ in
     };
 
     fileSystems."/boot" = {
-      device = "/dev/disk/by-label/boot";
+      device = "/dev/disk/by-label/${if boot_label == null then "nixos" else boot_label}";
       fsType = "vfat";
       options = [
         "noauto"
@@ -224,7 +228,7 @@ in
     };
 
     fileSystems."${cfg.second-disk.path}" = mkIf cfg.second-disk.enable {
-      device = "/dev/disk/by-label/${cfg.second-disk.label}";
+      device = "/dev/disk/by-label/${if second_label == null then "Games" else second_label}";
       fsType = "btrfs";
       options =
         optionals cfg.second-disk.compression [ "compress-force=zstd" ]
@@ -242,7 +246,7 @@ in
       ++ optionals cfg.swap.partition.enable [
         {
           options = [ "nofail" ];
-          device = "/dev/disk/by-label/${cfg.swap.partition.label}";
+          device = "/dev/disk/by-label/${if swap_label == null then "swap" else swap_label}";
         }
       ];
   };

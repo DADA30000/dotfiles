@@ -7,18 +7,56 @@
 }:
 with lib;
 let
+  initial_adnauseam_settings = toJSON {
+    selectedFilterLists = [
+      "user-filters"
+      "adnauseam-filters"
+      "eff-dnt-whitelist"
+      "ublock-filters"
+      "ublock-badware"
+      "ublock-privacy"
+      "ublock-quick-fixes"
+      "ublock-unbreak"
+      "easylist"
+      "easyprivacy"
+      "urlhaus-1"
+      "RUS-0"
+      "RUS-1"
+    ];
+    hidingAds = true;
+    disableClickingForDNT = true;
+    blockingMalware = true;
+    clickingAds = true;
+    firstInstall = false;
+    disableHidingForDNT = false;
+    user-filters = "! 5 янв. 2026 г. https://mangalib.org\nmangalib.org##.size-lg.variant-primary.is-glow.is-outline.is-full-width.is-filled.btn\nmangalib.org###\\30 7cecdc2-bda5-46a6-ab11-4b098ffd8489\nmangalib.org##div.mx_b:nth-of-type(2)";
+  };
+  initial_redirector_settings = toJSON {
+    redirects = [
+      {
+        processMatches = "noProcessing";
+        includePattern = "http(s?)://nixos.wiki/wiki/(.*)";
+        redirectUrl = "http$1://wiki.nixos.org/wiki/$2";
+        excludePattern = "";
+        error = null;
+        grouped = false;
+        patternType = "R";
+        disabled = false;
+        patternDesc = "";
+        description = "NixOS Wiki";
+        exampleUrl = "http://nixos.wiki/wiki/Main_Page";
+        appliesTo = [
+          "main_frame"
+        ];
+        exampleResult = "http://wiki.nixos.org/wiki/Main_Page";
+      }
+    ];
+  };
   zen-internet-settings = toJSON {
     transparentZenSettings = {
       forceStyling = true;
-      # disableFooter = false;
-      # disableHover = false;
       autoUpdate = true;
-      # fallbackBackgroundList = [ ];
-      # whitelistMode = false;
-      # whitelistStyleMode = false;
       enableStyling = true;
-      # lastFetchedTime = 1772049852100;
-      # disableTransparency = false;
       welcomeShown = true;
     };
   };
@@ -217,10 +255,7 @@ in
     };
 
     home = {
-      file = {
-        ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
-        "${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js".source = zen-internet-storage;
-      };
+      file.".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
       activation.zenTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [[ -z "''${DRY_RUN:-}" ]]; then
           echo "@import \"file://${config.xdg.configHome}/zen/default/chrome/sine-mods/Nebula/userChrome.css\";" > ${config.xdg.configHome}/zen/default/chrome/sine-mods/chrome.css
@@ -232,6 +267,26 @@ in
             rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}'
             mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}'
             echo '{ "global_extensionInitialInstall_extensionInstalled": { "__json__": true, "value": "true" } }' > '${config.xdg.configHome}/zen/default/browser-extension-data/{446900e4-71c2-419f-a6a7-df9c091e268b}/storage.js'
+          fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app'
+            echo '{ "alreadyInstalled": true }' > '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app/storage.js'
+          fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org'
+            echo '${initial_adnauseam_settings}' > '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org/storage.js'
+          fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+            cp '${zen-internet-storage}' '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js'
+          fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'
+            echo '${initial_redirector_settings}' > '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com/storage.js'
           fi
         fi
       '';
@@ -342,6 +397,7 @@ in
           nebula-tab-switch-animation = 1;
           nebula-urlbar-animation = 1;
           nebula-workspace-style = 1;
+          "extensions.webextensions.ExtensionStorageIDB.enabled" = false;
           "intl.locale.requested" = "ru,en-US";
           "extensions.postDownloadThirdPartyPrompt" = false;
           "extensions.autoDisableScopes" = 0;
@@ -354,53 +410,6 @@ in
           "zen.view.compact.enable-at-startup" = true;
         };
         extensions = {
-          force = true;
-          settings = {
-            "sponsorBlocker@ajay.app".settings.alreadyInstalled = true;
-            "adnauseam@rednoise.org".settings = {
-              selectedFilterLists = [
-                "user-filters"
-                "adnauseam-filters"
-                "eff-dnt-whitelist"
-                "ublock-filters"
-                "ublock-badware"
-                "ublock-privacy"
-                "ublock-quick-fixes"
-                "ublock-unbreak"
-                "easylist"
-                "easyprivacy"
-                "urlhaus-1"
-                "RUS-0"
-                "RUS-1"
-              ];
-              hidingAds = true;
-              disableClickingForDNT = true;
-              blockingMalware = true;
-              clickingAds = true;
-              firstInstall = false;
-              disableHidingForDNT = false;
-              user-filters = "! 5 янв. 2026 г. https://mangalib.org\nmangalib.org##.size-lg.variant-primary.is-glow.is-outline.is-full-width.is-filled.btn\nmangalib.org###\\30 7cecdc2-bda5-46a6-ab11-4b098ffd8489\nmangalib.org##div.mx_b:nth-of-type(2)";
-            };
-            "redirector@einaregilsson.com".settings.redirects = [
-              {
-                processMatches = "noProcessing";
-                includePattern = "http(s?)://nixos.wiki/wiki/(.*)";
-                redirectUrl = "http$1://wiki.nixos.org/wiki/$2";
-                excludePattern = "";
-                error = null;
-                grouped = false;
-                patternType = "R";
-                disabled = false;
-                patternDesc = "";
-                description = "NixOS Wiki";
-                exampleUrl = "http://nixos.wiki/wiki/Main_Page";
-                appliesTo = [
-                  "main_frame"
-                ];
-                exampleResult = "http://wiki.nixos.org/wiki/Main_Page";
-              }
-            ];
-          };
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
             youtube-auto-hd-fps
             adnauseam

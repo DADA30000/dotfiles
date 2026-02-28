@@ -1,18 +1,50 @@
 #!/usr/bin/env bash
 main() {
-  local disk_system="" disk_games="" bootpart="" usertemp="nixos" partitioned=true passtemp="" host="nixos"
+  local disk_system="" disk_games="" bootpart="" usertemp="nixos" partitioned=true passtemp="" host="nixos" root_label="nixos" swap_label="swap" boot_label="boot" second_label="Games"
   ./complete.sh
   clear
+  if gum confirm --default=false "Поменять метки (label) разделов?"; then
+    printf "Для / (корня): "
+    read -r temp_label
+    if [[ -n "$temp_label" ]]; then
+      root_label="$temp_label"
+      sed -i "s/root_label = .*;/root_label = \"$root_label\";/" ./modules/system/disks/default.nix
+    fi
+    printf "Для swap-а: "
+    read -r temp_label
+    if [[ -n "$temp_label" ]]; then
+      swap_label="$temp_label"
+      sed -i "s/swap_label = .*;/swap_label = \"$swap_label\";/" ./modules/system/disks/default.nix
+    fi
+    printf "Для boot-а: "
+    read -r temp_label
+    if [[ -n "$temp_label" ]]; then
+      boot_label="$temp_label"
+      sed -i "s/boot_label = .*;/boot_label = \"$boot_label\";/" ./modules/system/disks/default.nix
+    fi
+    printf "Для второго диска: "
+    read -r temp_label
+    if [[ -n "$temp_label" ]]; then
+      second_label="$temp_label"
+      sed -i "s/second_label = .*;/second_label = \"$second_label\";/" ./modules/system/disks/default.nix
+    fi
+  fi
   if gum confirm --default=true "Использовать встроенное в скрипт разделение диска на разделы? (Использует весь диск, если нажать нет, будет открыт GParted с инструкциями)"; then
     echo -e "\e[34mВыберите диск на котором будет расположена \e[4;34mСИСТЕМА\e[0m"
     echo -e "\e[32mСовет: вы всегда можете перезапустить скрипт нажав Ctrl+C (желательно не во время этапа установки)\e[0m"
     fdisk -l | grep -i -E "^(Диск|Disk|/)"
     echo
     disk_system=$(fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
+    if [[ "$disk_system" =~ [0-9]$ ]]; then
+      disk_system="${disk_system}p"
+    fi
     clear
     if gum confirm --default=false "Настроить дополнительный диск? (Он будет смонтирован/расположен в /home/пользователь/Games и так же будет ОТФОРМАТИРОВАН, настраивать его НЕОБЯЗАТЕЛЬНО)"; then
       echo -e "\e[34mВыберите диск, который будет использоваться как \e[4;34mДОПОЛНИТЕЛЬНЫЙ ДИСК\e[0m"
       disk_games=$(fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
+      if [[ "$disk_games" =~ [0-9]$ ]]; then
+        disk_games="${disk_games}p"
+      fi
     fi
     clear
     if gum confirm --default=false "Установить /boot на другой раздел?"; then
@@ -24,10 +56,10 @@ main() {
   else
     echo -e "Сейчас будет открыт GParted
   \e[32mВ нём вам нужно будет создать 4 раздела, названия меток должны полностью совпадать, в том числе регистр: 
-    1. Для загрузочного раздела (FAT32, 1 GiB) с меткой (label) boot.
-    2. Для раздела подкачки (swap) (половина от оперативки, не больше 16 GiB) с меткой (label) swap.
-    3. Для остальных файлов и системы (BTRFS, размер не меньше 40 GiB, желательно 100 GiB) с меткой (label) nixos. 
-    4. Опциональный. Этот раздел будет смонтирован в /home/пользователь/Games (BTRFS, размер не важен), с меткой (label) Games.
+    1. Для загрузочного раздела (FAT32, 1 GiB) с меткой (label) $boot_label.
+    2. Для раздела подкачки (swap) (половина от оперативки, не больше 16 GiB) с меткой (label) $swap_label.
+    3. Для остальных файлов и системы (BTRFS, размер не меньше 40 GiB, желательно 100 GiB) с меткой (label) $root_label. 
+    4. Опциональный. Этот раздел будет смонтирован в /home/пользователь/Games (BTRFS, размер не важен), с меткой (label) $second_label.
   Все 4 раздела могут быть на разных дисках. В скобках рекомендуемый размер.\e[0m
   Нажмите Enter для продолжения."
     read -r
@@ -62,15 +94,15 @@ main() {
       if [[ -n "$bootpart" ]] && [[ -n "$disk_system" ]]; then
         echo "
           label: gpt
-          size=8G, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"swap\"
-          type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"nixos\"
+          size=8G, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"$swap_label\"
+          type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"$root_label\"
         " | sfdisk "$disk_system"
       elif [[ -n "$disk_system" ]]; then
         echo "
           label: gpt
-          size=1G, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=\"boot\"
-          size=8G, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"swap\"
-          type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"nixos\"
+          size=1G, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=\"$boot_label\"
+          size=8G, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"$swap_label\"
+          type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"$root_label\"
         " | sfdisk "$disk_system"
       fi
       udevadm settle
@@ -82,23 +114,17 @@ main() {
       fi
       if [[ -n "$disk_system" ]]; then
         echo -e "\n\e[34mФорматирование разделов...\e[0m\n"
-        if [[ "$(echo "$disk_games" | grep -c nvme)" -eq 1 ]]; then
-          disk_games="${disk_games}p"
-        fi
-        if [[ "$(echo "$disk_system" | grep -c nvme)" -eq 1 ]]; then
-          disk_system="${disk_system}p"
-        fi
         if [ -n "$disk_games" ]; then
-          mkfs.btrfs -f -L Games "${disk_games}1"
+          mkfs.btrfs -f -L "$second_label" "${disk_games}1"
         fi
         if [[ -n "$bootpart" ]]; then
-          mkfs.btrfs -f -L nixos "${disk_system}2"
-          mkswap -L swap "${disk_system}1"
-          mkfs.fat -n boot -F 32 "${bootpart}"
+          mkfs.btrfs -f -L "$root_label" "${disk_system}2"
+          mkswap -L "$swap_label" "${disk_system}1"
+          mkfs.fat -n "$boot_label" -F 32 "${bootpart}"
         else
-          mkfs.btrfs -f -L nixos "${disk_system}3"
-          mkswap -L swap "${disk_system}2"
-          mkfs.fat -n boot -F 32 "${disk_system}1"
+          mkfs.btrfs -f -L "$root_label" "${disk_system}3"
+          mkswap -L "$swap_label" "${disk_system}2"
+          mkfs.fat -n "$boot_label" -F 32 "${disk_system}1"
         fi
       fi
     fi
@@ -112,20 +138,20 @@ main() {
     rmdir /mnt1
   fi
   mkdir -p /mnt
-  mount /dev/disk/by-label/nixos /mnt
+  mount /dev/disk/by-label/"$root_label" /mnt
   btrfs subvolume create /mnt/root
   btrfs subvolume create /mnt/home
   btrfs subvolume create /mnt/nix
   btrfs subvolume create /mnt/persistent
   umount /mnt
-  mount -o compress-force=zstd,subvol=root /dev/disk/by-label/nixos /mnt
+  mount -o compress-force=zstd,subvol=root /dev/disk/by-label/"$root_label" /mnt
   mkdir /mnt/{home,nix,persistent}
-  mount -o compress-force=zstd,subvol=home /dev/disk/by-label/nixos /mnt/home
-  mount -o compress-force=zstd,subvol=persistent /dev/disk/by-label/nixos /mnt/persistent
-  mount -o compress-force=zstd,noatime,subvol=nix /dev/disk/by-label/nixos /mnt/nix
+  mount -o compress-force=zstd,subvol=home /dev/disk/by-label/"$root_label" /mnt/home
+  mount -o compress-force=zstd,subvol=persistent /dev/disk/by-label/"$root_label" /mnt/persistent
+  mount -o compress-force=zstd,noatime,subvol=nix /dev/disk/by-label/"$root_label" /mnt/nix
   mkdir /mnt/boot
-  mount /dev/disk/by-label/boot /mnt/boot
-  swapon /dev/disk/by-label/swap
+  mount /dev/disk/by-label/"$boot_label" /mnt/boot
+  swapon /dev/disk/by-label/"$swap_label"
   clear
   echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
   sleep 2
