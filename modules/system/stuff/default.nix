@@ -370,6 +370,44 @@ let
       systemctl --user start hyprpaper
       exit
     '')
+    (pkgs.writeShellScriptBin "check-follows" ''
+      # This script scans flake.lock to find dependencies of your inputs
+      # that match the name of one of your top-level inputs but are not
+      # currently set to "follow" it.
+      
+      set -euo pipefail
+      
+      if ! [ -f "flake.lock" ]; then
+          echo "Error: flake.lock not found."
+          exit 1
+      fi
+      
+      echo "Scanning for missed 'follows'..."
+      
+      # Logic:
+      # 1. Get the map of top-level inputs from the "root" node.
+      # 2. Iterate through every other node in the lock file.
+      # 3. For each node, check its inputs.
+      # 4. If a node has an input name that exists at the top level, 
+      #    but the node IDs don't match, it's a candidate for "follows".
+      
+      jq -r '
+        .nodes.root.inputs as $top_inputs
+        | .nodes
+        | to_entries
+        | .[]
+        | select(.key != "root")
+        | .key as $parent_node
+        | .value.inputs // {}
+        | to_entries
+        | .[]
+        | # Normalize the dependency pointer: if it is a list (a follows path), 
+          # take the last element which is the final target node ID.
+          (if .value | type == "array" then .value[-1] else .value end) as $dep_target
+        | select($top_inputs[.key] != null and $top_inputs[.key] != $dep_target)
+        | "Input \u001b[1;36m\($parent_node)\u001b[0m has a dependency \u001b[1;33m\(.key)\u001b[0m pointing to \u001b[32m\($dep_target)\u001b[0m, but your top-level \u001b[1;33m\(.key)\u001b[0m points to \u001b[32m\($top_inputs[.key])\u001b[0m."
+      ' flake.lock
+    '')
     (pkgs.writeShellScriptBin "sheesh.sh" ''
       THE_MOUNT_POINT="$HOME/.local/state/nixos-config"
       USER_ID="$(id -u)"
