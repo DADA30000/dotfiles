@@ -143,6 +143,16 @@ in
 
       systemd.services.singbox.wantedBy = lib.mkForce [ ];
 
+      systemd.services.sshd.wantedBy = lib.mkForce [ ];
+
+      security.polkit.extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if (subject.isInGroup("wheel")) {
+            return polkit.Result.YES;
+          }
+        });
+      '';
+
       warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [
         "singbox module: config.json doesn't exist, singbox config file won't be copied."
       ];

@@ -14,12 +14,11 @@
       while true; do
         selected_button=$(zenity --info \
           --title="Выберите доп. службы для запуска" \
-          --text="singbox - это VPN\n\neasyeffects - звуковые эффекты, например шумоподавление\n\nreplays - служба повторов, записывает последние 5 минут, сохранять можно с помощью Ctrl + Super + R, повторы сохраняются в ~/Games/Replays\n\nopentabletdriver - служба для работы графических планшетов\n\numu - служба для подготовки окружения, необходимого для запуска .exe программ (без неё не будут запускаться)\n\nВсе эти службы потребляют ОЗУ и ЦП" \
+          --text="singbox - это VPN\n\neasyeffects - звуковые эффекты, например шумоподавление\n\nreplays - служба повторов, записывает последние 5 минут, сохранять можно с помощью Ctrl + Super + R, повторы сохраняются в ~/Games/Replays\n\nopentabletdriver - служба для работы графических планшетов\n\n\n\nВсе эти службы потребляют ОЗУ и ЦП" \
           --extra-button="singbox" \
           --extra-button="easy-effects" \
           --extra-button="replays" \
-          --extra-button="opentabletdriver" \
-          --extra-button="umu")
+          --extra-button="opentabletdriver")
 
         case $selected_button in
           "singbox")
@@ -33,9 +32,6 @@
             ;;
           "opentabletdriver")
             systemctl --user start opentabletdriver
-            ;;
-          "umu")
-            systemctl --user start umu-check
             ;;
           *)
             break
