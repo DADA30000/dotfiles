@@ -35,16 +35,10 @@ main() {
     fdisk -l | grep -i -E "^(Диск|Disk|/)"
     echo
     disk_system=$(fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
-    if [[ "$disk_system" =~ [0-9]$ ]]; then
-      disk_system="${disk_system}p"
-    fi
     clear
     if gum confirm --default=false "Настроить дополнительный диск? (Он будет смонтирован/расположен в /home/пользователь/Games и так же будет ОТФОРМАТИРОВАН, настраивать его НЕОБЯЗАТЕЛЬНО)"; then
       echo -e "\e[34mВыберите диск, который будет использоваться как \e[4;34mДОПОЛНИТЕЛЬНЫЙ ДИСК\e[0m"
       disk_games=$(fdisk -l | grep -i -E "^Диск" | gum choose | grep -oE '/[^[:space:]]*:' | sed 's/\://g')
-      if [[ "$disk_games" =~ [0-9]$ ]]; then
-        disk_games="${disk_games}p"
-      fi
     fi
     clear
     if gum confirm --default=false "Установить /boot на другой раздел?"; then
@@ -111,6 +105,12 @@ main() {
           label: gpt
           type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
         " | sfdisk "$disk_games"
+      fi
+      if [[ "$disk_games" =~ [0-9]$ ]]; then
+        disk_games="${disk_games}p"
+      fi
+      if [[ "$disk_system" =~ [0-9]$ ]]; then
+        disk_system="${disk_system}p"
       fi
       if [[ -n "$disk_system" ]]; then
         echo -e "\n\e[34mФорматирование разделов...\e[0m\n"
