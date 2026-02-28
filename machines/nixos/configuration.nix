@@ -165,6 +165,7 @@ in
       group = user;
       uid = 1000;
       initialPassword = if user-hash == null then "1234" else null;
+      initialHashedPassword = null;
       home = "/home/${user}";
       extraGroups = [
         "wheel"
