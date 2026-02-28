@@ -266,7 +266,6 @@ in
     second-disk = {
       enable = true;
       compression = true;
-      label = "Games";
       subvol = "games";
       path = "/home/${user}/Games";
     };
@@ -279,10 +278,7 @@ in
         size = 4 * 1024;
       };
 
-      partition = {
-        enable = false;
-        label = "swap";
-      };
+      partition.enable = false;
 
     };
 
@@ -419,6 +415,29 @@ in
         (aria2.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../stuff/max-connection-to-unlimited.patch ];
         }))
+        # Below are for offline build
+        (python3.withPackages (
+          ps: with ps; [
+            iniparse
+            markdown-it-py
+            mdit-py-plugins
+            mdurl
+            python-dateutil
+            remarshal
+            rich
+            rich-argparse
+            tomli
+            tomlkit
+            u-msgpack-python
+          ]
+        ))
+        stdenv
+        crudini
+        lndir
+        texinfo
+        xkbcomp
+        xkeyboard-config
+        libX11
       ]
       # Remove from min ISO
       ++ (

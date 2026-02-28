@@ -305,6 +305,8 @@ in
         optionals cfg.enable [
           man-nix
           man-home
+          # Below are for offline eval
+          pkgs.nixos-render-docs
         ]
         ++ optionals (cfg.enable && cfg.nos.enable) [ nos ];
     }
