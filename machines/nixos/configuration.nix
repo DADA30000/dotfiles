@@ -3,32 +3,48 @@
   inputs,
   user-hash,
   user,
-  min-flag, # Needed for minimal ISO version
-  avg-flag, # Needed for 8G ISO version
+  min-flag,
+  avg-flag,
   lib,
   config,
   ...
 }:
 let
-  getAllInputs =
-    inputsMap: seen:
+  collectUniqueInputs =
+    inputsMap: seenPaths:
     let
-      newInputs = lib.filterAttrs (name: value: value != null && !(lib.elem name seen)) inputsMap;
-      newNames = lib.attrNames newInputs;
-      currentLevelInputs = lib.mapAttrsToList (name: value: {
-        inherit name;
-        path = value.outPath;
-      }) (lib.filterAttrs (n: v: v ? outPath) newInputs);
-      nextLevelInputsMap = lib.mapAttrs (name: value: value.inputs) (
-        lib.filterAttrs (n: v: v ? inputs) newInputs
-      );
-      recursiveResults = lib.flatten (
-        lib.mapAttrsToList (name: value: getAllInputs value (seen ++ newNames)) nextLevelInputsMap
-      );
+      results = lib.mapAttrsToList (
+        name: value:
+        if value == null || !(value ? outPath) || (lib.elem value.outPath seenPaths) then
+          [ ]
+        else
+          let
+            currentInput = {
+              inherit name;
+              path = value.outPath;
+            };
+            children =
+              if value ? inputs then collectUniqueInputs value.inputs (seenPaths ++ [ value.outPath ]) else [ ];
+          in
+          [ currentInput ] ++ children
+      ) inputsMap;
     in
-    currentLevelInputs ++ recursiveResults;
-  allInputs = getAllInputs inputs [ "self" ];
-  inputsFarm = pkgs.linkFarm "flake-inputs" allInputs;
+    lib.flatten results;
+  allInputsRaw = collectUniqueInputs (removeAttrs inputs [ "self" ]) [ ];
+  groupedByName = lib.groupBy (x: x.name) allInputsRaw;
+  finalInputsList = lib.flatten (
+    lib.mapAttrsToList (
+      name: group:
+      if (lib.length group) == 1 then
+        group
+      else
+        lib.imap0 (idx: item: {
+          name = "${item.name}-${toString idx}";
+          path = item.path;
+        }) group
+    ) groupedByName
+  );
+  inputsFarm = pkgs.linkFarm "flake-inputs" finalInputsList;
 in
 {
 
