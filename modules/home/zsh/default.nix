@@ -171,10 +171,10 @@ in
               read -k 1 response
               echo
               if [[ "$response" == [nN] ]]; then
-                  unsetopt ERR_EXIT NO_UNSET PIPE_FAIL
+                  unsetopt ERR_EXIT PIPE_FAIL
                   echo "Pipefail disabled."
               else
-                  setopt ERR_EXIT NO_UNSET PIPE_FAIL
+                  setopt ERR_EXIT PIPE_FAIL
                   echo "Pipefail enabled."
               fi
               export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.ssdeep}/lib:${pkgs.graphviz}/lib
@@ -214,7 +214,7 @@ in
               sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
-              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}}"
+              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos
             )
