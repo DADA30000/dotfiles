@@ -19,12 +19,39 @@
       "address": "172.19.0.1/30",
       "route_exclude_address": [
         "1.1.1.1/32",
-        "127.0.0.1/32"
+        "127.0.0.1/32",
+        "192.168.0.0/16"
       ],
       "stack": "system"
     }
   ],
   "outbounds": [
+    {
+        "type": "selector",
+        "tag": "zen-toggle",
+        "outbounds": [ "direct", "proxy" ]
+    },
+    {
+      "tag": "proxy2",
+      "type": "vless",
+      "server": "",
+      "server_port": 0,
+      "flow": "xtls-rprx-vision",
+      "uuid": "",
+      "tls": {
+        "enabled": true,
+        "server_name": "yahoo.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
     {
       "type": "direct",
       "tag": "direct"
@@ -34,16 +61,16 @@
     {
       "system": true,
       "name": "wg0",
-      "address": "10.8.1.5/32",
-      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "address": "10.8.1.18/32",
+      "private_key": "",
       "type": "wireguard",
       "tag": "proxy",
       "peers": [
         {
-          "address": "AAA.AAA.AAA.AAA",
-          "port": 99999,
-          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "pre_shared_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "address": "",
+          "port": 0,
+          "public_key": "",
+          "pre_shared_key": "",
           "allowed_ips": [
             "0.0.0.0/0",
             "::/0"
@@ -57,6 +84,20 @@
     "auto_detect_interface": true,
     "rules": [
       {
+        "ip_cidr": [
+          "127.0.0.1/32",
+          "192.168.0.0/16"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "source_ip_cidr": [
+          "127.0.0.1/32",
+          "192.168.0.0/16"
+        ],
+        "outbound": "direct"
+      },
+      {
         "inbound": [ "mixed-in" ],
         "outbound": "proxy"
       },
@@ -65,8 +106,8 @@
         "outbound": "proxy"
       },
       {
-        "process_path_regex": [
-          "Battle.net.exe", ".AyuGram-wrapped", ".Discord-wrapped", ".DiscordCanary-wrapped", "TeamSpeak"
+        "process_name": [
+          "Battle.net.exe", ".AyuGram-wrapped", ".Discord-wrapped", ".DiscordCanary-wrapped", "TeamSpeak", "Titanfall2.exe", "electron"
         ],
         "outbound": "proxy"
       },
@@ -111,11 +152,28 @@
           "makersuite.google.com",
           "alkalimakersuite-pa.clients6.google.com",
           "hyprland.cachix.org",
-          "s3.dualstack.us-east-2.amazonaws.com"
+          "s3.dualstack.us-east-2.amazonaws.com",
+          "beatsaver.com",
+          "gemini.google.com",
+          "sagernet.com",
+          "cloudflare-ech.com",
+          "aiplatform.googleapis.com",
+          "oauth2.googleapis.com",
+          "apis.google.com",
+          "googleapis.com"
         ],
         "outbound": "proxy"
+      },
+      {
+        "process_name": [ "zen", ".zen-wrapped", "zen-bin", "zen.bin", ".zen-twilight-wrapped", "zen-twilight", ".zen-beta-wrapper", "zen-beta" ],
+        "outbound": "zen-toggle"
       }
     ]
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090"
+    }
   }
 }
 

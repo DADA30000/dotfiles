@@ -337,6 +337,7 @@ in
   environment = {
 
     etc = {
+      "libxkbcommon".source = pkgs.libxkbcommon;
       "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
       inputs.source = inputsFarm;
     };

@@ -138,18 +138,16 @@ in
         iptables -I INPUT -i veth_host -p udp --dport 53 -j ACCEPT
         iptables -I INPUT -i veth_host -p tcp --dport 53 -j ACCEPT
 
-        GW_IP=$(ip route show default | awk '/default/ {print $3}')
-        GW_DEV=$(ip route show default | awk '/default/ {print $5}')
-        ip route add default via $GW_IP dev $GW_DEV table 100 || true
-        iptables -t mangle -N BYPASS_CHECK || true
-        iptables -t mangle -F BYPASS_CHECK || true
-        iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -i veth_host -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark 0x1 || true
-        iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK || true
-        iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark || true
-        ip rule add fwmark 0x1 lookup 100 priority 50 || true
+        MAX_RETRIES=50
+        while [ $MAX_RETRIES -gt 0 ]; do
+          if ip route show | grep -q "dev tun0"; then
+            break
+          fi
+          sleep 0.2
+          MAX_RETRIES=$((MAX_RETRIES - 1))
+        done
+
+        sleep 1
 
         GW_IP=$(ip route show default | awk '/default/ {print $3}')
         GW_DEV=$(ip route show default | awk '/default/ {print $5}')
@@ -166,9 +164,8 @@ in
 
       '';
       path = [ pkgs.iproute2 ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      wantedBy = [ "multi-user.target" ];
+      after = [ "graphical.target" ];
+      wantedBy = [ "graphical.target" ];
       serviceConfig = {
         ExecStart = "${pkgs.sing-box}/bin/sing-box -c /config.json run";
         ExecStopPost = ''
