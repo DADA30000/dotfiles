@@ -397,6 +397,7 @@ in
           nebula-tab-switch-animation = 1;
           nebula-urlbar-animation = 1;
           nebula-workspace-style = 1;
+          "browser.toolbars.bookmarks.visibility" = "always";
           "extensions.webextensions.ExtensionStorageIDB.enabled" = false;
           "intl.locale.requested" = "ru,en-US";
           "extensions.postDownloadThirdPartyPrompt" = false;
