@@ -8,6 +8,8 @@
 with lib;
 let
   cfg = config.hyprland;
+  nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix {};
+  nautilus-listener = pkgs.callPackage ./nautilus-listener.nix {};
   read-text = pkgs.writeShellScript "read-text-hyprland" ''
     # Arguments:
     # $1 = Hyprshot Mode (e.g., "region", "window", "output")
@@ -59,12 +61,9 @@ in
       kdePackages.dolphin
       kdePackages.ark
       app2unit
-      hyprshot
       pulseaudio
       hyprshot
       nautilus
-      nautilus-python
-      nautilus-open-any-terminal
       file-roller
       cliphist
       libnotify
@@ -149,7 +148,7 @@ in
           "$mod, C, killactive,"
           "$mod, B, exec, uuctl"
           "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
-          "$mod, E, exec, app2unit -- nautilus -w"
+          "$mod, E, exec, app2unit -- pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & env NAUTILUS_4_EXTENSION_DIR='${pkgs.nautilus-python}/lib/nautilus/extensions-4' nautilus -w"
           "$mod, V, togglefloating,"
           "$mod, P, pseudo,"
           "$mod, J, togglesplit,"
@@ -234,6 +233,7 @@ in
           "animation slide left, match:namespace swaync-control-center"
         ];
         exec-once = [
+          "${nautilus-listener}/bin/nautilis-listener"
           "app2unit -- wl-paste --watch cliphist store"
           "fumon"
           "hyprctl setcursor Bibata-Modern-Classic 24"
@@ -367,12 +367,18 @@ in
         StartLimitInterval = 0;
       };
     };
-    xdg.portal = {
-      enable = true;
-      extraPortals = [
-        pkgs.xdg-desktop-portal-gtk
-      ];
-      config.common.default = "*";
+    xdg = {
+      dataFile.nautilus-python = {
+        source = "${nautilus-extensions}/share/nautilus-python";
+        recursive = true;
+      };
+      portal = {
+        enable = true;
+        extraPortals = [
+          pkgs.xdg-desktop-portal-gtk
+        ];
+        config.common.default = "*";
+      };
     };
     programs.hyprlock = mkIf cfg.hyprlock {
       enable = true;

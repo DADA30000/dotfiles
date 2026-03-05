@@ -185,7 +185,7 @@ in
         else
           export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
         fi
-        UMU_RUNTIME_UPDATE=0 ${pkgs.gamemode}/bin/gamemoderun ${pkgs.umu-launcher}/bin/umu-run "$@"
+        UMU_RUNTIME_UPDATE=0 WINEDLLOVERRIDES="winmm.dll=n,b;SteamFix64.dll=n,b;steam_api64.dll=n,b;OnlineFix64.dll=n,b;SteamOverlay64.dll=n,b" ${pkgs.gamemode}/bin/gamemoderun ${pkgs.umu-launcher}/bin/umu-run "$@"
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
         scan-umu-for-lnk & disown
       '')

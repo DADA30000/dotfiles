@@ -140,12 +140,18 @@ in
 
   fonts = {
 
+    fontDir = {
+      enable = true;
+      decompressFonts = true;
+    };
+
     enableDefaultPackages = true;
 
     packages = with pkgs; [
       vista-fonts
       corefonts
       noto-fonts
+      liberation_ttf
       nerd-fonts.jetbrains-mono
     ];
 
@@ -389,7 +395,6 @@ in
         wget
         zenity
         killall
-        screen
         unrar
         zip
         adwaita-icon-theme
@@ -671,6 +676,8 @@ in
 
   programs = {
 
+    screen.enable = true;
+
     firejail.enable = true;
 
     gamemode.enable = true;
@@ -683,7 +690,32 @@ in
 
     seahorse.enable = true;
 
-    steam.enable = true;
+    steam = {
+      enable = true;
+      extraPackages = with pkgs; [
+        libgdiplus
+        fontconfig
+        attr
+        libXcursor
+        libXinerama
+        libXScrnSaver
+        libXi
+        nss
+        nspr
+        atk
+        at-spi2-atk
+        libdrm
+        libGL
+        libXcomposite
+        libXdamage
+        libXrandr
+        libXext
+        libXfixes
+        mesa
+        libva
+        pipewire
+      ];
+    };
 
     dconf.enable = true;
 

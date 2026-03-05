@@ -215,6 +215,7 @@ in
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
+              cp /etc/nixos/stuff/nixpkgs.tar.zst ~/.cache/flake-lock-backups/"nixpkgs.tar.zst_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos
             )
