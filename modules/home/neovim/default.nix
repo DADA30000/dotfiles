@@ -324,7 +324,8 @@ in
         indent-blankline-nvim
         nvim-web-devicons
         nvim-treesitter.withAllGrammars
-        (pkgs.callPackage ./cord-nvim.nix { })
+        #(pkgs.callPackage ./cord-nvim.nix { })
+        cord-nvim
         coc-snippets
         vim-snippets
         coc-json

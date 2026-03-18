@@ -151,7 +151,7 @@ in
           "$mod, E, exec, app2unit -- pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & env NAUTILUS_4_EXTENSION_DIR='${pkgs.nautilus-python}/lib/nautilus/extensions-4' nautilus -w"
           "$mod, V, togglefloating,"
           "$mod, P, pseudo,"
-          "$mod, J, togglesplit,"
+          "$mod, J, layoutmsg, togglesplit"
           "$mod, F, fullscreen,"
           "$mod, left, movefocus, l"
           "$mod, right, movefocus, r"

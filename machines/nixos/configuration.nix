@@ -140,12 +140,12 @@ in
 
   fonts = {
 
+    enableDefaultPackages = true;
+
     fontDir = {
       enable = true;
       decompressFonts = true;
     };
-
-    enableDefaultPackages = true;
 
     packages = with pkgs; [
       vista-fonts
@@ -154,6 +154,12 @@ in
       liberation_ttf
       nerd-fonts.jetbrains-mono
     ];
+
+    fontconfig.defaultFonts = {
+      serif = [ "Noto Serif" "Liberation Serif" ];
+      sansSerif = [ "Noto Sans" "Arial" "Liberation Sans" ];
+      monospace = [ "JetBrainsMono Nerd Font" "Liberation Mono" ];
+    };
 
   };
 
@@ -546,10 +552,14 @@ in
 
   systemd = {
 
-    # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
-    user.targets.nixos-fake-graphical-session.enable = false;
-
     coredump.enable = false;
+
+    user = {
+      extraConfig = "DefaultTimeoutStopSec=5s";
+
+      # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+      targets.nixos-fake-graphical-session.enable = false;
+    };
 
     services = {
 

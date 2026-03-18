@@ -94,6 +94,66 @@ let
       install -m 0755 vpnify $out/bin/vpnify
     '';
   };
+  FIX_INCOMING_PACKETS_TABLE = "1212";
+  FIX_INCOMING_PACKETS_MARK = "0x1";
+  VPNIFY_TABLE = "2022";
+  fix_incoming_packets_script = pkgs.writeShellScript "fix_incoming_packets_script" ''
+    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin
+    FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
+    FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
+
+    while true; do
+      GW_IP=$(ip route show default | awk '/default/ {print $3}' | head -n 1)
+      GW_DEV=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
+
+      if [ -n "$GW_IP" ] && [ -n "$GW_DEV" ]; then
+        ip route show table $FIX_INCOMING_PACKETS_TABLE | grep -q "default via $GW_IP" || \
+          ip route add default via $GW_IP dev $GW_DEV table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null
+      fi
+
+      iptables -t mangle -L BYPASS_CHECK >/dev/null 2>&1 || iptables -t mangle -N BYPASS_CHECK
+      
+      if ip link show tun0 >/dev/null 2>&1; then
+         iptables -t mangle -C BYPASS_CHECK -i tun0 -j RETURN 2>/dev/null || \
+           iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN
+      fi
+
+      iptables -t mangle -C BYPASS_CHECK -i lo -j RETURN 2>/dev/null || \
+        iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN
+      
+      iptables -t mangle -C BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK 2>/dev/null || \
+        iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK
+
+      iptables -t mangle -C PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || \
+        iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK
+
+      iptables -t mangle -C OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || \
+        iptables -t mangle -A OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark
+
+      ip rule show | grep -q "lookup $FIX_INCOMING_PACKETS_TABLE" || \
+        ip rule add fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null
+
+      sleep 2
+    done
+  '';
+  cleanup_script = pkgs.writeShellScript "singbox_cleanup_script" ''
+    PATH=$PATH:${pkgs.iptables}/bin
+    FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
+    FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
+    VPNIFY_TABLE=${VPNIFY_TABLE}
+
+    ip netns del vpn_wrapper 2>/dev/null || true
+    ip link del veth_host 2>/dev/null || true
+    ip rule delete iif veth_host lookup $VPNIFY_TABLE priority 2 2>/dev/null || true
+    ip route flush table $VPNIFY_TABLE 2>/dev/null || true
+
+    iptables -t mangle -D PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || true
+    iptables -t mangle -F BYPASS_CHECK 2>/dev/null || true
+    iptables -t mangle -X BYPASS_CHECK 2>/dev/null || true
+    ip rule del fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null || true
+    ip route flush table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null || true
+  '';
 in
 {
   options.singbox = {
@@ -101,88 +161,52 @@ in
   };
 
   config = mkIf cfg.enable {
-    systemd.services.singbox = {
-      preStart = ''
-        # Cleanup old remains if service crashed
-        ip netns del vpn_wrapper 2>/dev/null || true
-        ip link del veth_host 2>/dev/null || true
-        ip rule delete iif veth_host lookup 2022 priority 2 || true
-      '';
+    systemd.services = {
+      singbox-fix-incoming-packets = {
+        bindsTo = [ "singbox.service" ];
+        after = [ "singbox.service" ];
+        wantedBy = [ "singbox.service" ];
+        serviceConfig.ExecStart = fix_incoming_packets_script;
+      };
+      singbox = {
+        postStart = ''
+          PATH=$PATH:${pkgs.iptables}/bin
+          FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
+          FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
+          VPNIFY_TABLE=${VPNIFY_TABLE}
 
-      postStart = ''
-        PATH=$PATH:${pkgs.procps}/bin:${pkgs.iptables}/bin:${pkgs.gawk}/bin
-        # 1. Create Namespace & Veth
-        ip netns add vpn_wrapper
-        ip link add veth_host mtu 1400 type veth peer name veth_peer mtu 1400
-        ip link set veth_peer netns vpn_wrapper
-        ip addr add 10.200.0.1/24 dev veth_host
-        ip link set veth_host up
+          ${cleanup_script}
 
-        # 2. Configure Namespace
-        ip netns exec vpn_wrapper ip addr add 10.200.0.2/24 dev veth_peer
-        ip netns exec vpn_wrapper ip link set veth_peer up
-        ip netns exec vpn_wrapper ip link set lo up
-        ip netns exec vpn_wrapper ip route add default via 10.200.0.1
-        ip netns exec vpn_wrapper sysctl -w net.ipv4.ping_group_range="0 2147483647"
+          ip netns add vpn_wrapper
+          ip link add veth_host mtu 1400 type veth peer name veth_peer mtu 1400
+          ip link set veth_peer netns vpn_wrapper
+          ip addr add 10.200.0.1/24 dev veth_host
+          ip link set veth_host up
 
-        # 3. Routing Rules (The persistent part)
-        ip rule add iif veth_host lookup 2022 priority 2
-        ip route add 10.200.0.0/24 dev veth_host table 2022
+          ip netns exec vpn_wrapper ip addr add 10.200.0.2/24 dev veth_peer
+          ip netns exec vpn_wrapper ip link set veth_peer up
+          ip netns exec vpn_wrapper ip link set lo up
+          ip netns exec vpn_wrapper ip route add default via 10.200.0.1
 
-        # 4. Point DNS to the Host (Gateway IP)
-        mkdir -p /etc/netns/vpn_wrapper
-        echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf
+          ip rule add iif veth_host lookup $VPNIFY_TABLE priority 2
+          ip route add 10.200.0.0/24 dev veth_host table $VPNIFY_TABLE
 
-        # 5. Ensure the host allows input to DNS from this subnet
-        # (NixOS firewall often blocks this by default)
-        iptables -I INPUT -i veth_host -p udp --dport 53 -j ACCEPT
-        iptables -I INPUT -i veth_host -p tcp --dport 53 -j ACCEPT
-
-        MAX_RETRIES=50
-        while [ $MAX_RETRIES -gt 0 ]; do
-          if ip route show | grep -q "dev tun0"; then
-            break
-          fi
-          sleep 0.2
-          MAX_RETRIES=$((MAX_RETRIES - 1))
-        done
-
-        sleep 1
-
-        GW_IP=$(ip route show default | awk '/default/ {print $3}')
-        GW_DEV=$(ip route show default | awk '/default/ {print $5}')
-        ip route add default via $GW_IP dev $GW_DEV table 100 || true
-        iptables -t mangle -N BYPASS_CHECK || true
-        iptables -t mangle -F BYPASS_CHECK || true
-        iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -i veth_host -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN || true
-        iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark 0x1 || true
-        iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK || true
-        iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark || true
-        ip rule add fwmark 0x1 lookup 100 priority 50 || true
-
-      '';
-      path = [ pkgs.iproute2 ];
-      after = [ "graphical.target" ];
-      wantedBy = [ "graphical.target" ];
-      serviceConfig = {
-        ExecStart = "${pkgs.sing-box}/bin/sing-box -c /config.json run";
-        ExecStopPost = ''
-          ${pkgs.iproute2}/bin/ip netns del vpn_wrapper || true
-          ${pkgs.iproute2}/bin/ip link del veth_host || true
-          ${pkgs.iproute2}/bin/ip rule delete iif veth_host lookup 2022 priority 2 || true
+          mkdir -p /etc/netns/vpn_wrapper
+          echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf
         '';
+        path = [ pkgs.iproute2 ];
+        after = [ "graphical.target" ];
+        wantedBy = [ "graphical.target" ];
+        serviceConfig = {
+          ExecStart = "${pkgs.sing-box}/bin/sing-box -c /config.json run";
+          ExecStopPost = cleanup_script;
+        };
       };
     };
     boot.kernel.sysctl = {
       "net.ipv4.ping_group_range" = "0 2147483647";
       "net.ipv4.ip_forward" = 1;
     };
-    #services.resolved = {
-    #  enable = true;
-    #  settings.Resolve.DNSStubListenerExtra = "127.0.0.1";
-    #};
     security.wrappers.vpnify = {
       setuid = true;
       owner = "root";
