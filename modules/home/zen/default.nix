@@ -299,7 +299,7 @@ in
         nativeMessagingHosts = cfg_orig.nativeMessagingHosts;
       };
       nativeMessagingHosts = [
-        #inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default
+        inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default
       ];
       policies = {
         AutofillAddressEnabled = true;

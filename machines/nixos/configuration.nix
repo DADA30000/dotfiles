@@ -70,8 +70,6 @@ in
 
   plymouth.enable = true;
 
-  hardware.opentabletdriver.enable = true;
-
   zapret.enable = false;
 
   replays.enable = if !min-flag then true else false;
@@ -79,6 +77,11 @@ in
   startup-sound.enable = false;
 
   zerotier.enable = false;
+
+  hardware = {
+    bluetooth.enable = true;
+    opentabletdriver.enable = true;
+  };
 
   zramSwap = {
     enable = true;
@@ -377,6 +380,8 @@ in
       with inputs;
       # Keep in every ISO
       [
+        blueman
+        virt-manager
         gemini-cli
         jq
         wayvr
@@ -562,6 +567,8 @@ in
     };
 
     services = {
+
+      blueman.enable = true;
 
       # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
       display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
