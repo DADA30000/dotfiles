@@ -132,6 +132,7 @@ in
       };
     };
     xdg.userDirs = {
+      setSessionVariables = false;
       createDirectories = true;
       enable = true;
       documents = "${config.home.homeDirectory}/Documents";
@@ -241,22 +242,23 @@ in
     };
     gtk = {
       enable = true;
-      gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
-      gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
+      gtk2.theme.name = "Fluent-Dark";
+      gtk4 = {
+        extraConfig.gtk-application-prefer-dark-theme = 1;
+        theme.name = "Fluent-Dark";
+      };
+      gtk3 = {
+        extraConfig.gtk-application-prefer-dark-theme = 1;
+        theme.name = "Fluent-Dark";
+      };
       iconTheme = {
         name = "MoreWaita";
         package = pkgs.morewaita-icon-theme;
-        #name = "Papirus-Dark";
-        #package = pkgs.runCommand "Papirus" {} ''
-        #  cp -r ${pkgs.papirus-icon-theme} $out
-        #  chmod -R +w $out/*
-        #  rm $out/share/icons/{breeze,breeze-dark}
-        #  ${pkgs.gnused}/bin/sed -i 's/Inherits=breeze,hicolor/Inherits=hicolor/g' $out/share/icons/Papirus-Dark/index.theme
-        #'';
       };
-      theme.name = "Fluent-Dark";
-      font.name = "Noto Sans Medium";
-      font.size = 11;
+      font = {
+        name = "Noto Sans Medium";
+        size = 11;
+      };
     };
 
   };

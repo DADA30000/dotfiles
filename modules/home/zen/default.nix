@@ -192,10 +192,40 @@ let
         --replace-fail "url(\"chrome://branding/content/about-logo.svg\")" "url(\"nix-snowflake.png\")" \
         --replace-fail "scale: 1.7;" "scale: 1.5;"
       TRANSPARENCY_PATCH="
+        :root {
+          --panel-background: rgba(0, 0, 0, 0.01) !important;
+          --arrowpanel-background: rgba(0, 0, 0, 0.01) !important;
+          --menu-background-color: rgba(0, 0, 0, 0.01) !important;
+          --arrowpanel-border-color: transparent !important;
+        }
+        panel,
+        menupopup,
+        menupopup::part(content),
+        .menupopup-arrowscrollbox,
+        tooltip,
+        dialog,
         panelmultiview, 
         .panel-subview-body, 
         .panel-arrowcontent,
-        #appMenu-popup {
+        .panel-viewcontainer,
+        .panel-viewstack,
+        #appMenu-popup,
+        #contentAreaContextMenu,
+        #tabContextMenu,
+        #placesContext,
+        #notification-popup,
+        #identity-popup,
+        #permission-popup,
+        #downloadsPanel,
+        #customizationui-widget-panel,
+        #BMB_bookmarksPopup,
+        #full-page-translations-panel,
+        #full-page-translations-panel-multiview,
+        .translations-panel-header-wrapper,
+        .translations-panel-footer,
+        #customizationui-widget-panel browser,
+        .webextension-popup-browser,
+        .webextension-popup-iframe {
           --panel-background: rgba(0, 0, 0, 0.01) !important;
           background-color: rgba(0, 0, 0, 0.01) !important;
           background: rgba(0, 0, 0, 0.01) !important;
@@ -206,22 +236,7 @@ let
           --panel-border-radius: 12px !important;
           border-radius: 12px !important;
           overflow: hidden !important;
-        }
-        #full-page-translations-panel,
-        #full-page-translations-panel-multiview,
-        #full-page-translations-panel .panel-viewcontainer,
-        #full-page-translations-panel .panel-viewstack,
-        .translations-panel-header-wrapper,
-        .translations-panel-footer {
-          background-color: rgba(0, 0, 0, 0.01) !important;
-          background: rgba(0, 0, 0, 0.01) !important;
-          --panel-background: rgba(0, 0, 0, 0.01) !important;
-          box-shadow: none !important;
-          --panel-shadow: none !important;
-          --panel-shadow-margin: 0px !important;
-          border: none !important;
           filter: none !important; 
-          border-radius: 12px !important;
         }
       "
       echo "$TRANSPARENCY_PATCH" | sed 's/^[[:space:]]*//' | sed '/^$/d' >> "$out/sine-mods/Nebula/userChrome.css"
@@ -316,20 +331,13 @@ in
           "*" = {
             installation_mode = "allowed";
           };
-          "{762f9885-5a13-4abd-9c77-433dcd38b8fd}" = {
-            installation_mode = "allowed";
-            managed_storage.showGreetings = false;
-          };
-          "{7b1bf0b6-a1b9-42b0-b75d-252036438bdc}" = {
-            installation_mode = "allowed";
-            managed_storage = {
-              showChangeLog = false;
-              firstRun = false;
-            };
-          };
           "sponsorBlocker@ajay.app" = {
             installation_mode = "allowed";
             default_area = "menupanel";
+          };
+          "{446900e4-71c2-419f-a6a7-df9c091e268b}" = {
+            installation_mode = "allowed";
+            default_area = "navbar";
           };
           "adnauseam@rednoise.org" = {
             installation_mode = "allowed";
@@ -406,11 +414,13 @@ in
           "browser.tabs.unloadOnLowMemory" = true;
           "zen.widget.linux.transparency" = true;
           "zen.welcome-screen.seen" = true;
-          "zen.view.use-single-toolbar" = true;
+          "zen.view.use-single-toolbar" = false;
           "zen.view.compact.enable-at-startup" = true;
+          "widget.wayland.force-move-to-rect" = true;
         };
         extensions = {
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
+            pipewire-screenaudio
             youtube-auto-hd-fps
             adnauseam
             darkreader
