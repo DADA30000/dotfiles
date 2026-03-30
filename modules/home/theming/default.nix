@@ -77,6 +77,11 @@ in
 {
   options.theming = {
     enable = mkEnableOption "theming stuff like cursor theme, icon theme and etc";
+    cursor_size = mkOption {
+      description = "XCURSOR size";
+      type = lib.types.int;
+      default = 24;
+    };
   };
 
   config = mkIf cfg.enable {
@@ -237,7 +242,7 @@ in
           ln -s ${../../../stuff/Bibata-Modern} $out/share/icons/Bibata-Modern
         '';
         name = "Bibata-Modern";
-        size = 24;
+        size = cfg.cursor_size;
       };
     };
     gtk = {

@@ -19,26 +19,42 @@ in
   };
 
   config = mkIf cfg.enable {
+    boot.extraModprobeConfig = ''
+      options nvidia NVreg_DynamicPowerManagement=0x02
+      options nvidia NVreg_EnableS0ixPowerManagement=1
+      options nvidia NVreg_PreserveVideoMemoryAllocations=1
+    '';
     hardware = {
       graphics = {
         enable = true;
         enable32Bit = true;
       };
       amdgpu = mkMerge [
-        (mkIf cfg.amdgpu.enable { initrd.enable = false; })
+        (mkIf cfg.amdgpu.enable { initrd.enable = true; })
         (mkIf cfg.amdgpu.pro { opencl.enable = true; })
       ];
       nvidia = mkIf cfg.nvidia.enable {
         modesetting.enable = true;
-        powerManagement.enable = true;
+        package = config.boot.kernelPackages.nvidiaPackages.beta;
         open = true;
-        nvidiaSettings = true;
-        #package = config.boot.kernelPackages.nvidiaPackages.beta;
+        nvidiaSettings = false;
+        powerManagement = {
+          enable = true;
+          finegrained = true;
+        };
+        prime = {
+          nvidiaBusId = "PCI:64:0:0";
+          amdgpuBusId = "PCI:65:0:0";
+          offload = {
+            enable = true;
+            enableOffloadCmd = true;
+          };
+        };
       };
     };
     services.xserver.videoDrivers = mkMerge [
-      (mkIf cfg.nvidia.enable [ "nvidia" ])
       (mkIf cfg.amdgpu.enable [ "amdgpu" ])
+      (mkIf cfg.nvidia.enable [ "nvidia" ])
     ];
     environment.variables = {
       ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;

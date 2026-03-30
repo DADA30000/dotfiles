@@ -46,6 +46,14 @@
         home-manager.follows = "home-manager";
       };
     };
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v1.0.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    split-monitor-workspaces = {
+      url = "github:zjeffer/split-monitor-workspaces";
+      inputs.hyprland.follows = "hyprland";
+    };
     firefox-addons = {
       url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -139,8 +147,6 @@
   outputs =
     {
       self,
-      nixpkgs,
-      home-manager,
       ...
     }@inputs:
     let
@@ -161,7 +167,7 @@
                 ;
             };
           };
-          orig_system = nixpkgs.lib.nixosSystem (
+          orig_system = inputs.nixpkgs.lib.nixosSystem (
             system
             // {
               specialArgs = system.specialArgs // {
@@ -171,7 +177,7 @@
             }
           );
         in
-        nixpkgs.lib.nixosSystem (
+        inputs.nixpkgs.lib.nixosSystem (
           system
           // {
             specialArgs = system.specialArgs // {
@@ -179,13 +185,13 @@
               orig = orig_system;
             };
             modules = system.modules ++ [
-              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+              "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             ];
           }
         )
       );
 
-      umport = (import ./modules/umport.nix { inherit (nixpkgs) lib; }).umport;
+      umport = (import ./modules/umport.nix { inherit (inputs.nixpkgs) lib; }).umport;
 
       system-modules = umport {
         paths = [ ./modules/system ];
@@ -204,7 +210,8 @@
 
       modules-list = [
         inputs.impermanence.nixosModules.impermanence
-        home-manager.nixosModules.home-manager
+        inputs.lanzaboote.nixosModules.lanzaboote
+        inputs.home-manager.nixosModules.home-manager
         {
           home-manager = {
             extraSpecialArgs = {
@@ -219,7 +226,8 @@
             overwriteBackup = true;
             useGlobalPkgs = true;
             useUserPackages = true;
-            users.root = import ./machines/nixos/home-root.nix;
+            users.${user} = { imports = home-modules; };
+            users.root = import ./modules/home/shared/home-root.nix;
           };
         }
       ]
@@ -231,7 +239,7 @@
     in
     {
       nixosConfigurations = {
-        nixos = nixpkgs.lib.nixosSystem {
+        nixos = inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit
               inputs
@@ -242,35 +250,30 @@
               system-modules
               home-modules
               ;
-            min-flag = false;
-            avg-flag = false;
           };
           modules = modules-list ++ [
             ./machines/nixos/configuration.nix
             ./machines/nixos/hardware-configuration.nix
           ];
         };
-        iso = iso-wrapper {
+        laptop = inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {
-            min-flag = false;
-            avg-flag = false;
+            inherit
+              inputs
+              user
+              user-hash
+              self
+              umport
+              system-modules
+              home-modules
+              ;
           };
-          modules = modules-list ++ [ ./machines/iso/configuration.nix ];
+          modules = modules-list ++ [
+            ./machines/laptop/configuration.nix
+            ./machines/laptop/hardware-configuration.nix
+          ];
         };
-        iso8G = iso-wrapper {
-          specialArgs = {
-            min-flag = false;
-            avg-flag = true;
-          };
-          modules = modules-list ++ [ ./machines/iso8G/configuration.nix ];
-        };
-        isoMIN = iso-wrapper {
-          specialArgs = {
-            min-flag = true;
-            avg-flag = false;
-          };
-          modules = modules-list ++ [ ./machines/isoMIN/configuration.nix ];
-        };
+        iso = iso-wrapper { modules = modules-list ++ [ ./machines/iso/configuration.nix ]; };
       };
     };
 }

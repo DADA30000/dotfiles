@@ -97,50 +97,78 @@ let
   FIX_INCOMING_PACKETS_TABLE = "1212";
   FIX_INCOMING_PACKETS_MARK = "0x1";
   VPNIFY_TABLE = "2022";
+  GAME_PEERS_TABLE = "1213";
   fix_incoming_packets_script = pkgs.writeShellScript "fix_incoming_packets_script" ''
-    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin
+    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin:${pkgs.ipset}/bin
     FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
     FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
+    GAME_PEERS_TABLE=${GAME_PEERS_TABLE}
 
     while true; do
-      GW_IP=$(ip route show default | awk '/default/ {print $3}' | head -n 1)
-      GW_DEV=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
+      GW_IP=$(ip route show default table main | awk '/default/ {print $3}' | head -n 1)
+      GW_DEV=$(ip route show default table main | awk '/default/ {print $5}' | head -n 1)
 
-      if [ -n "$GW_IP" ] && [ -n "$GW_DEV" ]; then
+      if [[ -n "$GW_IP" ]] && [[ -n "$GW_DEV" ]]; then
+        PHYSICAL_IP=$(ip -4 addr show dev $GW_DEV | awk '/inet / {print $2}' | cut -d/ -f1)
+
         ip route show table $FIX_INCOMING_PACKETS_TABLE | grep -q "default via $GW_IP" || \
           ip route add default via $GW_IP dev $GW_DEV table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null
+
+        iptables -t mangle -L BYPASS_CHECK >/dev/null 2>&1 || iptables -t mangle -N BYPASS_CHECK
+        
+        if ip link show tun0 >/dev/null 2>&1; then
+           iptables -t mangle -C BYPASS_CHECK -i tun0 -j RETURN 2>/dev/null || \
+             iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN
+        fi
+
+        iptables -t mangle -C BYPASS_CHECK -i lo -j RETURN 2>/dev/null || \
+          iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN
+        
+        iptables -t mangle -C BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK 2>/dev/null || \
+          iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK
+
+        iptables -t mangle -C PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || \
+          iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK
+
+        iptables -t mangle -C OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || \
+          iptables -t mangle -A OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark
+
+        ip rule show | grep -q "lookup $FIX_INCOMING_PACKETS_TABLE" || \
+          ip rule add fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null
+
+        if [[ -n "$PHYSICAL_IP" ]]; then
+          ipset create bypass_peers hash:ip 2>/dev/null || true
+
+          iptables -t mangle -C PREROUTING -i $GW_DEV -m conntrack --ctstate NEW -j SET --add-set bypass_peers src 2>/dev/null || \
+            iptables -t mangle -A PREROUTING -i $GW_DEV -m conntrack --ctstate NEW -j SET --add-set bypass_peers src
+
+          ip rule show | grep -q "lookup $GAME_PEERS_TABLE" || \
+            ip rule add lookup $GAME_PEERS_TABLE priority 5000 2>/dev/null
+
+          current_peers=$(ipset list bypass_peers 2>/dev/null | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $1}')
+          existing_routes=$(ip route show table $GAME_PEERS_TABLE 2>/dev/null | awk '{print $1}')
+
+          for peer in $current_peers; do
+            echo "$existing_routes" | grep -q "^$peer$" || \
+              ip route add $peer via $GW_IP dev $GW_DEV src $PHYSICAL_IP table $GAME_PEERS_TABLE 2>/dev/null
+          done
+
+          for route_ip in $existing_routes; do
+            echo "$current_peers" | grep -q "^$route_ip$" || \
+              ip route del $route_ip table $GAME_PEERS_TABLE 2>/dev/null
+          done
+        fi
       fi
-
-      iptables -t mangle -L BYPASS_CHECK >/dev/null 2>&1 || iptables -t mangle -N BYPASS_CHECK
-      
-      if ip link show tun0 >/dev/null 2>&1; then
-         iptables -t mangle -C BYPASS_CHECK -i tun0 -j RETURN 2>/dev/null || \
-           iptables -t mangle -A BYPASS_CHECK -i tun0 -j RETURN
-      fi
-
-      iptables -t mangle -C BYPASS_CHECK -i lo -j RETURN 2>/dev/null || \
-        iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN
-      
-      iptables -t mangle -C BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK 2>/dev/null || \
-        iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK
-
-      iptables -t mangle -C PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || \
-        iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK
-
-      iptables -t mangle -C OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || \
-        iptables -t mangle -A OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark
-
-      ip rule show | grep -q "lookup $FIX_INCOMING_PACKETS_TABLE" || \
-        ip rule add fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null
 
       sleep 2
     done
   '';
   cleanup_script = pkgs.writeShellScript "singbox_cleanup_script" ''
-    PATH=$PATH:${pkgs.iptables}/bin
+    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.iproute2}/bin:${pkgs.ipset}/bin
     FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
     FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
     VPNIFY_TABLE=${VPNIFY_TABLE}
+    GAME_PEERS_TABLE=${GAME_PEERS_TABLE}
 
     ip netns del vpn_wrapper 2>/dev/null || true
     ip link del veth_host 2>/dev/null || true
@@ -153,6 +181,14 @@ let
     iptables -t mangle -X BYPASS_CHECK 2>/dev/null || true
     ip rule del fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null || true
     ip route flush table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null || true
+
+    GW_DEV=$(ip route show default table main | awk '/default/ {print $5}' | head -n 1)
+    if [[ -n "$GW_DEV" ]]; then
+      iptables -t mangle -D PREROUTING -i $GW_DEV -m conntrack --ctstate NEW -j SET --add-set bypass_peers src 2>/dev/null || true
+    fi
+    ip rule del lookup $GAME_PEERS_TABLE priority 5000 2>/dev/null || true
+    ip route flush table $GAME_PEERS_TABLE 2>/dev/null || true
+    ipset destroy bypass_peers 2>/dev/null || true
   '';
 in
 {

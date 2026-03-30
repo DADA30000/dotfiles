@@ -7,10 +7,28 @@
 }:
 let
   cfg = config.wivrn;
+  xrSources = pkgs.callPackage "${inputs.nixpkgs-xr}/_sources/generated.nix" {};
   pkg_xrizer = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer;
-  pkg_wivrn = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
+  pkg_wivrn = (pkgs.wivrn.override { 
+    cudaSupport = true;
     xrizer = xrizer_multilib;
-  };
+  }).overrideAttrs (finalAttrs: prevAttrs: {
+    inherit (xrSources.wivrn) pname version src;
+
+    monado = pkgs.applyPatches {
+      inherit (xrSources.wivrn-monado) src;
+      inherit (prevAttrs.monado) patches postPatch;
+    };
+
+    patches = [ ];
+
+    cmakeFlags = (pkgs.lib.filter (flag: !pkgs.lib.hasInfix "GIT_DESC" flag) prevAttrs.cmakeFlags)
+      ++ [
+        (pkgs.lib.cmakeFeature "GIT_DESC" "v${prevAttrs.version}-0-g${builtins.substring 0 8 finalAttrs.version}")
+        (pkgs.lib.cmakeFeature "GIT_COMMIT" finalAttrs.version)
+        (pkgs.lib.cmakeFeature "WIVRN_USE_NVENC" "ON")
+      ];
+  });
   xrizer_multilib = pkgs.symlinkJoin {
     name = "xrizer-multilib";
     paths = [

@@ -50,10 +50,15 @@ in
     wlogout = mkEnableOption "power options menu";
     hyprlock = mkEnableOption "locking program";
     rofi = mkEnableOption "rofi (used as applauncher and dmenu)";
+    additional-monitors = mkOption {
+      default = [];
+      type = lib.types.listOf lib.types.str;
+    };
   };
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      rofi-bluetooth
       tesseract
       imagemagick
       libsForQt5.qtsvg
@@ -101,16 +106,19 @@ in
       ];
       plugins =
         lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
-          pkgs.hyprlandPlugins.hyprtrails
+          #pkgs.hyprlandPlugins.hyprtrails
         ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
-          inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
+          inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
+          #inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
         ]
         ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
-          inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
+          #inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
         ];
       enable = true;
       settings = {
+        xwayland.force_zero_scaling = true;
+        render.direct_scanout = 1;
         "$mod" = "SUPER";
         bind = [
           ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
@@ -118,6 +126,9 @@ in
           ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
           "SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
           "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+          "$mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
+          "$mod ALT, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+          "$mod SHIFT, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
           ", MENU, exec, app2unit -- ${read-text} region eng+osd"
           "SUPER, MENU, exec, app2unit -- ${read-text} window eng+osd"
           "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+osd"
@@ -141,7 +152,7 @@ in
           "$mod, I, exec, app2unit -- toggle-restriction"
           "$mod, F1, exec, app2unit -- gamemode.sh"
           "$mod, F2, exec, app2unit -- sheesh.sh"
-          "$mod, O, exec, killall -SIGUSR1 .waybar-wrapped"
+          "$mod, L, exec, killall -SIGUSR1 .waybar-wrapped"
           "$mod, Q, exec, app2unit -- kitty"
           "$mod, Z, exec, app2unit -- zen-twilight"
           "$mod, D, exec, app2unit -- discordcanary || app2unit -- discord"
@@ -157,32 +168,32 @@ in
           "$mod, right, movefocus, r"
           "$mod, up, movefocus, u"
           "$mod, down, movefocus, d"
-          "$mod, 1, workspace, 1"
-          "$mod, 2, workspace, 2"
-          "$mod, 3, workspace, 3"
-          "$mod, 4, workspace, 4"
-          "$mod, 5, workspace, 5"
-          "$mod, 6, workspace, 6"
-          "$mod, 7, workspace, 7"
-          "$mod, 8, workspace, 8"
-          "$mod, 9, workspace, 9"
-          "$mod, 0, workspace, 10"
-          "$mod SHIFT, 1, movetoworkspace, 1"
-          "$mod SHIFT, 2, movetoworkspace, 2"
-          "$mod SHIFT, 3, movetoworkspace, 3"
-          "$mod SHIFT, 4, movetoworkspace, 4"
-          "$mod SHIFT, 5, movetoworkspace, 5"
-          "$mod SHIFT, 6, movetoworkspace, 6"
-          "$mod SHIFT, 7, movetoworkspace, 7"
-          "$mod SHIFT, 8, movetoworkspace, 8"
-          "$mod SHIFT, 9, movetoworkspace, 9"
-          "$mod SHIFT, 0, movetoworkspace, 10"
+          "$mod, 1, split-workspace, 1"
+          "$mod, 2, split-workspace, 2"
+          "$mod, 3, split-workspace, 3"
+          "$mod, 4, split-workspace, 4"
+          "$mod, 5, split-workspace, 5"
+          "$mod, 6, split-workspace, 6"
+          "$mod, 7, split-workspace, 7"
+          "$mod, 8, split-workspace, 8"
+          "$mod, 9, split-workspace, 9"
+          "$mod, 0, split-workspace, 10"
+          "$mod SHIFT, 1, split-movetoworkspace, 1"
+          "$mod SHIFT, 2, split-movetoworkspace, 2"
+          "$mod SHIFT, 3, split-movetoworkspace, 3"
+          "$mod SHIFT, 4, split-movetoworkspace, 4"
+          "$mod SHIFT, 5, split-movetoworkspace, 5"
+          "$mod SHIFT, 6, split-movetoworkspace, 6"
+          "$mod SHIFT, 7, split-movetoworkspace, 7"
+          "$mod SHIFT, 8, split-movetoworkspace, 8"
+          "$mod SHIFT, 9, split-movetoworkspace, 9"
+          "$mod SHIFT, 0, split-movetoworkspace, 10"
           "$mod, S, togglespecialworkspace, magic"
-          "$mod SHIFT, S, movetoworkspace, special:magic"
-          "$mod, mouse_down, workspace, e+1"
-          "$mod, mouse_up, workspace, e-1"
+          "$mod SHIFT, S, split-movetoworkspace, special:magic"
+          "$mod, mouse_down, split-workspace, e+1"
+          "$mod, mouse_up, split-workspace, e-1"
         ];
-        monitor = [ ", highres, auto, 1" ];
+        monitor = [ ", highres, auto, auto" ] ++ cfg.additional-monitors;
         bindr = [
           ''$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"\$*\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- \"\$@\"" -- {cmd}' ''
           "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
@@ -236,7 +247,6 @@ in
           "${nautilus-listener}/bin/nautilis-listener"
           "app2unit -- wl-paste --watch cliphist store"
           "fumon"
-          "hyprctl setcursor Bibata-Modern-Classic 24"
         ];
         input = {
           kb_layout = "us,ru";
@@ -247,11 +257,21 @@ in
           touchpad = {
             natural_scroll = true;
             scroll_factor = 0.5;
+            clickfinger_behavior = true;
+            tap-to-click = true;
             disable_while_typing = false;
           };
           touchdevice.enabled = true;
           sensitivity = 1;
           accel_profile = "flat";
+        };
+        gestures = {
+          gesture = "3, horizontal, workspace";
+          workspace_swipe_distance = 300;
+          workspace_swipe_invert = true;
+          workspace_swipe_cancel_ratio = 0.5;
+          workspace_swipe_forever = true;
+          workspace_swipe_create_new = true;
         };
         general = {
           gaps_in = 5;
@@ -313,6 +333,7 @@ in
           preserve_split = true;
         };
         misc = {
+          vrr = 1;
           disable_watchdog_warning = true;
           disable_hyprland_logo = true;
           background_color = "0x000000";
@@ -327,28 +348,29 @@ in
           scroll_event_delay = 50;
         };
         plugin = mkIf cfg.enable-plugins {
-          hyprexpo = {
-            columns = 3;
-            gap_size = 5;
-            bg_col = "rgb(111111)";
-            workspace_method = "first 1";
-            enable_gesture = true;
-            gesture_distance = 300;
-            gesture_positive = true;
-          };
-          dynamic-cursors = {
-            enabled = false;
-            mode = "tilt";
-            shake.enabled = false;
-            stretch.function = "negative_quadratic";
-          };
-          hyprtrails = {
-            color = "rgba(bbddffff)";
-            bezier_step = 0.001;
-            history_points = 6;
-            points_per_step = 4;
-            histoty_step = 1;
-          };
+          split-monitor-workspaces.enable_persistent_workspaces = false;
+          #hyprexpo = {
+          #  columns = 3;
+          #  gap_size = 5;
+          #  bg_col = "rgb(111111)";
+          #  workspace_method = "first 1";
+          #  enable_gesture = true;
+          #  gesture_distance = 300;
+          #  gesture_positive = true;
+          #};
+          #dynamic-cursors = {
+          #  enabled = false;
+          #  mode = "tilt";
+          #  shake.enabled = false;
+          #  stretch.function = "negative_quadratic";
+          #};
+          #hyprtrails = {
+          #  color = "rgba(bbddffff)";
+          #  bezier_step = 0.001;
+          #  history_points = 6;
+          #  points_per_step = 4;
+          #  histoty_step = 1;
+          #};
         };
       };
       extraConfig = ''

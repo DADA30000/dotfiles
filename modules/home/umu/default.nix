@@ -8,10 +8,10 @@ with lib;
 let
   proton-umu = pkgs.stdenv.mkDerivation (finalAttrs: {
     name = "proton-umu";
-    version = "9.0-4e";
+    version = "10.0-4";
     src = pkgs.fetchurl {
       url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/UMU-Proton-${finalAttrs.version}/UMU-Proton-${finalAttrs.version}.tar.gz";
-      hash = "sha256-1TYX073YlPTVyP1D6Cf/+7zbtJv0c9f7O+JhjdRx6/M=";
+      hash = "sha256-YumeApoY+jE+b6Y9QjkJGBAXMKlA40kcVNnVjKuIfGk=";
     };
     installPhase = ''
       mkdir -p "$out"

@@ -118,43 +118,136 @@ let
         -bios ''${pkgs.OVMF.fd}/FV/OVMF.fd \
         "$@"
     '')
+    (pkgs.writeShellScriptBin "power-menu" ''
+      if [ "$1" == "getdata" ]; then
+        current=$(${pkgs.tlp}/bin/tlp-stat -s | grep "Power profile" | awk '{print $4}')
+    
+        case "$current" in
+          power-saver*)
+            echo '{"text":"󰌪","class":"powersave","tooltip":"Mode: Power Saver"}'
+            ;;
+          performance*)
+            echo '{"text":"󰓅","class":"performance","tooltip":"Mode: Performance"}'
+            ;;
+          balanced|*)
+            echo '{"text":"󰗑","class":"default","tooltip":"Mode: Balanced"}'
+            ;;
+        esac
+    
+      elif [ "$1" == "menu" ]; then
+        options="󰌪 Power Saver\n󰗑 Balanced\n󰓅 Performance"
+        
+        chosen=$(echo -e "$options" | ${pkgs.rofi}/bin/rofi -dmenu -i -p "Power Profile:" -theme-str 'window {width: 15%;}')
+        
+        case "$chosen" in
+          *Power*)       ${pkgs.tlp-pd}/bin/tlpctl set power-saver ;;
+          *Balanced*)    ${pkgs.tlp-pd}/bin/tlpctl set balanced ;;
+          *Performance*) ${pkgs.tlp-pd}/bin/tlpctl set performance ;;
+          *) exit 0 ;;
+        esac
+        
+        pkill -RTMIN+5 waybar
+      fi
+    '')
     (pkgs.writeShellScriptBin "dmenu" ''
       rofi -dmenu "$@"
     '')
-    (pkgs.writeShellScriptBin "gpu" ''
-      usage=$(nvidia-smi | grep % | cut -b 73,74,75,76,77 | sed 's/ //g')
-      temp=$(nvidia-smi | grep % | cut -b 9,10)
-      text="<span color='#02a62d'>  $usage  󰢮 </span>"
-      tooltip="GPU Usage: $usage\rGPU Temp: $temp°C"
-      cat <<EOF
-      {"text":"$text","tooltip":"$tooltip",}
-      EOF
+    (pkgs.writeShellScriptBin "cpu-temp" ''
+      CPU_HWMON=""
+      for d in /sys/class/hwmon/hwmon*; do
+        if [ -f "$d/name" ] && [ "$(cat "$d/name")" == "k10temp" ]; then
+          CPU_HWMON="$d"
+          break
+        fi
+      done
+    
+      if [ -z "$CPU_HWMON" ]; then
+        echo '{"text":"N/A","tooltip":"k10temp driver not found"}'
+        exit 0
+      fi
+    
+      TEMP_FILE=""
+      for f in "$CPU_HWMON"/temp*_label; do
+        label=$(cat "$f")
+        if [ "$label" == "Tdie" ]; then
+          TEMP_FILE="''${f%_label}_input"
+          break
+        fi
+      done
+    
+      if [ -z "$TEMP_FILE" ]; then
+        TEMP_FILE="$CPU_HWMON/temp1_input"
+      fi
+    
+      temp_raw=$(cat "$TEMP_FILE" 2>/dev/null || echo "0")
+      temp=$((temp_raw / 1000))
+    
+      # Use different icons based on heat
+      icon=""
+      if [ "$temp" -gt 65 ]; then icon=""; fi
+      if [ "$temp" -gt 85 ]; then icon=""; fi
+    
+      echo "{\"text\":\"$temp°C $icon\",\"tooltip\":\"Sensor: $TEMP_FILE\",\"class\":\"temp-$temp\"}"
+    '')
+    (pkgs.writeShellScriptBin "nvidia-gpu" ''
+      NVIDIA_PATH=""
+      for dev in /sys/bus/pci/devices/*; do
+        vendor=$(cat "$dev/vendor" 2>/dev/null)
+        if [ "$vendor" == "0x10de" ]; then
+          NVIDIA_PATH="$dev"
+          break
+        fi
+      done
+
+      if [ -z "$NVIDIA_PATH" ]; then
+        exit 1
+      fi
+
+      status=$(cat "$NVIDIA_PATH/power/runtime_status")
+
+      if [ "$status" != "active" ]; then
+        echo '{"text":"<span color=\"#555555\"> 󰢮 0W </span>","tooltip":"GPU is suspended","class":"sleep"}'
+      else
+        stats=$(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits 2>/dev/null)
+        if [ -n "$stats" ]; then
+          usage=$(echo "$stats" | cut -d',' -f1 | tr -d ' ')
+          temp=$(echo "$stats" | cut -d',' -f2 | tr -d ' ')
+          power=$(echo "$stats" | cut -d',' -f3 | tr -d ' ')
+          echo "{\"text\":\"<span color='#00ff00'>  ''${usage}%  󰢮 </span>\",\"tooltip\":\"NVIDIA GPU\rUsage: ''${usage}%\rTemp: ''${temp}°C\rPower: ''${power}W\",\"class\":\"active\"}"
+        fi
+      fi
     '')
     (pkgs.writeShellScriptBin "amd-gpu" ''
-      if test -f /sys/class/hwmon/hwmon0/device/gpu_busy_percent; then
-        usage=$(cat /sys/class/hwmon/hwmon0/device/gpu_busy_percent)
-        num=0
-      elif test -f /sys/class/hwmon/hwmon1/device/gpu_busy_percent; then
-        usage=$(cat /sys/class/hwmon/hwmon1/device/gpu_busy_percent)
-        num=1
-      elif test -f /sys/class/hwmon/hwmon2/device/gpu_busy_percent; then
-        usage=$(cat /sys/class/hwmon/hwmon2/device/gpu_busy_percent)
-        num=2
-      elif test -f /sys/class/hwmon/hwmon3/device/gpu_busy_percent; then
-        usage=$(cat /sys/class/hwmon/hwmon3/device/gpu_busy_percent)
-        num=3
-      elif test -f /sys/class/hwmon/hwmon4/device/gpu_busy_percent; then
-        usage=$(cat /sys/class/hwmon/hwmon4/device/gpu_busy_percent)
-        num=4
+      GPU_PATH=""
+      for dev in /sys/bus/pci/devices/*; do
+        if [ -e "$dev/driver" ] && [[ "$(readlink "$dev/driver")" =~ "amdgpu" ]]; then
+          GPU_PATH="$dev"
+          break
+        fi
+      done
+
+      if [ -z "$GPU_PATH" ]; then
+        exit 1
       fi
-      name=$(lspci | grep VGA | cut -d ":" -f3 | cut -d "[" -f3 | cut -d "]" -f1)
-      temp1=$(cat /sys/class/hwmon/hwmon''${num}/temp1_input)
-      temp=$(echo $temp1 | rev | cut -c 4- | rev)
-      text="<span color='#990000'>  ''${usage}%  󰢮 </span>"
-      tooltip="$name\rGPU Usage: ''${usage}%\rGPU Temp: $temp°C"
-      cat <<EOF
-      {"text":"$text","tooltip":"$tooltip",}
-      EOF
+
+      HWMON_DIR=$(ls "$GPU_PATH/hwmon" 2>/dev/null | head -n 1)
+      HWMON_PATH="$GPU_PATH/hwmon/$HWMON_DIR"
+
+      if [ -d "$HWMON_PATH" ]; then
+        usage=$(cat "$HWMON_PATH/device/gpu_busy_percent" 2>/dev/null || echo "0")
+        temp=$(( $(cat "$HWMON_PATH/temp1_input" 2>/dev/null || echo "0") / 1000 ))
+        power=$(( $(cat "$HWMON_PATH/power1_average" 2>/dev/null || echo "0") / 1000000 ))
+        
+        pci_addr=$(basename "$GPU_PATH")
+        name=$(lspci -s "$pci_addr" | cut -d ':' -f3- | sed 's/^ //')
+
+        text="<span color='#990000'>  ''${usage}%  󰢮 </span>"
+        tooltip="$name\rUsage: ''${usage}%\rTemp: ''${temp}°C\rPower: ''${power}W"
+        
+        echo "{\"text\":\"$text\",\"tooltip\":\"$tooltip\"}"
+      else
+        echo "{\"text\":\"error\",\"tooltip\":\"No hwmon found\"}"
+      fi
     '')
     (pkgs.writeShellScriptBin "nixos" ''
       cat <<EOF

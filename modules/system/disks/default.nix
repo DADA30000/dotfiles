@@ -114,6 +114,7 @@ in
           "/etc/nixos"
           "/var/lib/libvirt"
           "/var/lib/flatpak"
+          "/var/lib/sbctl"
           "/var/db"
           "/var/lib/zerotier-one"
           {

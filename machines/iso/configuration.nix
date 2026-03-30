@@ -111,16 +111,13 @@ let
       '';
 in
 {
-  imports = [
-    ../nixos/configuration.nix
-  ];
   config = lib.mkMerge [
     (lib.mkIf wrapped {
       system.build.isoImage = lib.mkForce (
         pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
           {
             inherit (config.isoImage) compressImage volumeID;
-            contents = patchedContents; # <--- We inject our patched list here
+            contents = patchedContents;
             isoName = "${config.image.baseName}.iso";
             bootable = config.isoImage.makeBiosBootable;
             bootImage = "/isolinux/isolinux.bin";

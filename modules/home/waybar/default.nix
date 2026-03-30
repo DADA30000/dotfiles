@@ -72,7 +72,8 @@ in
         #scripts,
         #window,
         #cpu,
-        #custom-gpu,
+        #custom-amd-gpu,
+        #custom-nvidia-gpu,
         #network,
         #pulseaudio,
         #pulseaudio-mic,
@@ -132,7 +133,8 @@ in
         #custom-notification,
         #cpu,
         #network,
-        #custom-gpu,
+        #custom-nvidia-gpu,
+        #custon-amd-gpu,
         #pulseaudio,
         #pulseaudio-mic,
         #custom-logout,
@@ -149,7 +151,8 @@ in
         #custom-notification:hover,
         #cpu:hover,
         #network:hover,
-        #custom-gpu:hover,
+        #custom-amd-gpu:hover,
+        #custom-nvidia-gpu:hover,
         #pulseaudio:hover,
         #pulseaudio-mic:hover,
         #custom-logout:hover,
@@ -238,17 +241,15 @@ in
         #clock,
         #network,
         #custom-vpn,
+        #battery,
         #custom-cputemp,
-        #custom-colorpicker,
+        #bluetooth,
         #submap,
         #idle_inhibitor,
-        #custom-updates,
         #gamemode,
         #custom-camera,
-        #custom-notifications,
         #custom-recorder,
         #custom-batterysaver,
-        #bluetooth,
         #disk,
         #memory,
         #pulseaudio,
@@ -267,7 +268,6 @@ in
         #custom-recorder,
         #custom-vpn,
         #custom-github,
-        #custom-updates,
         #bluetooth.connected {
           background: shade(alpha(@foreground, 0.1), 0.8);
           border-radius: 8px;
@@ -359,7 +359,8 @@ in
         /* Override */
 
         #batteries {
-          margin-right: 0px;
+          margin-right: 0;
+          margin-left: 6px;
           border-radius: 8px 0px 0px 8px;
         }
 
@@ -382,7 +383,10 @@ in
           ];
           modules-right = [
             "tray"
+            "bluetooth"
             "group/scroll"
+            "group/scripts"
+            "group/batteries"
             "group/hardware"
           ];
           "cava" = {
@@ -491,19 +495,16 @@ in
           "group/batteries" = {
             orientation = "horizontal";
             modules = [
-              "battery"
               "custom/batterysaver"
+              "battery"
             ];
           };
           "group/scripts" = {
             orientation = "horizontal";
             modules = [
               "hyprland/submap"
-              "custom/colorpicker"
               "idle_inhibitor"
-              "custom/notifications"
               "gamemode"
-              "custom/updates"
             ];
           };
           "group/hardware" = {
@@ -515,13 +516,12 @@ in
             orientation = "horizontal";
             "modules" = [
               "custom/cog"
-              "custom/vpn"
-              "custom/weather"
               "network"
               "memory"
+              "custom/cputemp"
               "cpu"
-              "temperature"
-              "custom/gpu"
+              "custom/amd-gpu"
+              "custom/nvidia-gpu"
             ];
           };
           "pulseaudio#mic" = {
@@ -555,7 +555,7 @@ in
             smooth-scrolling-threshold = 1;
           };
           "custom/vpn" = {
-            format = "󰖂 ";
+            format = " 󰖂";
             exec = "echo '{\"class\": \"connected\"}'";
             exec-if = "test -d /proc/sys/net/ipv4/conf/tun0";
             return-type = "json";
@@ -563,7 +563,7 @@ in
           };
           "network" = {
             interval = 2;
-            format-wifi = "   {bandwidthDownBits}";
+            format-wifi = "    {bandwidthDownBits}";
             format-ethernet = " 󰈀  {bandwidthDownBits}";
             format-disconnected = "󰈂";
             format-linked = "";
@@ -599,6 +599,7 @@ in
             smooth-scrolling-threshold = 1;
           };
           "battery" = {
+            interval = 120;
             states = {
               "good" = 95;
               "warning" = 30;
@@ -608,29 +609,31 @@ in
             format-charging = "<b>{icon} </b>";
             format-full = "<span color='#00ff00'><b>{icon}</b></span> {capacity}%";
             format-icons = [
-              ""
-              ""
-              ""
-              ""
-              ""
-              ""
-              ""
-              ""
-              ""
+              "󰂃"
+              "󰁺"
+              "󰁻"
+              "󰁼"
+              "󰁽"
+              "󰁾"
+              "󰁿"
+              "󰂀"
+              "󰂁"
+              "󰂂"
+              "󰁹"
             ];
             tooltip-format = "{timeTo}\n{capacity} % | {power} W";
           };
           "custom/batterysaver" = {
-            format = " {}";
-            exec = "~/.config/waybar/bin/battsaver-toggle getdata";
-            on-click = "~/.config/waybar/bin/battsaver-toggle menu";
+            format = "{}";
+            exec = "power-menu getdata";
+            on-click = "power-menu menu";
             interval = "once";
             return-type = "json";
             signal = 5;
           };
           "memory" = {
             format = "{}% ";
-            interval = 1;
+            interval = 5;
           };
           "disk" = {
             interval = 600;
@@ -638,23 +641,19 @@ in
             path = "/";
           };
           "cpu" = {
-            interval = 1;
+            interval = 2;
             format = "{usage}%  ";
             on-click = "kitty btop";
           };
-          "temperature" = {
-            interval = 1;
-            hwmon-path = [
-              "/sys/class/hwmon/hwmon0/temp1_input"
-              "/sys/class/hwmon/hwmon1/temp1_input"
-              "/sys/class/hwmon/hwmon2/temp1_input"
-              "/sys/class/hwmon/hwmon3/temp1_input"
-            ];
-            format = "<span color='#7AA2F7'> {temperatureC}°C  </span>";
-            tooltip-format = "Core Temp: {temperatureC}°C ";
+          "custom/cputemp" = {
+            interval = 3;
+            tooltip = true;
+            return-type = "json";
+            exec = "cpu-temp";
+            format = "<span color='#7AA2F7'>{}</span>";
           };
           "custom/weather" = {
-            format = "{}° ";
+            format = "{}°";
             tooltip = true;
             interval = 3600;
             exec = "wttrbar";
@@ -664,34 +663,18 @@ in
             format = "  ";
             tooltip = false;
           };
-          "custom/colorpicker" = {
-            format = "{}";
-            return-type = "json";
-            interval = "once";
-            exec = "$HOME/.config/waybar/bin/colpicker/colorpicker -j";
-            on-click = "sleep 1 && $HOME/.config/waybar/bin/colpicker/colorpicker";
-            signal = 1;
-          };
           "idle_inhibitor" = {
             format = "{icon}";
             tooltip-format-activated = "Idle Inhibitor is active";
             tooltip-format-deactivated = "Idle Inhibitor is not active";
             format-icons = {
-              "activated" = " ";
-              "deactivated" = " ";
+              "activated" = "";
+              "deactivated" = "";
             };
           };
           "hyprland/submap" = {
             format = "{}";
             tooltip = false;
-          };
-          "custom/updates" = {
-            format = "{}";
-            interval = 3600;
-            exec = "~/.config/waybar/bin/updatecheck";
-            return-type = "json";
-            exec-if = "exit 0";
-            signal = 8;
           };
           "gamemode" = {
             hide-not-running = true;
@@ -707,8 +690,18 @@ in
             on-click = "~/.config/hypr/bin/camera-toggle";
             signal = 3;
           };
-          "custom/gpu" = {
-            interval = 1;
+          #"custom/nvidia-gpu" = {
+          #  interval = 1;
+          #  exec-if = "nvidia-gpu";
+          #  exec = "nvidia-gpu";
+          #  on-click = "kitty nvtop";
+          #  return-type = "json";
+          #  format = "{}";
+          #  tooltip = true;
+          #};
+          "custom/amd-gpu" = {
+            interval = 2;
+            exec-if = "amd-gpu";
             exec = "amd-gpu";
             on-click = "kitty nvtop";
             return-type = "json";
@@ -768,15 +761,15 @@ in
           };
           "bluetooth" = {
             format-on = "";
-            format-off = "";
+            format-off = "󰂲";
             format-disabled = "";
-            format-connected = "<b> {num_connections}</b>";
-            format-connected-battery = " {device_alias} {device_battery_percentage}%";
+            format-connected = "<b>󰂰 {num_connections}</b>";
+            format-connected-battery = "󰂱 {device_alias} {device_battery_percentage}%";
             tooltip-format = "{controller_alias}\t{controller_address}\n\n{num_connections} connected";
             tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
             tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
             tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
-            on-click = "rofi-bluetooth -config ~/.config/rofi/menu.d/network.rasi -i";
+            on-click = "rofi-bluetooth -i";
           };
         };
       };
