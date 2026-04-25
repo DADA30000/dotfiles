@@ -140,9 +140,9 @@ let
         chosen=$(echo -e "$options" | ${pkgs.rofi}/bin/rofi -dmenu -i -p "Power Profile:" -theme-str 'window {width: 15%;}')
         
         case "$chosen" in
-          *Power*)       ${pkgs.tlp-pd}/bin/tlpctl set power-saver ;;
-          *Balanced*)    ${pkgs.tlp-pd}/bin/tlpctl set balanced ;;
-          *Performance*) ${pkgs.tlp-pd}/bin/tlpctl set performance ;;
+            *Power*)       ${pkgs.tlp-pd}/bin/tlpctl set power-saver; hyprctl keyword monitor "eDP-1, 2560x1600@60, auto, auto, bitdepth, 10, cm, hdr" ;;
+          *Balanced*)    ${pkgs.tlp-pd}/bin/tlpctl set balanced; hyprctl reload ;;
+          *Performance*) ${pkgs.tlp-pd}/bin/tlpctl set performance; hyprctl reload ;;
           *) exit 0 ;;
         esac
         
@@ -445,22 +445,12 @@ let
           hyprctl --batch "\
               keyword animations:enabled 0;\
               keyword decoration:drop_shadow 0;\
-              keyword decoration:blur:enabled 0;\
-              keyword general:gaps_in 0;\
-              keyword general:gaps_out 0;\
-              keyword general:border_size 0;\
-      	keyword windowrule opacity 1 override 1 override, title:^(.*)$;\
-              keyword decoration:rounding 0"
-          systemctl --user stop waybar
+              keyword general:border_size 0"
           systemctl --user stop replays
-          systemctl --user stop hyprpaper
-          pkill hyprpaper
           exit
       fi
       hyprctl reload
       systemctl --user start replays
-      systemctl --user start waybar
-      systemctl --user start hyprpaper
       exit
     '')
     (pkgs.writeShellScriptBin "check-follows" ''

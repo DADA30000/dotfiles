@@ -7,7 +7,7 @@
 with lib;
 let
   cfg = config.singbox;
-  dns = "1.1.1.1";
+  dns = "94.140.14.14";
   vpnifyBin = pkgs.stdenv.mkDerivation {
     pname = "vpnify";
     version = "1.0";
@@ -164,7 +164,7 @@ let
     done
   '';
   cleanup_script = pkgs.writeShellScript "singbox_cleanup_script" ''
-    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.iproute2}/bin:${pkgs.ipset}/bin
+    PATH=$PATH:${pkgs.iptables}/bin:${pkgs.iproute2}/bin:${pkgs.ipset}/bin:${pkgs.gawk}/bin
     FIX_INCOMING_PACKETS_TABLE=${FIX_INCOMING_PACKETS_TABLE}
     FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
     VPNIFY_TABLE=${VPNIFY_TABLE}

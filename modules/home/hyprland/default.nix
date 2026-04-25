@@ -58,6 +58,7 @@ in
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      kdePackages.kservice
       rofi-bluetooth
       tesseract
       imagemagick
@@ -79,11 +80,6 @@ in
       ffmpeg-full
       gpu-screen-recorder
       ffmpegthumbnailer
-      bun
-      esbuild
-      fd
-      dart-sass
-      swww
       hyprpicker
       wttrbar
     ];
@@ -118,7 +114,7 @@ in
       enable = true;
       settings = {
         xwayland.force_zero_scaling = true;
-        render.direct_scanout = 1;
+        # render.direct_scanout = 1;
         "$mod" = "SUPER";
         bind = [
           ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
@@ -138,6 +134,9 @@ in
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
           "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
           "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
+          "CTRL $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+          "CTRL ALT $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+          "CTRL SHIFT $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
           "ALT,R,submap,passthrough"
           "$mod CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
           "$mod CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
@@ -244,6 +243,7 @@ in
           "animation slide left, match:namespace swaync-control-center"
         ];
         exec-once = [
+          "kbuildsycoca6"
           "${nautilus-listener}/bin/nautilis-listener"
           "app2unit -- wl-paste --watch cliphist store"
           "fumon"
@@ -474,7 +474,7 @@ in
         splash = false;
         wallpaper = {
           monitor = "";
-          path = "${../../../stuff/wallpaper.jpg}";
+          path = "${../../../stuff/wallpaper.png}";
           fit_mode = "cover";
         };
       };

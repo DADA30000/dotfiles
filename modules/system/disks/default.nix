@@ -117,6 +117,10 @@ in
           "/var/lib/sbctl"
           "/var/db"
           "/var/lib/zerotier-one"
+          { 
+            directory = "/var/lib/private"; 
+            mode = "u=rwx,g=,o="; 
+          }
           {
             directory = "/var/lib/acme";
             user = "acme";
@@ -151,6 +155,7 @@ in
           "/etc/machine-id"
           "/cloudflare1.conf"
           "/cloudflare2.conf"
+          "/var/lib/searx-secret"
         ]
         ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];
       })

@@ -26,7 +26,7 @@ let
     version = "1.0";
     src = inputs.libcef-transparency-linux;
     buildPhase = ''
-      gcc -O3 -Wall -Wno-parentheses -masm=intel -I${pmparser}/include -shared -fpic -z defs -std=c++23 -o patcher_lib.so patcher_lib.c -lc -l:libpmparser.a -L${pmparser}/build
+      gcc -O3 -Wall -Wno-parentheses -masm=intel -I${pmparser}/include -shared -fpic -z defs -std=c++23 -o patcher_lib.so patcher_lib.cc -lc -l:libpmparser.a -L${pmparser}/build
     '';
     installPhase = ''
       cp -r ./. $out

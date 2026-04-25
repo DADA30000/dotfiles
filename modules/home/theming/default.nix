@@ -150,6 +150,8 @@ in
     xdg = {
       dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
       configFile = {
+        "menus/applications.menu".source = ../../../stuff/plasma-applications.menu;
+        "GIMP_fake".source = ../../../stuff/GIMP;
         "networkmanager-dmenu".source = ../../../stuff/networkmanager-dmenu;
         "Kvantum".source = ../../../stuff/Kvantum;
         "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
@@ -166,7 +168,6 @@ in
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
         '';
-        "GIMP_fake".source = ../../../stuff/GIMP;
       }
       // (mkSourcePrefix "easyeffects/db" {
         "graphrc" = ../../../stuff/graphrc;

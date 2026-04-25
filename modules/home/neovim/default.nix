@@ -329,6 +329,7 @@ in
         coc-snippets
         vim-snippets
         coc-json
+        coc-java
         coc-sh
         coc-css
         coc-html
@@ -607,6 +608,10 @@ in
         vim.opt.undofile = true
         local undodir = vim.fn.expand('~/.config/nvim/undodir')
         vim.opt.undodir = undodir
+        vim.keymap.set({'n', 'v'}, 'd', '"_d')
+        vim.keymap.set({'n', 'v'}, 'dd', '"_dd')
+        vim.keymap.set({'n', 'v'}, 'x', '"_x')
+        vim.opt.clipboard = "unnamedplus"
         require("cord").setup({})
         require("auto-save").setup({})
         -- Temporary workaround for https://github.com/NixOS/nixpkgs/pull/492172

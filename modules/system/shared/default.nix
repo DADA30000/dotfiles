@@ -347,6 +347,7 @@ in
       #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
+      QT_QPA_TRANSPARENT_BACKGROUND = "1";
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
@@ -360,6 +361,10 @@ in
       with pkgs;
       with inputs;
       [
+        tonelib-gfx
+        hunspell
+        hunspellDicts.en_US-large
+        hunspellDicts.ru_RU
         sbctl
         virt-manager
         gemini-cli
@@ -425,6 +430,7 @@ in
         ungoogled-chromium
         heroic
         gsettings-desktop-schemas
+        resources
         libsForQt5.qt5ct
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
@@ -432,7 +438,7 @@ in
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
-        (nvtopPackages.full.override { nvidia = false; })
+        #(nvtopPackages.full.override { nvidia = false; })
         (kdePackages.qt6ct.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../../stuff/qt6ct-shenanigans.patch ];
           buildInputs =
@@ -577,6 +583,14 @@ in
       motherboard = "amd";
     };
 
+    # greetd = {
+    #   enable = true;
+    #   settings = {
+    #     default_session.command = "${pkgs.uwsm}/bin/uwsm start hyprland";
+    #     initial_session.command = "${pkgs.uwsm}/bin/uwsm start hyprland -- lock";
+    #   };
+    # };
+
     displayManager = {
       defaultSession = "hyprland-uwsm";
       autoLogin = {
@@ -592,7 +606,7 @@ in
 
     sunshine = {
       autoStart = true;
-      enable = false;
+      enable = true;
       capSysAdmin = true;
       openFirewall = true;
     };
@@ -674,6 +688,7 @@ in
 
     steam = {
       enable = true;
+      protontricks.enable = true;
       extraPackages = with pkgs; [
         libgdiplus
         fontconfig

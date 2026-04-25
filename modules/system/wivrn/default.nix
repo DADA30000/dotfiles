@@ -7,38 +7,35 @@
 }:
 let
   cfg = config.wivrn;
-  xrSources = pkgs.callPackage "${inputs.nixpkgs-xr}/_sources/generated.nix" {};
   pkg_xrizer = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer;
-  pkg_wivrn = (pkgs.wivrn.override { 
+  wivrn_i686 = pkgs.pkgsi686Linux.callPackage (pkg_wivrn.override) {
+    clientLibOnly = true;
+    git = pkgs.pkgsi686Linux.git.override { withManual = false; };
+    android-tools = pkgs.android-tools.overrideAttrs (old: {
+      cmakeFlags = (old.cmakeFlags or [ ]) ++ [ "-DOPENSSL_NO_ASM=ON" ];
+    });
+  };  
+  pkg_wivrn = (inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
     cudaSupport = true;
     xrizer = xrizer_multilib;
-  }).overrideAttrs (finalAttrs: prevAttrs: {
-    inherit (xrSources.wivrn) pname version src;
-
-    monado = pkgs.applyPatches {
-      inherit (xrSources.wivrn-monado) src;
-      inherit (prevAttrs.monado) patches postPatch;
-    };
-
-    patches = [ ];
-
-    cmakeFlags = (pkgs.lib.filter (flag: !pkgs.lib.hasInfix "GIT_DESC" flag) prevAttrs.cmakeFlags)
-      ++ [
-        (pkgs.lib.cmakeFeature "GIT_DESC" "v${prevAttrs.version}-0-g${builtins.substring 0 8 finalAttrs.version}")
-        (pkgs.lib.cmakeFeature "GIT_COMMIT" finalAttrs.version)
-        (pkgs.lib.cmakeFeature "WIVRN_USE_NVENC" "ON")
-      ];
-  });
+    cudaPackages = pkgs.cudaPackages;
+  }).overrideAttrs
+  (
+    finalAttrs: prevAttrs: {
+      NIX_CFLAGS_COMPILE = (prevAttrs.NIX_CFLAGS_COMPILE or "") +  " -march=znver5 -O3";
+      monado = prevAttrs.monado.overrideAttrs (oldAttrs: {
+        patches = (oldAttrs.patches or [ ]) ++ [
+          ../../../stuff/monado.patch
+        ];
+      });
+    }
+  );  
   xrizer_multilib = pkgs.symlinkJoin {
     name = "xrizer-multilib";
     paths = [
       pkg_xrizer
       (pkgs.pkgsi686Linux.callPackage pkg_xrizer.override { })
     ];
-  };
-  wivrn_i686 = pkgs.pkgsi686Linux.callPackage pkg_wivrn.override {
-    clientLibOnly = true;
-    git = pkgs.pkgsi686Linux.git.override { withManual = false; };
   };
 in
 with lib;
@@ -50,7 +47,6 @@ with lib;
     services.wivrn = {
       enable = true;
       openFirewall = true;
-      defaultRuntime = true;
       autoStart = true;
       steam.importOXRRuntimes = true;
       highPriority = true;

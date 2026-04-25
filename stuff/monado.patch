@@ -1,0 +1,15 @@
+diff --git a/src/xrt/state_trackers/oxr/oxr_objects.h b/src/xrt/state_trackers/oxr/oxr_objects.h
+index e0f7f2e27..3aa9031b0 100644
+--- a/src/xrt/state_trackers/oxr/oxr_objects.h
++++ b/src/xrt/state_trackers/oxr/oxr_objects.h
+@@ -109,8 +109,8 @@ extern "C" {
+  */
+ 
+ 
+-#define XRT_MAX_HANDLE_CHILDREN 256
+-#define OXR_MAX_BINDINGS_PER_ACTION 32
++#define XRT_MAX_HANDLE_CHILDREN 2048
++#define OXR_MAX_BINDINGS_PER_ACTION 512
+ 
+ /*!
+  * Function pointer type for a handle destruction function.

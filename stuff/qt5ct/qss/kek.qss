@@ -1,4 +1,37 @@
-* {
-    background-color: rgba(0,0,0,1%);
+QMainWindow,
+QDialog,
+QWidget#centralwidget {
+    background-color: rgba(0, 0, 0, 1%);
+    color: white;
+}
+
+QStackedWidget,
+QTabWidget,
+QTabWidget::pane,
+QSplitter,
+QGroupBox {
+    background-color: rgba(0, 0, 0, 1%);
+}
+
+QAbstractScrollArea,
+QAbstractScrollArea::viewport {
+    background-color: rgba(0, 0, 0, 1%);
+}
+
+QAbstractItemView {
+    alternate-background-color: transparent;
+}
+
+QToolBar,
+QMenuBar,
+QMenu,
+QStatusBar {
+    background-color: rgba(0, 0, 0, 1%);
+}
+
+*:disabled {
+    color: rgba(255, 255, 255, 40%);
+}
+QToolTip {
     color: white;
 }

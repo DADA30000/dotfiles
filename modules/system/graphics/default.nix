@@ -34,6 +34,7 @@ in
         (mkIf cfg.amdgpu.pro { opencl.enable = true; })
       ];
       nvidia = mkIf cfg.nvidia.enable {
+        dynamicBoost.enable = true;
         modesetting.enable = true;
         package = config.boot.kernelPackages.nvidiaPackages.beta;
         open = true;

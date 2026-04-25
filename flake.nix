@@ -46,6 +46,10 @@
         home-manager.follows = "home-manager";
       };
     };
+    nix-cachyos-kernel = {
+      url = "github:xddxdd/nix-cachyos-kernel/release";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.0.0";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -155,7 +159,7 @@
         prev_system:
         let
           system = prev_system // {
-            specialArgs = prev_system.specialArgs // {
+            specialArgs = (prev_system.specialArgs or {}) // {
               user-hash = null;
               user = user_iso;
               inherit

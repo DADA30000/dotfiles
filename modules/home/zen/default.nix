@@ -67,7 +67,7 @@ let
   
     nativeBuildInputs = [
       pkgs.nodejs
-      pkgs.nodePackages.postcss
+      pkgs.postcss
       pkgs.jq
     ];
   
@@ -75,7 +75,7 @@ let
       runHook preBuild
       export HOME=$(mktemp -d)
       mkdir -p node_modules
-      ln -s ${pkgs.nodePackages.postcss}/lib/node_modules/postcss ./node_modules/postcss
+      ln -s ${pkgs.postcss}/lib/node_modules/postcss ./node_modules/postcss
       echo '${zen-internet-settings}' > settings.json
       node update-styles-json.mjs
       jq -n \
