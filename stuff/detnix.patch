@@ -1,0 +1,19 @@
+diff --git a/src/libexpr/primops.cc b/src/libexpr/primops.cc
+index a997c96..40a74a9 100644
+--- a/src/libexpr/primops.cc
++++ b/src/libexpr/primops.cc
+@@ -1778,14 +1778,6 @@ static void derivationStrictInternal(
+                 [&](const NixStringContextElem::Path & p) {
+                     if (!drvS)
+                         drvS = drv.unparse(*state.store, true);
+-                    if (drvS->find(p.storePath.to_string()) != drvS->npos) {
+-                        auto devirtualized = state.devirtualize(p.storePath, &rewrites);
+-                        warn(
+-                            "Using 'builtins.derivation' to create a derivation named '%s' that references the store path '%s' without a proper context. "
+-                            "The resulting derivation will not have a correct store reference, so this is unreliable and may stop working in the future.",
+-                            drvName,
+-                            state.store->printStorePath(devirtualized));
+-                    }
+                 },
+             },
+             c.raw);
