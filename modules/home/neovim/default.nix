@@ -46,16 +46,6 @@ let
       rustup default nix-system
     fi
   '';
-  nix-path =
-    pkgs.runCommand "kekma"
-      {
-        src = ../../../stuff/nixpkgs.tar.zst;
-      }
-      ''
-        PATH=$PATH:${pkgs.zstd}/bin
-        mkdir $out
-        tar --strip-components=1 -xvf $src -C $out
-      '';
   coc_cfg = ''
     -- https://raw.githubusercontent.com/neoclide/coc.nvim/master/doc/coc-example-config.lua
 
@@ -427,7 +417,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
+                  expr = "import (builtins.getFlake \"git+file://${config.zsh.nix.path}?rev=${config.zsh.nix.rev}\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];

@@ -1,8 +1,18 @@
 {
   inputs = {
-    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    # determinate = {
+    #   url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
+    #   inputs = {
+    #     nixpkgs.follows = "nixpkgs";
+    #     nix.inputs = {
+    #       # nixpkgs.follows = "nixpkgs";
+    #       nixpkgs-23-11.follows = "nixpkgs";
+    #       nixpkgs-regression.follows = "nixpkgs";
+    #     };
+    #   };
+    # };
     pyproject-build-systems = {
       url = "github:pyproject-nix/build-system-pkgs";
       inputs = {
@@ -105,6 +115,10 @@
     nix-search = {
       url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    vencord-src = {
+    url = "github:Vendicated/Vencord";
+      flake = false;
     };
     my-internet = {
       url = "github:sameerasw/my-internet";
@@ -213,6 +227,7 @@
         ];
 
       modules-list = [
+        # inputs.determinate.nixosModules.default
         inputs.impermanence.nixosModules.impermanence
         inputs.lanzaboote.nixosModules.lanzaboote
         inputs.home-manager.nixosModules.home-manager

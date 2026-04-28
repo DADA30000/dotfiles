@@ -35,3 +35,15 @@ QStatusBar {
 QToolTip {
     color: white;
 }
+PropertiesWidget,
+QScrollArea,
+QWidget#scrollAreaWidgetContents,
+QDockWidget,
+QDockWidget > QWidget {
+    background-color: rgba(0, 0, 0, 1%);
+}
+
+QWidget#mainWindow QWidget#centralWidget {
+    background-color: rgba(0, 0, 0, 1%);
+}
+

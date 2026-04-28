@@ -41,8 +41,6 @@ jobs:
 
       - name: Build ISO
         run: |
-          ./complete.sh
-          git add -f stuff/nixpkgs.tar.zst
           nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 32 -j 32 -o keep_deps
           nix-collect-garbage -d
           nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback

@@ -8,23 +8,58 @@
 with lib;
 let
   cfg = config.zsh;
-  nix-path =
-    pkgs.runCommand "kekma"
-      {
-        src = ../../../stuff/nixpkgs.tar.zst;
-      }
-      ''
-        PATH=$PATH:${pkgs.zstd}/bin
-        mkdir $out
-        tar --strip-components=1 -xvf $src -C $out
-      '';
+  nix-rev = builtins.readFile "${nix-path}/result";
+  nix-path = pkgs.stdenv.mkDerivation {
+    name = "nixpkgs-fake-git-repo";
+    src = inputs.nixpkgs;
+    nativeBuildInputs = [ pkgs.git ];
+    
+    GIT_AUTHOR_NAME = "Nix Builder";
+    GIT_AUTHOR_EMAIL = "nix@example.com";
+    GIT_COMMITTER_NAME = "Nix Builder";
+    GIT_COMMITTER_EMAIL = "nix@example.com";
+    GIT_AUTHOR_DATE = "1970-01-01T00:00:01Z";
+    GIT_COMMITTER_DATE = "1970-01-01T00:00:01Z";
+
+    dontFixup = true;
+    dontPatch = true;
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = ''
+      mkdir -p $out
+      cp -aT . $out
+      cd $out
+      git init
+      git add .
+      git commit -m "Deterministic nixpkgs bundle"
+      git rev-parse HEAD | tr -d '\n' > $out/result
+      echo finished
+    '';
+  };
 in
 {
   options.zsh = {
     enable = mkEnableOption "zsh shell";
+    nix = {
+      path = lib.mkOption {
+        type = lib.types.package;
+        internal = true;
+        visible = false; 
+      };
+      rev = lib.mkOption {
+        type = lib.types.str;
+        internal = true;
+        visible = false; 
+      };
+    };
   };
 
   config = mkIf cfg.enable {
+    zsh.nix = {
+      path = nix-path;
+      rev = nix-rev;
+    };
     programs = {
       zoxide = {
         enable = true;
@@ -62,7 +97,7 @@ in
         envExtra = ''
           touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
           source "${config.home.homeDirectory}"/.zsh/.zshenv_add
-          local NIX_FLAKE_PREAMBLE='import (builtins.getFlake "git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1") { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
+          local NIX_FLAKE_PREAMBLE='import (builtins.getFlake "git+file://${nix-path}?rev=${nix-rev}") { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
           _ns_parse_args() {
             flags=() pkgs=() pkgs_raw=()
             while (( $# > 0 )); do
@@ -186,7 +221,6 @@ in
               export UV_SYSTEM_PYTHON=true
               export TEMPDIR=$(${pkgs.coreutils-full}/bin/mktemp -d)
               export GIT_LFS_SKIP_SMUDGE=1
-              git clone https://github.com/NixOS/nixpkgs -b nixos-unstable --depth 1 $TEMPDIR/nixpkgs
               git clone https://github.com/kevoreilly/CAPEv2 --depth 1 $TEMPDIR/cape
               (
                 cd $TEMPDIR/cape
@@ -207,15 +241,11 @@ in
                 mv uv.lock nix_workspace
                 mv capev2 nix_workspace
               )
-              tar -cv --zstd -f $TEMPDIR/nixpkgs.tar.zst -C $TEMPDIR nixpkgs
-              sudo rm -rf /etc/nixos/stuff/nixpkgs.tar.zst
               sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
               sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
-              sudo cp $TEMPDIR/nixpkgs.tar.zst /etc/nixos/stuff
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
-              cp /etc/nixos/stuff/nixpkgs.tar.zst ~/.cache/flake-lock-backups/"nixpkgs.tar.zst_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos
             )
@@ -248,7 +278,7 @@ in
           u-build() { nh os build /etc/nixos $@ }
           u-debug() { nix build /etc/nixos\#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try $@ }
           ns() { ns-dev $@ }
-          ns-repl() { nix repl --expr "import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }" $@ }
+          ns-repl() { nix repl --expr "$NIX_FLAKE_PREAMBLE" $@ }
           nsl() { nix-locate $@ }
           fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' $@ }
           cps() { rsync -ahr --progress $@ }
@@ -312,10 +342,7 @@ in
                       local packages_string
                       packages_string=$(nix eval --raw --expr "
                         let
-                          pkgs = import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") {
-                            system = \"${pkgs.stdenv.hostPlatform.system}\";
-                            config.allowUnfree = true;
-                          };
+                          pkgs = $NIX_FLAKE_PREAMBLE;
                           startAttr = pkgs.''${curr_word%.*};
                           startPrefix = \"''${curr_word%.*}\";
                           childNames = builtins.attrNames startAttr;
@@ -333,7 +360,7 @@ in
                       packages_string=$(nix eval --raw --expr "
                         builtins.concatStringsSep \"\n\" (
                           builtins.attrNames (
-                            import (builtins.getFlake \"git+file://${nix-path}?rev=${inputs.nixpkgs.rev}&shallow=1\") {
+                            import (builtins.getFlake \"git+file://${nix-path}?rev=${nix-rev}\") {
                               system = \"x86_64-linux\";
                               config.allowUnfree = true;
                             }

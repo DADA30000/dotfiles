@@ -8,6 +8,49 @@
   ...
 }:
 let
+  vencord = pkgs.vencord.overrideAttrs (old: {
+    version = inputs.vencord-src.shortRev;
+    src = inputs.vencord-src;
+
+    env = {
+      VENCORD_REMOTE = "Vendicated/Vencord";
+      VENCORD_HASH = inputs.vencord-src.shortRev;
+    };
+
+    pnpmDeps = pkgs.fetchPnpmDeps {
+      pname = old.pname;
+      src = inputs.vencord-src;
+      patches = old.patches;
+      postPatch = old.postPatch;
+      pnpm = pkgs.pnpm_10;
+      fetcherVersion = 2;
+      hash = "sha256-GiUV2x8i7ewzn66v5wBUq67oNvrxZzOsh5TuQUtpJNQ=";
+    };
+  });
+  fixPrism =
+    pkg:
+    pkgs.symlinkJoin {
+      inherit (pkg) name;
+      paths = [ pkg ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        rm $out/bin/prismlauncher
+        makeWrapper ${pkg}/bin/prismlauncher $out/bin/prismlauncher \
+          --run '
+            CONF_DIR="$XDG_DATA_HOME/PrismLauncher"
+            CONF="$CONF_DIR/prismlauncher.cfg"
+            GEOM="AdnQywADAAAAAAAAAAAAAAAABDYAAAO/AAAAAAAAAAD////+/////gAAAAACAAAABkAAAAAAAAAAAAAABDYAAAO/"
+            
+            mkdir -p "$CONF_DIR"
+
+            if [ ! -f "$CONF" ]; then
+              echo "MainWindowGeometry=$GEOM" > "$CONF"
+            else
+              sed -i "s|^MainWindowGeometry=.*|MainWindowGeometry=$GEOM|" "$CONF"
+            fi
+          '
+      '';
+    };
   collectUniqueInputs =
     inputsMap: seenPaths:
     let
@@ -208,9 +251,17 @@ in
 
     package = pkgs.nixVersions.latest;
 
+    # package = lib.mkForce (
+    #   inputs.determinate.inputs.nix.packages.${pkgs.stdenv.hostPlatform.system}.default.appendPatches [
+    #     ../../../stuff/detnix.patch
+    #   ]
+    # );
+
     settings = {
 
       # eval-cores = 0;
+
+      # lazy-trees = false;
 
       # Disable IFD to speed up evaluation
       # allow-import-from-derivation = false;
@@ -286,11 +337,11 @@ in
   };
 
   home-manager.extraSpecialArgs.kekma = {
-    
+
     nix = config.docs.man-cache-nix;
-    
+
     home = config.docs.man-cache-home;
-  
+
   };
 
   boot = {
@@ -341,10 +392,12 @@ in
     ];
 
     variables = {
-      #AQ_DRM_DEVICES = "/dev/dri/card2"; 
+      #AQ_DRM_DEVICES = "/dev/dri/card2";
       #AQ_NO_MODESET_PROBE = "1";
       #__GLX_VENDOR_LIBRARY_NAME = "mesa";
       #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
+      # To fix Telegram sound in Discord screenshare
+      ALSOFT_DRIVERS = "pulse";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
       QT_QPA_TRANSPARENT_BACKGROUND = "1";
@@ -453,17 +506,20 @@ in
         (aria2.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../../stuff/max-connection-to-unlimited.patch ];
         }))
-        (prismlauncher.override {
-          prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
-            patches = prev.patches or [ ] ++ [ ../../../stuff/prismlauncher.patch ];
-          });
-        })
+        (fixPrism (
+          prismlauncher.override {
+            prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
+              patches = prev.patches or [ ] ++ [ ../../../stuff/prismlauncher.patch ];
+            });
+          }
+        ))
         (bottles.override {
           removeWarningPopup = true;
         })
         (discord-canary.override {
           withOpenASAR = true;
           withVencord = true;
+          vencord = vencord;
         })
         # Below are for offline build
         (python3.withPackages (
@@ -689,6 +745,7 @@ in
     steam = {
       enable = true;
       protontricks.enable = true;
+      extraCompatPackages = [ pkgs.proton-ge-bin ];
       extraPackages = with pkgs; [
         libgdiplus
         fontconfig
