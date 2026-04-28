@@ -5,6 +5,7 @@
   wrapped,
   orig,
   config,
+  inputs,
   ...
 }:
 let
@@ -167,18 +168,12 @@ in
           deps = [ "specialfs" ];
 
           text = ''
-            PATH="$PATH:${pkgs.gzip}/bin:${pkgs.coreutils-full}/bin:${pkgs.gnutar}/bin"
+            PATH="$PATH:${pkgs.coreutils-full}/bin"
             if [[ ! -d /repo ]]; then
               rm -rf /repo
-              mkdir /repo
-              tar -xzvf ${../../stuff/repo.tar.gz} -C /repo
-              rm /repo/stuff/nixpkgs.tar.zst
-              cp -f "${../../stuff/nixpkgs.tar.zst}" /repo/stuff/nixpkgs.tar.zst
-              chown root:root -R /repo
-              cd /repo
+              cp -r --no-preserve=mode "${inputs.self}" /repo
               mkdir -p /etc/nixos
-              cp ${../../stuff/repo.tar.gz} /repo/stuff/repo.tar.gz
-              cp -r ./machines ./stuff ./modules ./flake.nix ./flake.lock /etc/nixos
+              cp -r /repo/{machines,stuff,modules,flake.nix,flake.lock} /etc/nixos
             fi
           '';
 
