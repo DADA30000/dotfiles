@@ -513,7 +513,11 @@ in
             });
           }
         ))
-        (bottles.override {
+        (let
+          pkgs-fixed = pkgs.extend (self: super: {
+            openldap = super.openldap.overrideAttrs { doCheck = false; };
+          });
+        in pkgs-fixed.bottles.override {
           removeWarningPopup = true;
         })
         (discord-canary.override {
@@ -616,6 +620,8 @@ in
   };
 
   services = {
+
+    logind.settings.Login.HandlePowerKey = "suspend";
 
     blueman.enable = true;
 

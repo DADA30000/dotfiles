@@ -1,76 +1,41 @@
 {
-  "log": {
-    "level": "debug"
-  },
-  "inbounds": [
-    {
-      "listen": "127.0.0.1",
-      "listen_port": 2080,
-      "tag": "mixed-in",
-      "type": "mixed"
-    },
-    {
-      "type": "tun",
-      "tag": "tun-in",
-      "sniff": true,
-      "auto_route": true,
-      "strict_route": true,
-      "interface_name": "tun0",
-      "address": "172.19.0.1/30",
-      "route_exclude_address": [
-        "1.1.1.1/32",
-        "127.0.0.1/32",
-        "192.168.0.0/16"
-      ],
-      "stack": "system"
-    }
-  ],
   "outbounds": [
-    {
-        "type": "selector",
-        "tag": "zen-toggle",
-        "outbounds": [ "direct", "proxy" ]
-    },
     {
       "tag": "proxy2",
       "type": "vless",
-      "server": "",
-      "server_port": 0,
+      "server": "ip.address.here",
+      "server_port": 80115353,
       "flow": "xtls-rprx-vision",
-      "uuid": "",
+      "uuid": "uuidgen",
       "tls": {
         "enabled": true,
-        "server_name": "yahoo.com",
+        "server_name": "example.com",
         "reality": {
           "enabled": true,
-          "public_key": "",
-          "short_id": ""
+          "public_key": "smthsmthhere",
+          "short_id": "smthsmthhere"
         },
         "utls": {
           "enabled": true,
           "fingerprint": "chrome"
         }
       }
-    },
-    {
-      "type": "direct",
-      "tag": "direct"
     }
   ],
   "endpoints": [
     {
       "system": true,
       "name": "wg0",
-      "address": "10.8.1.18/32",
-      "private_key": "",
+      "address": "ip.address.here like 10.8.0.0/32",
+      "private_key": "smthsmthhere=",
       "type": "wireguard",
       "tag": "proxy",
       "peers": [
         {
-          "address": "",
-          "port": 0,
-          "public_key": "",
-          "pre_shared_key": "",
+          "address": "ip.address.here",
+          "port": 80115353,
+          "public_key": "smthsmthhere=",
+          "pre_shared_key": "smthsmthhere=",
           "allowed_ips": [
             "0.0.0.0/0",
             "::/0"
@@ -78,102 +43,6 @@
         }
       ]
     }
-  ],
-  "route": {
-    "final": "direct",
-    "auto_detect_interface": true,
-    "rules": [
-      {
-        "ip_cidr": [
-          "127.0.0.1/32",
-          "192.168.0.0/16"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "source_ip_cidr": [
-          "127.0.0.1/32",
-          "192.168.0.0/16"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "inbound": [ "mixed-in" ],
-        "outbound": "proxy"
-      },
-      {
-        "source_ip_cidr": [ "10.200.0.0/24" ], 
-        "outbound": "proxy"
-      },
-      {
-        "process_name": [
-          "Battle.net.exe", ".AyuGram-wrapped", ".Discord-wrapped", ".DiscordCanary-wrapped", "TeamSpeak", "Titanfall2.exe", "electron"
-        ],
-        "outbound": "proxy"
-      },
-      {
-        "domain_suffix": [
-          "dis.gd",
-          "discord.co",
-          "discord.com",
-          "discord.design",
-          "discord.dev",
-          "discord.gg",
-          "discord.gift",
-          "discord.gifts",
-          "discord.media",
-          "discord.new",
-          "discord.store",
-          "discord.tools",
-          "discordapp.com",
-          "discordapp.net",
-          "discordmerch.com",
-          "discordpartygames.com",
-          "discord-activities.com",
-          "discordactivities.com",
-          "discordsays.com",
-          "discordstatus.com",
-          "googlevideo.com",
-          "youtu.be",
-          "youtube.com",
-          "ytimg.com",
-          "ggpht.com",
-          "animego.org",
-          "animego.one",
-          "animego.bz",
-          "aniboom.one",
-          "ya-ligh.com",
-          "jut.su",
-          "aistudio.google.com",
-          "chatgpt.com",
-          "ai.google.dev",
-          "generativelanguage.googleapis.com",
-          "content-generativelanguage.googleapis.com",
-          "makersuite.google.com",
-          "alkalimakersuite-pa.clients6.google.com",
-          "hyprland.cachix.org",
-          "s3.dualstack.us-east-2.amazonaws.com",
-          "beatsaver.com",
-          "gemini.google.com",
-          "sagernet.com",
-          "cloudflare-ech.com",
-          "aiplatform.googleapis.com",
-          "oauth2.googleapis.com",
-          "apis.google.com",
-          "googleapis.com"
-        ],
-        "outbound": "proxy"
-      },
-      {
-        "process_name": [ "zen", ".zen-wrapped", "zen-bin", "zen.bin", ".zen-twilight-wrapped", "zen-twilight", ".zen-beta-wrapper", "zen-beta" ],
-        "outbound": "zen-toggle"
-      }
-    ]
-  },
-  "experimental": {
-    "clash_api": {
-      "external_controller": "127.0.0.1:9090"
-    }
-  }
+  ]
 }
 

@@ -116,8 +116,12 @@
       url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    zapret-flowseal = {
+      url = "github:Flowseal/zapret-discord-youtube";
+      flake = false;
+    };
     vencord-src = {
-    url = "github:Vendicated/Vencord";
+      url = "github:Vendicated/Vencord";
       flake = false;
     };
     my-internet = {

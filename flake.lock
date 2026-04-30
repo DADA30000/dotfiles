@@ -1338,6 +1338,7 @@
         "uv2nix": "uv2nix",
         "vencord-src": "vencord-src",
         "xrizer": "xrizer",
+        "zapret-flowseal": "zapret-flowseal",
         "zen-browser": "zen-browser"
       }
     },
@@ -1646,6 +1647,22 @@
       "original": {
         "owner": "Supreeeme",
         "repo": "xrizer",
+        "type": "github"
+      }
+    },
+    "zapret-flowseal": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777542578,
+        "narHash": "sha256-0olU50qdORNU0KTuP+xen/ybfX/0j7m0A5Jh5LNmgFk=",
+        "owner": "Flowseal",
+        "repo": "zapret-discord-youtube",
+        "rev": "4f8d81b74228dd5dc11dae3fa32337b9eaa16669",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Flowseal",
+        "repo": "zapret-discord-youtube",
         "type": "github"
       }
     },

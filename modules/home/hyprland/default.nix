@@ -329,7 +329,6 @@ in
           disable_logs = true;
         };
         dwindle = {
-          pseudotile = true;
           preserve_split = true;
         };
         misc = {
