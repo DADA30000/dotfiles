@@ -115,8 +115,6 @@ in
 
   startup-sound.enable = false;
 
-  zerotier.enable = false;
-
   hardware = {
     opentabletdriver.enable = true;
     bluetooth = {
