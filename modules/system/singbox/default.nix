@@ -271,6 +271,7 @@ let
         stack = "system";
         interface_name = "tun0";
         auto_route = true;
+        mtu = 1400;
         tag = "tun-in";
         address = "172.19.0.1/30";
         type = "tun";
@@ -410,10 +411,9 @@ let
       if [[ -n "$GW_IP" ]] && [[ -n "$GW_DEV" ]]; then
         PHYSICAL_IP=$(ip -4 addr show dev $GW_DEV | awk '/inet / {print $2}' | cut -d/ -f1)
 
-        ip route show table $FIX_INCOMING_PACKETS_TABLE | grep -q "default via $GW_IP" || \
-          ip route add default via $GW_IP dev $GW_DEV table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null
+        ip route replace default via $GW_IP dev $GW_DEV table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null
 
-        iptables -t mangle -L BYPASS_CHECK >/dev/null 2>&1 || iptables -t mangle -N BYPASS_CHECK
+        iptables -t mangle -N BYPASS_CHECK || true
         
         if ip link show tun0 >/dev/null 2>&1; then
            iptables -t mangle -C BYPASS_CHECK -i tun0 -j RETURN 2>/dev/null || \
@@ -421,7 +421,7 @@ let
         fi
 
         iptables -t mangle -C BYPASS_CHECK -i lo -j RETURN 2>/dev/null || \
-          iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN
+          iptables -t mangle -A BYPASS_CHECK -i lo -j RETURN 2>/dev/null || true
         
         iptables -t mangle -C BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK 2>/dev/null || \
           iptables -t mangle -A BYPASS_CHECK -j CONNMARK --set-mark $FIX_INCOMING_PACKETS_MARK
@@ -472,13 +472,20 @@ let
     FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
     VPNIFY_TABLE=${VPNIFY_TABLE}
     GAME_PEERS_TABLE=${GAME_PEERS_TABLE}
+    
+    rm -rf /etc/netns/vpn_wrapper
 
     ip netns del vpn_wrapper 2>/dev/null || true
-    ip link del veth_host 2>/dev/null || true
-    ip rule delete iif veth_host lookup $VPNIFY_TABLE priority 2 2>/dev/null || true
     ip route flush table $VPNIFY_TABLE 2>/dev/null || true
 
-    iptables -t mangle -D POSTROUTING -m mark --mark ${toString zapret-mark} -j NFQUEUE --queue-num ${zapret-qnum} --queue-bypass
+    for prio in 1 2; do
+      while ip rule del priority $prio 2>/dev/null; do :; done
+    done
+
+    iptables -t mangle -D PREROUTING -j CONNMARK --restore-mark --mask 0xFFFE 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -m mark --mark ${toString zapret-mark} -j CONNMARK --save-mark --mask 0xFFFE 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -m mark --mark ${toString zapret-mark} -j NFQUEUE --queue-num ${zapret-qnum} --queue-bypass 2>/dev/null || true
+    
     iptables -t mangle -D PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || true
     iptables -t mangle -D OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || true
     iptables -t mangle -F BYPASS_CHECK 2>/dev/null || true
@@ -486,10 +493,9 @@ let
     ip rule del fwmark $FIX_INCOMING_PACKETS_MARK lookup $FIX_INCOMING_PACKETS_TABLE priority 50 2>/dev/null || true
     ip route flush table $FIX_INCOMING_PACKETS_TABLE 2>/dev/null || true
 
-    GW_DEV=$(ip route show default table main | awk '/default/ {print $5}' | head -n 1)
-    if [[ -n "$GW_DEV" ]]; then
-      iptables -t mangle -D PREROUTING -i $GW_DEV -m conntrack --ctstate NEW -j SET --add-set bypass_peers src 2>/dev/null || true
-    fi
+    iptables-save -t mangle | grep -e "-j SET --add-set bypass_peers src" | sed 's/-A /-D /' | while read -r cmd; do
+      iptables -t mangle $cmd 2>/dev/null || true
+    done
     ip rule del lookup $GAME_PEERS_TABLE priority 5000 2>/dev/null || true
     ip route flush table $GAME_PEERS_TABLE 2>/dev/null || true
     ipset destroy bypass_peers 2>/dev/null || true
@@ -523,7 +529,11 @@ in
 
           ${cleanup_script}
 
-          iptables -t mangle -A POSTROUTING -m mark --mark ${toString zapret-mark} -j NFQUEUE --queue-num ${zapret-qnum} --queue-bypass
+          ip rule add fwmark ${toString zapret-mark}/${toString zapret-mark} lookup main priority 1
+          ip rule add fwmark 0x40000000/0x40000000 lookup main priority 2
+          iptables -t mangle -I PREROUTING -j CONNMARK --restore-mark --mask 0xFFFE
+          iptables -t mangle -I OUTPUT -m mark --mark ${toString zapret-mark} -j CONNMARK --save-mark --mask 0xFFFE
+          iptables -t mangle -A OUTPUT -m mark --mark ${toString zapret-mark} -j NFQUEUE --queue-num ${zapret-qnum} --queue-bypass
 
           ip netns add vpn_wrapper
           ip link add veth_host mtu 1400 type veth peer name veth_peer mtu 1400
@@ -554,7 +564,6 @@ in
     boot.kernel.sysctl = {
       "net.ipv4.conf.all.rp_filter" = 0;
       "net.ipv4.conf.default.rp_filter" = 0;
-      "net.ipv4.conf.veth_host.rp_filter" = 0;
       "net.ipv4.ping_group_range" = "0 2147483647";
       "net.ipv4.ip_forward" = 1;
     };
@@ -571,6 +580,8 @@ in
         enable = true;
         resolveLocalQueries = false;
         settings = {
+          bind-dynamic = true;
+          except-interface = "waydroid0";
           server = [ dns ];
           neg-ttl = 1;
           cache-size = 10000;

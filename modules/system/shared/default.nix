@@ -544,6 +544,8 @@ in
 
   virtualisation = {
 
+    waydroid.enable = true;
+
     spiceUSBRedirection.enable = true;
 
     # Set options for vm that is built using nixos-rebuild build-vm

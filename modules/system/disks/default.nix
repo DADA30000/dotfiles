@@ -115,6 +115,8 @@ in
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/lib/sbctl"
+          "/var/lib/waydroid"
+          "/etc/waydroid-extra"
           "/var/db"
           "/var/lib/zerotier-one"
           { 
