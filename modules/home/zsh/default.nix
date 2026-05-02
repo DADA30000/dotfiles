@@ -252,7 +252,7 @@ in
           }
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
           umu-run() { umu-run-wrapper $@ }
-          u() { nh os switch /etc/nixos $@ }
+          u() { nh os switch --keep-going /etc/nixos $@ }
           nsl-full() { ${
             inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
           }/bin/nix-locate $@ }

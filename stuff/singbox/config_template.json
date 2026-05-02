@@ -29,7 +29,7 @@
       "address": "ip.address.here like 10.8.0.0/32",
       "private_key": "smthsmthhere=",
       "type": "wireguard",
-      "tag": "proxy",
+      "tag": "proxy-server",
       "peers": [
         {
           "address": "ip.address.here",

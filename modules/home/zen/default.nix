@@ -416,7 +416,6 @@ in
           "zen.welcome-screen.seen" = true;
           "zen.view.use-single-toolbar" = false;
           "zen.view.compact.enable-at-startup" = true;
-          "widget.wayland.force-move-to-rect" = true;
         };
         extensions = {
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [

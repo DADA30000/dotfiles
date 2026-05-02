@@ -7,7 +7,7 @@
 with lib;
 let
   cfg = config.theming;
-  # https://github.com/Vendicated/Vencord/blob/main/src/api/Settings.ts
+  # https://github.com/Vendicated/Vencord/tree/main/src/plugins
   vencord_settings = (pkgs.formats.json { }).generate "settings.json" {
     autoUpdate = true;
     autoUpdateNotification = true;
@@ -27,6 +27,7 @@ let
       RoleColorEverywhere.enabled = true;
       ShowHiddenChannels.enabled = true;
       ShowHiddenThings.enabled = true;
+      SpotifyShareCommands.enabled = true;
       SpotifyCrack.enabled = true;
       Translate.enabled = true;
       VoiceDownload.enabled = true;

@@ -131,12 +131,12 @@ in
 
         case $exit_code in
           0)
-            umu-run-wrapper "$1"
+            app2unit -a "run-exe-ge" umu-run-wrapper "$1"
           ;;
           1)
             case "$choice" in
               "Запустить с помощью Proton UMU v${proton-umu.version}")
-                USE_PROTON_UMU=1 umu-run-wrapper "$1"
+                USE_PROTON_UMU=1 app2unit -a "run-exe-umu" umu-run-wrapper "$1"
               ;;
               "Выбрать другой файл")
                 selected_file=$(${pkgs.zenity}/bin/zenity --file-selection --title="Выберите файл для запуска")
@@ -164,7 +164,9 @@ in
         esac
       '')
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
-        export WINEPREFIX=$HOME/.umu
+        if [[ -z "$(printenv WINEPREFIX)" ]]; then
+          export WINEPREFIX=$HOME/.umu
+        fi
         if [[ ! -d "${config.xdg.dataHome}/umu" ]]; then
           ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
           if ! ${pkgs.systemd}/bin/systemctl --user start umu-check.service; then
@@ -180,11 +182,14 @@ in
           sleep 0.2
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
+        mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
         if [[ "$USE_PROTON_UMU" == 1 ]]; then
           export PROTONPATH="${proton-umu}"
         else
           export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
         fi
+        cp --no-preserve=mode "${proton-umu}/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
+        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
         UMU_RUNTIME_UPDATE=0 WINEDLLOVERRIDES="winhttp.dll=n,b;winmm.dll=n,b;SteamFix64.dll=n,b;steam_api64.dll=n,b;OnlineFix64.dll=n,b;SteamOverlay64.dll=n,b;version.dll=n,b" ${pkgs.gamemode}/bin/gamemoderun ${pkgs.umu-launcher}/bin/umu-run "$@"
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
         scan-umu-for-lnk & disown

@@ -178,6 +178,7 @@ let
             "Battle.net.exe"
             ".AyuGram-wrapped"
             ".Discord-wrapped"
+            ".spotify-wrapped"
             ".DiscordCanary-wrapped"
             "TeamSpeak"
             "electron"
@@ -240,6 +241,8 @@ let
             "votv.dev"
             "itch.io"
             "itch.zone"
+            "spotify.com"
+            "quora.com"
           ];
         }
         {
