@@ -128,9 +128,9 @@ in
           ", MENU, exec, app2unit -- ${read-text} region eng+osd"
           "SUPER, MENU, exec, app2unit -- ${read-text} window eng+osd"
           "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+osd"
-          "CTRL, MENU, exec, app2unit -- ${read-text} region jpn+chi_sim+kor+rus+osd"
-          "SUPER, MENU, exec, app2unit -- ${read-text} window jpn+chi_sim+kor+rus+osd"
-          "SHIFT, MENU, exec, app2unit -- ${read-text} output jpn+chi_sim+kor+rus+osd"
+          "CTRL, MENU, exec, app2unit -- ${read-text} region rus+osd"
+          "SUPER, MENU, exec, app2unit -- ${read-text} window rus+osd"
+          "SHIFT, MENU, exec, app2unit -- ${read-text} output rus+osd"
           "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
           "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
           "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
@@ -202,6 +202,7 @@ in
           "$mod, mouse:273, resizewindow"
         ];
         windowrule = [
+          "float on, match:class ^(steam)$, match:title negative:^(Steam)$"
           "float on, match:title ^(Извлечённый текст)$"
           "no_max_size on, match:class polkit-mate-authentication-agent-1"
           "pin on, match:class polkit-mate-authentication-agent-1"
@@ -267,11 +268,12 @@ in
         };
         gestures = {
           gesture = "3, horizontal, workspace";
-          workspace_swipe_distance = 300;
+          workspace_swipe_distance = 1000;
           workspace_swipe_invert = true;
-          workspace_swipe_cancel_ratio = 0.5;
+          workspace_swipe_cancel_ratio = 0.1;
           workspace_swipe_forever = true;
           workspace_swipe_create_new = true;
+          workspace_swipe_direction_lock = false;
         };
         general = {
           gaps_in = 5;

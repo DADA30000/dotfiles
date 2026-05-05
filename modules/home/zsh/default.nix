@@ -8,58 +8,11 @@
 with lib;
 let
   cfg = config.zsh;
-  nix-rev = builtins.readFile "${nix-path}/result";
-  nix-path = pkgs.stdenv.mkDerivation {
-    name = "nixpkgs-fake-git-repo";
-    src = inputs.nixpkgs;
-    nativeBuildInputs = [ pkgs.git ];
-    
-    GIT_AUTHOR_NAME = "Nix Builder";
-    GIT_AUTHOR_EMAIL = "nix@example.com";
-    GIT_COMMITTER_NAME = "Nix Builder";
-    GIT_COMMITTER_EMAIL = "nix@example.com";
-    GIT_AUTHOR_DATE = "1970-01-01T00:00:01Z";
-    GIT_COMMITTER_DATE = "1970-01-01T00:00:01Z";
-
-    dontFixup = true;
-    dontPatch = true;
-    dontConfigure = true;
-    dontBuild = true;
-
-    installPhase = ''
-      mkdir -p $out
-      cp -aT . $out
-      cd $out
-      git init
-      git add .
-      git commit -m "Deterministic nixpkgs bundle"
-      git rev-parse HEAD | tr -d '\n' > $out/result
-      echo finished
-    '';
-  };
 in
 {
-  options.zsh = {
-    enable = mkEnableOption "zsh shell";
-    nix = {
-      path = lib.mkOption {
-        type = lib.types.package;
-        internal = true;
-        visible = false; 
-      };
-      rev = lib.mkOption {
-        type = lib.types.str;
-        internal = true;
-        visible = false; 
-      };
-    };
-  };
+  options.zsh.enable = mkEnableOption "zsh shell";
 
   config = mkIf cfg.enable {
-    zsh.nix = {
-      path = nix-path;
-      rev = nix-rev;
-    };
     programs = {
       zoxide = {
         enable = true;
@@ -97,7 +50,13 @@ in
         envExtra = ''
           touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
           source "${config.home.homeDirectory}"/.zsh/.zshenv_add
-          local NIX_FLAKE_PREAMBLE='import (builtins.getFlake "git+file://${nix-path}?rev=${nix-rev}") { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
+          local NIX_FLAKE_PREAMBLE='(
+            let 
+              flake = builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}"; 
+              nixpkgs = import flake.inputs.nixpkgs { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; };
+            in
+              nixpkgs // { inherit (flake) inputs; }
+          )'
           _ns_parse_args() {
             flags=() pkgs=() pkgs_raw=()
             while (( $# > 0 )); do
@@ -245,14 +204,19 @@ in
               sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
+              echo "Fetching steamrt3 version and hash"
+              STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/VERSION.txt -O -)"
+              STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+              echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
+              echo "Finished fetching"
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
-              nh os switch /etc/nixos
+              nh os switch /etc/nixos --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5
             )
           }
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
           umu-run() { umu-run-wrapper $@ }
-          u() { nh os switch --keep-going /etc/nixos $@ }
+          u() { nh os switch --keep-going /etc/nixos -- --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5 $@ }
           nsl-full() { ${
             inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
           }/bin/nix-locate $@ }
@@ -360,7 +324,7 @@ in
                       packages_string=$(nix eval --raw --expr "
                         builtins.concatStringsSep \"\n\" (
                           builtins.attrNames (
-                            import (builtins.getFlake \"git+file://${nix-path}?rev=${nix-rev}\") {
+                            import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs {
                               system = \"x86_64-linux\";
                               config.allowUnfree = true;
                             }

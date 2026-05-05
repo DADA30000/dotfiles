@@ -51,41 +51,6 @@ let
           '
       '';
     };
-  collectUniqueInputs =
-    inputsMap: seenPaths:
-    let
-      results = lib.mapAttrsToList (
-        name: value:
-        if value == null || !(value ? outPath) || (lib.elem value.outPath seenPaths) then
-          [ ]
-        else
-          let
-            currentInput = {
-              inherit name;
-              path = value.outPath;
-            };
-            children =
-              if value ? inputs then collectUniqueInputs value.inputs (seenPaths ++ [ value.outPath ]) else [ ];
-          in
-          [ currentInput ] ++ children
-      ) inputsMap;
-    in
-    lib.flatten results;
-  allInputsRaw = collectUniqueInputs (removeAttrs inputs [ "self" ]) [ ];
-  groupedByName = lib.groupBy (x: x.name) allInputsRaw;
-  finalInputsList = lib.flatten (
-    lib.mapAttrsToList (
-      name: group:
-      if (lib.length group) == 1 then
-        group
-      else
-        lib.imap0 (idx: item: {
-          name = "${item.name}-${toString idx}";
-          path = item.path;
-        }) group
-    ) groupedByName
-  );
-  inputsFarm = pkgs.linkFarm "flake-inputs" finalInputsList;
 in
 {
 
@@ -269,10 +234,18 @@ in
 
       # Change cache providers (lower priority number = higher priority)
       substituters = [
-        # "https://hyprland.cachix.org"
         "https://cache.nixos.org?priority=1"
       ];
-      # trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
+
+      trusted-substituters = [ 
+        "https://hyprland.cachix.org"
+        "https://attic.xuyh0120.win/lantian"
+      ];
+
+      trusted-public-keys = [ 
+        "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
+        "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
+      ];
 
       # Enable flakes
       experimental-features = [
@@ -380,7 +353,6 @@ in
     etc = {
       "libxkbcommon".source = pkgs.libxkbcommon;
       "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
-      inputs.source = inputsFarm;
     };
 
     pathsToLink = [
@@ -519,7 +491,7 @@ in
           removeWarningPopup = true;
         })
         (discord-canary.override {
-          withOpenASAR = true;
+          withOpenASAR = false;
           withVencord = true;
           vencord = vencord;
         })
@@ -750,6 +722,17 @@ in
 
     steam = {
       enable = true;
+      #package = inputs.millenium.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+      package = pkgs.steam.override {
+        extraEnv = {
+          MANGOHUD = true;
+          OBS_VKCAPTURE = true;
+          RADV_TEX_ANISO = 16;
+        };
+        extraLibraries = p: with p; [
+          atk
+        ];
+      };
       protontricks.enable = true;
       extraCompatPackages = [ pkgs.proton-ge-bin ];
       extraPackages = with pkgs; [

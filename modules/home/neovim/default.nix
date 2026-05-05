@@ -1,6 +1,6 @@
 {
   config,
-  inputs,
+  osConfig,
   lib,
   pkgs,
   kekma,
@@ -417,7 +417,7 @@ in
             settings = {
               nixd = {
                 nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://${config.zsh.nix.path}?rev=${config.zsh.nix.rev}\") { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
+                  expr = "import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                 };
                 formatting = {
                   command = [ "nixfmt" ];

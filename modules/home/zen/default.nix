@@ -171,8 +171,8 @@ let
     installPhase = ''
       # Installing Sine
       mkdir -p $out/JS
-      cp --no-preserve=mode -r $src/{sine.sys.mjs,engine} $out/JS
-      cp --no-preserve=mode -r $src_2/profile/utils $src/locales $out
+      cp --no-preserve=mode -r $src/locales $src/src/* $out/JS
+      cp --no-preserve=mode -r $src_2/profile/utils $out
       # Installing Nebula
       mkdir -p $out/sine-mods
       cp --no-preserve=mode -r $src_1 $out/sine-mods/Nebula

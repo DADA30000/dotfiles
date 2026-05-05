@@ -112,6 +112,10 @@
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # millenium = {
+    #   url = "github:SteamClientHomebrew/Millennium?dir=packages/nix";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
     nix-search = {
       url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -216,13 +220,13 @@
       umport = (import ./modules/umport.nix { inherit (inputs.nixpkgs) lib; }).umport;
 
       system-modules = umport {
-        paths = [ ./modules/system ];
+        paths = [ ./modules/system ./modules/universal ];
         recursive = false;
       };
 
       home-modules =
         umport {
-          paths = [ ./modules/home ];
+          paths = [ ./modules/home ./modules/universal ];
           recursive = false;
         }
         ++ [

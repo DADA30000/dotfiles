@@ -83,7 +83,6 @@ in
       })
     ];
     programs.spicetify = {
-      alwaysEnableDevTools = true;
       enabledExtensions = with spicePkgs.extensions; [
         adblock
         hidePodcasts

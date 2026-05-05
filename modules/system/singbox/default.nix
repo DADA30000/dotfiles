@@ -42,15 +42,11 @@ let
     "--dpi-desync-repeats=6"
     "--new"
     "--filter-udp=443"
-    "--hostlist='${inputs.zapret-flowseal}/lists/list-google.txt'"
-    "--hostlist='${inputs.zapret-flowseal}/lists/list-general.txt'"
     "--dpi-desync=fake"
     "--dpi-desync-fake-quic='${pkgs.zapret}/usr/share/zapret/files/fake/quic_initial_www_google_com.bin'"
     "--dpi-desync-repeats=11"
     "--new"
     "--filter-tcp=80"
-    "--hostlist='${inputs.zapret-flowseal}/lists/list-google.txt'"
-    "--hostlist='${inputs.zapret-flowseal}/lists/list-general.txt'"
     "--dpi-desync=fake"
     "--dpi-desync-fake-http='${pkgs.zapret}/usr/share/zapret/files/fake/tls_clienthello_www_google_com.bin'"
     "--dpi-desync-fooling=badseq"
@@ -65,8 +61,6 @@ let
     "--new"
     "--filter-tcp=443"
     "--hostlist-exclude-domains=dis.gd,discord-attachments-uploads-prd.storage.googleapis.com,discord.app,discord.co,discord.com,updates.discord.com,discord.design,discord.dev,discord.gift,discord.gifts,discord.gg,gateway.discord.gg,discord.media,discord.new,discord.store,discord.status,discord-activities.com,discordactivities.com,discordapp.com,cdn.discordapp.com,discordapp.net,media.discordapp.net,images-ext-1.discordapp.net,discordcdn.com,discordmerch.com,discordpartygames.com,discordsays.com,discordsez.com,discordstatus.com"
-    "--hostlist='${inputs.zapret-flowseal}/lists/list-general.txt'"
-    "--hostlist-domains=adguard.com,adguard-vpn.com,totallyacdn.com,whiskergalaxy.com,windscribe.com,windscribe.net,soundcloud.com,sndcdn.com,soundcloud.cloud,nexusmods.com,nexus-cdn.com,prostovpn.org,html-classic.itch.zone,html.itch.zone,speedtest.net,softportal.com,ntc.party,mega.co.nz,modrinth.com,forgecdn.net,minecraftforge.net,neoforged.net,essential.gg,imagedelivery.net,malw.link,cloudflare-gateway.com,quora.com,amazon.com,awsstatic.com,amazonaws.com,awsapps.com,roblox.com,rbxcdn.com,whatsapp.com,whatsapp.net,uploads.ungrounded.net,tesera.io,roskomsvoboda.org,github-api.arkoselabs.com,anydesk.my.site.com,totalcommander.ch"
     "--dpi-desync=fake,multisplit"
     "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=vk.me"
     "--dpi-desync-split-pos=1,host"
@@ -226,7 +220,9 @@ let
             "content-generativelanguage.googleapis.com"
             "makersuite.google.com"
             "alkalimakersuite-pa.clients6.google.com"
-            "hyprland.cachix.org"
+            "cachix.org"
+            "garnix.io"
+            "xuyh0120.win"
             "s3.dualstack.us-east-2.amazonaws.com"
             "beatsaver.com"
             "gemini.google.com"
@@ -479,6 +475,7 @@ let
     rm -rf /etc/netns/vpn_wrapper
 
     ip netns del vpn_wrapper 2>/dev/null || true
+    ip link del veth_host 2>/dev/null || true
     ip route flush table $VPNIFY_TABLE 2>/dev/null || true
 
     for prio in 1 2; do

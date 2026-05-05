@@ -49,22 +49,24 @@ let
         ];
       });
   cfg = config.umu;
+  runtime_data = fromJSON (readFile ../../../stuff/steamrt3.json);
   runtime = pkgs.fetchurl {
-    url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/umu.tar.zstd";
-    hash = "sha256-uMAAWUGNEp5UYGs3hBtWXtf0BnaqEPzcX1yJ105vB1w=";
+    url = "https://repo.steampowered.com/steamrt3/images/${runtime_data.version}/SteamLinuxRuntime_sniper.tar.xz";
+    hash = runtime_data.hash;
   };
   umu-tar = (
     pkgs.writeShellScriptBin "umu-tar" ''
-      HOME="${config.home.homeDirectory}"
       LOCAL_DIR="${config.xdg.dataHome}"
-      PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.zstd}/bin:${pkgs.gnutar}/bin:${pkgs.util-linux}/bin"
+      PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.xz}/bin:${pkgs.gnutar}/bin:${pkgs.util-linux}/bin"
       if [[ ! -d "$LOCAL_DIR/umu" ]]; then
-        mkdir -p "$LOCAL_DIR/umu.tmp"
-        rm -rf "$LOCAL_DIR/umu.tmp/umu"
-        tar -xaf "${runtime}" -C "$LOCAL_DIR/umu.tmp"
+        rm -rf "$LOCAL_DIR/steamrt3.tmp"; mkdir -p "$LOCAL_DIR/steamrt3.tmp"
+        tar -xaf "${runtime}" --strip-components=1 -C "$LOCAL_DIR/steamrt3.tmp"
+        cd "$LOCAL_DIR/steamrt3.tmp"
+        ln -s "_v2-entry-point" "umu"
+        echo "ok" > ".installed.ok"
         umount -qf "$LOCAL_DIR/umu" 2>/dev/null || true 
-        rm -rf "$LOCAL_DIR/umu"
-        mv "$LOCAL_DIR/umu.tmp/umu" "$LOCAL_DIR"
+        rm -rf "$LOCAL_DIR/umu"; mkdir -p "$LOCAL_DIR/umu"
+        mv "$LOCAL_DIR/steamrt3.tmp" "$LOCAL_DIR/umu/steamrt3"
       fi
     ''
   );
@@ -183,10 +185,12 @@ in
         done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
         mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
-        if [[ "$USE_PROTON_UMU" == 1 ]]; then
-          export PROTONPATH="${proton-umu}"
-        else
-          export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
+        if [[ -z "$(printenv PROTONPATH)" ]]; then
+          if [[ "$USE_PROTON_UMU" == 1 ]]; then
+            export PROTONPATH="${proton-umu}"
+          else
+            export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
+          fi
         fi
         cp --no-preserve=mode "${proton-umu}/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
