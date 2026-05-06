@@ -58,6 +58,8 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
+  nixpkgs.config.permittedInsecurePackages = [ "openssl-1.1.1w" ];
+
   time.timeZone = "Europe/Moscow";
 
   i18n.defaultLocale = "ru_RU.UTF-8";
@@ -104,7 +106,7 @@ in
   docs = {
     enable = true;
     nos = {
-      enable = true;
+      enable = false;
       darwin = false;
       stable = false;
     };
@@ -206,6 +208,7 @@ in
         "vboxusers"
         "adbusers"
         "video"
+        "docker"
       ];
     };
   };
@@ -545,9 +548,11 @@ in
       };
     };
 
+    docker.enable = true;
+
     podman = {
       enable = true;
-      dockerCompat = true;
+    #  dockerCompat = true;
     };
 
   };

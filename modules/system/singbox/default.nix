@@ -256,7 +256,7 @@ let
         }
       ];
       auto_detect_interface = true;
-      final = "direct";
+      final = "proxy";
     };
     inbounds = [
       {
