@@ -1,0 +1,82 @@
+diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
+index 3d93d65..02fd0e4 100644
+--- a/kernel/runtime/ksud_integration.c
++++ b/kernel/runtime/ksud_integration.c
+@@ -39,6 +39,12 @@
+ #include "selinux/selinux.h"
+ #include "compat/kernel_compat.h"
+ 
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/jump_label.h>
++DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
++DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
++#endif
++
+ static const char KERNEL_SU_RC[] =
+ 	"\n"
+ 
+diff --git a/kernel/selinux/sepolicy.c b/kernel/selinux/sepolicy.c
+index 09b6579..ed80b36 100644
+--- a/kernel/selinux/sepolicy.c
++++ b/kernel/selinux/sepolicy.c
+@@ -10,6 +10,10 @@
+ #include <linux/version.h>
+ 
+ #include "sepolicy.h"
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
++#define SELINUX_POLICY_INSTEAD_SELINUX_SS
++#endif
+ #include "klog.h" // IWYU pragma: keep
+ #include "ss/symtab.h"
+ #include "compat/kernel_compat.h" // Add check Huawei Device
+diff --git a/kernel/selinux/sepolicy.h b/kernel/selinux/sepolicy.h
+index b4f0db1..9f1bd26 100644
+--- a/kernel/selinux/sepolicy.h
++++ b/kernel/selinux/sepolicy.h
+@@ -5,6 +5,9 @@
+ 
+ #include "ss/policydb.h"
+ 
++struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol);
++void ksu_destroy_sepolicy(struct selinux_policy *orig);
++
+ // Operation on types
+ bool ksu_type(struct policydb *db, const char *name, const char *attr);
+ bool ksu_attribute(struct policydb *db, const char *name);
+@@ -43,4 +46,4 @@ bool ksu_type_member(struct policydb *db, const char *src, const char *tgt,
+ bool ksu_genfscon(struct policydb *db, const char *fs_name, const char *path,
+           const char *ctx);
+ 
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/kernel/supercall/supercall.c b/kernel/supercall/supercall.c
+index 7c84575..b8c0e30 100644
+--- a/kernel/supercall/supercall.c
++++ b/kernel/supercall/supercall.c
+@@ -277,13 +277,13 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
+ 		uint64_t u_pptr = 0;
+ 		uint64_t u_ptr = 0;
+ 
+-		pr_info("sys_reboot: ppptr: 0x%lx \n", ppptr);
++    pr_info("sys_reboot: ppptr: %p \n", ppptr);
+ 
+ 		// arg here is ***, dereference to pull out **
+ 		if (copy_from_user(&u_pptr, (void __user *)*ppptr, sizeof(u_pptr)))
+ 			return 0;
+ 
+-		pr_info("sys_reboot: u_pptr: 0x%lx \n", u_pptr);
++		pr_info("sys_reboot: u_pptr: 0x%llx \n", (unsigned long long)u_pptr);
+ 
+ 		// now we got the __user **
+ 		// we cannot dereference this as this is __user
+@@ -291,7 +291,7 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
+ 		if (copy_from_user(&u_ptr, (void __user *)u_pptr, sizeof(u_ptr)))
+ 			return 0;
+ 
+-		pr_info("sys_reboot: u_ptr: 0x%lx \n", u_ptr);
++		pr_info("sys_reboot: u_ptr: 0x%llx \n", (unsigned long long)u_ptr);
+ 
+ 		// for release
+ 		if (strncpy_from_user(release_buf, (char __user *)u_ptr, sizeof(release_buf)) < 0)

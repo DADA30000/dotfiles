@@ -89,10 +89,24 @@ in
             fi
           }
 
+          # Internal replacement for nix develop, as nix develop is hardcoded to use registries
+          _nix-develop() {
+            local env_file
+            env_file=$(mktemp /tmp/nix-shell-env.XXXXXX)
+            export PREV_SHELL="$SHELL"
+            if nix print-dev-env "$@" > "$env_file"; then
+               ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
+            else
+              local status=$?
+              rm -f "$env_file"
+              return $status
+            fi
+          }
+
           # Ad-hoc nix-develop devShell
           ns-dev () {
             _ns_parse_args "$@"
-            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
               buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
               name = \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
               shellHook = '''
@@ -119,7 +133,7 @@ in
             local target="''${pkgs_raw[1]}"
             
             echo "❄️ Entering build environment for: $target"
-            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; $target"
+            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; $target"
           }
 
           # Ad-hoc python with modules env
@@ -131,7 +145,7 @@ in
 
             pkgs_new+=("(python3.withPackages (ps: [ ''${py_pkgs[*]} ]))")
 
-            nix develop "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
               buildInputs = let p = [ ''${pkgs_new[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
               name = \"ns_py_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 1) buildInputs))}\";
               shellHook = '''
@@ -142,15 +156,15 @@ in
           }
 
           # Pure nix-shell -p alternative
-          ns-old () { _ns_parse_args "$@"; nix shell "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+          ns-old () { _ns_parse_args "$@"; nix shell "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
 
           # ad-hoc nix build expr
-          ns-build () { _ns_parse_args "$@"; nix build "''${flags[@]}" --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+          ns-build () { _ns_parse_args "$@"; nix build "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
 
           # ad-hoc nix eval expr
           ns-eval () {
             _ns_parse_args "$@"
-            nix eval "''${flags[@]}" --raw --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])"
+            nix eval "''${flags[@]}" --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])"
           }
 
           proxify () {
@@ -185,7 +199,7 @@ in
                 cd $TEMPDIR/cape
                 mkdir capev2
                 sed -i '/package-mode/d' pyproject.toml
-                sed -i '/tool.poetry/d' pyproject.toml
+                sed -i '/\[tool.poetry\]/d' pyproject.toml
                 echo "print(\"Hello World\")" > capev2/__init__.py
                 echo "
                 [tool.hatch.build.targets.wheel]
@@ -211,7 +225,7 @@ in
               echo "Finished fetching"
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
-              nh os switch /etc/nixos --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5
+              nh os switch /etc/nixos -- --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5
             )
           }
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
@@ -242,7 +256,7 @@ in
           u-build() { nh os build /etc/nixos $@ }
           u-debug() { nix build /etc/nixos\#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try $@ }
           ns() { ns-dev $@ }
-          ns-repl() { nix repl --expr "$NIX_FLAKE_PREAMBLE" $@ }
+          ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" $@ }
           nsl() { nix-locate $@ }
           fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' $@ }
           cps() { rsync -ahr --progress $@ }
@@ -304,7 +318,7 @@ in
                   if [[ -n "$curr_word" ]]; then
                     if [[ "$curr_word" == *.* ]]; then
                       local packages_string
-                      packages_string=$(nix eval --raw --expr "
+                      packages_string=$(nix eval --raw --no-use-registries --expr "
                         let
                           pkgs = $NIX_FLAKE_PREAMBLE;
                           startAttr = pkgs.''${curr_word%.*};
@@ -321,7 +335,7 @@ in
                       packages=( ''${(f)"$(</tmp/nix_completer_cache)"} )
                     else
                       local packages_string
-                      packages_string=$(nix eval --raw --expr "
+                      packages_string=$(nix eval --raw --no-use-registries --expr "
                         builtins.concatStringsSep \"\n\" (
                           builtins.attrNames (
                             import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs {

@@ -53,10 +53,11 @@ let
     };
 in
 {
-
   qt.enable = true;
 
   nixpkgs.config.allowUnfree = true;
+
+  sandboxing.enable = true;
 
   nixpkgs.config.permittedInsecurePackages = [ "openssl-1.1.1w" ];
 
@@ -82,14 +83,6 @@ in
 
   startup-sound.enable = false;
 
-  hardware = {
-    opentabletdriver.enable = true;
-    bluetooth = {
-      enable = true;
-      powerOnBoot = false;
-    };
-  };
-
   zramSwap = {
     enable = true;
     memoryPercent = 100;
@@ -100,16 +93,52 @@ in
     users = [ user ];
   };
 
+  nix-mineral = {
+    enable = true;
+    preset = "performance";
+    filesystems.enable = false;
+    settings = {
+      network.tcp-sack = true;
+      entropy.jitterentropy = false;
+      etc = {
+        generic-machine-id = false;
+        kicksecure-gitconfig = false;
+      };
+      kernel = {
+        amd-iommu-force-isolation = false;
+        strict-iommu = false;
+      };
+      system = {
+        multilib = true;
+        yama = "relaxed";
+      };
+    };
+  };
+
+  hardware = {
+
+    opentabletdriver.enable = true;
+
+    bluetooth = {
+      enable = true;
+      powerOnBoot = false;
+    };
+
+  };
+
   # Enable custom man page generation and nix-option-search
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
   # Darwin and stable cause additional eval time, around 10-15 seconds
   docs = {
+
     enable = true;
+
     nos = {
       enable = false;
       darwin = false;
       stable = false;
     };
+
   };
 
   networking = {
@@ -208,7 +237,9 @@ in
         "vboxusers"
         "adbusers"
         "video"
+        "gamemode"
         "docker"
+        "cvdnetwork"
       ];
     };
   };
@@ -240,12 +271,12 @@ in
         "https://cache.nixos.org?priority=1"
       ];
 
-      trusted-substituters = [ 
+      trusted-substituters = [
         "https://hyprland.cachix.org"
         "https://attic.xuyh0120.win/lantian"
       ];
 
-      trusted-public-keys = [ 
+      trusted-public-keys = [
         "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
         "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
       ];
@@ -326,14 +357,9 @@ in
 
     initrd.systemd.enable = true;
 
-    kernelParams = [
-      "iommu=pt"
-      "quiet"
-      #"plymouth.use-simpledrm"
-    ];
-
     kernel.sysctl = {
       "net.core.default_qdisc" = "cake";
+      "net.ipv4.tcp_congestion_control" = "bbr";
       "kernel.sysrq" = 1;
     };
 
@@ -464,7 +490,6 @@ in
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
-        #(nvtopPackages.full.override { nvidia = false; })
         (kdePackages.qt6ct.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../../stuff/qt6ct-shenanigans.patch ];
           buildInputs =
@@ -479,24 +504,57 @@ in
         (aria2.overrideAttrs (prev: {
           patches = prev.patches or [ ] ++ [ ../../../stuff/max-connection-to-unlimited.patch ];
         }))
-        (fixPrism (
-          prismlauncher.override {
-            prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
-              patches = prev.patches or [ ] ++ [ ../../../stuff/prismlauncher.patch ];
-            });
-          }
-        ))
-        (let
-          pkgs-fixed = pkgs.extend (self: super: {
-            openldap = super.openldap.overrideAttrs { doCheck = false; };
-          });
-        in pkgs-fixed.bottles.override {
-          removeWarningPopup = true;
+        (config.mkSandbox {
+          appId = "com.wayland.utils";
+          audio = true;
+          wayland = true;
+          x11 = true;
+          package = pkgs.wayland-utils;
         })
-        (discord-canary.override {
-          withOpenASAR = false;
-          withVencord = true;
-          vencord = vencord;
+        (config.mkSandbox {
+          appId = "org.prismlauncher.PrismLauncher";
+          network_full = true;
+          audio = true;
+          wayland = true;
+          gpu = true;
+          x11 = true;
+          package = fixPrism (
+            prismlauncher.override {
+              prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
+                patches = prev.patches or [ ] ++ [ ../../../stuff/prismlauncher.patch ];
+              });
+            }
+          );
+        })
+        (
+          let
+            pkgs-fixed = pkgs.extend (
+              self: super: {
+                openldap = super.openldap.overrideAttrs { doCheck = false; };
+              }
+            );
+          in
+          pkgs-fixed.bottles.override {
+            removeWarningPopup = true;
+          }
+        )
+        (config.mkSandbox rec {
+          appId = "com.discordapp.DiscordCanary";
+          network_singbox = true;
+          audio = true;
+          wayland = true;
+          gpu = true;
+          x11 = true;
+          webcam = 5;
+          additional_args.bubblewrap.sharePid = true;
+          additional_wrap_commands = "ln -sf \"$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0\" \"$XDG_RUNTIME_DIR/discord-ipc-0\"";
+          package = (
+            discord-canary.override {
+              withOpenASAR = false;
+              withVencord = true;
+              vencord = vencord;
+            }
+          );
         })
         # Below are for offline build
         (python3.withPackages (
@@ -548,24 +606,20 @@ in
       };
     };
 
-    docker.enable = true;
+    # docker.enable = true;
 
     podman = {
       enable = true;
-    #  dockerCompat = true;
+      #  dockerCompat = true;
     };
 
   };
 
   systemd = {
 
-    coredump.enable = false;
-
     user = {
-      extraConfig = "DefaultTimeoutStopSec=5s";
-
-      # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
-      targets.nixos-fake-graphical-session.enable = false;
+      extraConfig = "DefaultTimeoutStopSec=1s";
+      targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
     };
 
     services = {
@@ -715,8 +769,6 @@ in
 
     firejail.enable = true;
 
-    gamemode.enable = true;
-
     zsh.enable = true;
 
     nix-ld.enable = true;
@@ -725,19 +777,72 @@ in
 
     seahorse.enable = true;
 
+    dconf.enable = true;
+
+    nh.enable = true;
+
+    gamemode = {
+      enable = true;
+      enableRenice = true;
+    };
+
     steam = {
       enable = true;
-      #package = inputs.millenium.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-      package = pkgs.steam.override {
-        extraEnv = {
-          MANGOHUD = true;
-          OBS_VKCAPTURE = true;
-          RADV_TEX_ANISO = 16;
+      package =
+        let
+          overriddenSteam = pkgs.steam.override {
+            extraEnv = {
+              MANGOHUD = true;
+              OBS_VKCAPTURE = true;
+              RADV_TEX_ANISO = 16;
+            };
+            extraLibraries =
+              p: with p; [
+                atk
+              ];
+          };
+
+          sandboxed = config.mkSandbox {
+            appId = "com.valvesoftware.Steam";
+            network_singbox = true;
+            audio = true;
+            gpu = true;
+            wayland = true;
+            x11_shared = true;
+            nvidia_gpu = true;
+            additional_wrap_commands = "rust-bridge sandbox 127.0.0.1:57343 \"$SANDBOXED_RUNTIME_DIR/steam\" &";
+            additional_prestart_commands = "rust-bridge host \"$XDG_RUNTIME_DIR/steam\" 127.0.0.1:57343 &";
+            additional_args =
+              { sloth, ... }:
+              {
+                bubblewrap = {
+                  bind = {
+                    ro = [
+                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
+                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
+                    ];
+                    rw = [
+                      [
+                        "/home/${user}/Games/steam"
+                        (sloth.mkdir "/Games")
+                      ]
+                    ];
+                  };
+                  sharePid = true;
+                };
+                dbus.policies = {
+                  "com.steampowered.Steam" = "own";
+                  "com.steampowered.Steam.*" = "own";
+                };
+              };
+            package = overriddenSteam;
+          };
+        in
+        sandboxed
+        // {
+          override = attrs: (sandboxed.override attrs) // { run = overriddenSteam.run; };
+          run = overriddenSteam.run;
         };
-        extraLibraries = p: with p; [
-          atk
-        ];
-      };
       protontricks.enable = true;
       extraCompatPackages = [ pkgs.proton-ge-bin ];
       extraPackages = with pkgs; [
@@ -764,10 +869,6 @@ in
         pipewire
       ];
     };
-
-    dconf.enable = true;
-
-    nh.enable = true;
 
     uwsm = {
       enable = true;

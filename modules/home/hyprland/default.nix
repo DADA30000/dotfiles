@@ -8,8 +8,100 @@
 with lib;
 let
   cfg = config.hyprland;
-  nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix {};
-  nautilus-listener = pkgs.callPackage ./nautilus-listener.nix {};
+  nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix { };
+  nautilus-listener = pkgs.callPackage ./nautilus-listener.nix { };
+  mkPluginPermissionEntries = list: map (plugin: mkPluginPermissionEntry plugin) list;
+  mkPluginExecEntries = list: lib.concatLines (map (plugin: mkPluginExecEntry plugin) list);
+  mkPluginExecEntry = plugin: "hl.exec_cmd [[${plugin-loader plugin}/bin/hypr-plugin-loader]]";
+  mkPluginPermissionEntry = plugin: {
+    binary = "${lib.escapeRegex "${plugin-loader plugin}/bin/hypr-plugin-loader"}";
+    type = "plugin";
+    mode = "allow";
+  };
+  plugins =
+    lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
+      #pkgs.hyprlandPlugins.hyprtrails
+    ]
+    ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
+      inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
+      #inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
+    ]
+    ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
+      #inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
+    ];
+  plugin-loader =
+    pkg:
+    pkgs.stdenv.mkDerivation {
+      pname = "${pkg.pname}-loader";
+      version = "1.0";
+
+      src = pkgs.writeText "hypr-plugin-loader.c" ''
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
+        #include <unistd.h>
+        #include <sys/socket.h>
+        #include <sys/un.h>
+
+        #define PLUGIN_PATH "${
+          if lib.types.package.check pkg then "${pkg}/lib/lib${pkg.pname}.so" else pkg
+        }"
+
+        int main() {
+            const char *xdg_runtime = getenv("XDG_RUNTIME_DIR");
+            const char *hypr_sig = getenv("HYPRLAND_INSTANCE_SIGNATURE");
+
+            if (!xdg_runtime || !hypr_sig) {
+                fprintf(stderr, "Missing Env Vars\n");
+                return 1;
+            }
+
+            int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (sock < 0) return 1;
+
+            struct sockaddr_un addr;
+            memset(&addr, 0, sizeof(addr));
+            addr.sun_family = AF_UNIX;
+            snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/hypr/%s/.socket.sock", xdg_runtime, hypr_sig);
+
+            if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+                close(sock);
+                return 1;
+            }
+
+            char command[2048];
+            snprintf(command, sizeof(command), "/plugin load %s", PLUGIN_PATH);
+
+            if (write(sock, command, strlen(command)) < 0) {
+                close(sock);
+                return 1;
+            }
+
+            shutdown(sock, SHUT_WR);
+
+            char buffer[4096];
+            ssize_t bytes_read = read(sock, buffer, sizeof(buffer) - 1);
+            if (bytes_read > 0) {
+                buffer[bytes_read] = '\0';
+                printf("Hyprland response: %s\n", buffer);
+            }
+
+            close(sock);
+            return 0;
+        }
+      '';
+
+      dontUnpack = true;
+
+      buildPhase = ''
+        $CC -O3 -flto -march=native -pipe -fPIE -pie -Wl,-s $src -o hypr-plugin-loader
+      '';
+
+      installPhase = ''
+        mkdir -p $out/bin
+        cp hypr-plugin-loader $out/bin/
+      '';
+    };
   read-text = pkgs.writeShellScript "read-text-hyprland" ''
     # Arguments:
     # $1 = Hyprshot Mode (e.g., "region", "window", "output")
@@ -51,13 +143,14 @@ in
     hyprlock = mkEnableOption "locking program";
     rofi = mkEnableOption "rofi (used as applauncher and dmenu)";
     additional-monitors = mkOption {
-      default = [];
-      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      type = lib.types.listOf lib.types.attrs;
     };
   };
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      gtk3
       kdePackages.kservice
       rofi-bluetooth
       tesseract
@@ -100,285 +193,727 @@ in
           cfg.from-unstable && !cfg.stable
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
       ];
-      plugins =
-        lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
-          #pkgs.hyprlandPlugins.hyprtrails
-        ]
-        ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
-          inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
-          #inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
-        ]
-        ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
-          #inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
-        ];
       enable = true;
-      settings = {
-        xwayland.force_zero_scaling = true;
-        # render.direct_scanout = 1;
-        "$mod" = "SUPER";
-        bind = [
-          ", code:122, exec, pactl set-sink-volume @DEFAULT_SINK@ -4096"
-          ", code:123, exec, pactl set-sink-volume @DEFAULT_SINK@ +4096"
-          ", Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-          "SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
-          "SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
-          "$mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-          "$mod ALT, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
-          "$mod SHIFT, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
-          ", MENU, exec, app2unit -- ${read-text} region eng+osd"
-          "SUPER, MENU, exec, app2unit -- ${read-text} window eng+osd"
-          "SHIFT, MENU, exec, app2unit -- ${read-text} output eng+osd"
-          "CTRL, MENU, exec, app2unit -- ${read-text} region rus+osd"
-          "SUPER, MENU, exec, app2unit -- ${read-text} window rus+osd"
-          "SHIFT, MENU, exec, app2unit -- ${read-text} output rus+osd"
-          "CTRL, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
-          "CTRL SUPER, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
-          "CTRL SHIFT, Print, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
-          "CTRL $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
-          "CTRL ALT $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
-          "CTRL SHIFT $mod, O, exec, app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -" # change later to "Satty" https://github.com/gabm/Satty
-          "ALT,R,submap,passthrough"
-          "$mod CTRL, Q, exec, app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
-          "$mod CTRL, R, exec, app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
-          "$mod CTRL, U, exec, app2unit -- update-damn-nixos"
-          "$mod CTRL, V, exec, rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
-          "$mod ALT, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}')"
-          "$mod ALT, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 2) {print $2 - 1} else {print 1}}')"
-          "$mod CTRL, mouse_down, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}')"
-          "$mod CTRL, mouse_up, exec, hyprctl keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 101) {print $2 - 100} else {print 1}}')"
-          "$mod CTRL, F, fullscreenstate, 0 2"
-          "$mod CTRL, C, exec, hyprctl kill"
-          "$mod, I, exec, app2unit -- toggle-restriction"
-          "$mod, F1, exec, app2unit -- gamemode.sh"
-          "$mod, F2, exec, app2unit -- sheesh.sh"
-          "$mod, L, exec, killall -SIGUSR1 .waybar-wrapped"
-          "$mod, Q, exec, app2unit -- kitty"
-          "$mod, Z, exec, app2unit -- zen-twilight"
-          "$mod, D, exec, app2unit -- discordcanary || app2unit -- discord"
-          "$mod, C, killactive,"
-          "$mod, B, exec, uuctl"
-          "$mod, M, exec, app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px,"
-          "$mod, E, exec, app2unit -- pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & env NAUTILUS_4_EXTENSION_DIR='${pkgs.nautilus-python}/lib/nautilus/extensions-4' nautilus -w"
-          "$mod, V, togglefloating,"
-          "$mod, P, pseudo,"
-          "$mod, J, layoutmsg, togglesplit"
-          "$mod, F, fullscreen,"
-          "$mod, left, movefocus, l"
-          "$mod, right, movefocus, r"
-          "$mod, up, movefocus, u"
-          "$mod, down, movefocus, d"
-          "$mod, 1, split-workspace, 1"
-          "$mod, 2, split-workspace, 2"
-          "$mod, 3, split-workspace, 3"
-          "$mod, 4, split-workspace, 4"
-          "$mod, 5, split-workspace, 5"
-          "$mod, 6, split-workspace, 6"
-          "$mod, 7, split-workspace, 7"
-          "$mod, 8, split-workspace, 8"
-          "$mod, 9, split-workspace, 9"
-          "$mod, 0, split-workspace, 10"
-          "$mod SHIFT, 1, split-movetoworkspace, 1"
-          "$mod SHIFT, 2, split-movetoworkspace, 2"
-          "$mod SHIFT, 3, split-movetoworkspace, 3"
-          "$mod SHIFT, 4, split-movetoworkspace, 4"
-          "$mod SHIFT, 5, split-movetoworkspace, 5"
-          "$mod SHIFT, 6, split-movetoworkspace, 6"
-          "$mod SHIFT, 7, split-movetoworkspace, 7"
-          "$mod SHIFT, 8, split-movetoworkspace, 8"
-          "$mod SHIFT, 9, split-movetoworkspace, 9"
-          "$mod SHIFT, 0, split-movetoworkspace, 10"
-          "$mod, S, togglespecialworkspace, magic"
-          "$mod SHIFT, S, split-movetoworkspace, special:magic"
-          "$mod, mouse_down, split-workspace, e+1"
-          "$mod, mouse_up, split-workspace, e-1"
-        ];
-        monitor = [ ", highres, auto, auto" ] ++ cfg.additional-monitors;
-        bindr = [
-          ''$mod, $mod_L, exec, pkill rofi || rofi -show drun -show-icons -hover-select -me-select-entry ''' -me-accept-entry MousePrimary -run-command 'bash -c "exec_path=\$(echo \"\$*\" | grep -oP \"(^|(?<=\s))(?![^=\s]+=[^\s]+)[/\w\.-]+\" | head -n1); n=\$(basename \"\$exec_path\" | sed \"s/\\\\x2d/-/g\" | tr -cd \"[:alnum:]. _-\"); app2unit -a \"\$n\" -- \"\$@\"" -- {cmd}' ''
-          "$mod_CTRL, $mod_L, exec, pkill rofi || rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary -run-command 'app2unit -- {cmd}'"
-        ];
-        bindm = [
-          "$mod, mouse:272, movewindow"
-          "$mod, mouse:273, resizewindow"
-        ];
-        windowrule = [
-          "float on, match:class ^(steam)$, match:title negative:^(Steam)$"
-          "float on, match:title ^(Извлечённый текст)$"
-          "no_max_size on, match:class polkit-mate-authentication-agent-1"
-          "pin on, match:class polkit-mate-authentication-agent-1"
-          "fullscreen_state 0 2, match:class (firefox), match:title ^(.*Discord.* — Mozilla Firefox.*)$"
-          "opacity 0.99 override 0.99 override, match:title QDiskInfo"
-          "opacity 0.99 override 0.99 override, match:title MainPicker"
-          "opacity 0.99 override 0.99 override, match:class thunderbird"
-          "opacity 0.99 override 0.99 override, match:class spotify"
-          "opacity 0.99 override 0.99 override, match:class org.prismlauncher.PrismLauncher"
-          "opacity 0.99 override 0.99 override, match:class mpv"
-          "opacity 0.99 override 0.99 override, match:class org.qbittorrent.qBittorrent"
-          "opacity 0.99 override 0.99 override, match:class die"
-        ];
-        permission = [
-          "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}, screencopy, allow"
-          "${lib.escapeRegex (lib.getExe pkgs.wayvr)}, screencopy, allow"
-          "${lib.escapeRegex (lib.getExe pkgs.grim)}, screencopy, allow"
-          "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}, screencopy, allow"
-          "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped, screencopy, allow"
-        ];
-        layerrule = [
-          "blur on, match:namespace .*"
-          "blur_popups on, match:namespace .*"
-          "no_anim on, match:namespace selection"
-          "no_anim on, match:namespace hyprpicker"
-          "ignore_alpha 0.9, match:namespace selection"
-          "ignore_alpha 0, match:namespace corner0"
-          "ignore_alpha 0, match:namespace overview"
-          "ignore_alpha 0, match:namespace indicator0"
-          "ignore_alpha 0, match:namespace datemenu"
-          "ignore_alpha 0, match:namespace launcher"
-          "ignore_alpha 0, match:namespace quicksettings"
-          "ignore_alpha 0, match:namespace swaync-control-center"
-          "ignore_alpha 0, match:namespace rofi"
-          "ignore_alpha 0, match:namespace waybar"
-          "ignore_alpha 0, match:namespace swaync-notification-window"
-          "animation popin 90%, match:namespace rofi"
-          "animation popin 90%, match:namespace logout_dialog"
-          "animation slide left, match:namespace swaync-control-center"
-        ];
-        exec-once = [
-          "kbuildsycoca6"
-          "${nautilus-listener}/bin/nautilis-listener"
-          "app2unit -- wl-paste --watch cliphist store"
-          "fumon"
-        ];
-        input = {
-          kb_layout = "us,ru";
-          kb_options = "grp:alt_shift_toggle";
-          repeat_delay = 150;
-          repeat_rate = 35;
-          follow_mouse = 1;
-          touchpad = {
-            natural_scroll = true;
-            scroll_factor = 0.5;
-            clickfinger_behavior = true;
-            tap-to-click = true;
-            disable_while_typing = false;
+      configType = "lua";
+      settings =
+        let
+          mod = "SUPER";
+          make-bind-exec-obj = keys: exec: args: {
+            _args = [
+              keys
+              (lib.generators.mkLuaInline "hl.dsp.exec_cmd [[${exec}]]")
+            ]
+            ++ args;
           };
-          touchdevice.enabled = true;
-          sensitivity = 1;
-          accel_profile = "flat";
-        };
-        gestures = {
-          gesture = "3, horizontal, workspace";
-          workspace_swipe_distance = 1000;
-          workspace_swipe_invert = true;
-          workspace_swipe_cancel_ratio = 0.1;
-          workspace_swipe_forever = true;
-          workspace_swipe_create_new = true;
-          workspace_swipe_direction_lock = false;
-        };
-        general = {
-          gaps_in = 5;
-          gaps_out = 5;
-          border_size = 0;
-          "col.active_border" = "rgb(4575da) rgb(6804b5)";
-          "col.inactive_border" = "rgb(595959)";
-          layout = "dwindle";
-          allow_tearing = false;
-        };
-        debug = {
-          full_cm_proto = true;
-        };
-        ecosystem = {
-          enforce_permissions = true;
-        };
-        cursor = {
-          no_hardware_cursors = false;
-          zoom_disable_aa = true;
-        };
-        decoration = {
-          rounding = 10;
-          blur = {
-            enabled = true;
-            popups = true;
-            popups_ignorealpha = 0;
-            ignore_opacity = true;
-            size = 10;
-            brightness = 0.8;
-            passes = 4;
-            noise = 0;
-            vibrancy = 0;
+          bind-exec =
+            list:
+            map (
+              pair: make-bind-exec-obj (builtins.elemAt pair 0) (builtins.elemAt pair 1) (lib.lists.drop 2 pair)
+            ) list;
+          make-bind-obj = keys: exec: args: {
+            _args = [
+              keys
+              (lib.generators.mkLuaInline exec)
+            ]
+            ++ args;
           };
-        };
-        animations = {
-          enabled = true;
-          workspace_wraparound = false;
-          bezier = [
-            "fade, 0.165, 0.84, 0.44, 1"
-            "woosh, 0.445, 0.05, 0, 1"
+          bind =
+            list:
+            map (
+              pair: make-bind-obj (builtins.elemAt pair 0) (builtins.elemAt pair 1) (lib.lists.drop 2 pair)
+            ) list;
+        in
+        {
+          monitor = [
+            {
+              output = "";
+              mode = "highres";
+              position = "auto";
+              scale = "auto";
+            }
+          ]
+          ++ cfg.additional-monitors;
+          curve = [
+            {
+              _args = [
+                "fade"
+                {
+                  type = "bezier";
+                  points = [
+                    [
+                      0.165
+                      0.84
+                    ]
+                    [
+                      0.44
+                      1
+                    ]
+                  ];
+                }
+              ];
+            }
+            {
+              _args = [
+                "woosh"
+                {
+                  type = "bezier";
+                  points = [
+                    [
+                      0.445
+                      0.05
+                    ]
+                    [
+                      0
+                      1
+                    ]
+                  ];
+                }
+              ];
+            }
+          ];
+          gesture = [
+            {
+              fingers = 3;
+              direction = "horizontal";
+              action = "workspace";
+            }
           ];
           animation = [
-            "windowsMove, 1, 5, default"
-            "windowsIn, 1, 2, fade, popin 90%"
-            "windows, 1, 7, default, slide"
-            "windowsOut, 1, 3, fade, popin 90%"
-            "fadeSwitch, 1, 7, default"
-            "fadeOut, 1, 3, fade"
-            "workspaces, 1, 4, woosh, slide"
-            "layers, 1, 3, fade, popin 90%"
+            {
+              leaf = "windowsMove";
+              enabled = true;
+              speed = 5;
+              bezier = "default";
+            }
+            {
+              leaf = "windowsIn";
+              enabled = true;
+              speed = 2;
+              bezier = "fade";
+              style = "popin 90%";
+            }
+            {
+              leaf = "windows";
+              enabled = true;
+              speed = 7;
+              bezier = "default";
+              style = "slide";
+            }
+            {
+              leaf = "windowsOut";
+              enabled = true;
+              speed = 3;
+              bezier = "fade";
+              style = "popin 90%";
+            }
+            {
+              leaf = "fadeSwitch";
+              enabled = true;
+              speed = 7;
+              bezier = "default";
+            }
+            {
+              leaf = "fadeOut";
+              enabled = true;
+              speed = 3;
+              bezier = "fade";
+            }
+            {
+              leaf = "workspaces";
+              enabled = true;
+              speed = 4;
+              bezier = "woosh";
+              style = "slide";
+            }
+            {
+              leaf = "layers";
+              enabled = true;
+              speed = 3;
+              bezier = "fade";
+              style = "popin 90%";
+            }
+          ];
+          config = {
+            xwayland.force_zero_scaling = true;
+            plugin = mkIf cfg.enable-plugins {
+              split_monitor_workspaces.enable_persistent_workspaces = 0;
+              #hyprexpo = {
+              #  columns = 3;
+              #  gap_size = 5;
+              #  bg_col = "rgb(111111)";
+              #  workspace_method = "first 1";
+              #  enable_gesture = true;
+              #  gesture_distance = 300;
+              #  gesture_positive = true;
+              #};
+              #dynamic-cursors = {
+              #  enabled = false;
+              #  mode = "tilt";
+              #  shake.enabled = false;
+              #  stretch.function = "negative_quadratic";
+              #};
+              #hyprtrails = {
+              #  color = "rgba(bbddffff)";
+              #  bezier_step = 0.001;
+              #  history_points = 6;
+              #  points_per_step = 4;
+              #  histoty_step = 1;
+              #};
+            };
+            input = {
+              kb_layout = "us,ru";
+              kb_options = "grp:alt_shift_toggle";
+              repeat_delay = 150;
+              repeat_rate = 35;
+              follow_mouse = 1;
+              touchpad = {
+                natural_scroll = true;
+                scroll_factor = 0.5;
+                clickfinger_behavior = true;
+                tap_to_click = true;
+                disable_while_typing = false;
+              };
+              touchdevice.enabled = true;
+              sensitivity = 1;
+              accel_profile = "flat";
+            };
+            gestures = {
+              workspace_swipe_distance = 1000;
+              workspace_swipe_invert = true;
+              workspace_swipe_cancel_ratio = 0.1;
+              workspace_swipe_forever = true;
+              workspace_swipe_create_new = true;
+              workspace_swipe_direction_lock = false;
+            };
+            general = {
+              gaps_in = 5;
+              gaps_out = 5;
+              border_size = 0;
+              #"col.active_border" = "rgb(4575da) rgb(6804b5)";
+              #"col.inactive_border" = "rgb(595959)";
+              layout = "dwindle";
+              allow_tearing = false;
+            };
+            debug = {
+              full_cm_proto = true;
+            };
+            ecosystem = {
+              enforce_permissions = true;
+            };
+            cursor = {
+              no_hardware_cursors = false;
+              zoom_disable_aa = true;
+            };
+            decoration = {
+              rounding = 10;
+              blur = {
+                enabled = true;
+                popups = true;
+                popups_ignorealpha = 0;
+                ignore_opacity = true;
+                size = 10;
+                brightness = 0.8;
+                passes = 4;
+                noise = 0;
+                vibrancy = 0;
+              };
+            };
+            animations = {
+              enabled = true;
+              workspace_wraparound = false;
+            };
+            debug = {
+              enable_stdout_logs = false;
+              disable_logs = true;
+            };
+            dwindle = {
+              preserve_split = true;
+            };
+            misc = {
+              vrr = 1;
+              disable_watchdog_warning = true;
+              disable_hyprland_logo = true;
+              background_color = "0x000000";
+              enable_swallow = false;
+              animate_manual_resizes = false;
+              animate_mouse_windowdragging = false;
+              swallow_regex = "^(kitty|lutris|bottles|alacritty)$";
+              swallow_exception_regex = "^(ncspot)$";
+              force_default_wallpaper = 2;
+            };
+            binds = {
+              scroll_event_delay = 50;
+            };
+          };
+          bind =
+            let
+              rofi = pkgs.writers.writeDash "rofi" ''
+                pkill rofi || rofi \
+                  -show drun \
+                  -show-icons \
+                  -hover-select \
+                  -me-select-entry ''' \
+                  -me-accept-entry MousePrimary \
+                  -run-command '${pkgs.dash}/bin/dash -c '\'''
+                      for arg do
+                          case "$arg" in
+                              *=*) 
+                                  ;;
+                              *) 
+                                  exec_path="$arg"
+                                  break
+                                  ;;
+                          esac
+                      done
+
+                      n=$(basename "$exec_path" | sed "s/\\\\x2d/-/g" | tr -cd "[:alnum:]. _-")
+                      exec app2unit -a "$n" -- "$@"
+                  '\''' -- {cmd}'
+              '';
+              rofi_cmd = pkgs.writers.writeDash "rofi_cmd" ''
+                pkill rofi || rofi \
+                  -show run \
+                  -hover-select \
+                  -me-select-entry ''' \
+                  -me-accept-entry MousePrimary \
+                  -run-command 'app2unit -- {cmd}'
+              '';
+            in
+            bind-exec [
+              [
+                "code:122"
+                "pactl set-sink-volume @DEFAULT_SINK@ -4096"
+              ]
+              [
+                "code:123"
+                "pactl set-sink-volume @DEFAULT_SINK@ +4096"
+              ]
+              [
+                "Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
+              ]
+              [
+                "${mod} + Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+              ]
+              [
+                "SHIFT + Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+              ]
+              [
+                "${mod} + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
+              ]
+              [
+                "${mod} + ALT + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+              ]
+              [
+                "${mod} + SHIFT + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+              ]
+              [
+                "MENU"
+                "app2unit -- ${read-text} region eng+osd"
+              ]
+              [
+                "${mod} + MENU"
+                "app2unit -- ${read-text} window eng+osd"
+              ]
+              [
+                "SHIFT + MENU"
+                "app2unit -- ${read-text} output eng+osd"
+              ]
+              [
+                "CTRL + MENU"
+                "app2unit -- ${read-text} region rus+osd"
+              ]
+              [
+                "${mod} + MENU"
+                "app2unit -- ${read-text} window rus+osd"
+              ]
+              [
+                "SHIFT + MENU"
+                "app2unit -- ${read-text} output rus+osd"
+              ]
+              [
+                "CTRL + Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+              ]
+              [
+                "CTRL + ${mod} + Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+              ]
+              [
+                "CTRL + SHIFT + Print"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -"
+              ] # change later to "Satty" https://github.com/gabm/Satty
+              [
+                "CTRL + ${mod} + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+              ]
+              [
+                "CTRL + ALT + ${mod} + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+              ]
+              [
+                "CTRL + SHIFT + ${mod} + O"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -"
+              ] # change later to "Satty" https://github.com/gabm/Satty
+              [
+                "${mod} + CTRL + Q"
+                "app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
+              ]
+              [
+                "${mod} + CTRL + R"
+                "app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
+              ]
+              [
+                "${mod} + CTRL + U"
+                "app2unit -- update-damn-nixos"
+              ]
+              [
+                "${mod} + CTRL + V"
+                "rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+              ]
+              [
+                "${mod} + ALT + mouse_down"
+                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}') } })\""
+              ]
+              [
+                "${mod} + ALT + mouse_up"
+                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 2) {print $2 - 1} else {print 1}}') } })\""
+              ]
+              [
+                "${mod} + CTRL + mouse_down"
+                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}') } })\""
+              ]
+              [
+                "${mod} + CTRL + mouse_up"
+                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 101) {print $2 - 100} else {print 1}}') } })\""
+              ]
+              [
+                "${mod} + CTRL + C"
+                "hyprctl kill"
+              ]
+              [
+                "${mod} + I"
+                "app2unit -- toggle-restriction"
+              ]
+              [
+                "${mod} + F1"
+                "app2unit -- gamemode.sh"
+              ]
+              [
+                "${mod} + F2"
+                "app2unit -- sheesh.sh"
+              ]
+              [
+                "${mod} + L"
+                "killall -SIGUSR1 .waybar-wrapped"
+              ]
+              [
+                "${mod} + Q"
+                "app2unit -- kitty"
+              ]
+              [
+                "${mod} + Z"
+                "app2unit -- zen-twilight"
+              ]
+              [
+                "${mod} + B"
+                "uuctl"
+              ]
+              [
+                "${mod} + M"
+                "app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px"
+              ]
+              [
+                "${mod} + E"
+                "app2unit -- pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & env NAUTILUS_4_EXTENSION_DIR='${pkgs.nautilus-python}/lib/nautilus/extensions-4' nautilus -w"
+              ]
+            ]
+            ++ bind [
+              [
+                "ALT + R"
+                "hl.dsp.submap 'passthrough'"
+              ]
+              [
+                "${mod} + C"
+                "hl.dsp.window.close()"
+              ]
+              [
+                "${mod} + CTRL + F"
+                "hl.dsp.window.fullscreen_state {internal = 0, client = 3}"
+              ]
+              [
+                "${mod} + V"
+                "hl.dsp.window.float()"
+              ]
+              [
+                "${mod} + P"
+                "hl.dsp.window.pseudo()"
+              ]
+              [
+                "${mod} + J"
+                "hl.dsp.layout 'togglesplit'"
+              ]
+              [
+                "${mod} + F"
+                "hl.dsp.window.fullscreen()"
+              ]
+              [
+                "${mod} + left"
+                "hl.dsp.focus { direction = 'l' }"
+              ]
+              [
+                "${mod} + right"
+                "hl.dsp.focus { direction = 'r' }"
+              ]
+              [
+                "${mod} + up"
+                "hl.dsp.focus { direction = 'u' }"
+              ]
+              [
+                "${mod} + down"
+                "hl.dsp.focus { direction = 'd' }"
+              ]
+              [
+                "${mod} + 1"
+                "function() hl.plugin.split_monitor_workspaces.workspace(1) end"
+              ]
+              [
+                "${mod} + 2"
+                "function() hl.plugin.split_monitor_workspaces.workspace(2) end"
+              ]
+              [
+                "${mod} + 3"
+                "function() hl.plugin.split_monitor_workspaces.workspace(3) end"
+              ]
+              [
+                "${mod} + 4"
+                "function() hl.plugin.split_monitor_workspaces.workspace(4) end"
+              ]
+              [
+                "${mod} + 5"
+                "function() hl.plugin.split_monitor_workspaces.workspace(5) end"
+              ]
+              [
+                "${mod} + 6"
+                "function() hl.plugin.split_monitor_workspaces.workspace(6) end"
+              ]
+              [
+                "${mod} + 7"
+                "function() hl.plugin.split_monitor_workspaces.workspace(7) end"
+              ]
+              [
+                "${mod} + 8"
+                "function() hl.plugin.split_monitor_workspaces.workspace(8) end"
+              ]
+              [
+                "${mod} + 9"
+                "function() hl.plugin.split_monitor_workspaces.workspace(9) end"
+              ]
+              [
+                "${mod} + 0"
+                "function() hl.plugin.split_monitor_workspaces.workspace(10) end"
+              ]
+              [
+                "${mod} + SHIFT + 1"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(1) end"
+              ]
+              [
+                "${mod} + SHIFT + 2"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(2) end"
+              ]
+              [
+                "${mod} + SHIFT + 3"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(3) end"
+              ]
+              [
+                "${mod} + SHIFT + 4"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(4) end"
+              ]
+              [
+                "${mod} + SHIFT + 5"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(5) end"
+              ]
+              [
+                "${mod} + SHIFT + 6"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(6) end"
+              ]
+              [
+                "${mod} + SHIFT + 7"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(7) end"
+              ]
+              [
+                "${mod} + SHIFT + 8"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(8) end"
+              ]
+              [
+                "${mod} + SHIFT + 9"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(9) end"
+              ]
+              [
+                "${mod} + SHIFT + 0"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(10) end"
+              ]
+              [
+                "${mod} + S"
+                "hl.dsp.workspace.toggle_special 'magic'"
+              ]
+              [
+                "${mod} + SHIFT + S"
+                "function() hl.plugin.split_monitor_workspaces.move_to_workspace 'special:magic' end"
+              ]
+              [
+                "${mod} + mouse_down"
+                "function() hl.plugin.split_monitor_workspaces.workspace 'e+1' end"
+              ]
+              [
+                "${mod} + mouse_up"
+                "function() hl.plugin.split_monitor_workspaces.workspace 'e-1' end"
+              ]
+              [
+                "${mod} + CTRL + ${mod}_L "
+                "hl.dsp.exec_raw [[${rofi_cmd}]]"
+                { release = true; }
+              ]
+              [
+                "${mod} + ${mod}_L"
+                "hl.dsp.exec_raw [[${rofi}]]"
+                { release = true; }
+              ]
+              [
+                "${mod} + mouse:272"
+                "hl.dsp.window.drag()"
+                { mouse = true; }
+              ]
+              [
+                "${mod} + mouse:273"
+                "hl.dsp.window.resize()"
+                { mouse = true; }
+              ]
+            ];
+          window_rule = [
+            {
+              float = true;
+              match.title = "Извлечённый текст";
+            }
+            {
+              no_max_size = true;
+              pin = true;
+              match.class = "polkit-mate-authentication-agent-1";
+            }
+            {
+              opacity = "0.99 override 0.99 override";
+              match.title = "^(QDiskInfo|MainPicker)$";
+            }
+            {
+              opacity = "0.99 override 0.99 override";
+              match.class = "^(thunderbird|spotify|org.prismlauncher.PrismLauncher|mpv|org.qbittorrent.qBittorrent|die)$";
+            }
+            {
+              float = true;
+              match = {
+                class = "steam";
+                title = "negative:Steam";
+              };
+            }
+            {
+              fullscreen_state = "0 3";
+              match = {
+                class = "firefox";
+                title = "^(.*Discord.* — Mozilla Firefox.*)$";
+              };
+            }
+          ];
+          permission = [
+            {
+              binary = "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}";
+              type = "screencopy";
+              mode = "allow";
+            }
+            {
+              binary = "${lib.escapeRegex (lib.getExe pkgs.wayvr)}";
+              type = "screencopy";
+              mode = "allow";
+            }
+            {
+              binary = "${lib.escapeRegex (lib.getExe pkgs.grim)}";
+              type = "screencopy";
+              mode = "allow";
+            }
+            {
+              binary = "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}";
+              type = "screencopy";
+              mode = "allow";
+            }
+            {
+              binary = "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped";
+              type = "screencopy";
+              mode = "allow";
+            }
+          ]
+          ++ mkPluginPermissionEntries plugins;
+          layer_rule = [
+            {
+              blur = true;
+              match.namespace = ".*";
+            }
+            {
+              blur_popups = true;
+              match.namespace = ".*";
+            }
+            {
+              no_anim = true;
+              match.namespace = "selection";
+            }
+            {
+              no_anim = true;
+              match.namespace = "hyprpicker";
+            }
+            {
+              ignore_alpha = 0.9;
+              match.namespace = "selection";
+            }
+            {
+              ignore_alpha = 0;
+              match.namespace = "^(corner0|overview|indicator0|launcher|quicksettings|swaync-control-center|rofi|waybar|swaync-notification-window)$";
+            }
+            {
+              animation = "popin 90%";
+              match.namespace = "^(rofi|logout_dialog)$";
+            }
+            {
+              animation = "slide left";
+              match.namespace = "swaync-control-center";
+            }
+          ];
+          on = [
+            {
+              _args = [
+                "hyprland.start"
+                (lib.generators.mkLuaInline ''
+                  function () 
+                                  ${mkPluginExecEntries plugins}
+                                  hl.exec_cmd [[kbuildsycoca6]]
+                                  hl.exec_cmd [[${nautilus-listener}/bin/nautilis-listener]]
+                                  hl.exec_cmd [[app2unit -- wl-paste --watch cliphist store]]
+                                  hl.exec_cmd [[fumon]]
+                                end'')
+              ];
+            }
           ];
         };
-        debug = {
-          enable_stdout_logs = false;
-          disable_logs = true;
-        };
-        dwindle = {
-          preserve_split = true;
-        };
-        misc = {
-          vrr = 1;
-          disable_watchdog_warning = true;
-          disable_hyprland_logo = true;
-          background_color = "0x000000";
-          enable_swallow = false;
-          animate_manual_resizes = false;
-          animate_mouse_windowdragging = false;
-          swallow_regex = "^(kitty|lutris|bottles|alacritty)$";
-          swallow_exception_regex = "^(ncspot)$";
-          force_default_wallpaper = 2;
-        };
-        binds = {
-          scroll_event_delay = 50;
-        };
-        plugin = mkIf cfg.enable-plugins {
-          split-monitor-workspaces.enable_persistent_workspaces = false;
-          #hyprexpo = {
-          #  columns = 3;
-          #  gap_size = 5;
-          #  bg_col = "rgb(111111)";
-          #  workspace_method = "first 1";
-          #  enable_gesture = true;
-          #  gesture_distance = 300;
-          #  gesture_positive = true;
-          #};
-          #dynamic-cursors = {
-          #  enabled = false;
-          #  mode = "tilt";
-          #  shake.enabled = false;
-          #  stretch.function = "negative_quadratic";
-          #};
-          #hyprtrails = {
-          #  color = "rgba(bbddffff)";
-          #  bezier_step = 0.001;
-          #  history_points = 6;
-          #  points_per_step = 4;
-          #  histoty_step = 1;
-          #};
-        };
-      };
-      extraConfig = ''
-        submap=passthrough
-          bind=,escape,submap,reset
-        submap=reset
-      '';
+      #extraConfig = ''
+      #  hl.submap({
+      #    name = "passthrough",
+      #    binds = {
+      #      { mods = {}, key = "escape", dispatcher = "submap", args = "reset" }
+      #    }
+      #  })
+      #'';
     };
     systemd.user.services.polkit_mate = {
       Install = {
@@ -508,7 +1043,7 @@ in
         }
         {
           label = "logout";
-          action = "hyprctl dispatch exit";
+          action = "uwsm stop";
           text = "Logout";
           keybind = "e";
         }

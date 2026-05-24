@@ -14,20 +14,16 @@ in
   };
 
   config = mkIf cfg.enable {
-
-    #systemd.services.plymouth-quit = {
-    #  requires = [ "user@1000.service" "systemd-vconsole-setup.service" "polkit.service" ];
-    #  after = [ "user@1000.service" "systemd-vconsole-setup.service" "polkit.service" ];
-    #  wants = [ "multi-user.target" ];
-    #  #preStart = "${pkgs.coreutils-full}/bin/sleep 5";
-    #};
-
-    # systemd.services.plymouth-quit-wait.enable = false;
-
-    boot.plymouth = {
-      enable = true;
-      theme = "logo";
-      themePackages = [ (pkgs.callPackage ./logo.nix { }) ];
+    boot = {
+      plymouth = {
+        enable = true;
+        theme = "logo";
+        themePackages = [ (pkgs.callPackage ./logo.nix { }) ];
+      };
+      kernelParams = [
+        "quiet"
+        #"plymouth.use-simpledrm"
+      ];
     };
   };
 }

@@ -294,15 +294,15 @@ in
       withRuby = true;
       withPerl = true;
       withNodeJs = true;
-      coc.enable = true;
       enable = true;
       viAlias = true;
       defaultEditor = true;
       vimAlias = true;
       vimdiffAlias = true;
-      extraPython3Packages = ps: with ps; [
-        pynvim
-      ];
+      extraPython3Packages =
+        ps: with ps; [
+          pynvim
+        ];
       plugins = with pkgs.vimPlugins; [
         netrw-nvim
         nvim-dap
@@ -328,106 +328,110 @@ in
         coc-rust-analyzer
         auto-save-nvim
       ];
-      coc.settings = {
-        diagnostic = {
-          enable = true;
-          virtualText = true;
-          virtualTextCurrentLineOnly = true;
-        };
-        rust-analyzer = {
-          serverPath = "rust-analyzer";
-          check = {
-            command = "clippy";
-            extraArgs = [
-              "--"
-              "-W"
-              "clippy::all"
-              "-W"
-              "clippy::pedantic"
-            ];
+      coc = {
+        enable = true;
+        settings = {
+          "coc.preferences.formatOnSave" = true;
+          diagnostic = {
+            enable = true;
+            virtualText = true;
+            virtualTextCurrentLineOnly = true;
           };
-        };
-        languageserver = {
-          basedpyright = {
-            command = "basedpyright-langserver";
-            args = [ "--stdio" ];
-            filetypes = [ "python" ];
-            rootPatterns = [
-              "pyproject.toml"
-              "setup.py"
-              ".git"
-              ".venv"
-            ];
-            settings = {
-              basedpyright.analysis = {
-                typeCheckingMode = "standard";
-                autoImportCompletions = true;
-              };
+          rust-analyzer = {
+            serverPath = "rust-analyzer";
+            check = {
+              command = "clippy";
+              extraArgs = [
+                "--"
+                "-W"
+                "clippy::all"
+                "-W"
+                "clippy::pedantic"
+              ];
             };
           };
-          ruff = {
-            command = "ruff";
-            args = [ "server" ];
-            filetypes = [ "python" ];
-            rootPatterns = [
-              "pyproject.toml"
-              "ruff.toml"
-              ".git"
-            ];
-            settings.logLevel = "debug";
-          };
-          asm = {
-            command = "asm-lsp";
-            filetypes = [
-              "asm"
-              "s"
-              "S"
-            ];
-          };
-          qml = {
-            command = "qmlls";
-            filetypes = [ "qml" ];
-            args = [ "-E" ];
-          };
-          cmake = {
-            command = "cmake-language-server";
-            filetypes = [ "cmake" ];
-            rootPatterns = [ "build/" ];
-            initializationOptions.buildDirectory = "build";
-          };
-          clangd = {
-            command = "clangd";
-            rootPatterns = [
-              "compile_flags.txt"
-              "compile_commands.json"
-            ];
-            filetypes = [
-              "c"
-              "cc"
-              "cpp"
-              "c++"
-              "objc"
-              "objcpp"
-            ];
-          };
-          nixd = {
-            command = "nixd";
-            rootPatterns = [ ".nixd.json" ];
-            filetypes = [ "nix" ];
-            settings = {
-              nixd = {
-                nixpkgs = {
-                  expr = "import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
+          languageserver = {
+            basedpyright = {
+              command = "basedpyright-langserver";
+              args = [ "--stdio" ];
+              filetypes = [ "python" ];
+              rootPatterns = [
+                "pyproject.toml"
+                "setup.py"
+                ".git"
+                ".venv"
+              ];
+              settings = {
+                basedpyright.analysis = {
+                  typeCheckingMode = "standard";
+                  autoImportCompletions = true;
                 };
-                formatting = {
-                  command = [ "nixfmt" ];
-                };
-                options = {
-                  nixos = {
-                    expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options";
+              };
+            };
+            ruff = {
+              command = "ruff";
+              args = [ "server" ];
+              filetypes = [ "python" ];
+              rootPatterns = [
+                "pyproject.toml"
+                "ruff.toml"
+                ".git"
+              ];
+              settings.logLevel = "debug";
+            };
+            asm = {
+              command = "asm-lsp";
+              filetypes = [
+                "asm"
+                "s"
+                "S"
+              ];
+            };
+            qml = {
+              command = "qmlls";
+              filetypes = [ "qml" ];
+              args = [ "-E" ];
+            };
+            cmake = {
+              command = "cmake-language-server";
+              filetypes = [ "cmake" ];
+              rootPatterns = [ "build/" ];
+              initializationOptions.buildDirectory = "build";
+            };
+            clangd = {
+              command = "clangd";
+              rootPatterns = [
+                "compile_flags.txt"
+                "compile_commands.json"
+              ];
+              filetypes = [
+                "c"
+                "cc"
+                "cpp"
+                "c++"
+                "objc"
+                "objcpp"
+              ];
+            };
+            nixd = {
+              command = "nixd";
+              rootPatterns = [ ".nixd.json" ];
+              filetypes = [ "nix" ];
+              settings = {
+                nixd = {
+                  nixpkgs = {
+                    expr = "import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
                   };
-                  home_manager = {
-                    expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options.home-manager.users.type.getSubOptions []";
+                  formatting = {
+                    command = [ "nixfmt" ];
+                  };
+                  options = {
+                    nixos = {
+                      expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options";
+                    };
+                    home_manager = {
+                      expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options.home-manager.users.type.getSubOptions []";
+                    };
                   };
                 };
               };
@@ -514,7 +518,7 @@ in
             miDebuggerPath = '${pkgs.gdb}/bin/gdb',
           },
         }
-        
+
         dap.configurations.c = dap.configurations.cpp
         dap.configurations.rust = {
           vim.tbl_extend("force", dap.configurations.cpp[1], {

@@ -1,13 +1,20 @@
 {
   pkgs,
   inputs,
+  lib,
   ...
 }:
 {
 
   xdg.configFile."bookmarks.html".source = ../../../stuff/bookmarks.html;
 
+  android.enable = true;
+
+  systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
+
   manual.manpages.enable = false;
+
+  sandboxing.enable = true;
 
   umu.enable = true;
 

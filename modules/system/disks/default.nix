@@ -42,12 +42,6 @@ in
     second-disk = {
       enable = mkEnableOption "additional disk (must be btrfs)";
       compression = mkEnableOption "compression on additional disk";
-      # label = mkOption {
-      #   type = types.str;
-      #   default = "Games";
-      #   example = "stuff";
-      #   description = "Filesystem label of the partition that is used for mounting";
-      # };
       path = mkOption {
         type = types.str;
         default = "/mnt/Games";
@@ -62,6 +56,7 @@ in
       };
     };
     swap = {
+      partition.enable = mkEnableOption "swap partition";
       file = {
         enable = mkEnableOption "swapfile";
         path = mkOption {
@@ -76,15 +71,6 @@ in
           example = 4 * 1024;
           description = "Size of swapfile in MB";
         };
-      };
-      partition = {
-        enable = mkEnableOption "swap partition";
-        # label = mkOption {
-        #   type = types.str;
-        #   default = "swap";
-        #   example = "swappart";
-        #   description = "Label of swap partition";
-        # };
       };
     };
     enable = mkOption {
@@ -154,94 +140,98 @@ in
           "/etc/ssh/ssh_host_rsa_key"
           "/etc/ssh/ssh_host_rsa_key.pub"
           "/config.json"
-          "/etc/machine-id"
           "/cloudflare1.conf"
           "/cloudflare2.conf"
           "/var/lib/searx-secret"
         ]
-        ++ lib.optionals cfg.swap.file.enable [ swap.file.path ];
+        ++ (lib.optionals cfg.swap.file.enable [ swap.file.path ]);
       })
     ];
 
-    boot.initrd.systemd.services.impermanence_subvolume = mkIf cfg.impermanence {
-      wantedBy = [
-        "initrd.target"
-      ];
-      after = [
-        "initrd-root-device.target"
-      ];
-      before = [
-        "sysroot.mount"
-      ];
-      unitConfig.DefaultDependencies = "no";
-      description = "Change subvolume for impermanence";
-      #path = [ pkgs.btrfs-progs pkgs.coreutils pkgs.util-linux pkgs.mount ];
-      serviceConfig.Type = "oneshot";
-      script = impermanence_subvolume_script;
+    boot = mkIf cfg.impermanence {
+      supportedFilesystems.btrfs = true;
+      initrd = {
+        supportedFilesystems.btrfs = true;
+        systemd.services.impermanence_subvolume = {
+          wantedBy = [
+            "initrd.target"
+          ];
+          after = [
+            "initrd-root-device.target"
+          ];
+          before = [
+            "sysroot.mount"
+          ];
+          unitConfig.DefaultDependencies = "no";
+          description = "Change subvolume for impermanence";
+          serviceConfig.Type = "oneshot";
+          script = impermanence_subvolume_script;
+        };
+      };
     };
 
-    boot.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
+    fileSystems = {
 
-    boot.initrd.supportedFilesystems.btrfs = mkIf cfg.impermanence true;
+      "/" = {
+        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
+        fsType = "btrfs";
+        neededForBoot = true;
+        options = [
+          "subvol=root"
+          "compress-force=zstd"
+        ];
+      };
 
-    # services.btrfs.autoScrub = {
-    #   enable = true;
-    #   interval = "weekly";
-    # };
+      "/persistent" = mkIf cfg.impermanence {
+        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
+        neededForBoot = true;
+        fsType = "btrfs";
+        options = [
+          "subvol=persistent"
+          "compress-force=zstd"
+        ];
+      };
 
-    fileSystems."/" = {
-      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-      fsType = "btrfs";
-      options = [
-        "subvol=root"
-        "compress-force=zstd"
-      ];
-    };
+      "/nix" = {
+        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
+        fsType = "btrfs";
+        neededForBoot = true;
+        options = [
+          "subvol=nix"
+          "compress-force=zstd"
+        ];
+      };
 
-    fileSystems."/persistent" = mkIf cfg.impermanence {
-      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-      neededForBoot = true;
-      fsType = "btrfs";
-      options = [
-        "subvol=persistent"
-        "compress-force=zstd"
-      ];
-    };
+      "/home" = {
+        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
+        fsType = "btrfs";
+        options = [
+          "subvol=home"
+          "compress-force=zstd"
+          "nodev"
+          "nosuid"
+        ];
+      };
 
-    fileSystems."/nix" = {
-      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-      fsType = "btrfs";
-      options = [
-        "subvol=nix"
-        "compress-force=zstd"
-      ];
-    };
+      "/boot" = {
+        device = "/dev/disk/by-label/${if boot_label == null then "boot" else boot_label}";
+        fsType = "vfat";
+        options = [
+          "noauto"
+          "x-systemd.automount"
+          "fmask=0077"
+          "dmask=0077"
+        ];
+      };
 
-    fileSystems."/home" = {
-      device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-      fsType = "btrfs";
-      options = [
-        "subvol=home"
-        "compress-force=zstd"
-      ];
-    };
-
-    fileSystems."/boot" = {
-      device = "/dev/disk/by-label/${if boot_label == null then "boot" else boot_label}";
-      fsType = "vfat";
-      options = [
-        "noauto"
-        "x-systemd.automount"
-      ];
-    };
-
-    fileSystems."${cfg.second-disk.path}" = mkIf cfg.second-disk.enable {
-      device = "/dev/disk/by-label/${if second_label == null then "Games" else second_label}";
-      fsType = "btrfs";
-      options =
-        optionals cfg.second-disk.compression [ "compress-force=zstd" ]
-        ++ optionals (cfg.second-disk.subvol != null) [ "subvol=${cfg.second-disk.subvol}" ]
-        ++ [ "nofail" ];
+      ${cfg.second-disk.path} = mkIf cfg.second-disk.enable {
+        device = "/dev/disk/by-label/${if second_label == null then "Games" else second_label}";
+        fsType = "btrfs";
+        options =
+          optionals cfg.second-disk.compression [ "compress-force=zstd" ]
+          ++ optionals (cfg.second-disk.subvol != null) [ "subvol=${cfg.second-disk.subvol}" ]
+          ++ [ "nofail" ];
+      };
     };
 
     swapDevices =

@@ -15,13 +15,7 @@
 
   graphics.nvidia.enable = true;
 
-  # nix.settings = {
-
-  #   substituters = [ "https://attic.xuyh0120.win/lantian" ];
-  #   
-  #   trusted-public-keys = [ "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=" ];
-
-  # };
+  amd-ai.enable = true;
 
   virtualisation.virtualbox.host = {
 
@@ -73,30 +67,6 @@
       TIMELINE_LIMIT_WEEKLY = 4;
       TIMELINE_LIMIT_DAILY = 7;
       TIMELINE_LIMIT_HOURLY = 24;
-    };
-
-    searx = {
-      enable = true;
-      redisCreateLocally = true;
-      environmentFile = "/var/lib/searx-secret";
-      settings = {
-        search.formats = [ "html" "json" ];
-        server = {
-          port = 8000;
-          bind_address = "127.0.0.1";
-          limiter = false;
-        };
-      };
-    };
-
-    open-webui = {
-      enable = true;
-      host = "127.0.0.1";
-      port = 8080;
-      environment = {
-        WEBUI_AUTH = "False";
-        OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
-      };
     };
 
     tlp = {

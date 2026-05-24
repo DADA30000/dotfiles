@@ -202,7 +202,7 @@ in
       #  StartupWMClass = "discord";
       #  Type = "Application";
       #};
-      desktopEntries.discord-canary.settings = {
+      desktopEntries."com.discordapp.DiscordCanary".settings = {
         Exec = "DiscordCanary --ozone-platform-hint=auto %U";
         Categories = "Network;InstantMessaging;Chat";
         GenericName = "All-in-one cross-platform voice and text chat for gamers";

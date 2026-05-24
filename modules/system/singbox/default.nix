@@ -145,6 +145,17 @@ let
       ${pkgs.sing-box}/bin/sing-box -c ${singbox-config} -c "${proxy-dummy}" run
     fi
   '';
+  processes = [
+    "Battle.net.exe"
+    ".AyuGram-wrapped"
+    ".Discord-wrapped"
+    ".spotify-wrapped"
+    ".DiscordCanary-wrapped"
+    "TeamSpeak"
+    "electron"
+    "prismlauncher"
+    "wineserver"
+  ];
   singbox-config = (pkgs.formats.json { }).generate "singbox-config" {
     log = {
       level = "debug";
@@ -153,6 +164,12 @@ let
       rules = [
         {
           action = "sniff";
+        }
+        {
+          inbound = [
+            "vless-in"
+          ];
+          outbound = "proxy";
         }
         {
           inbound = [
@@ -168,16 +185,7 @@ let
         }
         {
           outbound = "proxy";
-          process_name = [
-            "Battle.net.exe"
-            ".AyuGram-wrapped"
-            ".Discord-wrapped"
-            ".spotify-wrapped"
-            ".DiscordCanary-wrapped"
-            "TeamSpeak"
-            "electron"
-            "prismlauncher"
-          ];
+          process_name = processes;
         }
         {
           outbound = "proxy";
@@ -250,17 +258,28 @@ let
             "zen.bin"
             ".zen-twilight-wrapped"
             "zen-twilight"
-            ".zen-beta-wrapper"
-            "zen-beta"
+            ".zen-twilight-wrapper"
+            "zen-twilight"
           ];
         }
       ];
       auto_detect_interface = true;
-      final = "proxy";
+      final = "direct";
     };
     inbounds = [
       {
+        type = "vless";
+        tag = "vless-in";
         listen = "127.0.0.1";
+        listen_port = 1919;
+        users = [
+          {
+            uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+            name = "sandbox-user";
+          }
+        ];
+      }
+      {
         tag = "mixed-in";
         listen_port = 2080;
         type = "mixed";
@@ -270,11 +289,12 @@ let
         stack = "system";
         interface_name = "tun0";
         auto_route = true;
-        mtu = 1400;
+        mtu = 1360;
         tag = "tun-in";
         address = "172.19.0.1/30";
         type = "tun";
         route_exclude_address = [
+          "${dns}/32"
           "127.0.0.1/32"
           "192.168.0.0/16"
         ];
@@ -471,7 +491,7 @@ let
     FIX_INCOMING_PACKETS_MARK=${FIX_INCOMING_PACKETS_MARK}
     VPNIFY_TABLE=${VPNIFY_TABLE}
     GAME_PEERS_TABLE=${GAME_PEERS_TABLE}
-    
+
     rm -rf /etc/netns/vpn_wrapper
 
     ip netns del vpn_wrapper 2>/dev/null || true
@@ -485,7 +505,7 @@ let
     iptables -t mangle -D PREROUTING -j CONNMARK --restore-mark --mask 0xFFFE 2>/dev/null || true
     iptables -t mangle -D OUTPUT -m mark --mark ${toString zapret-mark} -j CONNMARK --save-mark --mask 0xFFFE 2>/dev/null || true
     iptables -t mangle -D OUTPUT -m mark --mark ${toString zapret-mark} -j NFQUEUE --queue-num ${zapret-qnum} --queue-bypass 2>/dev/null || true
-    
+
     iptables -t mangle -D PREROUTING -m conntrack --ctstate NEW -j BYPASS_CHECK 2>/dev/null || true
     iptables -t mangle -D OUTPUT -m connmark --mark $FIX_INCOMING_PACKETS_MARK -j CONNMARK --restore-mark 2>/dev/null || true
     iptables -t mangle -F BYPASS_CHECK 2>/dev/null || true
@@ -504,18 +524,26 @@ in
 {
   options.singbox = {
     enable = mkEnableOption "singbox";
+    processes_to_proxy = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      internal = true;
+      visible = false;
+    };
   };
 
   config = mkIf cfg.enable {
+    singbox.processes_to_proxy = processes;
     systemd.services = {
       singbox-fix-incoming-packets = {
         bindsTo = [ "singbox.service" ];
+        partOf = [ "singbox.service" ];
         after = [ "singbox.service" ];
         wantedBy = [ "singbox.service" ];
         serviceConfig.ExecStart = fix_incoming_packets_script;
       };
       zapret = {
         bindsTo = [ "singbox.service" ];
+        partOf = [ "singbox.service" ];
         after = [ "singbox.service" ];
         wantedBy = [ "singbox.service" ];
         serviceConfig.ExecStart = "${pkgs.zapret}/bin/nfqws --qnum=${zapret-qnum} ${zapret-flags}";

@@ -57,6 +57,10 @@ let
   umu-tar = (
     pkgs.writeShellScriptBin "umu-tar" ''
       LOCAL_DIR="${config.xdg.dataHome}"
+      LOCK_FILE="$LOCAL_DIR/umu-extraction.lock"
+      mkdir -p "$LOCAL_DIR"
+      exec 9> "$LOCK_FILE"
+      flock 9
       PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.xz}/bin:${pkgs.gnutar}/bin:${pkgs.util-linux}/bin"
       if [[ ! -d "$LOCAL_DIR/umu" ]]; then
         rm -rf "$LOCAL_DIR/steamrt3.tmp"; mkdir -p "$LOCAL_DIR/steamrt3.tmp"
@@ -68,6 +72,7 @@ let
         rm -rf "$LOCAL_DIR/umu"; mkdir -p "$LOCAL_DIR/umu"
         mv "$LOCAL_DIR/steamrt3.tmp" "$LOCAL_DIR/umu/steamrt3"
       fi
+      flock -u 9
     ''
   );
 in
@@ -77,14 +82,6 @@ in
   };
 
   config = mkIf cfg.enable {
-    systemd.user.services.umu-check = {
-      Install.WantedBy = [ "graphical-session.target" ];
-      Unit.After = [ "graphical-session.target" ];
-      Service = {
-        ExecStart = "${umu-tar}/bin/umu-tar";
-        Type = "oneshot";
-      };
-    };
     xdg.mimeApps.defaultApplications = {
       "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
       "application/x-msi" = "run-exe.desktop";
@@ -133,12 +130,14 @@ in
 
         case $exit_code in
           0)
-            app2unit -a "run-exe-ge" umu-run-wrapper "$1"
+            umu-run-wrapper "$1"
+            scan-umu-for-lnk
           ;;
           1)
             case "$choice" in
               "Запустить с помощью Proton UMU v${proton-umu.version}")
-                USE_PROTON_UMU=1 app2unit -a "run-exe-umu" umu-run-wrapper "$1"
+                USE_PROTON_UMU=1 umu-run-wrapper "$1"
+                scan-umu-for-lnk
               ;;
               "Выбрать другой файл")
                 selected_file=$(${pkgs.zenity}/bin/zenity --file-selection --title="Выберите файл для запуска")
@@ -170,10 +169,8 @@ in
           export WINEPREFIX=$HOME/.umu
         fi
         if [[ ! -d "${config.xdg.dataHome}/umu" ]]; then
-          ${pkgs.libnotify}/bin/notify-send "Please wait..." "Waiting for umu-check service to finish"
-          if ! ${pkgs.systemd}/bin/systemctl --user start umu-check.service; then
-            ${pkgs.libnotify}/bin/notify-send "Error" "umu-check.service failed"
-          fi
+          ${pkgs.libnotify}/bin/notify-send "Please wait..." "Preparing umu runtime (only on first launch)"
+          ${umu-tar}/bin/umu-tar
         fi
         if [[ ! -f "$WINEPREFIX/check-do_not_delete_this" ]]; then
           mkdir -p "$WINEPREFIX/drive_c/windows/syswow64"
@@ -196,7 +193,6 @@ in
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
         UMU_RUNTIME_UPDATE=0 WINEDLLOVERRIDES="winhttp.dll=n,b;winmm.dll=n,b;SteamFix64.dll=n,b;steam_api64.dll=n,b;OnlineFix64.dll=n,b;SteamOverlay64.dll=n,b;version.dll=n,b" ${pkgs.gamemode}/bin/gamemoderun ${pkgs.umu-launcher}/bin/umu-run "$@"
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
-        scan-umu-for-lnk & disown
       '')
       (pkgs.writeShellScriptBin "scan-umu-for-lnk" ''
         export WINEPREFIX=$HOME/.umu

@@ -451,7 +451,7 @@ in
           };
           "custom/logout" = {
             format = "<span color='#63c773'>󰍃</span>";
-            on-click = "hyprctl dispatch exit";
+            on-click = "uwsm stop";
             tooltip = false;
           };
           "custom/lock" = {

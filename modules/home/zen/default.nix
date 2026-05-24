@@ -404,6 +404,8 @@ in
           nebula-tab-switch-animation = 1;
           nebula-urlbar-animation = 1;
           nebula-workspace-style = 1;
+          # Breaks zen into some kind of weird grid of panels
+          # "gfx.wayland.hdr" = true;
           "browser.toolbars.bookmarks.visibility" = "always";
           "extensions.webextensions.ExtensionStorageIDB.enabled" = false;
           "intl.locale.requested" = "ru,en-US";

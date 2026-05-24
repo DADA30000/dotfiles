@@ -1,0 +1,84 @@
+--- hazy.js	1970-01-01 03:00:01.000000000 +0300
++++ /home/l0lk3k/hazy.js	2026-05-12 18:47:30.988454781 +0300
+@@ -6,3 +6,3 @@
+ 
+-  const defImage = "https://i.imgur.com/Wl2D0h0.png";
++  const defImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+   let startImage = localStorage.getItem("hazy:startupBg") || defImage;
+@@ -12,3 +12,3 @@
+       name: "Custom background",
+-      defVal: false,
++      defVal: true,
+     },
+@@ -17,3 +17,3 @@
+       name: "Custom color",
+-      defVal: false,
++      defVal: true,
+     },
+@@ -26,4 +26,4 @@
+   const toggles = {
+-    UseCustomBackground: false,
+-    UseCustomColor: false,
++    UseCustomBackground: true,
++    UseCustomColor: true,
+     HideNowPlayingSidebar: false
+@@ -208,3 +208,3 @@
+     } else {
+-      setAccentColor(localStorage.getItem("CustomColor") || "#ffc0ea");
++      setAccentColor(localStorage.getItem("CustomColor") || "#2e7eff");
+     }
+@@ -325,9 +325,11 @@
+   waitForElement(
+-    [".Root__globalNav"],
+-    (element) => {
++    [".Root__globalNav", ".Root__top-container"],
++    ([globalNav, topContainer]) => {
+       const isCenteredGlobalNav = Spicetify.Platform.version >= "1.2.46.462";
+       let addedClass = "control-nav";
+-      if (element?.[0]?.classList.contains("Root__globalNav"))
++      if (globalNav?.classList.contains("Root__globalNav"))
+         addedClass = isCenteredGlobalNav ? "global-nav-centered" : "global-nav";
+       document.body.classList.add(addedClass);
++      document.documentElement.style.setProperty('background-color', 'transparent', 'important');
++      topContainer.style.setProperty('background-color', 'transparent', 'important');
+     },
+@@ -496,4 +498,4 @@
+       localStorage.getItem("UseCustomBackground")
+-    );
+-    toggles.UseCustomColor = JSON.parse(localStorage.getItem("UseCustomColor"));
++    ) ?? true;
++    toggles.UseCustomColor = JSON.parse(localStorage.getItem("UseCustomColor")) ?? true;
+     toggles.HideNowPlayingSidebar = JSON.parse(localStorage.getItem("HideNowPlayingSidebar"));
+@@ -621,5 +623,3 @@
+       "Background image URL";
+-    if (!startImage.startsWith("data:image")) {
+-      srcInput.value = startImage;
+-    }
++    srcInput.value = startImage;
+     content.append(srcInput);
+@@ -646,3 +646,3 @@
+     colorInput.id = "color-input";
+-    colorInput.value = localStorage.getItem("CustomColor") || "#30bf63";
++    colorInput.value = localStorage.getItem("CustomColor") || "#2e7eff";
+     colorInput.style.border = "none";
+@@ -688,14 +688,3 @@
+     saveButton.onclick = async () => {
+-      // Check if image background is valid
+-      let invalidImage = false;
+-      try {
+-        await fetch(srcInput.value, {
+-          "mode": "no-cors"
+-        });
+-      }
+-      catch (error) {
+-        invalidImage = true;
+-      }
+-
+-      if (!srcInput.value || !URL.canParse(srcInput.value) || invalidImage) {
++      if (!srcInput.value) {
+         saveButton.innerHTML = "Invalid image";
+@@ -769,3 +758,3 @@
+       img.src = defImage;
+-      document.getElementById("color-input").value = "#30bf63";
++      document.getElementById("color-input").value = "#2e7eff";
+     };

@@ -1,0 +1,52 @@
+diff --git a/src/main.rs b/src/main.rs
+index 41b1c9e..780dca3 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -17,7 +17,7 @@ use lexopt::{
+     Arg::{Long, Short},
+     ValueExt as _,
+ };
+-use wayrs_client::{global::BindError, ConnectError, Connection, IoMode};
++use wayrs_client::{global::BindError, ConnectError, Connection};
+ use wayrs_protocols::security_context_v1::WpSecurityContextManagerV1;
+ 
+ fn usage() {
+@@ -51,11 +51,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+             Short('s') | Long("socket-fd") => socket_fd = Some(parser.value()?.parse()?),
+             Short('S') | Long("socket-path") => socket_path = Some(parser.value()?.parse()?),
+             Short('e') | Long("sandbox-engine") => {
+-                sandbox_engine = Some(CString::new(parser.value()?.into_vec())?)
++                sandbox_engine = Some(CString::new(parser.value()?.into_vec())?);
+             }
+             Short('a') | Long("app-id") => app_id = Some(CString::new(parser.value()?.into_vec())?),
+             Short('i') | Long("instance-id") => {
+-                instance_id = Some(CString::new(parser.value()?.into_vec())?)
++                instance_id = Some(CString::new(parser.value()?.into_vec())?);
+             }
+             Short('c') | Long("close-fd") => close_fd = Some(parser.value()?.parse()?),
+             Short('r') | Long("ready-fd") => ready_fd = Some(parser.value()?.parse()?),
+@@ -138,20 +138,16 @@ fn create_context(
+     let context = context_manager.create_listener(&mut conn, listed_fd, close_fd);
+     if let Some(sandbox_engine) = sandbox_engine {
+         context.set_sandbox_engine(&mut conn, sandbox_engine);
+-    };
++    }
+     if let Some(app_id) = app_id {
+         context.set_app_id(&mut conn, app_id);
+-    };
++    }
+     if let Some(instance_id) = instance_id {
+         context.set_instance_id(&mut conn, instance_id);
+-    };
++    }
+     context.commit(&mut conn);
+ 
+-    conn.flush(IoMode::Blocking)
+-        .map_err(CreateContextError::Io)?;
+-    conn.recv_events(IoMode::Blocking)
+-        .map_err(CreateContextError::Io)?;
+-    conn.dispatch_events(&mut state);
++    conn.blocking_roundtrip().map_err(CreateContextError::Io)?;
+ 
+     Ok(())
+ }

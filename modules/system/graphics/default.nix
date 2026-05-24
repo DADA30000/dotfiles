@@ -59,7 +59,7 @@ in
     ];
     environment.variables = {
       ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
-      RADV_PERFTEST = mkIf cfg.vulkan_video "video_decode,video_encode";
+      RADV_EXPERIMENTAL = mkIf cfg.vulkan_video "video_decode,video_encode";
       ANV_DEBUG = mkIf cfg.vulkan_video "video-decode,video-encode";
       ANV_VIDEO_DECODE = mkIf cfg.vulkan_video 1;
       ANV_VIDEO_ENCODE = mkIf cfg.vulkan_video 1;

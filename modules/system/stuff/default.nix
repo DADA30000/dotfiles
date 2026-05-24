@@ -78,6 +78,194 @@ let
       sed -i '1,/--qnum=210/d' "$TARGET"
       sed -i 's/^[[:space:]]*//; s/[[:space:]]*$//; s/.*/"&"/' "$TARGET"
     '')
+    (pkgs.writers.writePython3Bin "fetch-latest-nightly" {} ''
+      import urllib.request
+      import urllib.parse
+      import re
+      import datetime
+      import json
+      import subprocess
+      import sys
+      
+      BASE_URL = "https://ftp.mozilla.org/pub/fenix/nightly"
+      
+      
+      def fetch_index(year, month):
+          url = f"{BASE_URL}/{year}/{month:02d}/"
+          try:
+              with urllib.request.urlopen(url) as res:
+                  return url, res.read().decode("utf-8")
+          except Exception:
+              return url, ""
+      
+      
+      def main():
+          now = datetime.datetime.now()
+          # Check current month first, then drop back to last month if needed
+          periods = [now, now - datetime.timedelta(days=28)]
+      
+          latest_dir = None
+          month_url = ""
+      
+          for dt in periods:
+              url, html = fetch_index(dt.year, dt.month)
+              dirs = re.findall(r'href="([^"]+-android-x86_64/)"', html)
+              if dirs:
+                  dirs.sort()
+                  latest_dir = dirs[-1]
+                  month_url = url
+                  break
+      
+          if not latest_dir:
+              print(
+                  "Error: Could not locate any x86_64 nightly directories.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+      
+          # urljoin handles root-relative paths like /pub/... automatically
+          dir_url = urllib.parse.urljoin(month_url, latest_dir)
+          print(f"Target Directory: {dir_url}", file=sys.stderr)
+      
+          # Fetch directory to find the exact APK filename
+          with urllib.request.urlopen(dir_url) as res:
+              dir_html = res.read().decode("utf-8")
+      
+          apk_matches = re.findall(r'href="([^"]+\.apk)"', dir_html)
+          if not apk_matches:
+              print(f"Error: No APK found inside {dir_url}", file=sys.stderr)
+              sys.exit(1)
+      
+          # Safely merge file name or full path into the folder base URL
+          apk_url = urllib.parse.urljoin(dir_url, apk_matches[0])
+          print(f"Found APK: {apk_url}", file=sys.stderr)
+      
+          # Calculate store hash natively via Nix
+          res = subprocess.run(
+              ["nix", "store", "prefetch-file", "--json", apk_url],
+              capture_output=True,
+              text=True,
+              check=True,
+          )
+          sri_hash = json.loads(res.stdout)["hash"]
+      
+          # Output to the JSON target
+          output_data = {"url": apk_url, "hash": sri_hash}
+          with open("firefox-nightly.json", "w") as f:
+              json.dump(output_data, f, indent=2)
+      
+          print("Successfully generated firefox-nightly.json", file=sys.stderr)
+      
+      
+      if __name__ == "__main__":
+          main()
+    '')
+    (pkgs.writers.writePython3Bin "check-follows" {} ''
+      import json
+      import sys
+      import os
+      
+      
+      def resolve_target(lock_data, input_val):
+          """Recursively resolve the node ID for a given input."""
+          if isinstance(input_val, str):
+              return input_val
+          if isinstance(input_val, list):
+              current_node_id = "root"
+              for key in input_val:
+                  node = lock_data["nodes"].get(current_node_id)
+                  if not node:
+                      return None
+                  next_val = node.get("inputs", {}).get(key)
+                  if not next_val:
+                      return None
+                  current_node_id = resolve_target(lock_data, next_val)
+              return current_node_id
+          return None
+      
+      
+      def find_paths_to_nodes(lock_data):
+          """BFS to find the shortest dependency paths to every node."""
+          paths = {"root": [[]]}
+          queue = ["root"]
+          visited = {"root"}
+          nodes = lock_data.get("nodes", {})
+      
+          while queue:
+              current = queue.pop(0)
+              for in_key, in_val in nodes.get(current, {}).get("inputs", {}).items():
+                  target_node = resolve_target(lock_data, in_val)
+                  if not target_node:
+                      continue
+                  if target_node not in paths:
+                      paths[target_node] = []
+      
+                  for p in paths[current]:
+                      new_path = p + [in_key]
+                      existing = paths[target_node]
+                      if not existing or len(new_path) == len(existing[0]):
+                          if new_path not in existing:
+                              existing.append(new_path)
+                      elif len(new_path) < len(existing[0]):
+                          paths[target_node] = [new_path]
+      
+                  if target_node not in visited:
+                      visited.add(target_node)
+                      queue.append(target_node)
+          return paths
+      
+      
+      def get_fixes(lock):
+          """Logic to identify sub-inputs that don't follow top-level inputs."""
+          nodes = lock.get("nodes", {})
+          root_inputs = nodes.get("root", {}).get("inputs", {})
+          top_targets = {k: resolve_target(lock, v) for k, v in root_inputs.items()}
+          paths_to_nodes = find_paths_to_nodes(lock)
+          fixes = set()
+      
+          for node_id, node_data in nodes.items():
+              if node_id == "root":
+                  continue
+              for in_key, in_val in node_data.get("inputs", {}).items():
+                  if in_key in top_targets:
+                      target_id = resolve_target(lock, in_val)
+                      if target_id and target_id != top_targets[in_key]:
+                          for p in paths_to_nodes.get(node_id, []):
+                              if p:
+                                  path = ".inputs.".join(p)
+                                  # Implicit string concatenation fixes line length
+                                  fixes.add(
+                                      f'inputs.{path}.inputs.{in_key}'
+                                      f'.follows = "{in_key}";'
+                                  )
+          return fixes
+      
+      
+      def main():
+          if not os.path.exists("flake.lock"):
+              print("Error: flake.lock not found.")
+              sys.exit(1)
+      
+          with open("flake.lock", encoding="utf-8") as f:
+              lock = json.load(f)
+      
+          fixes = get_fixes(lock)
+      
+          if fixes:
+              msg = (
+                  "Found missed follows! Add these directly inside "
+                  "your top-level `inputs = { ... };` block:\n"
+              )
+              print(msg)
+              for fix in sorted(fixes):
+                  print(f"    {fix}")
+          else:
+              print("All dependencies are following top-level inputs correctly!")
+      
+      
+      if __name__ == "__main__":
+          main()
+    '')
     (pkgs.writers.writePython3Bin "krisp-patcher"
       {
         libraries = with pkgs.python3Packages; [
@@ -217,9 +405,9 @@ let
         chosen=$(echo -e "$options" | ${pkgs.rofi}/bin/rofi -dmenu -i -p "Power Profile:" -theme-str 'window {width: 15%;}')
         
         case "$chosen" in
-            *Power*)       ${pkgs.tlp-pd}/bin/tlpctl set power-saver; hyprctl keyword monitor "eDP-1, 2560x1600@60, auto, auto, bitdepth, 10, cm, hdr" ;;
-          *Balanced*)    ${pkgs.tlp-pd}/bin/tlpctl set balanced; hyprctl reload ;;
-          *Performance*) ${pkgs.tlp-pd}/bin/tlpctl set performance; hyprctl reload ;;
+            *Power*)       ${pkgs.tlp-pd}/bin/tlpctl set power-saver; hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "2560x1600@60", position = "auto", scale = "auto", bitdepth = 10, cm = "hdr" })';;
+          *Balanced*)    ${pkgs.tlp-pd}/bin/tlpctl set balanced; hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "2560x1600@165", position = "auto", scale = "auto", bitdepth = 10, cm = "hdr" })';;
+          *Performance*) ${pkgs.tlp-pd}/bin/tlpctl set performance; hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "2560x1600@165", position = "auto", scale = "auto", bitdepth = 10, cm = "hdr" })';;
           *) exit 0 ;;
         esac
         
@@ -518,55 +706,17 @@ let
     '')
     (pkgs.writeShellScriptBin "gamemode.sh" ''
       HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
-      if [ "$HYPRGAMEMODE" = 1 ] ; then
-          hyprctl --batch "\
-              keyword animations:enabled 0;\
-              keyword decoration:drop_shadow 0;\
-              keyword general:border_size 0"
+      if [ "$HYPRGAMEMODE" = "true" ] ; then
+          hyprctl eval "hl.config {
+              animations = { enabled = 0 },
+              general = { border_size = 0 }
+          }"
           systemctl --user stop replays
           exit
       fi
       hyprctl reload
       systemctl --user start replays
       exit
-    '')
-    (pkgs.writeShellScriptBin "check-follows" ''
-      # This script scans flake.lock to find dependencies of your inputs
-      # that match the name of one of your top-level inputs but are not
-      # currently set to "follow" it.
-      
-      set -euo pipefail
-      
-      if ! [ -f "flake.lock" ]; then
-          echo "Error: flake.lock not found."
-          exit 1
-      fi
-      
-      echo "Scanning for missed 'follows'..."
-      
-      # Logic:
-      # 1. Get the map of top-level inputs from the "root" node.
-      # 2. Iterate through every other node in the lock file.
-      # 3. For each node, check its inputs.
-      # 4. If a node has an input name that exists at the top level, 
-      #    but the node IDs don't match, it's a candidate for "follows".
-      
-      jq -r '
-        .nodes.root.inputs as $top_inputs
-        | .nodes
-        | to_entries
-        | .[]
-        | select(.key != "root")
-        | .key as $parent_node
-        | .value.inputs // {}
-        | to_entries
-        | .[]
-        | # Normalize the dependency pointer: if it is a list (a follows path), 
-          # take the last element which is the final target node ID.
-          (if .value | type == "array" then .value[-1] else .value end) as $dep_target
-        | select($top_inputs[.key] != null and $top_inputs[.key] != $dep_target)
-        | "Input \u001b[1;36m\($parent_node)\u001b[0m has a dependency \u001b[1;33m\(.key)\u001b[0m pointing to \u001b[32m\($dep_target)\u001b[0m, but your top-level \u001b[1;33m\(.key)\u001b[0m points to \u001b[32m\($top_inputs[.key])\u001b[0m."
-      ' flake.lock
     '')
     (pkgs.writeShellScriptBin "sheesh.sh" ''
       THE_MOUNT_POINT="$HOME/.local/state/nixos-config"

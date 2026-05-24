@@ -84,11 +84,12 @@ in
   };
   config = {
     # rev generation can be moved to u-full if needed
+    # IFD
     offline-rev = builtins.readFile "${nix-path}/rev";
     offline-path = nix-path;
-  } // lib.optionalAttrs (options ? environment) {
+  } // lib.optionalAttrs (options ? environment.etc) {
     environment.etc.inputs.source = inputsFarm;
-  } // lib.optionalAttrs (options.xdg ? dataFile) {
+  } // lib.optionalAttrs (options ? xdg.dataFile) {
     xdg.dataFile.inputs.source = inputsFarm;
   };
 }
