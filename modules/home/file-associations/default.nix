@@ -40,9 +40,7 @@ in
         "application/x-lzip-compressed-tar" = "org.gnome.FileRoller.desktop";
         "application/x-tarz " = "org.gnome.FileRoller.desktop";
         "application/zip" = "org.gnome.FileRoller.desktop";
-        "application/vnd.microsoft.portable-executable" = "umu.desktop";
-        "application/x-msi" = "umu.desktop";
-        "application/x-msdownload" = "umu.desktop";
+        "application/x-zerosize" = "neovide.desktop";
         #"inode/directory" = "nemo.desktop";
         "inode/directory" = "org.gnome.Nautilus.desktop";
         "text/html" = "zen-twilight.desktop";

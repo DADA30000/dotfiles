@@ -189,9 +189,13 @@ in
             export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
           fi
         fi
-        cp --no-preserve=mode "${proton-umu}/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
+        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
-        UMU_RUNTIME_UPDATE=0 WINEDLLOVERRIDES="winhttp.dll=n,b;winmm.dll=n,b;SteamFix64.dll=n,b;steam_api64.dll=n,b;OnlineFix64.dll=n,b;SteamOverlay64.dll=n,b;version.dll=n,b" ${pkgs.gamemode}/bin/gamemoderun ${pkgs.umu-launcher}/bin/umu-run "$@"
+        export LD_PRELOAD="$LD_PRELOAD:$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so" 
+        export UMU_RUNTIME_UPDATE=0 
+        export WINEDLLOVERRIDES="dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
+        cd "$(dirname "$1")" &> /dev/null || true
+        ${pkgs.gamemode}/bin/gamemoderun ${pkgs.mangohud}/bin/mangohud ${pkgs.umu-launcher}/bin/umu-run "$@"
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
       '')
       (pkgs.writeShellScriptBin "scan-umu-for-lnk" ''

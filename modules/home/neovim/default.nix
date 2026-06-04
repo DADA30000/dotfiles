@@ -1,6 +1,5 @@
 {
   config,
-  osConfig,
   lib,
   pkgs,
   kekma,
@@ -46,187 +45,447 @@ let
       rustup default nix-system
     fi
   '';
-  coc_cfg = ''
-    -- https://raw.githubusercontent.com/neoclide/coc.nvim/master/doc/coc-example-config.lua
+  config_lua = /* lua */ ''
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = '*',
+      callback = function()
+        pcall(vim.treesitter.start)
+      end,
+    })
+    local dap = require("dap")
+    local dapui = require("dapui")
+    dapui.setup()
+    require("nvim-dap-virtual-text").setup()
+    dap.listeners.before.attach.dapui_config = function() dapui.open() end
+    dap.listeners.before.launch.dapui_config = function() dapui.open() end
+    dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
+    dap.listeners.before.event_exited.dapui_config = function() dapui.close() end
+    dap.defaults.fallback.switch_into_active_window = true
+    require('dap-go').setup()
+    require('dap-python').setup('${python}/bin/python3')
+    local function pick_binary(path)
+      return coroutine.create(function(dap_run)
+        local files = vim.fn.glob(path .. '*', 0, 1)
+        local executables = vim.tbl_filter(function(f)
+          return vim.fn.executable(f) == 1 and vim.fn.isdirectory(f) == 0
+                 and not f:match("%.cpp$") and not f:match("%.c$") and not f:match("%.rs$")
+        end, files)
 
-    -- Some servers have issues with backup files, see #649
-    vim.opt.backup = false
-    vim.opt.writebackup = false
+        if #executables == 0 then
+          print("No executables found in " .. path)
+          coroutine.resume(dap_run, vim.fn.input('Path to executable: ', path, 'file'))
+        else
+          vim.ui.select(executables, {
+            prompt = 'Select executable to debug:',
+            format_item = function(item) return vim.fn.fnamemodify(item, ":t") end,
+          }, function(choice)
+            coroutine.resume(dap_run, choice)
+          end)
+        end
+      end)
+    end
 
-    -- Having longer updatetime (default is 4000 ms = 4s) leads to noticeable
-    -- delays and poor user experience
+    dap.adapters.cppdbg = {
+      id = 'cppdbg',
+      type = 'executable',
+      command = '${pkgs.vscode-extensions.ms-vscode.cpptools}/share/vscode/extensions/ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7',
+    }
+
+    dap.configurations.cpp = {
+      {
+        name = "Launch file",
+        type = "cppdbg",
+        request = "launch",
+        program = function() return pick_binary(vim.fn.getcwd() .. '/') end,
+        cwd = '${"\${workspaceFolder}"}',
+        stopAtEntry = false,
+        setupCommands = {
+          {
+            text = 'settings set target.process.thread.step-in-avoid-nodebug true',
+            description = 'ignore runtime code',
+            ignoreFailures = true
+          },
+          {
+            text = '-enable-pretty-printing',
+            description = 'enable pretty printing',
+            ignoreFailures = false
+          },
+          {
+            text = 'handle SIGSTOP noprint nostop pass',
+            description = 'ignore SIGSTOP',
+            ignoreFailures = true
+          },
+        },
+        logging = {
+          engineLogging = false,
+        },
+        externalConsole = false,
+        MIMode = 'gdb',
+        miDebuggerPath = '${pkgs.gdb}/bin/gdb',
+      },
+    }
+
+    dap.configurations.c = dap.configurations.cpp
+    dap.configurations.rust = {
+      vim.tbl_extend("force", dap.configurations.cpp[1], {
+        name = "Launch Rust (target/debug)",
+        program = function()
+          return pick_binary(vim.fn.getcwd() .. '/target/debug/')
+        end,
+      })
+    }
+
+    -- === KEYMAPS ===
+    vim.keymap.set('n', '<F5>', function() dap.continue() end, { desc = "Debug: Start" })
+    vim.keymap.set('n', '<F10>', function() dap.step_over() end, { desc = "Debug: Step Over" })
+    vim.keymap.set('n', '<F11>', function() dap.step_into() end, { desc = "Debug: Step Into" })
+    vim.keymap.set('n', '<F12>', function() dap.step_out() end, { desc = "Debug: Step Out" })
+    vim.keymap.set('n', '<leader>b', function() dap.toggle_breakpoint() end, { desc = "Debug: Breakpoint" })
+    vim.cmd([[
+      autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
+      let g:onedark_config = { 'style': 'deep', }
+      let g:netrw_keepdir = 0
+      colorscheme onedark
+      highlight Normal guifg=#bbddff
+      map! <S-Insert> <C-R>+
+      map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
+      map !hh :silent! tabnew +Man! ${kekma.home}<cr>
+      map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
+      set number
+      set signcolumn=yes
+      highlight EndOfBuffer ctermbg=none guibg=none
+      highlight SignColumn ctermbg=none guibg=none
+      highlight Normal guibg=none
+      highlight NonText guibg=none
+      highlight Normal ctermbg=none
+      highlight NonText ctermbg=none
+      highlight StatusLine guibg=none
+      set tabstop=2
+      set softtabstop=2
+      set shiftwidth=2
+      set expandtab
+      set autoindent
+      set smartindent
+    ]])
+    require("ibl").setup {
+      indent = { char = "│" },  -- Vertical indentation line
+      scope = { enabled = true, show_start = true, show_end = true }, -- Enable scope guides
+    }
+    if vim.g.neovide == true then
+      -- Copy to system clipboard (Normal/Visual mode)
+      vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
+      
+      -- Paste from system clipboard (Normal/Visual mode)
+      vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
+      
+      -- Paste from system clipboard (Insert mode)
+      vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
+    end
+
+    local function open_nos_terminal()
+      vim.cmd("tab term tmux new-session -s my-tui 'tmux set-option status off; nos; tmux kill-session -t my-tui'")
+      vim.b.auto_terminal_mode = true
+      vim.cmd('startinsert')
+    end
+
+    vim.api.nvim_create_user_command('Hh', open_nos_terminal, {
+      desc = 'Open `nos` in a smart terminal',
+    })
+
+    vim.keymap.set('n', '!nos', ':Hh<CR>', { desc = 'Open nos terminal', noremap = true, silent = true })
+
+    vim.api.nvim_create_autocmd("BufEnter", {
+      pattern = "*",
+      callback = function()
+        if vim.bo.buftype == "terminal" and vim.b.auto_terminal_mode == true then
+          vim.cmd("startinsert")
+        end
+      end,
+    })
+
+    vim.keymap.set('t', '<C-PageDown>', '<C-\\><C-n>:tabnext<CR>', { desc = 'Next Tab', noremap = true, silent = true })
+    vim.keymap.set('t', '<C-PageUp>',   '<C-\\><C-n>:tabprevious<CR>', { desc = 'Previous Tab', noremap = true, silent = true })
+
     vim.opt.updatetime = 100
+    vim.opt.undofile = true
+    local undodir = vim.fn.expand('~/.config/nvim/undodir')
+    vim.opt.undodir = undodir
 
-    -- Always show the signcolumn, otherwise it would shift the text each time
-    -- diagnostics appeared/became resolved
-    vim.opt.signcolumn = "yes"
+    vim.keymap.set({'n', 'v'}, 'd', '"_d')
+    vim.keymap.set('n', 'dd', '"_dd')
+    vim.keymap.set({'n', 'v'}, 'x', '"_x')
+    vim.opt.clipboard = "unnamedplus"
 
-    local keyset = vim.keymap.set
+    require("cord").setup({})
+
+    -- === AUTO-SAVE SETUP (Using standard auto-save-nvim package) ===
+    require("auto-save").setup({
+      enabled = true,
+      trigger_events = {
+        immediate_save = { "FocusLost", "BufLeave" },
+        defer_save = { "InsertLeave", "TextChanged" },
+        cancel_deferred_save = { "InsertEnter" },
+      },
+      -- Save without triggering blocking standard autocommands
+      noautocmd = true,
+      debounce_delay = 1000,
+    })
+  '';
+  lsp_cmp_cfg = /* lua */ ''
+    local luasnip = require("luasnip")
+    require("luasnip.loaders.from_vscode").lazy_load()
+
+    local cmp = require("cmp")
+
     -- Autocomplete
     function _G.check_back_space()
-        local col = vim.fn.col('.') - 1
-        return col == 0 or vim.fn.getline('.'):sub(col, col):match('%s') ~= nil
+      local col = vim.fn.col('.') - 1
+      return col == 0 or vim.fn.getline('.'):sub(col, col):match('%s') ~= nil
     end
 
-    -- Use Tab for trigger completion with characters ahead and navigate
-    -- NOTE: There's always a completion item selected by default, you may want to enable
-    -- no select by setting `"suggest.noselect": true` in your configuration file
-    -- NOTE: Use command ':verbose imap <tab>' to make sure Tab is not mapped by
-    -- other plugins before putting this into your config
-    local opts = {silent = true, noremap = true, expr = true, replace_keycodes = false}
-    keyset("i", "<TAB>", 'coc#pum#visible() ? coc#pum#next(1) : v:lua.check_back_space() ? "<TAB>" : coc#refresh()', opts)
-    keyset("i", "<S-TAB>", [[coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"]], opts)
+    cmp.setup({
+      snippet = {
+        expand = function(args)
+          luasnip.lsp_expand(args.body)
+        end,
+      },
+      mapping = cmp.mapping.preset.insert({
+        -- Remap <C-f> and <C-b> to scroll float windows/popups
+        ['<C-b>'] = cmp.mapping.scroll_docs(-4),
+        ['<C-f>'] = cmp.mapping.scroll_docs(4),
+        -- Use <c-space> to trigger completion
+        ['<C-Space>'] = cmp.mapping.complete(),
+        ['<C-e>'] = cmp.mapping.abort(),
+        
+        -- 1. Map Shift + Enter to accept completion
+        ['<S-CR>'] = cmp.mapping.confirm({ select = true }),
+        -- 2. Keep Enter for new lines and auto-format (without accepting completion)
+        ['<CR>'] = cmp.mapping.confirm({ select = false }), 
+        
+        -- Use Tab for trigger completion with characters ahead and navigate
+        ['<Tab>'] = cmp.mapping(function(fallback)
+          if cmp.visible() then
+            cmp.select_next_item()
+          elseif luasnip.expand_or_jumpable() then
+            luasnip.expand_or_jump()
+          elseif not _G.check_back_space() then
+            cmp.complete()
+          else
+            fallback()
+          end
+        end, { "i", "s" }),
+        
+        ['<S-Tab>'] = cmp.mapping(function(fallback)
+          if cmp.visible() then
+            cmp.select_prev_item()
+          elseif luasnip.jumpable(-1) then
+            luasnip.jump(-1)
+          else
+            fallback()
+          end
+        end, { "i", "s" }),
+      }),
+      sources = cmp.config.sources({
+        { name = "nvim_lsp" },
+        { name = "luasnip" },
+      }, {
+        { name = "buffer" },
+        { name = "path" }
+      })
+    })
 
-    -- 1. Map Shift + Enter to accept completion
-    keyset("i", "<S-CR>", [[coc#pum#visible() ? coc#pum#confirm() : "\<S-CR>"]], opts)
+    -- === CONFORM FORMATTING SETUP ===
+    local conform = require("conform")
+    conform.setup({
+      formatters_by_ft = {
+        lua = { "stylua" },
+        python = { "ruff_format" },
+        rust = { "rustfmt" },
+        nix = { "nixfmt" }, -- Direct fast CLI formatter (avoids nixd timeouts)
+      },
+      default_format_opts = {
+        lsp_format = "fallback",
+      },
+      -- format_on_save runs formatting synchronously inside BufWritePre
+      -- Auto-saves bypass this because we use 'noautocmd write' in auto-save config!
+      format_on_save = {
+        lsp_format = "fallback",
+        timeout_ms = 10000, -- 10-second safety timeout so it never drops manual saves
+      },
+    })
 
-    -- 2. Keep Enter for new lines and auto-format (without accepting completion)
-    keyset("i", "<cr>", [[ "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"]], opts)
+    -- Manual `:Format` user command is fully synchronous (blocks until complete)
+    vim.api.nvim_create_user_command("Format", function()
+      conform.format({ async = false, lsp_format = "fallback" })
+    end, {})
 
-    -- Use <c-j> to trigger snippets
-    keyset("i", "<c-j>", "<Plug>(coc-snippets-expand-jump)")
-    -- Use <c-space> to trigger completion
-    keyset("i", "<c-space>", "coc#refresh()", {silent = true, expr = true})
+    -- === ASYNC AUTO-FORMAT ON AUTO-SAVE ===
+    -- When the background auto-save writes successfully, we run conform asynchronously.
+    -- This ensures the file is still auto-formatted, but without blocking your cursor.
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "AutoSaveWritePost",
+      group = vim.api.nvim_create_augroup("AutoSaveAsyncFormat", { clear = true }),
+      callback = function()
+        conform.format({ async = true, lsp_format = "fallback" })
+      end,
+    })
+
+    -- Configure Diagnostics
+    vim.diagnostic.config({
+      virtual_text = true,
+      float = {
+        focusable = false,
+        style = "minimal",
+        border = "rounded",
+        source = "always",
+        header = "",
+        prefix = "",
+      },
+    })
+
+    -- Show diagnostics on hover
+    vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+      callback = function()
+        vim.diagnostic.open_float(nil, { focusable = false, scope = "cursor" })
+      end
+    })
 
     -- Use `[g` and `]g` to navigate diagnostics
-    -- Use `:CocDiagnostics` to get all diagnostics of current buffer in location list
-    keyset("n", "[g", "<Plug>(coc-diagnostic-prev)", {silent = true})
-    keyset("n", "]g", "<Plug>(coc-diagnostic-next)", {silent = true})
-
-    -- GoTo code navigation
-    keyset("n", "gd", "<Plug>(coc-definition)", {silent = true})
-    keyset("n", "gy", "<Plug>(coc-type-definition)", {silent = true})
-    keyset("n", "gi", "<Plug>(coc-implementation)", {silent = true})
-    keyset("n", "gr", "<Plug>(coc-references)", {silent = true})
-
-
-    -- Use K to show documentation in preview window
-    function _G.show_docs()
-        local cw = vim.fn.expand('<cword>')
-        if vim.fn.index({'vim', 'help'}, vim.bo.filetype) >= 0 then
-            vim.api.nvim_command('h ' .. cw)
-        elseif vim.api.nvim_eval('coc#rpc#ready()') then
-            vim.fn.CocActionAsync('doHover')
-        else
-            vim.api.nvim_command('!' .. vim.o.keywordprg .. ' ' .. cw)
-        end
-    end
-    keyset("n", "K", '<CMD>lua _G.show_docs()<CR>', {silent = true})
-
-
-    -- Highlight the symbol and its references on a CursorHold event(cursor is idle)
-    vim.api.nvim_create_augroup("CocGroup", {})
-    vim.api.nvim_create_autocmd("CursorHold", {
-        group = "CocGroup",
-        command = "silent call CocActionAsync('highlight')",
-        desc = "Highlight symbol under cursor on CursorHold"
-    })
-
-
-    -- Symbol renaming
-    keyset("n", "<leader>rn", "<Plug>(coc-rename)", {silent = true})
-
-
-    -- Formatting selected code
-    keyset("x", "<leader>f", "<Plug>(coc-format-selected)", {silent = true})
-    keyset("n", "<leader>f", "<Plug>(coc-format-selected)", {silent = true})
-
-
-    -- Setup formatexpr specified filetype(s)
-    vim.api.nvim_create_autocmd("FileType", {
-        group = "CocGroup",
-        pattern = "typescript,json",
-        command = "setl formatexpr=CocAction('formatSelected')",
-        desc = "Setup formatexpr specified filetype(s)."
-    })
-
-    -- Apply codeAction to the selected region
-    -- Example: `<leader>aap` for current paragraph
-    local opts = {silent = true, nowait = true}
-    keyset("x", "<leader>a", "<Plug>(coc-codeaction-selected)", opts)
-    keyset("n", "<leader>a", "<Plug>(coc-codeaction-selected)", opts)
-
-    -- Remap keys for apply code actions at the cursor position.
-    keyset("n", "<leader>ac", "<Plug>(coc-codeaction-cursor)", opts)
-    -- Remap keys for apply source code actions for current file.
-    keyset("n", "<leader>as", "<Plug>(coc-codeaction-source)", opts)
-    -- Apply the most preferred quickfix action on the current line.
-    keyset("n", "<leader>qf", "<Plug>(coc-fix-current)", opts)
-
-    -- Remap keys for apply refactor code actions.
-    keyset("n", "<leader>re", "<Plug>(coc-codeaction-refactor)", { silent = true })
-    keyset("x", "<leader>r", "<Plug>(coc-codeaction-refactor-selected)", { silent = true })
-    keyset("n", "<leader>r", "<Plug>(coc-codeaction-refactor-selected)", { silent = true })
-
-    -- Run the Code Lens actions on the current line
-    keyset("n", "<leader>cl", "<Plug>(coc-codelens-action)", opts)
-
-
-    -- Map function and class text objects
-    -- NOTE: Requires 'textDocument.documentSymbol' support from the language server
-    keyset("x", "if", "<Plug>(coc-funcobj-i)", opts)
-    keyset("o", "if", "<Plug>(coc-funcobj-i)", opts)
-    keyset("x", "af", "<Plug>(coc-funcobj-a)", opts)
-    keyset("o", "af", "<Plug>(coc-funcobj-a)", opts)
-    keyset("x", "ic", "<Plug>(coc-classobj-i)", opts)
-    keyset("o", "ic", "<Plug>(coc-classobj-i)", opts)
-    keyset("x", "ac", "<Plug>(coc-classobj-a)", opts)
-    keyset("o", "ac", "<Plug>(coc-classobj-a)", opts)
-
-
-    -- Remap <C-f> and <C-b> to scroll float windows/popups
-    ---@diagnostic disable-next-line: redefined-local
-    local opts = {silent = true, nowait = true, expr = true}
-    keyset("n", "<C-f>", 'coc#float#has_scroll() ? coc#float#scroll(1) : "<C-f>"', opts)
-    keyset("n", "<C-b>", 'coc#float#has_scroll() ? coc#float#scroll(0) : "<C-b>"', opts)
-    keyset("i", "<C-f>",
-           'coc#float#has_scroll() ? "<c-r>=coc#float#scroll(1)<cr>" : "<Right>"', opts)
-    keyset("i", "<C-b>",
-           'coc#float#has_scroll() ? "<c-r>=coc#float#scroll(0)<cr>" : "<Left>"', opts)
-    keyset("v", "<C-f>", 'coc#float#has_scroll() ? coc#float#scroll(1) : "<C-f>"', opts)
-    keyset("v", "<C-b>", 'coc#float#has_scroll() ? coc#float#scroll(0) : "<C-b>"', opts)
-
-
-    -- Use CTRL-S for selections ranges
-    -- Requires 'textDocument/selectionRange' support of language server
-    keyset("n", "<C-s>", "<Plug>(coc-range-select)", {silent = true})
-    keyset("x", "<C-s>", "<Plug>(coc-range-select)", {silent = true})
-
-
-    -- Add `:Format` command to format current buffer
-    vim.api.nvim_create_user_command("Format", "call CocAction('format')", {})
-
-    -- " Add `:Fold` command to fold current buffer
-    vim.api.nvim_create_user_command("Fold", "call CocAction('fold', <f-args>)", {nargs = '?'})
-
-    -- Add `:OR` command for organize imports of the current buffer
-    vim.api.nvim_create_user_command("OR", "call CocActionAsync('runCommand', 'editor.action.organizeImport')", {})
-
-    -- Add (Neo)Vim's native statusline support
-    -- NOTE: Please see `:h coc-status` for integrations with external plugins that
-    -- provide custom statusline: lightline.vim, vim-airline
-    vim.opt.statusline:prepend("%{coc#status()}%{get(b:,'coc_current_function',\'\')}")
-
-    -- Mappings for CoCList
-    -- code actions and coc stuff
-    ---@diagnostic disable-next-line: redefined-local
-    local opts = {silent = true, nowait = true}
+    vim.keymap.set('n', '[g', vim.diagnostic.goto_prev, { desc = "Previous Diagnostic" })
+    vim.keymap.set('n', ']g', vim.diagnostic.goto_next, { desc = "Next Diagnostic" })
     -- Show all diagnostics
-    keyset("n", "<space>a", ":<C-u>CocList diagnostics<cr>", opts)
-    -- Manage extensions
-    keyset("n", "<space>e", ":<C-u>CocList extensions<cr>", opts)
-    -- Show commands
-    keyset("n", "<space>c", ":<C-u>CocList commands<cr>", opts)
-    -- Find symbol of current document
-    keyset("n", "<space>o", ":<C-u>CocList outline<cr>", opts)
-    -- Search workspace symbols
-    keyset("n", "<space>s", ":<C-u>CocList -I symbols<cr>", opts)
-    -- Do default action for next item
-    keyset("n", "<space>j", ":<C-u>CocNext<cr>", opts)
-    -- Do default action for previous item
-    keyset("n", "<space>k", ":<C-u>CocPrev<cr>", opts)
-    -- Resume latest coc list
-    keyset("n", "<space>p", ":<C-u>CocListResume<cr>", opts)
+    vim.keymap.set('n', '<space>a', vim.diagnostic.setqflist, { desc = "Workspace Diagnostics" })
+
+    vim.api.nvim_create_autocmd('LspAttach', {
+      group = vim.api.nvim_create_augroup('UserLspConfig', {}),
+      callback = function(ev)
+        local opts = { buffer = ev.buf, silent = true }
+        local bind = vim.keymap.set
+
+        -- GoTo code navigation
+        bind('n', 'gd', vim.lsp.buf.definition, opts)
+        bind('n', 'gy', vim.lsp.buf.type_definition, opts)
+        bind('n', 'gi', vim.lsp.buf.implementation, opts)
+        bind('n', 'gr', vim.lsp.buf.references, opts)
+        -- Use K to show documentation in preview window
+        bind('n', 'K', vim.lsp.buf.hover, opts)
+        -- Symbol renaming
+        bind('n', '<leader>rn', vim.lsp.buf.rename, opts)
+        
+        -- Formatting selected code (conform handles this)
+        bind({'n', 'x'}, '<leader>f', function() conform.format({ async = false, lsp_format = "fallback" }) end, opts)
+        -- Apply codeAction to the selected region
+        bind({'n', 'x'}, '<leader>a', vim.lsp.buf.code_action, opts)
+        -- Remap keys for apply code actions at the cursor position.
+        bind('n', '<leader>ac', vim.lsp.buf.code_action, opts)
+        -- Run the Code Lens actions on the current line
+        bind('n', '<leader>cl', vim.lsp.codelens.run, opts)
+      end,
+    })
+
+    vim.keymap.set('n', '<C-h>', function()
+      if vim.lsp.inlay_hint then
+        vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+      end
+    end, { desc = "Toggle Inlay Hints", silent = true })
+
+    local capabilities = require('cmp_nvim_lsp').default_capabilities()
+
+    vim.lsp.config('rust_analyzer', {
+      capabilities = capabilities,
+      settings = {
+        ["rust-analyzer"] = {
+          checkOnSave = {
+            command = "clippy",
+            extraArgs = { "--", "-W", "clippy::all", "-W", "clippy::pedantic" }
+          }
+        }
+      }
+    })
+    vim.lsp.enable('rust_analyzer')
+
+    vim.lsp.config('basedpyright', {
+      capabilities = capabilities,
+      settings = {
+        basedpyright = {
+          analysis = {
+            typeCheckingMode = "standard",
+            autoImportCompletions = true,
+          }
+        }
+      }
+    })
+    vim.lsp.enable('basedpyright')
+
+    vim.lsp.config('ruff', {
+      capabilities = capabilities,
+      init_options = {
+        settings = { logLevel = "debug" }
+      }
+    })
+    vim.lsp.enable('ruff')
+
+    vim.lsp.config('asm_lsp', {
+      capabilities = capabilities,
+      filetypes = { "asm", "s", "S" }
+    })
+    vim.lsp.enable('asm_lsp')
+
+    vim.lsp.config('qmlls', {
+      capabilities = capabilities,
+      cmd = { "qmlls", "-E" }
+    })
+    vim.lsp.enable('qmlls')
+
+    vim.lsp.config('cmake', {
+      capabilities = capabilities,
+      init_options = { buildDirectory = "build" }
+    })
+    vim.lsp.enable('cmake')
+
+    vim.lsp.config('clangd', { capabilities = capabilities })
+    vim.lsp.enable('clangd')
+
+    vim.lsp.config('nixd', {
+      capabilities = capabilities,
+      settings = {
+        nixd = {
+          nixpkgs = {
+            expr = 'import (builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}").inputs.nixpkgs { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; }'
+          },
+          formatting = {
+            command = { "nixfmt" }
+          },
+          options = {
+            nixos = {
+              expr = '(builtins.getFlake "/etc/nixos").nixosConfigurations.nixos.options'
+            },
+            home_manager = {
+              expr = '(builtins.getFlake "/etc/nixos").nixosConfigurations.nixos.options.home-manager.users.type.getSubOptions []'
+            }
+          }
+        }
+      }
+    })
+    vim.lsp.enable('nixd')
+
+    vim.lsp.config('lua_ls', {
+      capabilities = capabilities,
+      settings = {
+        Lua = {
+          diagnostics = {
+            globals = { 'vim' }
+          }
+        }
+      }
+    })
+    vim.lsp.enable('lua_ls')
+
+    local standard_lsps = { 'bashls', 'html', 'cssls', 'jsonls', 'jdtls', 'taplo', 'yamlls' }
+    for _, lsp in ipairs(standard_lsps) do
+      vim.lsp.config(lsp, { capabilities = capabilities })
+      vim.lsp.enable(lsp)
+    end
   '';
 in
 {
@@ -275,6 +534,11 @@ in
       hexpatch
       tinyxxd
       bash-language-server
+      vscode-langservers-extracted
+      jdt-language-server
+      lua-language-server
+      taplo
+      yaml-language-server
       shellcheck
       shfmt
       asm-lsp
@@ -304,6 +568,8 @@ in
           pynvim
         ];
       plugins = with pkgs.vimPlugins; [
+        conform-nvim
+        auto-save-nvim
         netrw-nvim
         nvim-dap
         nvim-dap-ui
@@ -314,312 +580,26 @@ in
         indent-blankline-nvim
         nvim-web-devicons
         nvim-treesitter.withAllGrammars
-        #(pkgs.callPackage ./cord-nvim.nix { })
         cord-nvim
-        coc-snippets
-        vim-snippets
-        coc-json
-        coc-java
-        coc-sh
-        coc-css
-        coc-html
-        coc-prettier
+        nvim-lspconfig
+        nvim-cmp
+        cmp-nvim-lsp
+        cmp-buffer
+        cmp-path
+        luasnip
+        cmp_luasnip
+        friendly-snippets
         onedark-nvim
-        coc-rust-analyzer
-        auto-save-nvim
       ];
-      coc = {
-        enable = true;
-        settings = {
-          "coc.preferences.formatOnSave" = true;
-          diagnostic = {
-            enable = true;
-            virtualText = true;
-            virtualTextCurrentLineOnly = true;
-          };
-          rust-analyzer = {
-            serverPath = "rust-analyzer";
-            check = {
-              command = "clippy";
-              extraArgs = [
-                "--"
-                "-W"
-                "clippy::all"
-                "-W"
-                "clippy::pedantic"
-              ];
-            };
-          };
-          languageserver = {
-            basedpyright = {
-              command = "basedpyright-langserver";
-              args = [ "--stdio" ];
-              filetypes = [ "python" ];
-              rootPatterns = [
-                "pyproject.toml"
-                "setup.py"
-                ".git"
-                ".venv"
-              ];
-              settings = {
-                basedpyright.analysis = {
-                  typeCheckingMode = "standard";
-                  autoImportCompletions = true;
-                };
-              };
-            };
-            ruff = {
-              command = "ruff";
-              args = [ "server" ];
-              filetypes = [ "python" ];
-              rootPatterns = [
-                "pyproject.toml"
-                "ruff.toml"
-                ".git"
-              ];
-              settings.logLevel = "debug";
-            };
-            asm = {
-              command = "asm-lsp";
-              filetypes = [
-                "asm"
-                "s"
-                "S"
-              ];
-            };
-            qml = {
-              command = "qmlls";
-              filetypes = [ "qml" ];
-              args = [ "-E" ];
-            };
-            cmake = {
-              command = "cmake-language-server";
-              filetypes = [ "cmake" ];
-              rootPatterns = [ "build/" ];
-              initializationOptions.buildDirectory = "build";
-            };
-            clangd = {
-              command = "clangd";
-              rootPatterns = [
-                "compile_flags.txt"
-                "compile_commands.json"
-              ];
-              filetypes = [
-                "c"
-                "cc"
-                "cpp"
-                "c++"
-                "objc"
-                "objcpp"
-              ];
-            };
-            nixd = {
-              command = "nixd";
-              rootPatterns = [ ".nixd.json" ];
-              filetypes = [ "nix" ];
-              settings = {
-                nixd = {
-                  nixpkgs = {
-                    expr = "import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs { system = \"${pkgs.stdenv.hostPlatform.system}\"; config.allowUnfree = true; }";
-                  };
-                  formatting = {
-                    command = [ "nixfmt" ];
-                  };
-                  options = {
-                    nixos = {
-                      expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options";
-                    };
-                    home_manager = {
-                      expr = "(builtins.getFlake \"/etc/nixos\").nixosConfigurations.nixos.options.home-manager.users.type.getSubOptions []";
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-      initLua = ''
-        vim.api.nvim_create_autocmd('FileType', {
-          pattern = '*',
-          callback = function()
-            pcall(vim.treesitter.start)
-          end,
-        })
-        local dap = require("dap")
-        local dapui = require("dapui")
-        dapui.setup()
-        require("nvim-dap-virtual-text").setup()
-        dap.listeners.before.attach.dapui_config = function() dapui.open() end
-        dap.listeners.before.launch.dapui_config = function() dapui.open() end
-        dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
-        dap.listeners.before.event_exited.dapui_config = function() dapui.close() end
-        dap.defaults.fallback.switch_into_active_window = true
-        require('dap-go').setup()
-        require('dap-python').setup('${python}/bin/python3')
-        local function pick_binary(path)
-          return coroutine.create(function(dap_run)
-            local files = vim.fn.glob(path .. '*', 0, 1)
-            local executables = vim.tbl_filter(function(f)
-              return vim.fn.executable(f) == 1 and vim.fn.isdirectory(f) == 0
-                     and not f:match("%.cpp$") and not f:match("%.c$") and not f:match("%.rs$")
-            end, files)
-
-            if #executables == 0 then
-              print("No executables found in " .. path)
-              coroutine.resume(dap_run, vim.fn.input('Path to executable: ', path, 'file'))
-            else
-              vim.ui.select(executables, {
-                prompt = 'Select executable to debug:',
-                format_item = function(item) return vim.fn.fnamemodify(item, ":t") end,
-              }, function(choice)
-                coroutine.resume(dap_run, choice)
-              end)
-            end
-          end)
-        end
-
-        dap.adapters.cppdbg = {
-          id = 'cppdbg',
-          type = 'executable',
-          command = '${pkgs.vscode-extensions.ms-vscode.cpptools}/share/vscode/extensions/ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7',
-        }
-
-        dap.configurations.cpp = {
-          {
-            name = "Launch file",
-            type = "cppdbg",
-            request = "launch",
-            program = function() return pick_binary(vim.fn.getcwd() .. '/') end,
-            cwd = '${"\${workspaceFolder}"}',
-            stopAtEntry = false,
-            setupCommands = {
-              {
-                text = 'settings set target.process.thread.step-in-avoid-nodebug true',
-                description = 'ignore runtime code',
-                ignoreFailures = true
-              },
-              {
-                text = '-enable-pretty-printing',
-                description = 'enable pretty printing',
-                ignoreFailures = false
-              },
-              {
-                text = 'handle SIGSTOP noprint nostop pass',
-                description = 'ignore SIGSTOP',
-                ignoreFailures = true
-              },
-            },
-            logging = {
-              engineLogging = false,
-            },
-            externalConsole = false,
-            MIMode = 'gdb',
-            miDebuggerPath = '${pkgs.gdb}/bin/gdb',
-          },
-        }
-
-        dap.configurations.c = dap.configurations.cpp
-        dap.configurations.rust = {
-          vim.tbl_extend("force", dap.configurations.cpp[1], {
-            name = "Launch Rust (target/debug)",
-            program = function()
-              return pick_binary(vim.fn.getcwd() .. '/target/debug/')
-            end,
-          })
-        }
-
-        -- === KEYMAPS ===
-        vim.keymap.set('n', '<F5>', function() dap.continue() end, { desc = "Debug: Start" })
-        vim.keymap.set('n', '<F10>', function() dap.step_over() end, { desc = "Debug: Step Over" })
-        vim.keymap.set('n', '<F11>', function() dap.step_into() end, { desc = "Debug: Step Into" })
-        vim.keymap.set('n', '<F12>', function() dap.step_out() end, { desc = "Debug: Step Out" })
-        vim.keymap.set('n', '<leader>b', function() dap.toggle_breakpoint() end, { desc = "Debug: Breakpoint" })
-        vim.cmd([[
-          autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
-          let g:onedark_config = { 'style': 'deep', }
-          let g:netrw_keepdir = 0
-          colorscheme onedark
-          highlight Normal guifg=#bbddff
-          map! <S-Insert> <C-R>+
-          map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
-          map !hh :silent! tabnew +Man! ${kekma.home}<cr>
-          map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
-          nnoremap <silent> <C-h> :CocCommand document.toggleInlayHint<CR>
-          set number
-          highlight EndOfBuffer ctermbg=none guibg=none
-          highlight SignColumn ctermbg=none guibg=none
-          highlight Normal guibg=none
-          highlight NonText guibg=none
-          highlight Normal ctermbg=none
-          highlight NonText ctermbg=none
-          highlight StatusLine guibg=none
-          set tabstop=2
-          set softtabstop=2
-          set shiftwidth=2
-          set expandtab
-          set autoindent
-          set smartindent
-        ]])
-        require("ibl").setup {
-          indent = { char = "│" },  -- Vertical indentation line
-          scope = { enabled = true, show_start = true, show_end = true }, -- Enable scope guides
-        }
-        if vim.g.neovide == true then
-          -- Copy to system clipboard (Normal/Visual mode)
-          vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
-          
-          -- Paste from system clipboard (Normal/Visual mode)
-          vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
-          
-          -- Paste from system clipboard (Insert mode)
-          vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
-        end
-
-        local function open_nos_terminal()
-          vim.cmd("tab term tmux new-session -s my-tui 'tmux set-option status off; nos; tmux kill-session -t my-tui'")
-          vim.b.auto_terminal_mode = true
-          vim.cmd('startinsert')
-        end
-
-        vim.api.nvim_create_user_command('Hh', open_nos_terminal, {
-          desc = 'Open `nos` in a smart terminal',
-        })
-
-        vim.keymap.set('n', '!nos', ':Hh<CR>', { desc = 'Open nos terminal', noremap = true, silent = true })
-
-        vim.api.nvim_create_autocmd("BufEnter", {
-          pattern = "*",
-          callback = function()
-            if vim.bo.buftype == "terminal" and vim.b.auto_terminal_mode == true then
-              vim.cmd("startinsert")
-            end
-          end,
-        })
-
-        vim.keymap.set('t', '<C-PageDown>', '<C-\\><C-n>:tabnext<CR>', { desc = 'Next Tab', noremap = true, silent = true })
-        vim.keymap.set('t', '<C-PageUp>',   '<C-\\><C-n>:tabprevious<CR>', { desc = 'Previous Tab', noremap = true, silent = true })
-        vim.opt.undofile = true
-        local undodir = vim.fn.expand('~/.config/nvim/undodir')
-        vim.opt.undodir = undodir
-        vim.keymap.set({'n', 'v'}, 'd', '"_d')
-        vim.keymap.set({'n', 'v'}, 'dd', '"_dd')
-        vim.keymap.set({'n', 'v'}, 'x', '"_x')
-        vim.opt.clipboard = "unnamedplus"
-        require("cord").setup({})
-        require("auto-save").setup({})
-        -- Temporary workaround for https://github.com/NixOS/nixpkgs/pull/492172
-        -- vim.g.python3_host_prog = '${python}/bin/python3'
-      ''
-      + coc_cfg;
+      initLua = config_lua + lsp_cmp_cfg;
       extraConfig = ''
         if exists("g:neovide")
             let g:neovide_padding_top = 15
             let g:neovide_opacity = 0.2
+            let g:neovide_floating_shadow = v:false
+            let g:neovide_floating_blur_amount_x = 8.0
+            let g:neovide_floating_blur_amount_y = 8.0
         endif
-        augroup statusline
-          autocmd User CocStatusChange redrawstatus
-        augroup END
       '';
     };
   };

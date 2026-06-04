@@ -105,9 +105,9 @@ in
           "/etc/waydroid-extra"
           "/var/db"
           "/var/lib/zerotier-one"
-          { 
-            directory = "/var/lib/private"; 
-            mode = "u=rwx,g=,o="; 
+          {
+            directory = "/var/lib/private";
+            mode = "u=rwx,g=,o=";
           }
           {
             directory = "/var/lib/acme";
@@ -135,6 +135,7 @@ in
           }
         ];
         files = [
+          "/etc/machine-id"
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_ed25519_key.pub"
           "/etc/ssh/ssh_host_rsa_key"

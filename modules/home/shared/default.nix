@@ -1,14 +1,19 @@
 {
   pkgs,
   inputs,
+  config,
   lib,
   ...
 }:
 {
 
-  xdg.configFile."bookmarks.html".source = ../../../stuff/bookmarks.html;
+  xdg.configFile = {
+    "openxr/1/active_runtime.i686.json".source =
+      config.lib.file.mkOutOfStoreSymlink "/etc/xdg/openxr/1/active_runtime.i686.json";
+    "bookmarks.html".source = ../../../stuff/bookmarks.html;
+  };
 
-  android.enable = true;
+  android.enable = false;
 
   systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
 
@@ -73,7 +78,7 @@
     ollama = {
       enable = true;
       package = pkgs.ollama-vulkan;
-      environmentVariables = { 
+      environmentVariables = {
         OLLAMA_KV_CACHE_TYPE = "q8_0";
         OLLAMA_FLASH_ATTENTION = "1";
       };

@@ -1,0 +1,148 @@
+diff --git a/src/xrt/compositor/client/comp_vk_client.c b/src/xrt/compositor/client/comp_vk_client.c
+index d68dd14aa..70a007572 100644
+--- a/src/xrt/compositor/client/comp_vk_client.c
++++ b/src/xrt/compositor/client/comp_vk_client.c
+@@ -16,6 +16,39 @@
+ 
+ #include "comp_vk_client.h"
+ 
++#include <stdio.h>
++#include <stdint.h>
++#include <unistd.h>
++#include <sys/types.h>
++
++// Макрос обертывает вызов функции, замеряет время и сохраняет в уникальный буфер.
++// #name автоматически превращает имя в строку для CSV.
++#define PROFILE_CALL(log_name, code_to_run)                                                                            \
++	do {                                                                                                           \
++		static uint64_t _prof_buf[2000];                                                                       \
++		static size_t _prof_count = 0;                                                                         \
++		uint64_t _start_ns = os_monotonic_get_ns();                                                            \
++                                                                                                                       \
++		code_to_run; /* <-- Здесь выполняется оригинальный вызов */                                            \
++                                                                                                                       \
++		uint64_t _duration_ns = os_monotonic_get_ns() - _start_ns;                                             \
++		if (_prof_count < 2000) {                                                                              \
++			_prof_buf[_prof_count++] = _duration_ns;                                                       \
++		} else {                                                                                               \
++			char filename[256];                                                                            \
++			snprintf(filename, sizeof(filename), "/tmp/monado_log_%d.csv", getpid());                      \
++			FILE *f = fopen(filename, "a");                                                                \
++			if (f) {                                                                                       \
++				for (size_t i = 0; i < 2000; ++i) {                                                    \
++					fprintf(f, "%s,%llu\n", #log_name, (unsigned long long)_prof_buf[i]);          \
++				}                                                                                      \
++				fclose(f);                                                                             \
++			}                                                                                              \
++			_prof_count = 0;                                                                               \
++			_prof_buf[_prof_count++] = _duration_ns;                                                       \
++		}                                                                                                      \
++	} while (0)
++
+ // Prefixed with OXR since the only user right now is the OpenXR state tracker.
+ DEBUG_GET_ONCE_LOG_OPTION(vulkan_log, "OXR_VULKAN_LOG", U_LOGGING_INFO)
+ 
+@@ -346,7 +379,8 @@ submit_temporary_fence(struct client_vk_compositor *c, xrt_result_t *out_xret)
+ 	{
+ 		COMP_TRACE_IDENT(create_and_submit_fence);
+ 
+-		ret = vk_create_and_submit_fence_native(vk, &sync_handle);
++		PROFILE_CALL(vk_create_and_submit_fence_native,
++		             ret = vk_create_and_submit_fence_native(vk, &sync_handle));
+ 		if (ret != VK_SUCCESS) {
+ 			// This is really bad, log again.
+ 			U_LOG_E("Could not create and submit a native fence!");
+diff --git a/src/xrt/compositor/multi/comp_multi_compositor.c b/src/xrt/compositor/multi/comp_multi_compositor.c
+index 153aba660..53913b53b 100644
+--- a/src/xrt/compositor/multi/comp_multi_compositor.c
++++ b/src/xrt/compositor/multi/comp_multi_compositor.c
+@@ -41,6 +41,39 @@
+ #include "android/android_globals.h"
+ #endif
+ 
++#include <stdio.h>
++#include <stdint.h>
++#include <unistd.h>
++#include <sys/types.h>
++
++// Макрос обертывает вызов функции, замеряет время и сохраняет в уникальный буфер.
++// #name автоматически превращает имя в строку для CSV.
++#define PROFILE_CALL(log_name, code_to_run)                                                                            \
++	do {                                                                                                           \
++		static uint64_t _prof_buf[2000];                                                                       \
++		static size_t _prof_count = 0;                                                                         \
++		uint64_t _start_ns = os_monotonic_get_ns();                                                            \
++                                                                                                                       \
++		code_to_run; /* <-- Здесь выполняется оригинальный вызов */                                            \
++                                                                                                                       \
++		uint64_t _duration_ns = os_monotonic_get_ns() - _start_ns;                                             \
++		if (_prof_count < 2000) {                                                                              \
++			_prof_buf[_prof_count++] = _duration_ns;                                                       \
++		} else {                                                                                               \
++			char filename[256];                                                                            \
++			snprintf(filename, sizeof(filename), "/tmp/monado_log_%d.csv", getpid());                      \
++			FILE *f = fopen(filename, "a");                                                                \
++			if (f) {                                                                                       \
++				for (size_t i = 0; i < 2000; ++i) {                                                    \
++					fprintf(f, "%s,%llu\n", #log_name, (unsigned long long)_prof_buf[i]);          \
++				}                                                                                      \
++				fclose(f);                                                                             \
++			}                                                                                              \
++			_prof_count = 0;                                                                               \
++			_prof_buf[_prof_count++] = _duration_ns;                                                       \
++		}                                                                                                      \
++	} while (0)
++
+ DEBUG_GET_ONCE_LOG_OPTION(app_frame_lag_level, "XRT_APP_FRAME_LAG_LOG_AS_LEVEL", U_LOGGING_DEBUG)
+ #define LOG_FRAME_LAG(...) U_LOG_IFL(debug_get_log_option_app_frame_lag_level(), u_log_get_global_level(), __VA_ARGS__)
+ 
+@@ -296,7 +329,7 @@ run_func(void *ptr)
+ 			wait_semaphore(mc, &xcsem, value);
+ 		}
+ 		if (xcf != NULL) {
+-			wait_fence(mc, &xcf);
++			PROFILE_CALL(wait_fence, wait_fence(mc, &xcf));
+ 		}
+ 
+ 		// Sample time outside of lock.
+@@ -455,7 +488,12 @@ multi_compositor_import_fence(struct xrt_compositor *xc,
+ 
+ 	struct multi_compositor *mc = multi_compositor(xc);
+ 
+-	return xrt_comp_import_fence(&mc->msc->xcn->base, handle, handle_type, out_xcf);
++	xrt_result_t result;
++
++	PROFILE_CALL(xrt_comp_import_fence,
++	             result = xrt_comp_import_fence(&mc->msc->xcn->base, handle, handle_type, out_xcf));
++
++	return result;
+ }
+ 
+ static xrt_result_t
+@@ -789,11 +827,12 @@ multi_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
+ 			break;
+ 		}
+ 
+-		xrt_result_t xret = xrt_comp_import_fence( //
+-		    &mc->msc->xcn->base,                   //
+-		    sync_handle,                           //
+-		    XRT_TEMPORARY_FENCE_HANDLE_TYPE,       //
+-		    &xcf);                                 //
++		xrt_result_t xret;
++		PROFILE_CALL(xrt_comp_import_fence, xret = xrt_comp_import_fence(        //
++		                                        &mc->msc->xcn->base,             //
++		                                        sync_handle,                     //
++		                                        XRT_TEMPORARY_FENCE_HANDLE_TYPE, //
++		                                        &xcf));                          //
+ 		/*!
+ 		 * If import_fence succeeded, we have transferred ownership to
+ 		 * the compositor; no need to do anything more. If the call
+@@ -807,7 +846,7 @@ multi_compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handl
+ 	} while (false); // Goto without the labels.
+ 
+ 	if (xcf != NULL) {
+-		push_fence_to_wait_thread(mc, frame_id, xcf);
++		PROFILE_CALL(push_fence_to_wait_thread, push_fence_to_wait_thread(mc, frame_id, xcf));
+ 	} else {
+ 		// Assume that the app side compositor waited.
+ 		int64_t now_ns = os_monotonic_get_ns();

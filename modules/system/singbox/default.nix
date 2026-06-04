@@ -247,6 +247,7 @@ let
             "itch.zone"
             "spotify.com"
             "quora.com"
+            "geekbench.com"
           ];
         }
         {

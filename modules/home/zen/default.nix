@@ -64,13 +64,13 @@ let
     pname = "zen-internet-storage";
     version = "1.0.0";
     src = inputs.my-internet;
-  
+
     nativeBuildInputs = [
       pkgs.nodejs
       pkgs.postcss
       pkgs.jq
     ];
-  
+
     buildPhase = ''
       runHook preBuild
       export HOME=$(mktemp -d)
@@ -85,7 +85,7 @@ let
         > storage.json
       runHook postBuild
     '';
-  
+
     installPhase = ''
       runHook preInstall
       install -Dm644 storage.json $out
@@ -105,9 +105,11 @@ let
       python3 ${./generate_extensions_json.py} \
         --profile-path ${config.xdg.configHome}/zen/default \
         --extension "$src"/**/*.xpi \
-        --extension "${inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}.return-youtube-dislikes}"/**/*.xpi
+        --extension "${
+          inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}.return-youtube-dislikes
+        }"/**/*.xpi
     '';
-    
+
     installPhase = ''
       cp ./generated_extensions.json $out
     '';
@@ -293,11 +295,11 @@ in
             mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org'
             echo '${initial_adnauseam_settings}' > '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org/storage.js'
           fi
-          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js' ]]; then
-            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
-            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
-            cp '${zen-internet-storage}' '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js'
-          fi
+          # if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js' ]]; then
+          #   rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+          #   mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+          #   cp '${zen-internet-storage}' '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js'
+          # fi
           if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com/storage.js' ]]; then
             rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'
             mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'

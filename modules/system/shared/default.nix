@@ -57,9 +57,43 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
-  sandboxing.enable = true;
+  nixpkgs.overlays = [
+    (
+      final: prev:
+      let
+        customFetchurl =
+          args:
+          let
+            nixFetch = import <nix/fetchurl.nix>;
+            isSet = builtins.typeOf args == "set";
+            supported = builtins.functionArgs nixFetch;
+            hasUnsupported = isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames args);
+            hasUrls = isSet && (args ? urls);
+            isMirror = u: builtins.isString u && builtins.substring 0 9 u == "mirror://";
+            hasMirror = isSet && (args ? url) && isMirror args.url;
+            needsFallback = !isSet || hasUnsupported || hasUrls || hasMirror;
+          in
+          if needsFallback then
+            prev.fetchurl args
+          else
+            (nixFetch args)
+            // {
+              overrideAttrs = f: (prev.fetchurl args).overrideAttrs f;
+              override = f: (prev.fetchurl args).override f;
+              overrideDerivation = f: (prev.fetchurl args).overrideDerivation f;
+            };
+      in
+      {
+        fetchurl =
+          if builtins.typeOf prev.fetchurl == "set" && prev.fetchurl ? __functor then
+            prev.fetchurl // { __functor = self: args: customFetchurl args; }
+          else
+            customFetchurl;
+      }
+    )
+  ];
 
-  nixpkgs.config.permittedInsecurePackages = [ "openssl-1.1.1w" ];
+  sandboxing.enable = true;
 
   time.timeZone = "Europe/Moscow";
 
@@ -71,7 +105,7 @@ in
 
   wivrn.enable = true;
 
-  nix.gc.automatic = false;
+  nix.gc.automatic = true;
 
   singbox.enable = true;
 
@@ -107,6 +141,7 @@ in
       kernel = {
         amd-iommu-force-isolation = false;
         strict-iommu = false;
+        binfmt-misc = true;
       };
       system = {
         multilib = true;
@@ -396,6 +431,7 @@ in
       #__GLX_VENDOR_LIBRARY_NAME = "mesa";
       #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
       # To fix Telegram sound in Discord screenshare
+      MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=shift+F12,toggle_fps_limit=shift+F4,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
       ALSOFT_DRIVERS = "pulse";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
@@ -487,6 +523,8 @@ in
         libsForQt5.qtstyleplugin-kvantum
         kdePackages.qtstyleplugin-kvantum
         kdePackages.qtdeclarative
+        kdePackages.kdenlive
+        kdePackages.kdeconnect-kde
         quickshell.packages.${system}.default
         nix-alien.packages.${system}.nix-alien
         nix-search.packages.${system}.default
@@ -518,6 +556,17 @@ in
           wayland = true;
           gpu = true;
           x11 = true;
+          nvidia_gpu = true;
+          additional_args =
+            { sloth, ... }:
+            {
+              dbus.policies."com.feralinteractive.GameMode" = "talk";
+              bubblewrap.bind.ro = [
+                (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
+                (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
+                (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
+              ];
+            };
           package = fixPrism (
             prismlauncher.override {
               prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
@@ -526,18 +575,6 @@ in
             }
           );
         })
-        (
-          let
-            pkgs-fixed = pkgs.extend (
-              self: super: {
-                openldap = super.openldap.overrideAttrs { doCheck = false; };
-              }
-            );
-          in
-          pkgs-fixed.bottles.override {
-            removeWarningPopup = true;
-          }
-        )
         (config.mkSandbox rec {
           appId = "com.discordapp.DiscordCanary";
           network_singbox = true;
@@ -546,15 +583,20 @@ in
           gpu = true;
           x11 = true;
           webcam = 5;
-          additional_args.bubblewrap.sharePid = true;
+          additional_args =
+            { sloth, ... }:
+            {
+              bubblewrap = {
+                sharePid = true;
+                bind.ro = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
+              };
+            };
           additional_wrap_commands = "ln -sf \"$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0\" \"$XDG_RUNTIME_DIR/discord-ipc-0\"";
-          package = (
-            discord-canary.override {
-              withOpenASAR = false;
-              withVencord = true;
-              vencord = vencord;
-            }
-          );
+          package = discord-canary.override {
+            withOpenASAR = true;
+            withVencord = true;
+            vencord = vencord;
+          };
         })
         # Below are for offline build
         (python3.withPackages (
@@ -576,8 +618,6 @@ in
   };
 
   virtualisation = {
-
-    waydroid.enable = true;
 
     spiceUSBRedirection.enable = true;
 
@@ -748,6 +788,8 @@ in
 
   security = {
 
+    wrappers.su.enable = false;
+
     rtkit.enable = true;
 
     polkit.enable = true;
@@ -779,11 +821,20 @@ in
 
     dconf.enable = true;
 
-    nh.enable = true;
-
     gamemode = {
       enable = true;
       enableRenice = true;
+    };
+
+    nh = {
+      enable = true;
+      package = pkgs.nh.override {
+        nix-output-monitor = (
+          pkgs.nix-output-monitor.overrideAttrs (prev: {
+            patches = (prev.patches or [ ]) ++ [ ../../../stuff/nom.patch ];
+          })
+        );
+      };
     };
 
     steam = {
@@ -808,7 +859,7 @@ in
             audio = true;
             gpu = true;
             wayland = true;
-            x11_shared = true;
+            x11 = true;
             nvidia_gpu = true;
             additional_wrap_commands = "rust-bridge sandbox 127.0.0.1:57343 \"$SANDBOXED_RUNTIME_DIR/steam\" &";
             additional_prestart_commands = "rust-bridge host \"$XDG_RUNTIME_DIR/steam\" 127.0.0.1:57343 &";
@@ -820,6 +871,7 @@ in
                     ro = [
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
+                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                     ];
                     rw = [
                       [
@@ -833,6 +885,7 @@ in
                 dbus.policies = {
                   "com.steampowered.Steam" = "own";
                   "com.steampowered.Steam.*" = "own";
+                  "com.feralinteractive.GameMode" = "talk";
                 };
               };
             package = overriddenSteam;
@@ -872,7 +925,14 @@ in
 
     uwsm = {
       enable = true;
-      package = pkgs.uwsm.overrideAttrs { patches = ../../../stuff/uwsm_uuctl.patch; };
+      package = pkgs.uwsm.overrideAttrs (prev: {
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/uwsm_uuctl.patch ];
+        postInstall = (prev.postInstall or "") + ''
+          chmod -R 777 "$out/bin"
+          wrapProgram "$out/bin/uuctl" \
+            --add-flags "dmenu -i -p"
+        '';
+      });
       waylandCompositors = {
         hyprland = {
           prettyName = "Hyprland";

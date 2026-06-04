@@ -75,15 +75,15 @@ in
         };
       };
 
-      # open-webui = {
-      #   enable = true;
-      #   host = "127.0.0.1";
-      #   port = 8080;
-      #   environment = {
-      #     WEBUI_AUTH = "False";
-      #     OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
-      #   };
-      # };
+      open-webui = {
+        enable = true;
+        host = "127.0.0.1";
+        port = 8080;
+        environment = {
+          WEBUI_AUTH = "False";
+          OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
+        };
+      };
     };
   };
 }

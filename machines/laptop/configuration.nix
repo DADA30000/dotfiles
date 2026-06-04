@@ -7,7 +7,14 @@
 {
   environment.systemPackages = with pkgs; [ nvtopPackages.full ];
 
-  security.pam.loginLimits = [{ domain = "*"; item = "memlock"; type = "-"; value = "infinity"; }];
+  security.pam.loginLimits = [
+    {
+      domain = "*";
+      item = "memlock";
+      type = "-";
+      value = "infinity";
+    }
+  ];
 
   home-manager.users.${user} = import ./home.nix;
 
@@ -15,7 +22,7 @@
 
   graphics.nvidia.enable = true;
 
-  amd-ai.enable = true;
+  amd-ai.enable = false;
 
   virtualisation.virtualbox.host = {
 
@@ -27,18 +34,20 @@
 
   boot = {
 
-    kernelPackages = pkgs.linuxPackagesFor inputs.nix-cachyos-kernel.packages.${pkgs.system}.linux-cachyos-latest-lto-zen4;
+    kernelPackages =
+      pkgs.linuxPackagesFor
+        inputs.nix-cachyos-kernel.packages.${pkgs.system}.linux-cachyos-latest-lto-zen4;
 
     lanzaboote = {
       enable = true;
       pkiBundle = "/var/lib/sbctl";
     };
 
-    kernelParams = [ 
-      "rd.shell=0" 
+    kernelParams = [
+      "rd.shell=0"
       "ttm.pages_limit=6291456"
     ];
-    
+
     initrd = {
       luks.devices = {
         nixos = {

@@ -13,6 +13,11 @@ in
   options.zsh.enable = mkEnableOption "zsh shell";
 
   config = mkIf cfg.enable {
+    home.packages = [
+      (pkgs.nix-output-monitor.overrideAttrs (prev: {
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/nom.patch ];
+      }))
+    ];
     programs = {
       zoxide = {
         enable = true;
@@ -47,19 +52,59 @@ in
         autosuggestion.enable = true;
         enable = true;
         shellAliases.ls = "lsd";
-        envExtra = ''
+        envExtra = /* zsh */ ''
           touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
           source "${config.home.homeDirectory}"/.zsh/.zshenv_add
           local NIX_FLAKE_PREAMBLE='(
             let 
               flake = builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}"; 
-              nixpkgs = import flake.inputs.nixpkgs { system = "${pkgs.stdenv.hostPlatform.system}"; config.allowUnfree = true; };
+              nixpkgs = import flake.inputs.nixpkgs { 
+                system = "${pkgs.stdenv.hostPlatform.system}";
+                config.allowUnfree = true;
+                overlays = [
+                  (
+                    final: prev:
+                    let
+                      customFetchurl =
+                        args:
+                        let
+                          nixFetch = import <nix/fetchurl.nix>;
+                          isSet = builtins.typeOf args == "set";
+                          supported = builtins.functionArgs nixFetch;
+                          hasUnsupported = isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames args);
+                          hasUrls = isSet && (args ? urls);
+                          isMirror = u: builtins.isString u && builtins.substring 0 9 u == "mirror://";
+                          hasMirror = isSet && (args ? url) && isMirror args.url;
+                          needsFallback = !isSet || hasUnsupported || hasUrls || hasMirror;
+                        in
+                        if needsFallback then prev.fetchurl args 
+                        else (nixFetch args) // {
+                          overrideAttrs = f: (prev.fetchurl args).overrideAttrs f;
+                          override = f: (prev.fetchurl args).override f;
+                          overrideDerivation = f: (prev.fetchurl args).overrideDerivation f;
+                        };
+                    in
+                    {
+                      fetchurl =
+                        if builtins.typeOf prev.fetchurl == "set" && prev.fetchurl ? __functor then
+                          prev.fetchurl // { __functor = self: args: customFetchurl args; }
+                        else
+                          customFetchurl;
+                    }
+                  )
+                ];
+              };
             in
               nixpkgs // { inherit (flake) inputs; }
           )'
           _ns_parse_args() {
             flags=() pkgs=() pkgs_raw=()
             while (( $# > 0 )); do
+              if [[ "$1" == -*\ * ]]; then
+                flags+=(''${=1})
+                shift 1
+                continue
+              fi
               case "$1" in
                 --max-jobs|-j|--cores|--builders|--substituters|--impure-env|-I|--override-input|--arg|--argstr|-o|--output)
                   flags+=("$1" "$2")
@@ -91,11 +136,25 @@ in
 
           # Internal replacement for nix develop, as nix develop is hardcoded to use registries
           _nix-develop() {
+            local has_help=0
+            for arg in "$@"; do
+              if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+                has_help=1
+                break
+              fi
+            done
+
+            if (( has_help == 1 )); then
+              nix print-dev-env "$@"
+              return 0
+            fi
+
             local env_file
             env_file=$(mktemp /tmp/nix-shell-env.XXXXXX)
             export PREV_SHELL="$SHELL"
-            if nix print-dev-env "$@" > "$env_file"; then
-               ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
+            if OUT_SHELL="$(nix print-dev-env --log-format internal-json -v "$@" 2> >(nom --json))"; then
+              printf "%s" "$OUT_SHELL" > "$env_file"
+              ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
             else
               local status=$?
               rm -f "$env_file"
@@ -119,21 +178,7 @@ in
           # Enter shell with build dependencies and build phases for 1 package (nix-shell -E)
           ns-build-env () {
             _ns_parse_args "$@"
-
-            local count=''${#pkgs_raw[@]}
-
-            if [[ $count -eq 0 ]]; then
-              echo "Error: No target specified. Usage: ns-build-env [flags] <package>"
-              return 1
-            elif [[ $count -gt 1 ]]; then
-              echo "Error: Only 1 target allowed. Found $count targets: ''${pkgs_raw[*]}"
-              return 1
-            fi
-
-            local target="''${pkgs_raw[1]}"
-            
-            echo "❄️ Entering build environment for: $target"
-            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; $target"
+            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; ''${pkgs[*]}"
           }
 
           # Ad-hoc python with modules env
@@ -156,20 +201,29 @@ in
           }
 
           # Pure nix-shell -p alternative
-          ns-old () { _ns_parse_args "$@"; nix shell "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+          ns-old () { 
+            _ns_parse_args "$@"
+            nix shell "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]"
+          }
 
           # ad-hoc nix build expr
-          ns-build () { _ns_parse_args "$@"; nix build "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" }
+          ns-build () {
+            _ns_parse_args "$@" 
+            local OUT_PATH
+            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" 2> >(nom --json))"
+            printf "$OUT_PATH" | wl-copy
+            echo "$OUT_PATH"
+          }
 
           # ad-hoc nix eval expr
           ns-eval () {
             _ns_parse_args "$@"
-            nix eval "''${flags[@]}" --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])"
+            local OUT_PATH
+            OUT_PATH="$(nix eval "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(nom --json))"
+            printf "$OUT_PATH" | wl-copy
+            echo "$OUT_PATH"
           }
 
-          proxify () {
-            SOCKS_SERVER=127.0.0.1:2080 socksify $@
-          }
           u-full () {
             echo "Updating locks, switching"
             setopt LOCAL_OPTIONS
@@ -225,15 +279,34 @@ in
               echo "Finished fetching"
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
-              nh os switch /etc/nixos -- --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5
+              nh os switch /etc/nixos -- --extra-substituters "https://attic.xuyh0120.win/lantian" --option connect-timeout 5
             )
           }
-          detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $@ }
-          umu-run() { umu-run-wrapper $@ }
-          u() { nh os switch --keep-going /etc/nixos -- --extra-substituters "https://hyprland.cachix.org https://attic.xuyh0120.win/lantian" --option connect-timeout 5 $@ }
+          prefetch() {
+            local OUT_PATH
+            local -a resolved_args
+            local arg
+
+            for arg in "$@"; do
+                if [[ -e "$arg" ]]; then
+                    resolved_args+=("file://''${arg:A}")
+                else
+                    resolved_args+=("$arg")
+                fi
+            done
+
+            if OUT_PATH="$(nix-prefetch-url --print-path "$resolved_args")"; then
+              OUT_PATH="$(printf "$OUT_PATH" | tail -n 1)"
+              printf '%s' "$OUT_PATH" | wl-copy
+              echo "$OUT_PATH"
+            fi
+          }
+          detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 "$@" }
+          umu-run() { umu-run-wrapper "$@" }
+          u() { nh os switch --keep-going /etc/nixos -- --extra-substituters "https://attic.xuyh0120.win/lantian" --option connect-timeout 5 "$@" }
           nsl-full() { ${
             inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
-          }/bin/nix-locate $@ }
+          }/bin/nix-locate "$@" }
           nss() { ${
             let
               index = pkgs.runCommand "index" { } ''
@@ -247,37 +320,36 @@ in
                 rm -rf "$out/.cache"
               '';
             in
-            "nix-search --index-path \"${index}\" $@"
+            "nix-search --index-path \"${index}\" \"$@\""
           }
           }
-          7z() { 7zz $@ }
-          u-test() { nh os test /etc/nixos $@ }
-          u-boot() { nh os boot /etc/nixos $@ }
-          u-build() { nh os build /etc/nixos $@ }
-          u-debug() { nix build /etc/nixos\#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try $@ }
-          ns() { ns-dev $@ }
-          ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" $@ }
-          nsl() { nix-locate $@ }
-          fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' $@ }
-          cps() { rsync -ahr --progress $@ }
-          res() { screen -r $@ }
-          record-h264() { gpu-screen-recorder -k h264 -w screen -f 60 -a 'default_output|default_input' -o }
-          nvide() { neovide --no-fork $@ }
+          7z() { 7zz "$@" }
+          u-test() { nh os test /etc/nixos "$@" }
+          u-boot() { nh os boot /etc/nixos "$@" }
+          u-build() { nh os build /etc/nixos "$@" }
+          u-debug() { nix build /etc/nixos\#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try "$@" }
+          ns() { ns-dev "$@" }
+          ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" "$@" }
+          nsl() { nix-locate "$@" }
+          fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' "$@" }
+          cps() { rsync -ahr --progress "$@" }
+          res() { screen -r "$@" }
+          record-h264() { gpu-screen-recorder -k h264 -w screen -a 'default_output|default_input' -o "$@" }
+          nvide() { neovide --no-fork "$@" }
           c() { 
             clear 
             printf '\n%.0s' {1..100}
-            fastfetch $@
+            fastfetch "$@"
           }
           cl() { 
             clear
             printf '\n%.0s' {1..100}
-            fastfetch --pipe false | lolcat -b -g 4f05fc:4287f5 $@
+            fastfetch --pipe false | lolcat -b -g 4f05fc:4287f5 "$@"
           }
-          sudoe() { sudo -E $@ }
-          suvide() { sudo -E neovide --no-fork $@ }
-          cwp() { swww img --transition-type wipe --transition-fps 60 --transition-step 255 $@ }
-          record() { gpu-screen-recorder -w screen -f 60 -a 'default_output|default_input' -o $@ }
-          fzfd() { fzf | xargs xdg-open $@ }
+          sudoe() { sudo -E "$@" }
+          suvide() { sudo -E neovide --no-fork "$@" }
+          record() { gpu-screen-recorder -w screen -a 'default_output|default_input' -o "$@" }
+          fzfd() { fzf | xargs xdg-open "$@" }
           ${pkgs.any-nix-shell}/bin/any-nix-shell zsh | source /dev/stdin
           _zsh_nix_bridge
           if [ -f /run/.containerenv ]; then
@@ -286,7 +358,7 @@ in
         '';
         initContent =
           let
-            zshConfig = ''
+            zshConfig = /* zsh */ ''
               nixos_ascii () {
               echo -n $'\E[34m'
               cat << "EOF"
@@ -299,6 +371,7 @@ in
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
               setopt correct
+
               _ns_completer() {
                 local subcommand
                 subcommand="$1"
@@ -314,64 +387,97 @@ in
                 done
                 local curr_word
                 curr_word="''${processed_words[$CURRENT]}"
+                
                 if [[ ! "$curr_word" == -* ]]; then
                   if [[ -n "$curr_word" ]]; then
+                    local cache_dir="/tmp/nix_completer_cache_dir"
+                    local current_flake_source="${config.offline-path}?rev=${config.offline-rev}"
+                    
+                    # Cache invalidation if flake source changes
+                    if [[ -d "$cache_dir" ]]; then
+                      if [[ ! -f "$cache_dir/flake_source" || "$(<"$cache_dir/flake_source")" != "$current_flake_source" ]]; then
+                        rm -rf "$cache_dir"
+                      fi
+                    fi
+                    
+                    mkdir -p "$cache_dir"
+                    if [[ ! -f "$cache_dir/flake_source" ]]; then
+                      echo -n "$current_flake_source" > "$cache_dir/flake_source"
+                    fi
+
+                    local cache_key
+                    local eval_prefix=""
+                    local start_attr="pkgs"
+                    
+                    # 1-Level On-Demand Path Builder
                     if [[ "$curr_word" == *.* ]]; then
-                      local packages_string
+                      cache_key="''${curr_word%.*}"
+                      eval_prefix="''${cache_key}."
+                      start_attr="pkgs.''${cache_key}"
+                    else
+                      cache_key="root"
+                    fi
+                    local cache_file="$cache_dir/''${cache_key//./_}"
+                    
+                    local packages_string=""
+                    if [[ -f "$cache_file" ]]; then
+                      # Fast path: Load from localized cache
+                      packages_string="$(<"$cache_file")"
+                    else
+                      # Safe 1-level deep on-demand evaluation
                       packages_string=$(nix eval --raw --no-use-registries --expr "
                         let
                           pkgs = $NIX_FLAKE_PREAMBLE;
-                          startAttr = pkgs.''${curr_word%.*};
-                          startPrefix = \"''${curr_word%.*}\";
-                          childNames = builtins.attrNames startAttr;
-                          formattedNames = map (name: \"\''${startPrefix}.\''${name}\") childNames;
+                          startAttr = builtins.tryEval ''${start_attr};
                         in
-                        builtins.concatStringsSep \"\n\" formattedNames
+                        if startAttr.success && builtins.typeOf startAttr.value == \"set\" then
+                          builtins.concatStringsSep \"\n\" (map (name: \"''${eval_prefix}\''${name}\") (builtins.attrNames startAttr.value))
+                        else
+                          \"\"
                       " 2>/dev/null)
-                      local -a packages
-                      packages=(''${(f)packages_string})
-                    elif [[ -f /tmp/nix_completer_cache ]]; then
-                      local -a packages
-                      packages=( ''${(f)"$(</tmp/nix_completer_cache)"} )
-                    else
-                      local packages_string
-                      packages_string=$(nix eval --raw --no-use-registries --expr "
-                        builtins.concatStringsSep \"\n\" (
-                          builtins.attrNames (
-                            import (builtins.getFlake \"git+file://${config.offline-path}?rev=${config.offline-rev}\").inputs.nixpkgs {
-                              system = \"x86_64-linux\";
-                              config.allowUnfree = true;
-                            }
-                          )
-                        )
-                      " 2>/dev/null)
-                      print -rn -- "$packages_string" > /tmp/nix_completer_cache
-                      local -a packages
-                      packages=(''${(f)packages_string})
+                      print -rn -- "$packages_string" > "$cache_file"
                     fi
 
-                    local -a suggestions_first
-                    suggestions_first=( ''${(M)packages:#"$curr_word"*} )
-                    local -a suggestions_second
-                    suggestions_second=( ''${(M)packages:#*"$curr_word"*} )
+                    local -a packages
+                    packages=(''${(f)packages_string})
 
-                    typeset -A seen
-                    for item in "''${suggestions_first[@]}"; do
-                      seen[$item]=1
-                    done
+                    # Match Categorization
+                    local -a exact_matches prefix_matches substring_matches
 
-                    local -a suggestions_second_unique
-                    suggestions_second_unique=()
-                    for item in "''${suggestions_second[@]}"; do
-                      if [[ -z "''${seen[$item]}" ]]; then
-                        suggestions_second_unique+=("$item")
+                    exact_matches=( ''${(M)packages:#"$curr_word"} )
+                    exact_matches=( "''${(@)exact_matches/#''${attr_prefix}/}" )
+
+                    prefix_matches=( ''${(M)packages:#"$curr_word"*} )
+                    prefix_matches=( "''${(@)prefix_matches/#''${attr_prefix}/}" )
+                    prefix_matches=( ''${prefix_matches:|exact_matches} )
+
+                    substring_matches=( ''${(M)packages:#*"$curr_word"*} )
+                    substring_matches=( "''${(@)substring_matches/#''${attr_prefix}/}" )
+                    substring_matches=( ''${substring_matches:|exact_matches} )
+                    substring_matches=( ''${substring_matches:|prefix_matches} )
+
+                    # Check how many exact/prefix matches we have in total
+                    local total_prefixes=$(( ''${#exact_matches[@]} + ''${#prefix_matches[@]} ))
+
+                    if (( total_prefixes == 1 )); then
+                      # EXACTLY 1 match: Give it to Zsh exclusively so it skips the menu and instantly auto-completes.
+                      if (( ''${#exact_matches[@]} == 1 )); then
+                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -a exact_matches
+                      else
+                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -a prefix_matches
                       fi
-                    done
-
-                    local -a suggestions
-                    suggestions=( ''${suggestions_first[@]} ''${suggestions_second_unique[@]} )
-                    suggestions=( "''${(@)suggestions/#''${attr_prefix}/}" )
-                    compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=*' -a suggestions
+                    else
+                      # 0 or >1 prefix matches: Still show substring matches!
+                      if (( ''${#exact_matches[@]} > 0 )); then
+                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -J exact -a exact_matches
+                      fi
+                      if (( ''${#prefix_matches[@]} > 0 )); then
+                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -J prefix -a prefix_matches
+                      fi
+                      if (( ''${#substring_matches[@]} > 0 )); then
+                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
+                      fi
+                    fi
                   fi
                 else
                   shift processed_words
@@ -405,6 +511,7 @@ in
                   compadd -J nix "''${args[@]}" -a suggestions
                 fi
               }
+
               _ns-old () { _ns_completer shell }
               _ns-py () { _ns_completer develop python3Packages. }
               _ns () { _ns_completer develop }

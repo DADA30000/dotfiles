@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   lib,
   ...
 }:
@@ -19,6 +20,15 @@ in
       font = {
         name = "JetBrainsMono NF Medium";
         size = 12;
+      };
+      package = pkgs.symlinkJoin {
+        name = "kitty-wrapped";
+        paths = [ pkgs.kitty ];
+        buildInputs = [ pkgs.makeWrapper ];
+        postBuild = ''
+          wrapProgram $out/bin/kitty \
+            --add-flags "--single-instance"
+        '';
       };
       keybindings = {
         "ctrl+left" = "neighboring_window left";

@@ -16,6 +16,7 @@ configuration {
       /** Disable DBusActivatable */
       DBusActivatable: false;
    }
+   case-sensitive: false;
 }
 
 window {

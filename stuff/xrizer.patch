@@ -1,0 +1,521 @@
+From eb21899ae27df47da347068e8fa72dd71e979f9e Mon Sep 17 00:00:00 2001
+From: Sapphire <imsapphire0@gmail.com>
+Date: Sun, 17 May 2026 17:26:22 -0500
+Subject: [PATCH 01/11] input: fix binds to grip/click and trigger/click on
+ Oculus Touch
+
+Closes #358
+---
+ src/input/profiles/oculus_touch.rs | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/input/profiles/oculus_touch.rs b/src/input/profiles/oculus_touch.rs
+index 270b83c6..8acb688b 100644
+--- a/src/input/profiles/oculus_touch.rs
++++ b/src/input/profiles/oculus_touch.rs
+@@ -4,7 +4,7 @@ use super::{
+ };
+ use crate::button_mask_from_ids;
+ use crate::input::legacy::{self, LegacyBindings, button_mask_from_id};
+-use crate::input::profiles::InputToXrPath;
++use crate::input::profiles::{DynInputPath, InputToXrPath};
+ use crate::openxr_data::Hand;
+ use glam::{EulerRot, Mat4, Quat, Vec3};
+ 
+@@ -59,6 +59,16 @@ impl InteractionProfile for OculusTouch {
+         };
+         &DEVICE_PROPERTIES
+     }
++    fn translate_path(path: DynInputPath) -> Option<DynInputPath> {
++        match path {
++            p @ DynInputPath {
++                subpath: DynSubpath::Squeeze | DynSubpath::Trigger,
++                component: Some(DynComponent::Click),
++                ..
++            } => Some(p.with_component(DynComponent::Value)),
++            _ => None,
++        }
++    }
+     fn profile_path() -> &'static str {
+         "/interaction_profiles/oculus/touch_controller"
+     }
+
+From 397740ba8a1ace88e18d7bf49ee1e5e72e9158c6 Mon Sep 17 00:00:00 2001
+From: Sapphire <imsapphire0@gmail.com>
+Date: Sun, 17 May 2026 20:07:55 -0500
+Subject: [PATCH 02/11] input/action_manifest: fix possibly suggesting invalid
+ paths for dpad bindings
+
+---
+ src/input/action_manifest/bindings.rs | 10 ++++++----
+ src/input/profiles/knuckles.rs        |  6 ++++++
+ tests/input_data/knuckles.json        | 12 ++++++++++++
+ 3 files changed, 24 insertions(+), 4 deletions(-)
+
+diff --git a/src/input/action_manifest/bindings.rs b/src/input/action_manifest/bindings.rs
+index e4eb180e..5f752dd7 100644
+--- a/src/input/action_manifest/bindings.rs
++++ b/src/input/action_manifest/bindings.rs
+@@ -725,12 +725,14 @@ pub fn handle_sources(
+                             return None;
+                         };
+ 
+-                        if validate_path(path).is_none() {
+-                            InvalidActionPath(path, s).warn();
+-                            return None;
++                        if let Some(path) = validate_path(path)
++                            .map(|path| context.instance.string_to_path(&path.to_string()).unwrap())
++                        {
++                            return Some(path);
+                         }
+ 
+-                        Some(context.instance.string_to_path(&path.to_string()).unwrap())
++                        InvalidActionPath(path, s).warn();
++                        None
+                     },
+                     path,
+                     action_set_name,
+diff --git a/src/input/profiles/knuckles.rs b/src/input/profiles/knuckles.rs
+index e94024a5..581d31d2 100644
+--- a/src/input/profiles/knuckles.rs
++++ b/src/input/profiles/knuckles.rs
+@@ -185,6 +185,12 @@ mod tests {
+             ],
+         );
+ 
++        f.verify_bindings::<f32>(
++            path,
++            c"/user/hand/left/input/trackpad/click-/actions/set1",
++            ["/user/hand/left/input/trackpad/force".into()],
++        );
++
+         let handle = f.get_action_handle(c"/actions/set1/in/boolact");
+         let data = f.input.openxr.session_data.get();
+         let actions = data.input_data.get_loaded_actions().unwrap();
+diff --git a/tests/input_data/knuckles.json b/tests/input_data/knuckles.json
+index 598873e3..2bf1f1eb 100644
+--- a/tests/input_data/knuckles.json
++++ b/tests/input_data/knuckles.json
+@@ -275,6 +275,18 @@
+ 					},
+ 					"mode": "joystick",
+ 					"path": "/user/hand/right/input/trackpad"
++				},
++				{
++					"inputs": {
++						"north": {
++							"output": "/actions/set1/in/boolact"
++						}
++					},
++					"mode": "dpad",
++					"path": "/user/hand/left/input/trackpad",
++					"parameters": {
++						"sub_mode": "click"
++					}
+ 				}
+ 			]
+ 		}
+
+From 6df3122fd8d88615fdd8f6f0ee0ee0c251c1c91c Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Mon, 18 May 2026 00:54:59 +0200
+Subject: [PATCH 03/11] input: re-add system and thumbrest to openvr input
+ subpaths
+
+---
+ src/input/profiles.rs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/input/profiles.rs b/src/input/profiles.rs
+index 1ab716da..c3dec0e5 100644
+--- a/src/input/profiles.rs
++++ b/src/input/profiles.rs
+@@ -555,10 +555,11 @@ pub mod paths {
+                 "b" => Some(Self::B),
+                 "x" => Some(Self::X),
+                 "y" => Some(Self::Y),
+-                "application_menu" => Some(Self::Menu),
++                "application_menu" | "system" => Some(Self::Menu),
+                 "trigger" => Some(Self::Trigger),
+                 "grip" => Some(Self::Squeeze),
+                 "thumbstick" | "joystick" => Some(Self::Thumbstick),
++                "thumbrest" => Some(Self::Thumbrest),
+                 "trackpad" => Some(Self::Trackpad),
+                 _ => None,
+             }
+
+From 99bc23583c1c97bc6144291d846aa3473f48797c Mon Sep 17 00:00:00 2001
+From: Sapphire <imsapphire0@gmail.com>
+Date: Sat, 23 May 2026 20:05:53 -0500
+Subject: [PATCH 04/11] input: fix squeeze/touch binding for Knuckles
+
+---
+ src/input/profiles/knuckles.rs | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/input/profiles/knuckles.rs b/src/input/profiles/knuckles.rs
+index 581d31d2..2c27a5c6 100644
+--- a/src/input/profiles/knuckles.rs
++++ b/src/input/profiles/knuckles.rs
+@@ -80,6 +80,11 @@ impl InteractionProfile for Knuckles {
+                 component: Some(DynComponent::Click),
+                 ..
+             } => Some(p.with_component(DynComponent::Force)),
++            p @ DynInputPath {
++                subpath: DynSubpath::Squeeze,
++                component: Some(DynComponent::Touch),
++                ..
++            } => Some(p.with_component(DynComponent::Value)),
+             _ => None,
+         }
+     }
+
+From efd4f5c016e204c5d740704f7bdb42f3f0d9577b Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Mon, 18 May 2026 07:18:54 +0200
+Subject: [PATCH 05/11] input: add pinch support to knuckles interaction
+ profile
+
+---
+ src/input/profiles.rs          |  4 +++-
+ src/input/profiles/knuckles.rs | 13 +++++++++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/input/profiles.rs b/src/input/profiles.rs
+index c3dec0e5..c0b322ca 100644
+--- a/src/input/profiles.rs
++++ b/src/input/profiles.rs
+@@ -541,7 +541,8 @@ pub mod paths {
+         Squeeze::<Click, Value, Force, Touch>,
+         Thumbstick::<Click, Touch, Vec2X, Vec2Y>,
+         Trackpad::<Click, Touch, Force, Vec2X, Vec2Y>,
+-        Thumbrest::<Touch>
++        Thumbrest::<Touch>,
++        Pinch::<Value, Force, Touch>
+     );
+ 
+     // Vec2 impls
+@@ -561,6 +562,7 @@ pub mod paths {
+                 "thumbstick" | "joystick" => Some(Self::Thumbstick),
+                 "thumbrest" => Some(Self::Thumbrest),
+                 "trackpad" => Some(Self::Trackpad),
++                "pinch" => Some(Self::Pinch),
+                 _ => None,
+             }
+         }
+diff --git a/src/input/profiles/knuckles.rs b/src/input/profiles/knuckles.rs
+index 2c27a5c6..c8e48838 100644
+--- a/src/input/profiles/knuckles.rs
++++ b/src/input/profiles/knuckles.rs
+@@ -85,6 +85,19 @@ impl InteractionProfile for Knuckles {
+                 component: Some(DynComponent::Touch),
+                 ..
+             } => Some(p.with_component(DynComponent::Value)),
++            DynInputPath {
++                subpath: DynSubpath::Pinch,
++                component: Some(component @ (DynComponent::Force | DynComponent::Value | DynComponent::Touch)),
++                ..
++            } => Some(DynInputPath {
++                subpath: match component {
++                    DynComponent::Force => DynSubpath::Trackpad,
++                    DynComponent::Value => DynSubpath::Trigger,
++                    DynComponent::Touch => DynSubpath::Thumbrest,
++                    _ => unreachable!(),
++                },
++                ..path
++            }),
+             _ => None,
+         }
+     }
+
+From caa60ec3df5330a14ccd3f63c163b53ff1a75aa2 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Mon, 18 May 2026 07:31:38 +0200
+Subject: [PATCH 06/11] input: change ActionSetBinding sources to be optional
+
+---
+ src/input/action_manifest.rs          | 22 +++++++++-------------
+ src/input/action_manifest/bindings.rs |  2 +-
+ 2 files changed, 10 insertions(+), 14 deletions(-)
+
+diff --git a/src/input/action_manifest.rs b/src/input/action_manifest.rs
+index 8c23cebd..eb5d9903 100644
+--- a/src/input/action_manifest.rs
++++ b/src/input/action_manifest.rs
+@@ -357,25 +357,21 @@ impl<C: openxr_data::Compositor> Input<C> {
+ 
+             let set = set.clone();
+ 
+-            if let Some(bindings) = &bindings.haptics {
+-                bindings::handle_haptic_bindings(&self.openxr.instance, context, bindings);
++            if let Some(haptics) = &bindings.haptics {
++                bindings::handle_haptic_bindings(&self.openxr.instance, context, haptics);
+             }
+ 
+-            if let Some(bindings) = &bindings.poses {
+-                bindings::handle_pose_bindings(context, bindings);
++            if let Some(poses) = &bindings.poses {
++                bindings::handle_pose_bindings(context, poses);
+             }
+ 
+-            if let Some(bindings) = &bindings.skeleton {
+-                bindings::handle_skeleton_bindings(context, bindings);
++            if let Some(skeleton) = &bindings.skeleton {
++                bindings::handle_skeleton_bindings(context, skeleton);
+             }
+ 
+-            bindings::handle_sources(
+-                &path_validator,
+-                context,
+-                action_set_name,
+-                &set,
+-                &bindings.sources,
+-            );
++            if let Some(sources) = &bindings.sources {
++                bindings::handle_sources(&path_validator, context, action_set_name, &set, &sources);
++            }
+         }
+ 
+         let info_action_binding = *legacy_bindings
+diff --git a/src/input/action_manifest/bindings.rs b/src/input/action_manifest/bindings.rs
+index 5f752dd7..63de040e 100644
+--- a/src/input/action_manifest/bindings.rs
++++ b/src/input/action_manifest/bindings.rs
+@@ -37,7 +37,7 @@ pub struct Bindings {
+ 
+ #[derive(Deserialize)]
+ pub struct ActionSetBinding {
+-    pub sources: Vec<ActionBinding>,
++    pub sources: Option<Vec<ActionBinding>>,
+     pub poses: Option<Vec<PoseBinding>>,
+     pub haptics: Option<Vec<SimpleActionBinding>>,
+     pub skeleton: Option<Vec<SimpleActionBinding>>,
+
+From 5fe5f2b2123860b7e14cd191e2eb9e5335d71477 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Mon, 18 May 2026 07:38:50 +0200
+Subject: [PATCH 07/11] input: extend pose binding parser to handle additional
+ pose types
+
+---
+ src/input/action_manifest/bindings.rs | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/input/action_manifest/bindings.rs b/src/input/action_manifest/bindings.rs
+index 63de040e..ceef6569 100644
+--- a/src/input/action_manifest/bindings.rs
++++ b/src/input/action_manifest/bindings.rs
+@@ -102,6 +102,21 @@ fn parse_pose_binding<'de, D: serde::Deserializer<'de>>(
+     let hand = match hand {
+         "/user/hand/left/pose" => Hand::Left,
+         "/user/hand/right/pose" => Hand::Right,
++        "/user/camera/pose"
++        | "/user/chest/pose"
++        | "/user/keyboard/pose"
++        | "/user/elbow/left/pose"
++        | "/user/elbow/right/pose"
++        | "/user/foot/left/pose"
++        | "/user/foot/right/pose"
++        | "/user/knee/left/pose"
++        | "/user/knee/right/pose"
++        | "/user/shoulder/left/pose"
++        | "/user/shoulder/right/pose"
++        | "/user/waist/pose" => {
++            debug!("Got pose binding for {pose_path} - ignoring");
++            return Ok((Hand::Left, BoundPoseType::Raw)); // Hand doesn't matter since we'll ignore it
++        }
+         _ => {
+             return Err(D::Error::unknown_variant(
+                 hand,
+@@ -115,7 +130,7 @@ fn parse_pose_binding<'de, D: serde::Deserializer<'de>>(
+         "tip" => BoundPoseType::Tip,
+         "gdc2015" => BoundPoseType::Gdc2015,
+         other => {
+-            warn!("Unknown pose type: {other:?}");
++            debug!("Unknown pose type: {other:?}");
+             BoundPoseType::Raw
+         }
+     };
+
+From d7b6b6bfe035c9517d66e7a8633047eb306b8424 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Mon, 18 May 2026 07:51:27 +0200
+Subject: [PATCH 08/11] input: prevent duplicate bindings for controller types
+ in load_bindings
+
+---
+ src/input/action_manifest.rs | 21 ++++++++++++---------
+ 1 file changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/src/input/action_manifest.rs b/src/input/action_manifest.rs
+index eb5d9903..1e256931 100644
+--- a/src/input/action_manifest.rs
++++ b/src/input/action_manifest.rs
+@@ -255,12 +255,19 @@ impl<C: openxr_data::Compositor> Input<C> {
+         bindings: Vec<actions::DefaultBindings>,
+         context: &mut context::BindingsLoadContext,
+     ) {
+-        let mut it = bindings.into_iter().peekable();
+-        while let Some(actions::DefaultBindings {
++        let mut processed_types = HashSet::new();
++        for actions::DefaultBindings {
+             binding_url,
+             controller_type,
+-        }) = it.next()
++        } in bindings
+         {
++            if !processed_types.insert(controller_type.clone()) {
++                debug!(
++                    "skipping duplicate bindings in {:?} for {controller_type:?}",
++                    binding_url
++                );
++                continue;
++            }
+             let custom_path = if let Ok(custom_dir) = std::env::var("XRIZER_CUSTOM_BINDINGS_DIR") {
+                 PathBuf::from(custom_dir)
+             } else {
+@@ -294,7 +301,7 @@ impl<C: openxr_data::Compositor> Input<C> {
+ 
+             match controller_type {
+                 actions::ControllerType::Unknown(ref other) => {
+-                    info!("Ignoring bindings for unknown profile {other}")
++                    debug!("Ignoring bindings for unknown profile {other}")
+                 }
+                 ref other => {
+                     let mut runner = Runner(self, context, bindings);
+@@ -321,10 +328,6 @@ impl<C: openxr_data::Compositor> Input<C> {
+                     }
+                 }
+             }
+-
+-            while let Some(b) = it.next_if(|b| b.controller_type == controller_type) {
+-                info!("skipping bindings in {:?}", b.binding_url);
+-            }
+         }
+     }
+ 
+@@ -370,7 +373,7 @@ impl<C: openxr_data::Compositor> Input<C> {
+             }
+ 
+             if let Some(sources) = &bindings.sources {
+-                bindings::handle_sources(&path_validator, context, action_set_name, &set, &sources);
++                bindings::handle_sources(&path_validator, context, action_set_name, &set, sources);
+             }
+         }
+ 
+
+From 906fbd50fea1232102a7b72f4cc55f0a0e09f981 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Sun, 24 May 2026 15:46:26 +0200
+Subject: [PATCH 09/11] input: add error handling for mismatched action
+ manifest loading
+
+---
+ src/input/action_manifest.rs | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/input/action_manifest.rs b/src/input/action_manifest.rs
+index 1e256931..76f4c829 100644
+--- a/src/input/action_manifest.rs
++++ b/src/input/action_manifest.rs
+@@ -42,7 +42,14 @@ impl<C: openxr_data::Compositor> Input<C> {
+     ) -> Result<(), vr::EVRInputError> {
+         match self.loaded_actions_path.get() {
+             Some(p) => {
+-                assert_eq!(p, manifest_path);
++                if p != manifest_path {
++                    error!(
++                        "Tried to load action manifest {}, but {} is already loaded!",
++                        manifest_path.display(),
++                        p.display()
++                    );
++                    return Err(vr::EVRInputError::MismatchedActionManifest);
++                }
+                 if session_data.input_data.actions.get().is_some() {
+                     return Ok(());
+                 }
+
+From 5a8c2eb584397b21192a30982dd9c81d15067413 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Sun, 24 May 2026 19:36:22 +0200
+Subject: [PATCH 10/11] input: update path translation to map Value components
+ to Click for specific subpaths
+
+---
+ src/input/profiles/oculus_touch.rs | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/input/profiles/oculus_touch.rs b/src/input/profiles/oculus_touch.rs
+index 8acb688b..3f98e936 100644
+--- a/src/input/profiles/oculus_touch.rs
++++ b/src/input/profiles/oculus_touch.rs
+@@ -66,6 +66,11 @@ impl InteractionProfile for OculusTouch {
+                 component: Some(DynComponent::Click),
+                 ..
+             } => Some(p.with_component(DynComponent::Value)),
++            p @ DynInputPath {
++                subpath: DynSubpath::A | DynSubpath::B | DynSubpath::X | DynSubpath::Y,
++                component: Some(DynComponent::Value),
++                ..
++            } => Some(p.with_component(DynComponent::Click)),
+             _ => None,
+         }
+     }
+
+From c38ca8d0e3dbee8a04a3d2f640ea6896318de354 Mon Sep 17 00:00:00 2001
+From: Mats Huesmann <huesmann.mats@gmail.com>
+Date: Sun, 24 May 2026 21:28:24 +0200
+Subject: [PATCH 11/11] input: enhance InputAnalogActionData_t and
+ InputDigitalActionData_t with update time calculations
+
+---
+ src/input.rs | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/input.rs b/src/input.rs
+index da69fc54..20f70012 100644
+--- a/src/input.rs
++++ b/src/input.rs
+@@ -33,6 +33,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
+ use std::ffi::{CStr, CString, c_char, c_void};
+ use std::mem::ManuallyDrop;
+ use std::ops::Deref;
++use std::ops::Sub;
+ use std::path::PathBuf;
+ use std::sync::atomic::AtomicBool;
+ use std::sync::atomic::Ordering;
+@@ -930,14 +931,17 @@ impl<C: openxr_data::Compositor> vr::IVRInput010_Interface for Input<C> {
+             _ => return vr::EVRInputError::WrongType,
+         };
+ 
++        let update_time = state.last_change_time.sub(self.openxr.display_time.get());
+         *out.value = vr::InputAnalogActionData_t {
+             bActive: state.is_active,
+             activeOrigin: active_hand,
+             x: state.current_state.x,
+-            deltaX: delta.x,
+             y: state.current_state.y,
++            z: 0.0, // TODO: support 3D axes?
++            deltaX: delta.x,
+             deltaY: delta.y,
+-            ..Default::default()
++            deltaZ: 0.0, // TODO: support 3D axes?
++            fUpdateTime: update_time.as_nanos() as f32 / 1_000_000_000.0,
+         };
+ 
+         vr::EVRInputError::None
+@@ -975,12 +979,13 @@ impl<C: openxr_data::Compositor> vr::IVRInput010_Interface for Input<C> {
+             active_hand = binding_source;
+         }
+ 
++        let update_time = state.last_change_time.sub(self.openxr.display_time.get());
+         *out.value = vr::InputDigitalActionData_t {
+             bActive: state.is_active,
+             bState: state.current_state,
+             activeOrigin: active_hand,
+             bChanged: state.changed_since_last_sync,
+-            fUpdateTime: 0.0, // TODO
++            fUpdateTime: update_time.as_nanos() as f32 / 1_000_000_000.0,
+         };
+ 
+         vr::EVRInputError::None

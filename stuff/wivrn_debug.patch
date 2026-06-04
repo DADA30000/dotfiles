@@ -1,0 +1,52 @@
+diff --git a/server/driver/app_pacer.cpp b/server/driver/app_pacer.cpp
+index af8b2444..2d229122 100644
+--- a/server/driver/app_pacer.cpp
++++ b/server/driver/app_pacer.cpp
+@@ -25,6 +25,7 @@
+ #include <algorithm>
+ #include <cassert>
+ #include <cmath>
++#include <iostream>
+ #include <ranges>
+ 
+ // Default value is half the compositor margin
+@@ -141,6 +142,13 @@ void app_pacer::predict(int64_t now_ns,
+ 
+ 	if (cpu_time > period or gpu_time > period or (min_ready > last_display_time and min_ready < last_display_time + period))
+ 	{
++		std::cerr << "[Pacer Skip!] Frame: " << frame_id
++		          << " | min_ready: " << min_ready
++		          << " | last_display_time: " << last_display_time
++		          << " | cpu_time: " << (cpu_time / 1e6) << "ms"
++		          << " | gpu_time: " << (gpu_time / 1e6) << "ms"
++		          << " | compositor_time: " << (compositor_time / 1e6) << "ms"
++		          << std::endl;
+ 		// We are limited by app time, don't wait
+ 		*out_wake_up_time = now_ns;
+ 		*out_predicted_display_period = period; // FIXME: may be more than one frame
+@@ -216,8 +224,23 @@ void app_pacer::mark_gpu_done(int64_t frame_id, int64_t when_ns)
+ 		return;
+ 
+ 	std::lock_guard lock(mutex);
+-	cpu_time = lerp0(cpu_time, std::min(3 * period, frame.delivered - frame.wake_up), 0.1);
+-	gpu_time = lerp0(gpu_time, std::min(3 * period, when_ns - frame.delivered), 0.1);
++
++	int64_t raw_cpu = frame.delivered - frame.wake_up;
++	int64_t raw_gpu = when_ns - frame.delivered;
++
++	cpu_time = lerp0(3 * period, raw_cpu, 0.1);
++	gpu_time = lerp0(3 * period, raw_gpu, 0.1);
++	if (frame_id % 120 == 0)
++	{
++		std::cerr << "[Pacer Stats] Frame: " << frame_id
++		          << " | Period: " << (period / 1e6) << "ms"
++		          << " | Raw CPU: " << (raw_cpu / 1e6) << "ms"
++		          << ", GPU: " << (raw_gpu / 1e6) << "ms"
++		          << " | Smoothed CPU: " << (cpu_time / 1e6) << "ms"
++		          << ", GPU: " << (gpu_time / 1e6) << "ms"
++		          << " | Compositor: " << (compositor_time / 1e6) << "ms"
++		          << std::endl;
++	}
+ }
+ 
+ pacing_app_factory::pacing_app_factory() :

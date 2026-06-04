@@ -20,9 +20,7 @@ in
 
   config = mkIf cfg.enable {
     boot.extraModprobeConfig = ''
-      options nvidia NVreg_DynamicPowerManagement=0x02
       options nvidia NVreg_EnableS0ixPowerManagement=1
-      options nvidia NVreg_PreserveVideoMemoryAllocations=1
     '';
     hardware = {
       graphics = {
@@ -34,18 +32,20 @@ in
         (mkIf cfg.amdgpu.pro { opencl.enable = true; })
       ];
       nvidia = mkIf cfg.nvidia.enable {
-        dynamicBoost.enable = false;
+        dynamicBoost.enable = true;
         modesetting.enable = true;
         package = config.boot.kernelPackages.nvidiaPackages.beta;
         open = true;
         nvidiaSettings = false;
+        videoAcceleration = true;
         powerManagement = {
           enable = true;
           finegrained = true;
+          kernelSuspendNotifier = true;
         };
         prime = {
-          nvidiaBusId = "PCI:64:0:0";
-          amdgpuBusId = "PCI:65:0:0";
+          nvidiaBusId = "PCI:100@0:0:0";
+          amdgpuBusId = "PCI:102@0:0:0";
           offload = {
             enable = true;
             enableOffloadCmd = true;
@@ -58,6 +58,7 @@ in
       (mkIf cfg.nvidia.enable [ "nvidia" ])
     ];
     environment.variables = {
+      NVD_BACKEND = mkIf (cfg.nvidia.enable) "direct";
       ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
       RADV_EXPERIMENTAL = mkIf cfg.vulkan_video "video_decode,video_encode";
       ANV_DEBUG = mkIf cfg.vulkan_video "video-decode,video-encode";

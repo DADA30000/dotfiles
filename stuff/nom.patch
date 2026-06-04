@@ -1,0 +1,163 @@
+diff --git a/lib/NOM/Print.hs b/lib/NOM/Print.hs
+index 5b27103..1942115 100644
+--- a/lib/NOM/Print.hs
++++ b/lib/NOM/Print.hs
+@@ -14,7 +14,7 @@ import Data.Time (NominalDiffTime, ZonedTime, defaultTimeLocale, formatTime)
+ import Data.Tree (Forest, Tree (Node))
+ import GHC.Records (HasField)
+ import NOM.Builds (Derivation (..), FailType (..), Host (..), StorePath (..))
+-import NOM.NixMessage.JSON (ActivityId (..))
++import NOM.NixMessage.JSON (Activity (CopyPath, FileTransfer, Build), ActivityId (..), ActivityProgress (..))
+ import NOM.Print.Table (Entry, blue, bold, cells, dummy, green, grey, header, label, magenta, markup, markups, prependLines, printAlignedSep, red, text, yellow)
+ import NOM.Print.Tree (showForest)
+ import NOM.State (
+@@ -163,7 +163,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+       | progressState == JustStarted && config.piping = \nows@(_, now) -> markup bold (time nows <> showCond (now - startTime > 15) (markup grey " nom hasn‘t detected any input. Have you redirected nix-build stderr into nom? (See -h and the README for details.)"))
+       | progressState == Finished && config.silent = const ""
+       | Just sections' <- nonEmpty sections = \now -> printSections . fmap ($ now) $ sections' <> one (table . time)
+-      | fullSummary /= mempty = printSections . one . table . time
++      | fullSummary /= mempty || totalExpectedBytes > 0 = printSections . one . table . time
+       | config.silent = const ""
+       | otherwise = markup bold . time
+     sections =
+@@ -208,7 +208,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+   innerTable = fromMaybe (one (text "")) (nonEmpty headers) : showCond showHosts printHosts
+   headers =
+     (cells 3 <$> optHeader showBuilds "Builds")
+-      <> (cells 3 <$> optHeader showDownloads "Downloads")
++      <> (cells 4 <$> optHeader showDownloads "Downloads")
+       <> (cells 2 <$> optHeader showUploads "Uploads")
+       <> optHeader showHosts "Host"
+   optHeader cond = showCond cond . one . bold . header :: Text -> [Entry]
+@@ -224,6 +224,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+         [ yellow $ nonZeroBold down downloadsRunning
+         , green $ nonZeroBold down downloadsDone
+         , blue $ nonZeroBold todo numPlannedDownloads
++        , downloadBytesEntry
+         ]
+       <> showCond
+         showUploads
+@@ -236,11 +237,21 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+   manyHosts = Set.size buildHosts > 1 || Set.size hosts > 2 -- We only need number labels on hosts if we are using remote builders or more then one transfer peer (normally a substitution cache).
+   hostNums = zip (toList hosts) [0 ..]
+   showBuilds = totalBuilds > 0
+-  showDownloads = downloadsDone + downloadsRunning + numPlannedDownloads > 0
++  showDownloads = downloadsDone + downloadsRunning + numPlannedDownloads > 0 || totalExpectedBytes > 0
+   showUploads = uploadsDone + uploadsRunning > 0
+   numPlannedDownloads = CSet.size plannedDownloads
+   buildHosts = one Localhost <> foldMap (foldMap one) [runningBuilds', completedBuilds', failedBuilds']
+-  hosts = buildHosts <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
++  activityHosts = Set.fromList . mapMaybe getHost . IntMap.elems $ activities
++   where
++    getHost act = case act.activity of
++      CopyPath _ from _ -> Just from
++      FileTransfer url -> urlToHost url
++      Build _ from -> Just from
++      _ -> Nothing
++
++  hosts = buildHosts 
++    <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
++    <> activityHosts
+   numRunningBuilds = CMap.size runningBuilds
+   numCompletedBuilds = CMap.size completedBuilds
+   numPlannedBuilds = CSet.size plannedBuilds
+@@ -249,6 +260,31 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+   downloadsRunning = CMap.size runningDownloads
+   uploadsRunning = CMap.size runningUploads
+   uploadsDone = CMap.size completedUploads
++  totalDownloadBytes = (totalDone, totalExpected)
++   where
++    isDownload act = case act.activity of
++      FileTransfer _ -> True
++      _ -> False
++    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isDownload $ IntMap.elems activities
++    totalDone = sum (fmap (\(MkActivityProgress d _ _ _) -> d) progresses)
++    totalExpected = sum (fmap (\(MkActivityProgress d e _ _) -> max d e) progresses)
++
++  hostDownloadBytes h = (totalDone, totalExpected)
++   where
++    isHostDownload act = case act.activity of
++      FileTransfer url | urlToHost url == Just h -> True
++      _ -> False
++    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isHostDownload $ IntMap.elems activities
++    totalDone = sum (fmap (\(MkActivityProgress d _ _ _) -> d) progresses)
++    totalExpected = sum (fmap (\(MkActivityProgress d e _ _) -> max d e) progresses)
++
++  (totalDoneBytes, totalExpectedBytes) = totalDownloadBytes
++  downloadBytesEntry =
++    if totalExpectedBytes > totalDoneBytes
++      then green $ text (printBytes totalDoneBytes <> "/" <> printBytes totalExpectedBytes)
++      else if totalDoneBytes > 0
++        then green $ text (printBytes totalDoneBytes)
++        else dummy
+   finishedWithTraces =
+     mconcat
+       [ markup yellow warning
+@@ -277,6 +313,12 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+           [ yellow $ nonZeroShowBold down downloadsRunning'
+           , green $ nonZeroShowBold down downloads
+           , dummy
++          , let (hostDoneBytes, hostExpectedBytes) = hostDownloadBytes host
++               in if hostExpectedBytes > hostDoneBytes
++                    then green $ text (printBytes hostDoneBytes <> "/" <> printBytes hostExpectedBytes)
++                    else if hostDoneBytes > 0
++                      then green $ text (printBytes hostDoneBytes)
++                      else dummy
+           ]
+         <> showCond
+           showUploads
+@@ -588,3 +630,22 @@ printDuration diff
+ 
+ timeDiffSeconds :: Int -> Text
+ timeDiffSeconds = printDuration . fromIntegral
++
++printBytes :: Int -> Text
++printBytes bytes
++  | bytes < 1024 = show bytes <> " B"
++  | bytes < 1024 * 1024 = showDouble (fromIntegral bytes / 1024) <> " KiB"
++  | bytes < 1024 * 1024 * 1024 = showDouble (fromIntegral bytes / (1024 * 1024)) <> " MiB"
++  | otherwise = showDouble (fromIntegral bytes / (1024 * 1024 * 1024)) <> " GiB"
++ where
++  showDouble :: Double -> Text
++  showDouble val = fromString $ printf "%.1f" val
++
++urlToHost :: Text -> Maybe Host
++urlToHost url =
++  let (schema, suffix) = Text.breakOn "://" url
++  in if Text.null suffix
++       then Nothing
++       else
++         let hostPart = fst $ Text.breakOn "/" (Text.drop 3 suffix)
++         in if Text.null hostPart then Nothing else Just (Host (schema <> "://" <> hostPart))
+diff --git a/lib/NOM/Update.hs b/lib/NOM/Update.hs
+index 7f4271f..8cf31d4 100644
+--- a/lib/NOM/Update.hs
++++ b/lib/NOM/Update.hs
+@@ -272,6 +272,7 @@ processJsonMessage = \case
+           now <- getNow
+           pathId <- getStorePathId path
+           uploading to pathId now
++        JSON.FileTransfer _ -> withChange (pure ())
+         JSON.Unknown | Text.isPrefixOf "querying info" startAction.text -> set_interesting
+         JSON.QueryPathInfo{} -> set_interesting
+         _ -> noChange -- tell [Right (encodeUtf8 (markup yellow "unused activity: " <> show startAction.id <> " " <> show startAction.activity))]
+diff --git a/lib/NOM/Update/Monad.hs b/lib/NOM/Update/Monad.hs
+index f4b2c22..efc6867 100644
+--- a/lib/NOM/Update/Monad.hs
++++ b/lib/NOM/Update/Monad.hs
+@@ -12,6 +12,7 @@ import Control.Exception (try)
+ import Control.Monad.Trans.Writer.CPS (WriterT)
+ -- attoparsec
+ import Data.Attoparsec.Text (eitherResult, parse)
++import Data.Text qualified as Text
+ import Data.Text.IO qualified as TextIO
+ import Data.Time (UTCTime, getCurrentTime)
+ import GHC.Clock qualified
+@@ -51,6 +52,7 @@ instance MonadReadDerivation IO where
+           >=> first (DerivationParseError . toText)
+           . eitherResult
+           . parse Nix.parseDerivation
++          . Text.replace "\"\"" "\"__empty__\""
+       )
+       . try
+       . TextIO.readFile

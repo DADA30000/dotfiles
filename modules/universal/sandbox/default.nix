@@ -322,19 +322,23 @@ let
               PAYLOAD="eval \"\$(printf '%s' '$B64_CMD' | ${pkgs.coreutils}/bin/base64 -d)\""
               printf "%s\n" "$PAYLOAD" >> "$COMMAND_PIPE"
             else
-              if [ -f "$SANDBOX_DIR/cgroup_path" ]; then
-                MY_CGROUP="$(cat "$SANDBOX_DIR/cgroup_path")"
-                echo 1 > "$MY_CGROUP/cgroup.kill"
-                while [ -s "$MY_CGROUP/cgroup.procs" ]; do
-                  sleep 0.01
-                done
-              else 
-                MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3 | sed 's/\(app-graphical\.slice\).*/\1/')/${appId}"
-                mkdir "$MY_CGROUP"
-                echo "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
+              if [ -f "$SANDBOX_DIR/scope" ]; then
+                systemctl --user stop "$(< $SANDBOX_DIR/scope)"
+                rm "$SANDBOX_DIR/cgroup_path"
+                rm "$SANDBOX_DIR/scope"
               fi
-              export MY_CGROUP
-              echo "$$" > "$MY_CGROUP/cgroup.procs"
+              MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
+              MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
+              case "$MY_SCOPE" in
+                *"${appId}"*)
+                  printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
+                  printf '%s\n' "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
+                  ;;
+                *)
+                  exec app2unit -a "${appId}" -- "$0" "$@"
+                  ;;
+              esac
+              export MY_CGROUP MY_SCOPE
               rm -f "$COMMAND_PIPE"
               mkdir -p "$SANDBOXED_RUNTIME_DIR"
               mkfifo "$COMMAND_PIPE"
@@ -401,7 +405,7 @@ let
               echo $! > "$SANDBOX_DIR/parent_pid"
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5 >/dev/null 2>&1; then
                   echo "timeout"
-                  echo 1 > "$MY_CGROUP/cgroup.kill"
+                  systemctl --user stop "$MY_SCOPE"
                   exit 1
               fi
               exec 5<&-
@@ -409,7 +413,7 @@ let
               while [ $(wc -l < "$MY_CGROUP/inside/cgroup.procs" 2>/dev/null || echo 0) -gt 1 ]; do
                 sleep 1
               done
-              echo 1 > "$MY_CGROUP/cgroup.kill"
+              systemctl --user stop "$MY_SCOPE"
             fi
           else
             exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"

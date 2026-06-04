@@ -1,272 +1,6 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 let
-  scripts = [
-    (pkgs.writeShellScriptBin "translate-zapret" ''
-      SOURCE="$1"
-      TARGET="$2"
-      TARGET_DIR="$(dirname "$TARGET")"
-      
-      if [ -z "$TARGET" ]; then
-          echo "Usage: $0 <script_to_translate> <out_path>"
-          exit 1
-      fi
-      
-      mkdir -p "$TARGET_DIR"/lists
-      touch "$TARGET_DIR"/lists/ipset-exclude-user.txt
-      touch "$TARGET_DIR"/lists/list-exclude-user.txt
-      touch "$TARGET_DIR"/lists/list-general-user.txt
-      cp "$SOURCE" "$TARGET"
-      
-      sed -i 's$start "zapret: %~n0" /min "%BIN%winws.exe"$nfqws --qnum=210$g' "$TARGET"
-      sed -i "s/%GameFilter%,//g; s/,%GameFilter%//g; s/%GameFilter%//g" "$TARGET"
-      sed -i $'s/\r//g' "$TARGET"
-      sed -i 's$\^$ \\$g' "$TARGET"
-      sed -i 's/ --/ \\\n--/g' "$TARGET"
-      sed -i '/^--comment/d' "$TARGET"
-      sed -i "s/--wf-udp/--filter-udp/g" "$TARGET"
-      sed -i "s/--wf-tcp/--filter-tcp/g" "$TARGET"
-      sed -i 's/--filter-udp=%GameFilterUDP%//g' "$TARGET"
-      sed -i 's/--filter-tcp=%GameFilterTCP%//g' "$TARGET"
-      sed -i 's$,%GameFilterUDP%$$g' "$TARGET"
-      sed -i 's$,%GameFilterTCP%$$g' "$TARGET"
-      sed -i 's&%LISTS%&$(dirname "$0")/lists/&g' "$TARGET"
-      sed -i 's&%BIN%&$(dirname "$0")/bin/&g' "$TARGET"
-      sed -i '/^[[:space:]]*\\*$/d' "$TARGET"
-      sed -i '$ s/ \\$//' "$TARGET"
-      sed -i "/--filter-tcp= /d" "$TARGET"
-      sed -i "/--filter-udp= /d" "$TARGET"
-      sed -i -n '/nfqws/,$p' "$TARGET"
-      sed -i -E 's/ +/ /g' "$TARGET"
-      
-      TMP_FILE=$(mktemp)
-      cat <<EOF > "$TMP_FILE"
-      #!/usr/bin/env bash
-      
-      iptables -t mangle -C OUTPUT -p tcp -m multiport --dports 80,443,853,2053,2083,2087,2096,8443 -j NFQUEUE --queue-num 210 --queue-bypass 2>/dev/null || \\
-      iptables -t mangle -I OUTPUT -p tcp -m multiport --dports 80,443,853,2053,2083,2087,2096,8443 -j NFQUEUE --queue-num 210 --queue-bypass
-      
-      iptables -t mangle -C OUTPUT -p udp --dport 53:65535 -j NFQUEUE --queue-num 210 --queue-bypass 2>/dev/null || \\
-      iptables -t mangle -I OUTPUT -p udp --dport 53:65535 -j NFQUEUE --queue-num 210 --queue-bypass
-      
-      EOF
-      
-      cat "$TARGET" >> "$TMP_FILE"
-      mv "$TMP_FILE" "$TARGET"
-      chmod +x "$TARGET"
-      
-      echo "Successfully translated $TARGET"
-    '')
-    (pkgs.writeShellScriptBin "translate-zapret-nixos" ''
-      SOURCE="$1"
-      TARGET="$2"
-      TARGET_DIR="$(dirname "$TARGET")"
-      
-      if [ -z "$TARGET" ]; then
-          echo "Usage: $0 <script_to_translate> <out_path>"
-          exit 1
-      fi
-
-      translate-zapret "$SOURCE" "$TARGET"
-
-      sed -i 's/\\$//' "$TARGET"
-      sed -i 's/\$(dirname "$0")/\$(dirname_TEMP_0)/g' "$TARGET"
-      sed -i 's%$(dirname_TEMP_0)/bin%''${pkgs.zapret}/usr/share/zapret/files/fake%g' "$TARGET"
-      sed -i 's%$(dirname_TEMP_0)/lists%''${inputs.zapret-flowseal}/lists%g' "$TARGET"
-      sed -i "s/\"/'/g" "$TARGET"
-      sed -i -E 's/ +/ /g' "$TARGET"
-      sed -i '/user\.txt/d' "$TARGET"
-      sed -i '1,/--qnum=210/d' "$TARGET"
-      sed -i 's/^[[:space:]]*//; s/[[:space:]]*$//; s/.*/"&"/' "$TARGET"
-    '')
-    (pkgs.writers.writePython3Bin "fetch-latest-nightly" {} ''
-      import urllib.request
-      import urllib.parse
-      import re
-      import datetime
-      import json
-      import subprocess
-      import sys
-      
-      BASE_URL = "https://ftp.mozilla.org/pub/fenix/nightly"
-      
-      
-      def fetch_index(year, month):
-          url = f"{BASE_URL}/{year}/{month:02d}/"
-          try:
-              with urllib.request.urlopen(url) as res:
-                  return url, res.read().decode("utf-8")
-          except Exception:
-              return url, ""
-      
-      
-      def main():
-          now = datetime.datetime.now()
-          # Check current month first, then drop back to last month if needed
-          periods = [now, now - datetime.timedelta(days=28)]
-      
-          latest_dir = None
-          month_url = ""
-      
-          for dt in periods:
-              url, html = fetch_index(dt.year, dt.month)
-              dirs = re.findall(r'href="([^"]+-android-x86_64/)"', html)
-              if dirs:
-                  dirs.sort()
-                  latest_dir = dirs[-1]
-                  month_url = url
-                  break
-      
-          if not latest_dir:
-              print(
-                  "Error: Could not locate any x86_64 nightly directories.",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-      
-          # urljoin handles root-relative paths like /pub/... automatically
-          dir_url = urllib.parse.urljoin(month_url, latest_dir)
-          print(f"Target Directory: {dir_url}", file=sys.stderr)
-      
-          # Fetch directory to find the exact APK filename
-          with urllib.request.urlopen(dir_url) as res:
-              dir_html = res.read().decode("utf-8")
-      
-          apk_matches = re.findall(r'href="([^"]+\.apk)"', dir_html)
-          if not apk_matches:
-              print(f"Error: No APK found inside {dir_url}", file=sys.stderr)
-              sys.exit(1)
-      
-          # Safely merge file name or full path into the folder base URL
-          apk_url = urllib.parse.urljoin(dir_url, apk_matches[0])
-          print(f"Found APK: {apk_url}", file=sys.stderr)
-      
-          # Calculate store hash natively via Nix
-          res = subprocess.run(
-              ["nix", "store", "prefetch-file", "--json", apk_url],
-              capture_output=True,
-              text=True,
-              check=True,
-          )
-          sri_hash = json.loads(res.stdout)["hash"]
-      
-          # Output to the JSON target
-          output_data = {"url": apk_url, "hash": sri_hash}
-          with open("firefox-nightly.json", "w") as f:
-              json.dump(output_data, f, indent=2)
-      
-          print("Successfully generated firefox-nightly.json", file=sys.stderr)
-      
-      
-      if __name__ == "__main__":
-          main()
-    '')
-    (pkgs.writers.writePython3Bin "check-follows" {} ''
-      import json
-      import sys
-      import os
-      
-      
-      def resolve_target(lock_data, input_val):
-          """Recursively resolve the node ID for a given input."""
-          if isinstance(input_val, str):
-              return input_val
-          if isinstance(input_val, list):
-              current_node_id = "root"
-              for key in input_val:
-                  node = lock_data["nodes"].get(current_node_id)
-                  if not node:
-                      return None
-                  next_val = node.get("inputs", {}).get(key)
-                  if not next_val:
-                      return None
-                  current_node_id = resolve_target(lock_data, next_val)
-              return current_node_id
-          return None
-      
-      
-      def find_paths_to_nodes(lock_data):
-          """BFS to find the shortest dependency paths to every node."""
-          paths = {"root": [[]]}
-          queue = ["root"]
-          visited = {"root"}
-          nodes = lock_data.get("nodes", {})
-      
-          while queue:
-              current = queue.pop(0)
-              for in_key, in_val in nodes.get(current, {}).get("inputs", {}).items():
-                  target_node = resolve_target(lock_data, in_val)
-                  if not target_node:
-                      continue
-                  if target_node not in paths:
-                      paths[target_node] = []
-      
-                  for p in paths[current]:
-                      new_path = p + [in_key]
-                      existing = paths[target_node]
-                      if not existing or len(new_path) == len(existing[0]):
-                          if new_path not in existing:
-                              existing.append(new_path)
-                      elif len(new_path) < len(existing[0]):
-                          paths[target_node] = [new_path]
-      
-                  if target_node not in visited:
-                      visited.add(target_node)
-                      queue.append(target_node)
-          return paths
-      
-      
-      def get_fixes(lock):
-          """Logic to identify sub-inputs that don't follow top-level inputs."""
-          nodes = lock.get("nodes", {})
-          root_inputs = nodes.get("root", {}).get("inputs", {})
-          top_targets = {k: resolve_target(lock, v) for k, v in root_inputs.items()}
-          paths_to_nodes = find_paths_to_nodes(lock)
-          fixes = set()
-      
-          for node_id, node_data in nodes.items():
-              if node_id == "root":
-                  continue
-              for in_key, in_val in node_data.get("inputs", {}).items():
-                  if in_key in top_targets:
-                      target_id = resolve_target(lock, in_val)
-                      if target_id and target_id != top_targets[in_key]:
-                          for p in paths_to_nodes.get(node_id, []):
-                              if p:
-                                  path = ".inputs.".join(p)
-                                  # Implicit string concatenation fixes line length
-                                  fixes.add(
-                                      f'inputs.{path}.inputs.{in_key}'
-                                      f'.follows = "{in_key}";'
-                                  )
-          return fixes
-      
-      
-      def main():
-          if not os.path.exists("flake.lock"):
-              print("Error: flake.lock not found.")
-              sys.exit(1)
-      
-          with open("flake.lock", encoding="utf-8") as f:
-              lock = json.load(f)
-      
-          fixes = get_fixes(lock)
-      
-          if fixes:
-              msg = (
-                  "Found missed follows! Add these directly inside "
-                  "your top-level `inputs = { ... };` block:\n"
-              )
-              print(msg)
-              for fix in sorted(fixes):
-                  print(f"    {fix}")
-          else:
-              print("All dependencies are following top-level inputs correctly!")
-      
-      
-      if __name__ == "__main__":
-          main()
-    '')
-    (pkgs.writers.writePython3Bin "krisp-patcher"
+  krisp-patcher = (pkgs.writers.writePython3Bin "krisp-patcher"
       {
         libraries = with pkgs.python3Packages; [
           capstone
@@ -365,7 +99,274 @@ let
             else:
                 print("Couldn't find patch location - review manually. Sorry.")
       ''
-    )
+    );
+  scripts = [
+    krisp-patcher
+    (pkgs.writeShellScriptBin "translate-zapret" ''
+      SOURCE="$1"
+      TARGET="$2"
+      TARGET_DIR="$(dirname "$TARGET")"
+
+      if [ -z "$TARGET" ]; then
+          echo "Usage: $0 <script_to_translate> <out_path>"
+          exit 1
+      fi
+
+      mkdir -p "$TARGET_DIR"/lists
+      touch "$TARGET_DIR"/lists/ipset-exclude-user.txt
+      touch "$TARGET_DIR"/lists/list-exclude-user.txt
+      touch "$TARGET_DIR"/lists/list-general-user.txt
+      cp "$SOURCE" "$TARGET"
+
+      sed -i 's$start "zapret: %~n0" /min "%BIN%winws.exe"$nfqws --qnum=210$g' "$TARGET"
+      sed -i "s/%GameFilter%,//g; s/,%GameFilter%//g; s/%GameFilter%//g" "$TARGET"
+      sed -i $'s/\r//g' "$TARGET"
+      sed -i 's$\^$ \\$g' "$TARGET"
+      sed -i 's/ --/ \\\n--/g' "$TARGET"
+      sed -i '/^--comment/d' "$TARGET"
+      sed -i "s/--wf-udp/--filter-udp/g" "$TARGET"
+      sed -i "s/--wf-tcp/--filter-tcp/g" "$TARGET"
+      sed -i 's/--filter-udp=%GameFilterUDP%//g' "$TARGET"
+      sed -i 's/--filter-tcp=%GameFilterTCP%//g' "$TARGET"
+      sed -i 's$,%GameFilterUDP%$$g' "$TARGET"
+      sed -i 's$,%GameFilterTCP%$$g' "$TARGET"
+      sed -i 's&%LISTS%&$(dirname "$0")/lists/&g' "$TARGET"
+      sed -i 's&%BIN%&$(dirname "$0")/bin/&g' "$TARGET"
+      sed -i '/^[[:space:]]*\\*$/d' "$TARGET"
+      sed -i '$ s/ \\$//' "$TARGET"
+      sed -i "/--filter-tcp= /d" "$TARGET"
+      sed -i "/--filter-udp= /d" "$TARGET"
+      sed -i -n '/nfqws/,$p' "$TARGET"
+      sed -i -E 's/ +/ /g' "$TARGET"
+
+      TMP_FILE=$(mktemp)
+      cat <<EOF > "$TMP_FILE"
+      #!/usr/bin/env bash
+
+      iptables -t mangle -C OUTPUT -p tcp -m multiport --dports 80,443,853,2053,2083,2087,2096,8443 -j NFQUEUE --queue-num 210 --queue-bypass 2>/dev/null || \\
+      iptables -t mangle -I OUTPUT -p tcp -m multiport --dports 80,443,853,2053,2083,2087,2096,8443 -j NFQUEUE --queue-num 210 --queue-bypass
+
+      iptables -t mangle -C OUTPUT -p udp --dport 53:65535 -j NFQUEUE --queue-num 210 --queue-bypass 2>/dev/null || \\
+      iptables -t mangle -I OUTPUT -p udp --dport 53:65535 -j NFQUEUE --queue-num 210 --queue-bypass
+
+      EOF
+
+      cat "$TARGET" >> "$TMP_FILE"
+      mv "$TMP_FILE" "$TARGET"
+      chmod +x "$TARGET"
+
+      echo "Successfully translated $TARGET"
+    '')
+    (pkgs.writeShellScriptBin "translate-zapret-nixos" ''
+      SOURCE="$1"
+      TARGET="$2"
+      TARGET_DIR="$(dirname "$TARGET")"
+
+      if [ -z "$TARGET" ]; then
+          echo "Usage: $0 <script_to_translate> <out_path>"
+          exit 1
+      fi
+
+      translate-zapret "$SOURCE" "$TARGET"
+
+      sed -i 's/\\$//' "$TARGET"
+      sed -i 's/\$(dirname "$0")/\$(dirname_TEMP_0)/g' "$TARGET"
+      sed -i 's%$(dirname_TEMP_0)/bin%''${pkgs.zapret}/usr/share/zapret/files/fake%g' "$TARGET"
+      sed -i 's%$(dirname_TEMP_0)/lists%''${inputs.zapret-flowseal}/lists%g' "$TARGET"
+      sed -i "s/\"/'/g" "$TARGET"
+      sed -i -E 's/ +/ /g' "$TARGET"
+      sed -i '/user\.txt/d' "$TARGET"
+      sed -i '1,/--qnum=210/d' "$TARGET"
+      sed -i 's/^[[:space:]]*//; s/[[:space:]]*$//; s/.*/"&"/' "$TARGET"
+    '')
+    (pkgs.writers.writePython3Bin "fetch-latest-nightly" { } ''
+      import urllib.request
+      import urllib.parse
+      import re
+      import datetime
+      import json
+      import subprocess
+      import sys
+
+      BASE_URL = "https://ftp.mozilla.org/pub/fenix/nightly"
+
+
+      def fetch_index(year, month):
+          url = f"{BASE_URL}/{year}/{month:02d}/"
+          try:
+              with urllib.request.urlopen(url) as res:
+                  return url, res.read().decode("utf-8")
+          except Exception:
+              return url, ""
+
+
+      def main():
+          now = datetime.datetime.now()
+          # Check current month first, then drop back to last month if needed
+          periods = [now, now - datetime.timedelta(days=28)]
+
+          latest_dir = None
+          month_url = ""
+
+          for dt in periods:
+              url, html = fetch_index(dt.year, dt.month)
+              dirs = re.findall(r'href="([^"]+-android-x86_64/)"', html)
+              if dirs:
+                  dirs.sort()
+                  latest_dir = dirs[-1]
+                  month_url = url
+                  break
+
+          if not latest_dir:
+              print(
+                  "Error: Could not locate any x86_64 nightly directories.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          # urljoin handles root-relative paths like /pub/... automatically
+          dir_url = urllib.parse.urljoin(month_url, latest_dir)
+          print(f"Target Directory: {dir_url}", file=sys.stderr)
+
+          # Fetch directory to find the exact APK filename
+          with urllib.request.urlopen(dir_url) as res:
+              dir_html = res.read().decode("utf-8")
+
+          apk_matches = re.findall(r'href="([^"]+\.apk)"', dir_html)
+          if not apk_matches:
+              print(f"Error: No APK found inside {dir_url}", file=sys.stderr)
+              sys.exit(1)
+
+          # Safely merge file name or full path into the folder base URL
+          apk_url = urllib.parse.urljoin(dir_url, apk_matches[0])
+          print(f"Found APK: {apk_url}", file=sys.stderr)
+
+          # Calculate store hash natively via Nix
+          res = subprocess.run(
+              ["nix", "store", "prefetch-file", "--json", apk_url],
+              capture_output=True,
+              text=True,
+              check=True,
+          )
+          sri_hash = json.loads(res.stdout)["hash"]
+
+          # Output to the JSON target
+          output_data = {"url": apk_url, "hash": sri_hash}
+          with open("firefox-nightly.json", "w") as f:
+              json.dump(output_data, f, indent=2)
+
+          print("Successfully generated firefox-nightly.json", file=sys.stderr)
+
+
+      if __name__ == "__main__":
+          main()
+    '')
+    (pkgs.writers.writePython3Bin "check-follows" { } ''
+      import json
+      import sys
+      import os
+
+
+      def resolve_target(lock_data, input_val):
+          """Recursively resolve the node ID for a given input."""
+          if isinstance(input_val, str):
+              return input_val
+          if isinstance(input_val, list):
+              current_node_id = "root"
+              for key in input_val:
+                  node = lock_data["nodes"].get(current_node_id)
+                  if not node:
+                      return None
+                  next_val = node.get("inputs", {}).get(key)
+                  if not next_val:
+                      return None
+                  current_node_id = resolve_target(lock_data, next_val)
+              return current_node_id
+          return None
+
+
+      def find_paths_to_nodes(lock_data):
+          """BFS to find the shortest dependency paths to every node."""
+          paths = {"root": [[]]}
+          queue = ["root"]
+          visited = {"root"}
+          nodes = lock_data.get("nodes", {})
+
+          while queue:
+              current = queue.pop(0)
+              for in_key, in_val in nodes.get(current, {}).get("inputs", {}).items():
+                  target_node = resolve_target(lock_data, in_val)
+                  if not target_node:
+                      continue
+                  if target_node not in paths:
+                      paths[target_node] = []
+
+                  for p in paths[current]:
+                      new_path = p + [in_key]
+                      existing = paths[target_node]
+                      if not existing or len(new_path) == len(existing[0]):
+                          if new_path not in existing:
+                              existing.append(new_path)
+                      elif len(new_path) < len(existing[0]):
+                          paths[target_node] = [new_path]
+
+                  if target_node not in visited:
+                      visited.add(target_node)
+                      queue.append(target_node)
+          return paths
+
+
+      def get_fixes(lock):
+          """Logic to identify sub-inputs that don't follow top-level inputs."""
+          nodes = lock.get("nodes", {})
+          root_inputs = nodes.get("root", {}).get("inputs", {})
+          top_targets = {k: resolve_target(lock, v) for k, v in root_inputs.items()}
+          paths_to_nodes = find_paths_to_nodes(lock)
+          fixes = set()
+
+          for node_id, node_data in nodes.items():
+              if node_id == "root":
+                  continue
+              for in_key, in_val in node_data.get("inputs", {}).items():
+                  if in_key in top_targets:
+                      target_id = resolve_target(lock, in_val)
+                      if target_id and target_id != top_targets[in_key]:
+                          for p in paths_to_nodes.get(node_id, []):
+                              if p:
+                                  path = ".inputs.".join(p)
+                                  # Implicit string concatenation fixes line length
+                                  fixes.add(
+                                      f'inputs.{path}.inputs.{in_key}'
+                                      f'.follows = "{in_key}";'
+                                  )
+          return fixes
+
+
+      def main():
+          if not os.path.exists("flake.lock"):
+              print("Error: flake.lock not found.")
+              sys.exit(1)
+
+          with open("flake.lock", encoding="utf-8") as f:
+              lock = json.load(f)
+
+          fixes = get_fixes(lock)
+
+          if fixes:
+              msg = (
+                  "Found missed follows! Add these directly inside "
+                  "your top-level `inputs = { ... };` block:\n"
+              )
+              print(msg)
+              for fix in sorted(fixes):
+                  print(f"    {fix}")
+          else:
+              print("All dependencies are following top-level inputs correctly!")
+
+
+      if __name__ == "__main__":
+          main()
+    '')
     (pkgs.writeShellScriptBin "dinfo" ''
       Kernel="$(uname -r)"
       uptime="$(uptime -p | sed 's/up //')"
@@ -386,7 +387,7 @@ let
     (pkgs.writeShellScriptBin "power-menu" ''
       if [ "$1" == "getdata" ]; then
         current=$(${pkgs.tlp}/bin/tlp-stat -s | grep "Power profile" | awk '{print $4}')
-    
+
         case "$current" in
           power-saver*)
             echo '{"text":"󰌪","class":"powersave","tooltip":"Mode: Power Saver"}'
@@ -398,7 +399,7 @@ let
             echo '{"text":"󰗑","class":"default","tooltip":"Mode: Balanced"}'
             ;;
         esac
-    
+
       elif [ "$1" == "menu" ]; then
         options="󰌪 Power Saver\n󰗑 Balanced\n󰓅 Performance"
         
@@ -425,12 +426,12 @@ let
           break
         fi
       done
-    
+
       if [ -z "$CPU_HWMON" ]; then
         echo '{"text":"N/A","tooltip":"k10temp driver not found"}'
         exit 0
       fi
-    
+
       TEMP_FILE=""
       for f in "$CPU_HWMON"/temp*_label; do
         label=$(cat "$f")
@@ -439,19 +440,19 @@ let
           break
         fi
       done
-    
+
       if [ -z "$TEMP_FILE" ]; then
         TEMP_FILE="$CPU_HWMON/temp1_input"
       fi
-    
+
       temp_raw=$(cat "$TEMP_FILE" 2>/dev/null || echo "0")
       temp=$((temp_raw / 1000))
-    
+
       # Use different icons based on heat
       icon=""
       if [ "$temp" -gt 65 ]; then icon=""; fi
       if [ "$temp" -gt 85 ]; then icon=""; fi
-    
+
       echo "{\"text\":\"$temp°C $icon\",\"tooltip\":\"Sensor: $TEMP_FILE\",\"class\":\"temp-$temp\"}"
     '')
     (pkgs.writeShellScriptBin "nvidia-gpu" ''
@@ -947,8 +948,16 @@ let
   ];
 in
 {
-  environment.systemPackages = scripts ++ [
-    pkgs.bindfs
-    pkgs.imagemagick
-  ];
+  options.krisp-patcher = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    visible = false;
+  };
+  config = {
+    krisp-patcher = krisp-patcher;
+    environment.systemPackages = scripts ++ [
+      pkgs.bindfs
+      pkgs.imagemagick
+    ];
+  };
 }
