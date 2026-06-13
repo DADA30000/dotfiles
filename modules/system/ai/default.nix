@@ -3,60 +3,106 @@
   config,
   inputs,
   pkgs,
+  user,
   ...
-}:
+}@args:
 let
   cfg = config.amd-ai;
-  xrt = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt" { };
-  xrt-plugin-amdxdna = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt-plugin-amdxdna" {
-    inherit xrt;
+  ik_llama-cpp = pkgs.cudaPackages.backendStdenv.mkDerivation {
+    pname = "ik-llama-cpp";
+    version = "latest";
+
+    src = inputs.llama-cpp;
+
+    nativeBuildInputs = [
+      pkgs.cmake
+      pkgs.ninja
+      pkgs.pkg-config
+      pkgs.autoAddDriverRunpath
+      pkgs.cudaPackages.cuda_nvcc
+    ];
+
+    buildInputs = [
+      pkgs.curl
+      pkgs.cudaPackages.cuda_cudart
+      pkgs.cudaPackages.libcublas
+    ];
+
+    cmakeFlags = [
+      "-DGGML_NATIVE=ON"
+      "-DGGML_CUDA=ON"
+      "-DGGML_BLAS=OFF"
+      "-DLLAMA_BUILD_SERVER=ON"
+      "-DCMAKE_CUDA_ARCHITECTURES=120"
+    ];
+
+    preConfigure = ''
+      export NIX_ENFORCE_NO_NATIVE=0
+    '';
   };
-  fastflowlm = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/fastflowlm" { inherit xrt; };
-  xrtPrefix = "${xrt}/opt/xilinx/xrt";
-  xrt-combined = pkgs.runCommand "xrt-combined" { } ''
-    mkdir -p $out
-    cp -rs ${xrtPrefix}/* $out/
-    chmod -R u+w $out/lib
-    ln -sf ${xrt-plugin-amdxdna}/opt/xilinx/xrt/lib/libxrt_driver_xdna* $out/lib/
-  '';
 in
 {
   options.amd-ai.enable = lib.mkEnableOption "amd ai stuff";
 
+  imports = [
+    (import "${inputs.nix-amd-ai}/modules/amd-npu.nix" (
+      args
+      // {
+        pkgs =
+          let
+            xrt = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt" { };
+          in
+          pkgs
+          // {
+            inherit xrt;
+            fastflowlm = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/fastflowlm" { inherit xrt; };
+            xrt-plugin-amdxdna = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt-plugin-amdxdna" {
+              inherit xrt;
+            };
+          };
+      }
+    ))
+  ];
+
   config = lib.mkIf cfg.enable {
-    environment.sessionVariables = {
-      XILINX_XRT = "${xrt-combined}";
-      XRT_PATH = "${xrt-combined}";
-      FLM_DISABLE_UPDATE_CHECK = "1";
-    };
+    boot.kernelParams = [ "amd_iommu=off" ];
     environment.systemPackages = [
-      xrt-combined
-      fastflowlm
-      pkgs.pciutils
-      pkgs.lshw
+      pkgs.alpaca
+      ik_llama-cpp
     ];
-    services.udev.extraRules = ''
-      SUBSYSTEM=="accel", DRIVERS=="amdxdna", GROUP="video", MODE="0660"
-      KERNEL=="accel*", SUBSYSTEM=="misc", ATTRS{driver}=="amdxdna", GROUP="video", MODE="0660"
-    '';
-    boot = {
-      kernelParams = [ "iommu.passthrough=0" ];
-      kernelModules = [ "amdxdna" ];
+    hardware.amd-npu = {
+      enableNPU = true;
+      enable = true;
+      enableFastFlowLM = true;
+      enableLemonade = false;
     };
-    security.pam.loginLimits = [
-      {
-        domain = "@video";
-        type = "-";
-        item = "memlock";
-        value = "unlimited";
-      }
-      {
-        domain = "@render";
-        type = "-";
-        item = "memlock";
-        value = "unlimited";
-      }
-    ];
+    systemd.services.llama-server = {
+      description = "ik_llama.cpp local API server";
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      serviceConfig = {
+        ExecStart = ''
+          ${ik_llama-cpp}/bin/llama-server \
+            --model /var/lib/llama-cpp/models/Qwen3.6-35B-A3B-abliterated-Q4_K_M.gguf \
+            --ctx-size 98304 \
+            --batch-size 2048 \
+            --ubatch-size 128 \
+            --ctx-checkpoints 4 \
+            --fit \
+            --fit-margin 384 \
+            --cache-type-k q8_0 \
+            --cache-type-v q8_0 \
+            --flash-attn on \
+            --jinja \
+            --threads 8 \
+            --host 127.0.0.1 \
+            --port 8080
+        '';
+        Restart = "always";
+        User = user;
+      };
+    };
     services = {
       searx = {
         enable = true;
@@ -72,16 +118,53 @@ in
             bind_address = "127.0.0.1";
             limiter = false;
           };
+
+          outgoing = {
+            request_timeout = 1.0;
+            max_request_timeout = 1.5;
+            keepalive = true;
+          };
+
+          engines = [
+            {
+              name = "google";
+              engine = "google";
+              shortcut = "g";
+            }
+            {
+              name = "duckduckgo";
+              engine = "duckduckgo";
+              shortcut = "ddg";
+            }
+            {
+              name = "wikipedia";
+              engine = "wikipedia";
+              shortcut = "wp";
+            }
+            {
+              name = "wikidata";
+              engine = "wikidata";
+              shortcut = "wd";
+            }
+          ];
         };
       };
 
       open-webui = {
         enable = true;
         host = "127.0.0.1";
-        port = 8080;
+        port = 8070;
         environment = {
           WEBUI_AUTH = "False";
-          OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
+          ENABLE_OLLAMA_API = "False";
+          OPENAI_API_BASE_URLS = "http://127.0.0.1:8080/v1";
+          OPENAI_API_KEYS = "dummy-key";
+          ENABLE_RAG_WEB_SEARCH = "True";
+          RAG_WEB_SEARCH_ENGINE = "searxng";
+          SEARXNG_QUERY_URL = "http://127.0.0.1:8000/search?q=<query>";
+          BYPASS_WEB_SEARCH_WEB_LOADER = "True";
+          BYPASS_EMBEDDING_AND_RETRIEVAL = "True";
+          RAG_WEB_SEARCH_RESULT_COUNT = "3";
         };
       };
     };

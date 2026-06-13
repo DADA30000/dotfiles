@@ -105,6 +105,7 @@ in
           "/etc/waydroid-extra"
           "/var/db"
           "/var/lib/zerotier-one"
+          "/var/lib/llama-cpp"
           {
             directory = "/var/lib/private";
             mode = "u=rwx,g=,o=";

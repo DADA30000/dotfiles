@@ -140,6 +140,18 @@ dev = [
 ]
 
 
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+bingraph = { git = "https://github.com/CAPESandbox/binGraph" }
+httpreplay = { git = "https://github.com/CAPESandbox/httpreplay" }
+socks5man = { git = "https://github.com/CAPESandbox/socks5man" }
+xlmmacrodeobfuscator = { git = "https://github.com/DissectMalware/XLMMacroDeobfuscator.git" }
+batch-deobfuscator = { git = "https://github.com/DissectMalware/batch_deobfuscator" }
+peepdf-3 = { git = "https://github.com/digitalsleuth/peepdf-3" }
+pyattck = { git = "https://github.com/CAPESandbox/pyattck/" }
+
 [tool.black]
 line-length = 132
 include = "\\.py(_disabled)?$"
@@ -219,13 +231,4 @@ files = [
       packages = [
         "dummy"
       ]
-
-[tool.uv.sources]
-bingraph = { git = "https://github.com/CAPESandbox/binGraph" }
-httpreplay = { git = "https://github.com/CAPESandbox/httpreplay" }
-socks5man = { git = "https://github.com/CAPESandbox/socks5man" }
-xlmmacrodeobfuscator = { git = "https://github.com/DissectMalware/XLMMacroDeobfuscator.git" }
-batch-deobfuscator = { git = "https://github.com/DissectMalware/batch_deobfuscator" }
-peepdf-3 = { git = "https://github.com/digitalsleuth/peepdf-3" }
-pyattck = { git = "https://github.com/CAPESandbox/pyattck/" }
       

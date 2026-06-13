@@ -8,25 +8,25 @@
   ...
 }:
 let
-  vencord = pkgs.vencord.overrideAttrs (old: {
-    version = inputs.vencord-src.shortRev;
-    src = inputs.vencord-src;
+  # vencord = pkgs.vencord.overrideAttrs (old: {
+  #   version = inputs.vencord-src.shortRev;
+  #   src = inputs.vencord-src;
 
-    env = {
-      VENCORD_REMOTE = "Vendicated/Vencord";
-      VENCORD_HASH = inputs.vencord-src.shortRev;
-    };
+  #   env = {
+  #     VENCORD_REMOTE = "Vendicated/Vencord";
+  #     VENCORD_HASH = inputs.vencord-src.shortRev;
+  #   };
 
-    pnpmDeps = pkgs.fetchPnpmDeps {
-      pname = old.pname;
-      src = inputs.vencord-src;
-      patches = old.patches;
-      postPatch = old.postPatch;
-      pnpm = pkgs.pnpm_10;
-      fetcherVersion = 2;
-      hash = "sha256-GiUV2x8i7ewzn66v5wBUq67oNvrxZzOsh5TuQUtpJNQ=";
-    };
-  });
+  #   pnpmDeps = pkgs.fetchPnpmDeps {
+  #     pname = old.pname;
+  #     src = inputs.vencord-src;
+  #     patches = old.patches;
+  #     postPatch = old.postPatch;
+  #     pnpm = pkgs.pnpm_10;
+  #     fetcherVersion = 3;
+  #     hash = "sha256-hk1rnNog5xvuIVI0M1ZJ5xrEuk0zcBiYsbROUycdi+A=";
+  #   };
+  # });
   fixPrism =
     pkg:
     pkgs.symlinkJoin {
@@ -111,8 +111,6 @@ in
 
   plymouth.enable = true;
 
-  zapret.enable = false;
-
   replays.enable = true;
 
   startup-sound.enable = false;
@@ -132,8 +130,8 @@ in
     preset = "performance";
     filesystems.enable = false;
     settings = {
+      debug.debugfs = true;
       network.tcp-sack = true;
-      entropy.jitterentropy = false;
       etc = {
         generic-machine-id = false;
         kicksecure-gitconfig = false;
@@ -595,7 +593,6 @@ in
           package = discord-canary.override {
             withOpenASAR = true;
             withVencord = true;
-            vencord = vencord;
           };
         })
         # Below are for offline build

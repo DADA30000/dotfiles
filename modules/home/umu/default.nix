@@ -192,8 +192,9 @@ in
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
         export LD_PRELOAD="$LD_PRELOAD:$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so" 
-        export UMU_RUNTIME_UPDATE=0 
-        export WINEDLLOVERRIDES="dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
+        export UMU_RUNTIME_UPDATE=0
+        export PROTON_ENABLE_WAYLAND=1
+        export WINEDLLOVERRIDES="steamclient64,voices38,dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
         cd "$(dirname "$1")" &> /dev/null || true
         ${pkgs.gamemode}/bin/gamemoderun ${pkgs.mangohud}/bin/mangohud ${pkgs.umu-launcher}/bin/umu-run "$@"
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"

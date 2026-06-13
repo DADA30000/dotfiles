@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    llama-cpp = {
+      url = "github:ikawrakow/ik_llama.cpp";
+      flake = false;
+    };
     nix-amd-ai = {
       url = "github:noamsto/nix-amd-ai";
       flake = false;
@@ -70,6 +74,18 @@
       url = "git+https://github.com/pershoot/KernelSU-Next?ref=dev-susfs";
       flake = false;
     };
+    monado = {
+      url = "gitlab:xytovl/monado/shared-fences?host=gitlab.freedesktop.org";
+      flake = false;
+    };
+    gigabyte-laptop-wmi = {
+      url = "github:tangalbert919/gigabyte-laptop-wmi";
+      flake = false;
+    };
+    wivrn = {
+      url = "github:WiVRn/WiVRn";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     android-nixpkgs = {
       url = "github:tadfisher/android-nixpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -114,10 +130,6 @@
       url = "github:nix-community/nixpkgs-xr";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    wivrn = {
-      url = "github:WiVRn/WiVRn/test/fence2";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -141,6 +153,13 @@
     nix-search = {
       url = "github:diamondburned/nix-search";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    chaotic = {
+      url = "github:chaotic-cx/nyx";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        home-manager.follows = "home-manager";
+      };
     };
     nix-mineral = {
       url = "github:cynicsketch/nix-mineral";
@@ -196,7 +215,6 @@
 
   outputs =
     {
-      self,
       ...
     }@inputs:
     let
@@ -210,7 +228,6 @@
               user = user_iso;
               inherit
                 inputs
-                self
                 umport
                 system-modules
                 home-modules
@@ -274,7 +291,6 @@
             extraSpecialArgs = {
               inherit
                 inputs
-                self
                 umport
                 home-modules
                 ;
@@ -300,7 +316,6 @@
               inputs
               user
               user-hash
-              self
               umport
               system-modules
               home-modules

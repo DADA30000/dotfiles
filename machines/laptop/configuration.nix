@@ -2,9 +2,31 @@
   user,
   pkgs,
   inputs,
+  config,
   ...
 }:
+let
+  gigabyte-laptop-wmi = pkgs.stdenv.mkDerivation {
+    pname = "aorus-laptop";
+    version = inputs.gigabyte-laptop-wmi.shortRev;
+
+    src = inputs.gigabyte-laptop-wmi;
+
+    makeFlags = [
+      "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"
+    ];
+
+    installPhase = ''
+      dir=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/platform/x86
+      mkdir -p $dir
+      cp aorus-laptop.ko $dir/
+    '';
+
+  };
+in
 {
+
+  imports = [ inputs.home-manager.nixosModules.home-manager ];
   environment.systemPackages = with pkgs; [ nvtopPackages.full ];
 
   security.pam.loginLimits = [
@@ -34,9 +56,13 @@
 
   boot = {
 
-    kernelPackages =
-      pkgs.linuxPackagesFor
-        inputs.nix-cachyos-kernel.packages.${pkgs.system}.linux-cachyos-latest-lto-zen4;
+    # kernelPackages =
+    #   pkgs.linuxPackagesFor
+    #     inputs.nix-cachyos-kernel.packages.${pkgs.system}.linux-cachyos-latest-lto-zen4;
+
+    extraModulePackages = [ gigabyte-laptop-wmi ];
+
+    kernelModules = [ "aorus-laptop" ];
 
     lanzaboote = {
       enable = true;

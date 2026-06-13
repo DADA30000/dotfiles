@@ -28,35 +28,40 @@ let
     });
   };
   pkg_wivrn =
-    (inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
+    (inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
       cudaSupport = true;
       xrizer = xrizer_multilib;
       opencomposite = opencomposite_multilib;
       cudaPackages = pkgs.cudaPackages;
     }).overrideAttrs
       (prevAttrs: {
-        # patches = (prevAttrs.patches or [ ]) ++ [ ../../../stuff/wivrn_debug.patch ];
-        NIX_CFLAGS_COMPILE = (prevAttrs.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
-        postUnpack = "";
-        buildInputs = (prevAttrs.buildInputs or [ ]) ++ [
-          pkgs.kdePackages.kirigami-addons
-        ];
-        src = inputs.wivrn // {
-          name = "${inputs.wivrn}";
-        };
-        monado = prevAttrs.monado.overrideAttrs (oldAttrs: {
-          src = pkgs.fetchFromGitLab {
-            domain = "gitlab.freedesktop.org";
-            owner = "xytovl";
-            repo = "monado";
-            rev = "e947c895136cb7b225a3195b19e04356bf1a4f15";
-            hash = "sha256-6IIlh123uskh7eE1h9Lipu1n1bOK6e1ue43pZt+/3EY=";
-          };
-          # patches = (oldAttrs.patches or [ ]) ++ [
-          #   ../../../stuff/monado_debug.patch
-          # ];
-        });
+        env.NIX_CFLAGS_COMPILE = (prevAttrs.env.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
       });
+  # pkg_wivrn = (
+  #   inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
+  #     cudaSupport = true;
+  #     xrizer = xrizer_multilib;
+  #     opencomposite = opencomposite_multilib;
+  #     cudaPackages = pkgs.cudaPackages;
+  #   }
+  # ); # .overrideAttrs
+  # (prevAttrs: {
+  # # patches = (prevAttrs.patches or [ ]) ++ [ ../../../stuff/wivrn_debug.patch ];
+  # NIX_CFLAGS_COMPILE = (prevAttrs.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
+  # postUnpack = "";
+  # buildInputs = (prevAttrs.buildInputs or [ ]) ++ [
+  #   pkgs.kdePackages.kirigami-addons
+  # ];
+  # src = inputs.wivrn // {
+  #   name = "${inputs.wivrn}";
+  # };
+  # monado = prevAttrs.monado.overrideAttrs (oldAttrs: {
+  #   src = inputs.monado;
+  #   # patches = (oldAttrs.patches or [ ]) ++ [
+  #   #   ../../../stuff/monado_debug.patch
+  #   # ];
+  # });
+  # });
   xrizer_multilib = pkgs.symlinkJoin {
     name = "xrizer-multilib";
     paths = [
@@ -71,9 +76,9 @@ with lib;
     enable = mkEnableOption "WiVRn";
   };
   config = mkIf cfg.enable {
-    # hardware.graphics.extraPackages = with pkgs; [
-    #   monado-vulkan-layers
-    # ];
+    hardware.graphics.extraPackages = with pkgs; [
+      monado-vulkan-layers
+    ];
     services.wivrn = {
       enable = true;
       openFirewall = true;

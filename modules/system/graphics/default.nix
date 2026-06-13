@@ -1,5 +1,7 @@
 {
   config,
+  pkgs,
+  inputs,
   lib,
   ...
 }:
@@ -19,13 +21,13 @@ in
   };
 
   config = mkIf cfg.enable {
-    boot.extraModprobeConfig = ''
-      options nvidia NVreg_EnableS0ixPowerManagement=1
-    '';
     hardware = {
       graphics = {
         enable = true;
         enable32Bit = true;
+        extraPackages = [
+          inputs.chaotic.packages.${pkgs.stdenv.hostPlatform.system}.low-latency-layer
+        ];
       };
       amdgpu = mkMerge [
         (mkIf cfg.amdgpu.enable { initrd.enable = true; })
@@ -33,11 +35,15 @@ in
       ];
       nvidia = mkIf cfg.nvidia.enable {
         dynamicBoost.enable = true;
+        # package = config.boot.kernelPackages.nvidiaPackages.new_feature;
         modesetting.enable = true;
-        package = config.boot.kernelPackages.nvidiaPackages.beta;
         open = true;
         nvidiaSettings = false;
         videoAcceleration = true;
+        moduleParams.nvidia = {
+          NVreg_RegistryDwords = "RmLogonRC=0x1;RmEngineContextSwitchTimeoutUs=0x01FFFFFF";
+          NVreg_EnableS0ixPowerManagement = 1;
+        };
         powerManagement = {
           enable = true;
           finegrained = true;
@@ -58,7 +64,7 @@ in
       (mkIf cfg.nvidia.enable [ "nvidia" ])
     ];
     environment.variables = {
-      NVD_BACKEND = mkIf (cfg.nvidia.enable) "direct";
+      # NVD_BACKEND = mkIf (cfg.nvidia.enable) "direct";
       ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
       RADV_EXPERIMENTAL = mkIf cfg.vulkan_video "video_decode,video_encode";
       ANV_DEBUG = mkIf cfg.vulkan_video "video-decode,video-encode";
