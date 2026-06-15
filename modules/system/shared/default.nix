@@ -5,54 +5,12 @@
   user,
   lib,
   config,
+  mkSandbox,
   ...
 }:
-let
-  # vencord = pkgs.vencord.overrideAttrs (old: {
-  #   version = inputs.vencord-src.shortRev;
-  #   src = inputs.vencord-src;
-
-  #   env = {
-  #     VENCORD_REMOTE = "Vendicated/Vencord";
-  #     VENCORD_HASH = inputs.vencord-src.shortRev;
-  #   };
-
-  #   pnpmDeps = pkgs.fetchPnpmDeps {
-  #     pname = old.pname;
-  #     src = inputs.vencord-src;
-  #     patches = old.patches;
-  #     postPatch = old.postPatch;
-  #     pnpm = pkgs.pnpm_10;
-  #     fetcherVersion = 3;
-  #     hash = "sha256-hk1rnNog5xvuIVI0M1ZJ5xrEuk0zcBiYsbROUycdi+A=";
-  #   };
-  # });
-  fixPrism =
-    pkg:
-    pkgs.symlinkJoin {
-      inherit (pkg) name;
-      paths = [ pkg ];
-      nativeBuildInputs = [ pkgs.makeWrapper ];
-      postBuild = ''
-        rm $out/bin/prismlauncher
-        makeWrapper ${pkg}/bin/prismlauncher $out/bin/prismlauncher \
-          --run '
-            CONF_DIR="$XDG_DATA_HOME/PrismLauncher"
-            CONF="$CONF_DIR/prismlauncher.cfg"
-            GEOM="AdnQywADAAAAAAAAAAAAAAAABDYAAAO/AAAAAAAAAAD////+/////gAAAAACAAAABkAAAAAAAAAAAAAABDYAAAO/"
-            
-            mkdir -p "$CONF_DIR"
-
-            if [ ! -f "$CONF" ]; then
-              echo "MainWindowGeometry=$GEOM" > "$CONF"
-            else
-              sed -i "s|^MainWindowGeometry=.*|MainWindowGeometry=$GEOM|" "$CONF"
-            fi
-          '
-      '';
-    };
-in
 {
+  imports = [ ./packages.nix ];
+
   qt.enable = true;
 
   nixpkgs.config.allowUnfree = true;
@@ -140,6 +98,7 @@ in
         amd-iommu-force-isolation = false;
         strict-iommu = false;
         binfmt-misc = true;
+        sysrq = "none";
       };
       system = {
         multilib = true;
@@ -443,175 +402,6 @@ in
       NIXPKGS_ALLOW_UNFREE = "1";
     };
 
-    systemPackages =
-      with pkgs;
-      with inputs;
-      [
-        tonelib-gfx
-        hunspell
-        hunspellDicts.en_US-large
-        hunspellDicts.ru_RU
-        sbctl
-        virt-manager
-        gemini-cli
-        jq
-        wayvr
-        bs-manager
-        xhost
-        dante
-        ente-auth
-        mtkclient
-        sidequest
-        patchelf
-        file
-        mpv
-        gnome-boxes
-        lsd
-        kdiskmark
-        nixfmt
-        gdu
-        nixd
-        wget
-        zenity
-        killall
-        unrar
-        zip
-        adwaita-icon-theme
-        vmpk
-        wl-clipboard
-        networkmanager_dmenu
-        neovide
-        _7zz-rar
-        stdenv
-        crudini
-        lndir
-        texinfo
-        xkbcomp
-        xkeyboard-config
-        libX11
-        scanmem
-        comma
-        remmina
-        mangohud
-        jdk25
-        moonlight-qt
-        osu-lazer-bin
-        mindustry
-        xonotic
-        supertux
-        supertuxkart
-        pavucontrol
-        qalculate-gtk
-        distrobox
-        qbittorrent
-        ayugram-desktop
-        gdb
-        gcc
-        nodejs
-        libreoffice
-        protonplus
-        gimp3-with-plugins
-        gamescope
-        android-tools
-        ungoogled-chromium
-        heroic
-        gsettings-desktop-schemas
-        resources
-        libsForQt5.qt5ct
-        libsForQt5.qtstyleplugin-kvantum
-        kdePackages.qtstyleplugin-kvantum
-        kdePackages.qtdeclarative
-        kdePackages.kdenlive
-        kdePackages.kdeconnect-kde
-        quickshell.packages.${system}.default
-        nix-alien.packages.${system}.nix-alien
-        nix-search.packages.${system}.default
-        (kdePackages.qt6ct.overrideAttrs (prev: {
-          patches = prev.patches or [ ] ++ [ ../../../stuff/qt6ct-shenanigans.patch ];
-          buildInputs =
-            prev.buildInputs or [ ]
-            ++ (with kdePackages; [
-              kconfig
-              kcolorscheme
-              kiconthemes
-              qqc2-desktop-style
-            ]);
-        }))
-        (aria2.overrideAttrs (prev: {
-          patches = prev.patches or [ ] ++ [ ../../../stuff/max-connection-to-unlimited.patch ];
-        }))
-        (config.mkSandbox {
-          appId = "com.wayland.utils";
-          audio = true;
-          wayland = true;
-          x11 = true;
-          package = pkgs.wayland-utils;
-        })
-        (config.mkSandbox {
-          appId = "org.prismlauncher.PrismLauncher";
-          network_full = true;
-          audio = true;
-          wayland = true;
-          gpu = true;
-          x11 = true;
-          nvidia_gpu = true;
-          additional_args =
-            { sloth, ... }:
-            {
-              dbus.policies."com.feralinteractive.GameMode" = "talk";
-              bubblewrap.bind.ro = [
-                (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
-                (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
-                (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
-              ];
-            };
-          package = fixPrism (
-            prismlauncher.override {
-              prismlauncher-unwrapped = prismlauncher-unwrapped.overrideAttrs (prev: {
-                patches = prev.patches or [ ] ++ [ ../../../stuff/prismlauncher.patch ];
-              });
-            }
-          );
-        })
-        (config.mkSandbox rec {
-          appId = "com.discordapp.DiscordCanary";
-          network_singbox = true;
-          audio = true;
-          wayland = true;
-          gpu = true;
-          x11 = true;
-          webcam = 5;
-          additional_args =
-            { sloth, ... }:
-            {
-              bubblewrap = {
-                sharePid = true;
-                bind.ro = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
-              };
-            };
-          additional_wrap_commands = "ln -sf \"$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0\" \"$XDG_RUNTIME_DIR/discord-ipc-0\"";
-          package = discord-canary.override {
-            withOpenASAR = true;
-            withVencord = true;
-          };
-        })
-        # Below are for offline build
-        (python3.withPackages (
-          ps: with ps; [
-            iniparse
-            markdown-it-py
-            mdit-py-plugins
-            mdurl
-            python-dateutil
-            remarshal
-            rich
-            rich-argparse
-            tomli
-            tomlkit
-            u-msgpack-python
-          ]
-        ))
-      ];
   };
 
   virtualisation = {
@@ -657,6 +447,10 @@ in
     user = {
       extraConfig = "DefaultTimeoutStopSec=1s";
       targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+      services.dbus-broker.serviceConfig = {
+        Type = "notify";
+        ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
+      };
     };
 
     services = {
@@ -828,7 +622,7 @@ in
       package = pkgs.nh.override {
         nix-output-monitor = (
           pkgs.nix-output-monitor.overrideAttrs (prev: {
-            patches = (prev.patches or [ ]) ++ [ ../../../stuff/nom.patch ];
+            patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom.patch ];
           })
         );
       };
@@ -850,7 +644,7 @@ in
               ];
           };
 
-          sandboxed = config.mkSandbox {
+          sandboxed = mkSandbox {
             appId = "com.valvesoftware.Steam";
             network_singbox = true;
             audio = true;
@@ -923,7 +717,7 @@ in
     uwsm = {
       enable = true;
       package = pkgs.uwsm.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/uwsm_uuctl.patch ];
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/uwsm_uuctl.patch ];
         postInstall = (prev.postInstall or "") + ''
           chmod -R 777 "$out/bin"
           wrapProgram "$out/bin/uuctl" \

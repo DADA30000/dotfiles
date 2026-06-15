@@ -228,9 +228,9 @@
               user = user_iso;
               inherit
                 inputs
-                umport
                 system-modules
                 home-modules
+                listFiles
                 ;
             };
           };
@@ -258,24 +258,28 @@
         )
       );
 
-      umport = (import ./modules/umport.nix { inherit (inputs.nixpkgs) lib; }).umport;
+      listFiles =
+        paths:
+        let
+          listSingleDir =
+            p:
+            if builtins.pathExists p then
+              map (name: p + "/${name}") (builtins.attrNames (builtins.readDir p))
+            else
+              throw "The specified path '${toString p}' does not exist.";
+        in
+        builtins.concatMap listSingleDir paths;
 
-      system-modules = umport {
-        paths = [
-          ./modules/system
-          ./modules/universal
-        ];
-        recursive = false;
-      };
+      system-modules = listFiles [
+        ./modules/system
+        ./modules/universal
+      ];
 
       home-modules =
-        umport {
-          paths = [
-            ./modules/home
-            ./modules/universal
-          ];
-          recursive = false;
-        }
+        listFiles [
+          ./modules/home
+          ./modules/universal
+        ]
         ++ [
           inputs.nix-index-database.homeModules.nix-index
           inputs.zen-browser.homeModules.twilight
@@ -291,8 +295,8 @@
             extraSpecialArgs = {
               inherit
                 inputs
-                umport
                 home-modules
+                listFiles
                 ;
             };
             backupFileExtension = "backup";
@@ -316,9 +320,9 @@
               inputs
               user
               user-hash
-              umport
               system-modules
               home-modules
+              listFiles
               ;
           };
           modules = modules-list ++ [

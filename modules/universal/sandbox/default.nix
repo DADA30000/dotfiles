@@ -67,79 +67,7 @@ let
       stdenv.cc
     ];
 
-    src = pkgs.writeText "bridge.rs" ''
-      use std::env;
-      use std::fs;
-      use std::io;
-      use std::net::{TcpListener, TcpStream, Shutdown};
-      use std::os::unix::net::{UnixListener, UnixStream};
-      use std::thread;
-      use std::time::Duration;
-
-      fn handle_connection(tcp_stream: TcpStream, unix_stream: UnixStream) {
-          let _ = tcp_stream.set_nodelay(true);
-          
-          if let (Ok(mut t_read), Ok(mut u_read)) = (tcp_stream.try_clone(), unix_stream.try_clone()) {
-              
-              let mut t_write = tcp_stream;
-              let mut u_write = unix_stream;
-
-              thread::spawn(move || {
-                  let _ = io::copy(&mut t_read, &mut u_write);
-                  let _ = u_write.shutdown(Shutdown::Write); 
-              });
-
-              thread::spawn(move || {
-                  let _ = io::copy(&mut u_read, &mut t_write);
-                  let _ = t_write.shutdown(Shutdown::Write); 
-              });
-          }
-      }
-
-      fn main() -> io::Result<()> {
-          let args: Vec<String> = env::args().collect();
-          let mode = args.get(1).expect("Missing mode");
-          let listen_addr = args.get(2).expect("Missing listen_addr");
-          let connect_addr = args.get(3).expect("Missing connect_addr");
-
-          if mode == "host" {
-              let _ = fs::remove_file(listen_addr);
-              let listener = UnixListener::bind(listen_addr)?;
-              for stream in listener.incoming() {
-                  if let Ok(unix_stream) = stream {
-                      let connect_addr = connect_addr.clone();
-                      thread::spawn(move || {
-                          if let Ok(tcp_stream) = TcpStream::connect(&connect_addr) {
-                              handle_connection(tcp_stream, unix_stream);
-                          }
-                      });
-                  }
-              }
-          } else {
-              let listener = TcpListener::bind(listen_addr)?;
-              for stream in listener.incoming() {
-                  if let Ok(tcp_stream) = stream {
-                      let connect_addr = connect_addr.clone();
-                      thread::spawn(move || {
-                          let mut unix_stream = None;
-                          for _ in 0..50 { 
-                              if let Ok(u) = UnixStream::connect(&connect_addr) {
-                                  unix_stream = Some(u);
-                                  break;
-                              }
-                              thread::sleep(Duration::from_millis(100));
-                          }
-
-                          if let Some(u) = unix_stream {
-                              handle_connection(tcp_stream, u);
-                          }
-                      });
-                  }
-              }
-          }
-          Ok(())
-      }
-    '';
+    src = ../../../stuff/bridge.rs;
 
     buildPhase = ''
       rustc --target x86_64-unknown-linux-musl -C target-feature=+crt-static -C linker=$CC -C opt-level=z -C lto -C codegen-units=1 -C panic=abort -C strip=symbols -O $src -o rust-bridge
@@ -155,50 +83,13 @@ let
     version = "unstable";
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
     src = pkgs.lib.cleanSource "${inputs.way-secure}";
-    patches = [ ../../../stuff/way-secure.patch ];
+    patches = [ ../../../stuff/patches/way-secure.patch ];
   };
   landlock = pkgs.stdenv.mkDerivation {
     pname = "landlock";
     version = "1.0";
 
-    src = pkgs.writeText "landlock.c" ''
-      #include <linux/landlock.h>
-      #include <sys/prctl.h>
-      #include <sys/syscall.h>
-      #include <unistd.h>
-      #include <stdio.h>
-
-      int main(int argc, char *argv[]) {
-          if (argc < 2) {
-              fprintf(stderr, "Usage: %s <command> [args...]\n", argv[0]);
-              return 1;
-          }
-
-          struct landlock_ruleset_attr attr = {
-              .scoped = LANDLOCK_SCOPE_SIGNAL,
-          };
-
-          int fd = syscall(__NR_landlock_create_ruleset, &attr, sizeof(attr), 0);
-          if (fd < 0) {
-              perror("landlock_create_ruleset");
-              return 1;
-          }
-
-          if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
-              perror("prctl");
-              return 1;
-          }
-
-          if (syscall(__NR_landlock_restrict_self, fd, 0)) {
-              perror("landlock_restrict_self");
-              return 1;
-          }
-          close(fd);
-
-          execvp(argv[1], &argv[1]);
-          return 0;
-      }
-    '';
+    src = ../../../stuff/landlock.c;
 
     dontUnpack = true;
 
@@ -297,8 +188,6 @@ let
             SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
             COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
             if [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null && [ -f "$SANDBOX_DIR/cgroup_path" ]; then
-              MY_CGROUP="$(cat "$SANDBOX_DIR/cgroup_path")"
-              echo "$$" > "$MY_CGROUP/cgroup.procs"
               CMD_LINE=""
               SQ=$(printf '\047')
               for arg in "$TARGET" "$@"; do
@@ -435,8 +324,6 @@ let
                   app.package = pkgs.dash;
                   app.binPath = "bin/dash";
 
-                  dbus.enable = true;
-
                   dbus.policies = {
                     # Notifications
                     "org.freedesktop.Notifications" = "talk";
@@ -485,7 +372,7 @@ let
 
                     sockets = {
                       pulse = audio;
-                      pipewire = false;
+                      pipewire = audio;
                       wayland = false;
                       x11 = false;
                     };
@@ -608,7 +495,8 @@ let
                   }
 
                   find "$out" -type l -not -xtype d | while read -r link; do
-                    target=$(readlink -f "$link")
+                    ls -la "$link"
+                    target=$(readlink -fm "$link")
                     
                     is_desktop_or_service=0
                     is_executable=0
@@ -639,6 +527,7 @@ let
                       fi
                     fi
                   done
+
 
                   if [[ -d "$out/share/applications" ]]; then
                     materialize_path "$out/share/applications"
@@ -706,16 +595,9 @@ let
       });
 in
 {
-  options = {
-    sandboxing.enable = lib.mkEnableOption "app sandboxing using nixpak";
-    mkSandbox = lib.mkOption {
-      type = lib.types.functionTo lib.types.package;
-      internal = true;
-      visible = false;
-    };
-  };
+  options.sandboxing.enable = lib.mkEnableOption "app sandboxing using nixpak";
   config = {
-    mkSandbox = mkSandbox;
+    _module.args.mkSandbox = mkSandbox;
   }
   // lib.optionalAttrs (options ? home.file) {
     home = {

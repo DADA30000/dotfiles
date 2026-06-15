@@ -10,7 +10,7 @@ let
   pkg_xrizer =
     inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer.overrideAttrs
       (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/xrizer.patch ];
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/xrizer.patch ];
       });
   pkg_opencomposite = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.opencomposite;
   opencomposite_multilib = pkgs.symlinkJoin {

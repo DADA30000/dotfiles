@@ -395,7 +395,7 @@ let
       capabilities = capabilities,
       settings = {
         ["rust-analyzer"] = {
-          checkOnSave = {
+          check = {
             command = "clippy",
             extraArgs = { "--", "-W", "clippy::all", "-W", "clippy::pedantic" }
           }
@@ -528,6 +528,7 @@ in
       };
     };
     home.packages = with pkgs; [
+      stylua
       delve
       rustup
       vscode-extensions.ms-vscode.cpptools

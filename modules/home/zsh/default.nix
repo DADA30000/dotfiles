@@ -15,7 +15,7 @@ in
   config = mkIf cfg.enable {
     home.packages = [
       (pkgs.nix-output-monitor.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/nom.patch ];
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom.patch ];
       }))
     ];
     programs = {
@@ -167,7 +167,7 @@ in
             _ns_parse_args "$@"
             _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
               buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
-              name = \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
+              name = builtins.substring 0 100 \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
               shellHook = '''
                 export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\''${lib.makeLibraryPath buildInputs}\";
                 export PKG_CONFIG_PATH=\"\$PKG_CONFIG_PATH:\''${builtins.concatStringsSep \":\" (builtins.map (x: \"\''${x}/lib/pkgconfig\") buildInputs)}\";

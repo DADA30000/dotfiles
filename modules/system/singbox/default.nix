@@ -155,6 +155,7 @@ let
     "electron"
     "prismlauncher"
     "wineserver"
+    "cs2"
   ];
   singbox-config = (pkgs.formats.json { }).generate "singbox-config" {
     log = {

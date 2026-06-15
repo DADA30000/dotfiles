@@ -3,6 +3,7 @@
   lib,
   pkgs,
   inputs,
+  mkSandbox,
   ...
 }:
 with lib;
@@ -36,7 +37,7 @@ let
   hazy = pkgs.runCommand "patch-hazy" { } ''
     cp -r --no-preserve=mode ${hazy_orig} $out
     mv "$out/hazy.js" "$out/theme.js"
-    patch "$out/theme.js" < "${../../../stuff/hazy.patch}"
+    patch "$out/theme.js" < "${../../../stuff/patches/hazy.patch}"
   '';
   cfg = config.spicetify;
 in
@@ -48,7 +49,7 @@ in
   imports = [ inputs.spicetify-nix.homeManagerModules.default ];
   config = mkIf cfg.enable {
     home.packages = [
-      (config.mkSandbox {
+      (mkSandbox {
         appId = "com.spotify.Client";
         audio = true;
         gpu = true;
