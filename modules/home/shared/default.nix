@@ -160,7 +160,7 @@
 
   flatpak = {
 
-    enable = true;
+    enable = false;
 
     packages = [
       "io.github.Soundux"

@@ -345,7 +345,7 @@
 
     tmp.useTmpfs = true;
 
-    kernelPackages = lib.mkDefault pkgs.linuxPackages_zen;
+    kernelPackages = lib.mkDefault pkgs.linuxPackages_latest;
 
     initrd.systemd.enable = true;
 
@@ -455,10 +455,12 @@
 
     services = {
 
-      # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
-      display-manager.environment.XDG_CURRENT_DESKTOP = "X-NIXOS-SYSTEMD-AWARE";
-
       NetworkManager-wait-online.enable = false;
+
+      greetd = {
+        wantedBy = lib.mkForce [ "systemd-user-sessions.service" ];
+        after = [ "systemd-user-sessions.service" ];
+      };
 
       quest-adb-reverse = {
         description = "Quest 3S ADB Reverse (Root)";
@@ -507,19 +509,17 @@
       motherboard = "amd";
     };
 
-    # greetd = {
-    #   enable = true;
-    #   settings = {
-    #     default_session.command = "${pkgs.uwsm}/bin/uwsm start hyprland";
-    #     initial_session.command = "${pkgs.uwsm}/bin/uwsm start hyprland -- lock";
-    #   };
-    # };
-
-    displayManager = {
-      defaultSession = "hyprland-uwsm";
-      autoLogin = {
-        user = user;
-        enable = true;
+    greetd = {
+      enable = true;
+      settings = {
+        initial_session = {
+          command = "uwsm start hyprland-uwsm.desktop";
+          user = user;
+        };
+        default_session = {
+          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd \"uwsm start hyprland-uwsm.desktop\"";
+          user = "greeter";
+        };
       };
     };
 
@@ -538,14 +538,6 @@
     earlyoom = {
       enable = true;
       enableNotifications = true;
-    };
-
-    xserver = {
-      enable = true;
-      displayManager.lightdm = {
-        enable = true;
-        greeter.enable = false;
-      };
     };
 
     udev.extraRules = ''

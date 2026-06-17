@@ -139,8 +139,8 @@ let
     ];
   };
   start-singbox = pkgs.writeShellScript "start-singbox" ''
-    if [[ -s /config.json ]]; then
-      ${pkgs.sing-box}/bin/sing-box -c ${singbox-config} -c /config.json run
+    if [[ -s /var/lib/private/config.json ]]; then
+      ${pkgs.sing-box}/bin/sing-box -c ${singbox-config} -c /var/lib/private/config.json run
     else
       ${pkgs.sing-box}/bin/sing-box -c ${singbox-config} -c "${proxy-dummy}" run
     fi
@@ -154,8 +154,6 @@ let
     "TeamSpeak"
     "electron"
     "prismlauncher"
-    "wineserver"
-    "cs2"
   ];
   singbox-config = (pkgs.formats.json { }).generate "singbox-config" {
     log = {
@@ -249,6 +247,8 @@ let
             "spotify.com"
             "quora.com"
             "geekbench.com"
+            "website-files.com"
+            "localizeapi.com"
           ];
         }
         {

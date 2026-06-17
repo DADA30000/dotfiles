@@ -26,16 +26,8 @@ let
 in
 {
 
-  imports = [ inputs.home-manager.nixosModules.home-manager ];
-  environment.systemPackages = with pkgs; [ nvtopPackages.full ];
-
-  security.pam.loginLimits = [
-    {
-      domain = "*";
-      item = "memlock";
-      type = "-";
-      value = "infinity";
-    }
+  fileSystems.${config.disks.second-disk.path}.options = [
+    "x-systemd.requires=systemd-cryptsetup@Games.service"
   ];
 
   home-manager.users.${user} = import ./home.nix;
@@ -46,23 +38,30 @@ in
 
   amd-ai.enable = false;
 
-  virtualisation.virtualbox.host = {
+  environment = {
 
-    # enable = true;
+    systemPackages = with pkgs; [ nvtopPackages.full ];
 
-    addNetworkInterface = true;
+    etc."crypttab".text = ''
+      Games /dev/disk/by-label/Games-encrypted /var/lib/private/games.key luks,discard,no-read-workqueue,no-write-workqueue,noauto
+    '';
 
+  };
+
+  systemd.services.load-aorus-laptop = {
+    description = "Load Gigabyte Aorus Laptop driver asynchronously";
+    after = [ "basic.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.kmod}/bin/modprobe aorus_laptop";
+      RemainAfterExit = true;
+    };
   };
 
   boot = {
 
-    # kernelPackages =
-    #   pkgs.linuxPackagesFor
-    #     inputs.nix-cachyos-kernel.packages.${pkgs.system}.linux-cachyos-latest-lto-zen4;
-
     extraModulePackages = [ gigabyte-laptop-wmi ];
-
-    kernelModules = [ "aorus-laptop" ];
 
     lanzaboote = {
       enable = true;
@@ -74,19 +73,10 @@ in
       "ttm.pages_limit=6291456"
     ];
 
-    initrd = {
-      luks.devices = {
-        nixos = {
-          device = "/dev/disk/by-label/nixos-encrypted";
-          allowDiscards = true;
-          bypassWorkqueues = true;
-        };
-        Games = {
-          device = "/dev/disk/by-label/Games-encrypted";
-          allowDiscards = true;
-          bypassWorkqueues = true;
-        };
-      };
+    initrd.luks.devices.nixos = {
+      device = "/dev/disk/by-label/nixos-encrypted";
+      allowDiscards = true;
+      bypassWorkqueues = true;
     };
 
   };

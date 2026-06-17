@@ -22,7 +22,7 @@ in
       };
       kernelParams = [
         "quiet"
-        #"plymouth.use-simpledrm"
+        "plymouth.use-simpledrm"
       ];
     };
   };

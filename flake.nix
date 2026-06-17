@@ -82,6 +82,42 @@
       url = "github:tangalbert919/gigabyte-laptop-wmi";
       flake = false;
     };
+    waywallen = {
+      url = "github:waywallen/waywallen/v0.2.0";
+      flake = false;
+    };
+    open-wallpaper-engine = {
+      url = "github:waywallen/open-wallpaper-engine/v0.1.6";
+      flake = false;
+    };
+    rstd = {
+      url = "github:hypengw/rstd/629bda81eb98856ca023f0f87f57dde8d22b4823";
+      flake = false;
+    };
+    ncrequest = {
+      url = "github:hypengw/ncrequest/404868aa2aa4481e262f25d8f7d053f42b61b7b8";
+      flake = false;
+    };
+    wavsen = {
+      url = "github:hypengw/wavsen/c714a4fc59a689a80b3b537ee8ef501c363a841f";
+      flake = false;
+    };
+    qmlmaterial = {
+      url = "github:hypengw/QmlMaterial/c36528593c70d67c8bac8fc7dea579702a7e8aff";
+      flake = false;
+    };
+    qextra = {
+      url = "github:hypengw/QExtra/26e4b4134a05d35676f02f8b0e82a6130d877695";
+      flake = false;
+    };
+    spirv-reflect = {
+      url = "github:KhronosGroup/SPIRV-Reflect/vulkan-sdk-1.4.321.0";
+      flake = false;
+    };
+    helium = {
+      url = "github:schembriaiden/helium-browser-nix-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     wivrn = {
       url = "github:WiVRn/WiVRn";
       inputs.nixpkgs.follows = "nixpkgs";

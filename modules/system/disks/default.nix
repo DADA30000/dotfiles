@@ -98,6 +98,7 @@ in
           "/etc/NetworkManager/system-connections"
           "/website"
           "/etc/nixos"
+          "/etc/ssh"
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/lib/sbctl"
@@ -137,13 +138,6 @@ in
         ];
         files = [
           "/etc/machine-id"
-          "/etc/ssh/ssh_host_ed25519_key"
-          "/etc/ssh/ssh_host_ed25519_key.pub"
-          "/etc/ssh/ssh_host_rsa_key"
-          "/etc/ssh/ssh_host_rsa_key.pub"
-          "/config.json"
-          "/cloudflare1.conf"
-          "/cloudflare2.conf"
           "/var/lib/searx-secret"
         ]
         ++ (lib.optionals cfg.swap.file.enable [ swap.file.path ]);
@@ -232,7 +226,11 @@ in
         options =
           optionals cfg.second-disk.compression [ "compress-force=zstd" ]
           ++ optionals (cfg.second-disk.subvol != null) [ "subvol=${cfg.second-disk.subvol}" ]
-          ++ [ "nofail" ];
+          ++ [
+            "nofail"
+            "noauto"
+            "x-systemd.automount"
+          ];
       };
     };
 

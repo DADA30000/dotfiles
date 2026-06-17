@@ -30,7 +30,7 @@ in
         ];
       };
       amdgpu = mkMerge [
-        (mkIf cfg.amdgpu.enable { initrd.enable = true; })
+        (mkIf cfg.amdgpu.enable { initrd.enable = false; })
         (mkIf cfg.amdgpu.pro { opencl.enable = true; })
       ];
       nvidia = mkIf cfg.nvidia.enable {

@@ -41,6 +41,7 @@ in
         "shift+down" = "move_window down";
       };
       extraConfig = ''
+        auto_reload_config      -1
         mouse_hide_wait         2.0
         url_color               #0087bd
         url_style               dotted
