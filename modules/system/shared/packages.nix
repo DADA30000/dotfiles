@@ -354,6 +354,7 @@ in
         qbittorrent
         ayugram-desktop
         gdb
+        wiggle
         gcc
         nodejs
         libreoffice

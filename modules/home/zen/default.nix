@@ -160,6 +160,98 @@ let
       };
     };
   });
+  transparency_patch = /* css */ ''
+    :root {
+      --panel-box-shadow: none !important;
+      --zen-colors-tertiary: rgba(0, 0, 0, 0.01) !important;
+      --zen-colors-secondary: rgba(0, 0, 0, 0.01) !important;
+      --arrowpanel-background: rgba(0, 0, 0, 0.01) !important;
+      --panel-background: rgba(0, 0, 0, 0.01) !important;
+      --menu-background-color: rgba(0, 0, 0, 0.01) !important;
+      --panel-border-color: transparent !important;
+      --arrowpanel-border-color: transparent !important;
+      --menupopup-shadow: none !important;
+      --panel-shadow: none !important;
+      --menu-shadow: none !important;
+      --menu-box-shadow: none !important;
+      --arrowpanel-shadow-margin: 0px !important;
+      --panel-shadow-margin: 0px !important;
+    }
+
+    panel,
+    menupopup {
+      background: transparent !important;
+      background-color: transparent !important;
+      -moz-window-shadow: none !important;
+    }
+
+    .menupopup-arrowscrollbox {
+      background: rgba(0, 0, 0, 0.01) !important;
+      background-color: rgba(0, 0, 0, 0.01) !important;
+      box-shadow: none !important;
+      filter: none !important;
+      overflow: hidden !important;
+      -moz-window-shadow: none !important;
+    }
+
+    .panel-arrowcontainer {
+      background: transparent !important;
+      background-color: transparent !important;
+      box-shadow: none !important;
+      -moz-window-shadow: none !important;
+      border: none !important;
+    }
+
+    .panel-arrowcontent,
+    .panel-subview-body,
+    .translations-panel-header-wrapper,
+    .translations-panel-footer,
+    panelmultiview,
+    .panel-viewcontainer,
+    .panel-viewstack,
+    menupopup::part(content),
+    panel::part(content),
+    panel[type="arrow"]::part(content),
+    menupopup[type="arrow"]::part(content) {
+      background: rgba(0, 0, 0, 0.01) !important;
+      background-color: rgba(0, 0, 0, 0.01) !important;
+      box-shadow: none !important;
+      filter: none !important;
+      overflow: hidden !important;
+      -moz-window-shadow: none !important;
+    }
+
+    .panel-arrow,
+    tooltip,
+    dialog {
+      border: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+    }
+
+    #urlbar[breakout-extend="true"],
+    #urlbar[open],
+    #urlbar-input-container,
+    .urlbar-input-container,
+    .urlbarView,
+    .urlbarView-body,
+    .urlbarView-results,
+    .autocomplete-richlistbox {
+      background: transparent !important;
+      background-color: transparent !important;
+      box-shadow: none !important;
+    }
+
+    #urlbar[breakout-extend="true"] > #urlbar-background,
+    #urlbar[open] > #urlbar-background,
+    #urlbar[breakout-extend="true"] .urlbar-background,
+    #urlbar[open] .urlbar-background {
+      background: var(--nebula-color-glass) !important;
+      background-color: var(--nebula-color-glass) !important;
+      backdrop-filter: none !important;
+    }
+  '';
+
   combined_chrome = pkgs.stdenv.mkDerivation {
     pname = "chrome-zen";
     version = "1.0";
@@ -188,60 +280,14 @@ let
           "enabled": true
         })' $out/sine-mods/mods.json > $out/sine-mods/mods.json.tmp && mv $out/sine-mods/mods.json.tmp $out/sine-mods/mods.json
       ln -s $out/sine-mods/Nebula/README.md $out/sine-mods/Nebula/readme.md
+
       # Modifying Nebula
-      cp --no-preserve=mode ${pkgs.nixos-icons}/share/icons/hicolor/1024x1024/apps/nix-snowflake.png $out/sine-mods/Nebula/Nebula/modules
-      substituteInPlace $out/sine-mods/Nebula/Nebula/modules/Topbar-buttons.css \
+      cp --no-preserve=mode ${pkgs.nixos-icons}/share/icons/hicolor/1024x1024/apps/nix-snowflake.png $out/sine-mods/Nebula/nebula/modules
+      substituteInPlace $out/sine-mods/Nebula/nebula/modules/topbar-buttons.css \
         --replace-fail "url(\"chrome://branding/content/about-logo.svg\")" "url(\"nix-snowflake.png\")" \
         --replace-fail "scale: 1.7;" "scale: 1.5;"
-      TRANSPARENCY_PATCH="
-        :root {
-          --panel-background: rgba(0, 0, 0, 0.01) !important;
-          --arrowpanel-background: rgba(0, 0, 0, 0.01) !important;
-          --menu-background-color: rgba(0, 0, 0, 0.01) !important;
-          --arrowpanel-border-color: transparent !important;
-        }
-        panel,
-        menupopup,
-        menupopup::part(content),
-        .menupopup-arrowscrollbox,
-        tooltip,
-        dialog,
-        panelmultiview, 
-        .panel-subview-body, 
-        .panel-arrowcontent,
-        .panel-viewcontainer,
-        .panel-viewstack,
-        #appMenu-popup,
-        #contentAreaContextMenu,
-        #tabContextMenu,
-        #placesContext,
-        #notification-popup,
-        #identity-popup,
-        #permission-popup,
-        #downloadsPanel,
-        #customizationui-widget-panel,
-        #BMB_bookmarksPopup,
-        #full-page-translations-panel,
-        #full-page-translations-panel-multiview,
-        .translations-panel-header-wrapper,
-        .translations-panel-footer,
-        #customizationui-widget-panel browser,
-        .webextension-popup-browser,
-        .webextension-popup-iframe {
-          --panel-background: rgba(0, 0, 0, 0.01) !important;
-          background-color: rgba(0, 0, 0, 0.01) !important;
-          background: rgba(0, 0, 0, 0.01) !important;
-          --panel-shadow: none !important;
-          --panel-shadow-margin: 0px !important;
-          box-shadow: none !important;
-          border: none !important;
-          --panel-border-radius: 12px !important;
-          border-radius: 12px !important;
-          overflow: hidden !important;
-          filter: none !important; 
-        }
-      "
-      echo "$TRANSPARENCY_PATCH" | sed 's/^[[:space:]]*//' | sed '/^$/d' >> "$out/sine-mods/Nebula/userChrome.css"
+
+      echo '${transparency_patch}' >> $out/sine-mods/Nebula/userChrome.css
     '';
   };
   zen-package =
@@ -374,8 +420,6 @@ in
         isDefault = true;
         search.default = "google";
         settings = {
-          gfx.webrender.all = true;
-          sine.engine.auto-update = false;
           nebula-nogaps-mod = true;
           nebula-tab-loading-animation = 0;
           var-nebula-border-radius = "13px";
@@ -408,6 +452,8 @@ in
           nebula-workspace-style = 1;
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
+          "gfx.webrender.all" = true;
+          "sine.engine.auto-update" = false;
           "browser.toolbars.bookmarks.visibility" = "always";
           "extensions.webextensions.ExtensionStorageIDB.enabled" = false;
           "intl.locale.requested" = "ru,en-US";

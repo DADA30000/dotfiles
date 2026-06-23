@@ -12,7 +12,7 @@ let
     inherit (pkgs) lib;
     inherit pkgs;
   };
-  singbox-sandbox-config = (pkgs.formats.json { }).generate "singbox-sandbox-config" {
+  sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
     log.level = "error";
     route = {
       auto_detect_interface = true;
@@ -23,7 +23,7 @@ let
         }
         {
           outbound = "to-host-vpn";
-          process_name = (config.singbox.processes_to_proxy or [ ]);
+          process_name = (config.sing-box.processes_to_proxy or [ ]);
         }
       ];
     };
@@ -238,7 +238,7 @@ let
               mkdir "$MY_CGROUP/inside"
               ${additional_wrap_commands}
               ${lib.optionalString network_singbox ''
-                ${rust-bridge}/bin/rust-bridge host "$SANDBOXED_RUNTIME_DIR/singbox" 127.0.0.1:1919 &
+                ${rust-bridge}/bin/rust-bridge host "$SANDBOXED_RUNTIME_DIR/sing-box" 127.0.0.1:1919 &
               ''}
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
@@ -275,8 +275,8 @@ let
                 ${additional_prestart_commands}
                 ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
                 ${lib.optionalString network_singbox ''
-                  ${sing-box-lite}/bin/sing-box -c "${singbox-sandbox-config}" run &
-                  ${rust-bridge}/bin/rust-bridge sandbox 127.0.0.1:1919 "$XDG_RUNTIME_DIR/singbox" &
+                  ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
+                  ${rust-bridge}/bin/rust-bridge sandbox 127.0.0.1:1919 "$XDG_RUNTIME_DIR/sing-box" &
                   exec ${landlock}/bin/landlock ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${pkgs.dash}/bin/dash -c "
                 ''}
                 ${lib.optionalString (!network_singbox) ''

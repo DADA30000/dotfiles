@@ -609,8 +609,12 @@ in
                 "app2unit -- sheesh.sh"
               ]
               [
-                "${mod} + L"
+                "${mod} + H"
                 "killall -SIGUSR1 .waybar-wrapped"
+              ]
+              [
+                "${mod} + L"
+                "hyprlock"
               ]
               [
                 "${mod} + Q"
@@ -1003,15 +1007,34 @@ in
         ];
       };
     };
-    services.hyprpaper = mkIf (cfg.hyprpaper && !cfg.mpvpaper) {
-      enable = true;
-      settings = {
-        ipc = "on";
-        splash = false;
-        wallpaper = {
-          monitor = "";
-          path = "${../../../stuff/wallpaper.png}";
-          fit_mode = "cover";
+    services = {
+      hypridle = {
+        enable = true;
+        settings = {
+          listener = [
+            {
+              timeout = 300;
+              on-timeout = ''hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
+              on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
+            }
+            {
+              timeout = 10;
+              on-timeout = ''pidof hyprlock && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
+              on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
+            }
+          ];
+        };
+      };
+      hyprpaper = mkIf (cfg.hyprpaper && !cfg.mpvpaper) {
+        enable = true;
+        settings = {
+          ipc = "on";
+          splash = false;
+          wallpaper = {
+            monitor = "";
+            path = "${../../../stuff/wallpaper.png}";
+            fit_mode = "cover";
+          };
         };
       };
     };

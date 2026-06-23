@@ -134,7 +134,7 @@ in
         #cpu,
         #network,
         #custom-nvidia-gpu,
-        #custon-amd-gpu,
+        #custom-amd-gpu,
         #pulseaudio,
         #pulseaudio-mic,
         #custom-logout,
@@ -701,7 +701,6 @@ in
           #};
           "custom/amd-gpu" = {
             interval = 2;
-            exec-if = "amd-gpu";
             exec = "amd-gpu";
             on-click = "kitty nvtop";
             return-type = "json";

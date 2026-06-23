@@ -142,69 +142,75 @@ in
         })
       ];
     };
-    systemd.services = {
-      "acme-order-renew-ip.sanic.space" = {
-        after = lib.mkForce [
-          "graphical.target"
-          "acme-setup.service"
-          "acme-ip.sanic.space.service"
+    systemd = {
+      services = {
+        cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
+          description = "Update Cloudflare DDNS Records";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/secrets/cloudflare-ddns";
+          };
+        };
+        "acme-order-renew-ip.sanic.space" = {
+          after = lib.mkForce [
+            "graphical.target"
+            "acme-setup.service"
+            "acme-ip.sanic.space.service"
+          ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "acme-order-renew-sanic.space" = {
+          after = lib.mkForce [
+            "graphical.target"
+            "acme-setup.service"
+            "acme-ip.sanic.space.service"
+          ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "acme-order-renew-cape.sanic.space" = {
+          after = lib.mkForce [
+            "graphical.target"
+            "acme-setup.service"
+            "acme-ip.sanic.space.service"
+          ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "acme-ip.sanic.space" = {
+          after = [ "graphical.target" ];
+          before = lib.mkForce [ ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "acme-cape.sanic.space" = {
+          after = [ "graphical.target" ];
+          before = lib.mkForce [ ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "acme-sanic.space" = {
+          after = [ "graphical.target" ];
+          before = lib.mkForce [ ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
+        };
+        "nginx" = {
+          wantedBy = lib.mkForce [ "graphical.target" ];
+          serviceConfig.ReadWritePaths = [ "/website/stream" ];
+          before = lib.mkForce [ ];
+          after = lib.mkForce [ "graphical.target" ];
+        };
+        "nginx-config-reload".wantedBy = lib.mkForce [
+          "acme-order-renew-ip.sanic.space.service"
+          "acme-order-renew-sanic.space.service"
         ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
       };
-      "acme-order-renew-sanic.space" = {
-        after = lib.mkForce [
-          "graphical.target"
-          "acme-setup.service"
-          "acme-ip.sanic.space.service"
-        ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
+      timers.cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
+        description = "Timer for periodically updating Cloudflare DDNS";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "1min";
+          OnUnitActiveSec = "1hour";
+        };
       };
-      "acme-order-renew-cape.sanic.space" = {
-        after = lib.mkForce [
-          "graphical.target"
-          "acme-setup.service"
-          "acme-ip.sanic.space.service"
-        ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
-      };
-      "acme-ip.sanic.space" = {
-        after = [ "graphical.target" ];
-        before = lib.mkForce [ ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
-      };
-      "acme-cape.sanic.space" = {
-        after = [ "graphical.target" ];
-        before = lib.mkForce [ ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
-      };
-      "acme-sanic.space" = {
-        after = [ "graphical.target" ];
-        before = lib.mkForce [ ];
-        wantedBy = lib.mkForce [ "graphical.target" ];
-      };
-      "nginx" = {
-        wantedBy = lib.mkForce [ "graphical.target" ];
-        serviceConfig.ReadWritePaths = [ "/website/stream" ];
-        before = lib.mkForce [ ];
-        after = lib.mkForce [ "graphical.target" ];
-      };
-      "nginx-config-reload".wantedBy = lib.mkForce [
-        "acme-order-renew-ip.sanic.space.service"
-        "acme-order-renew-sanic.space.service"
-      ];
     };
-    services.cron = mkIf cfg.cloudflare-ddns.enable {
-      enable = true;
-      systemCronJobs = [
-        "*/59 * * * *   root  update-cloudflare-dns /cloudflare1.conf"
-        "*/59 * * * *   root  update-cloudflare-dns /cloudflare2.conf"
-      ];
-    };
-    environment.systemPackages =
-      with pkgs;
-      mkIf cfg.cloudflare-ddns.enable [
-        net-tools
-        dig.dnsutils
-      ];
   };
 }

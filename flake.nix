@@ -51,7 +51,7 @@
       flake = false;
     };
     sine = {
-      url = "github:CosmoCreeper/Sine";
+      url = "github:CosmoCreeper/Sine/v2.3.3";
       flake = false;
     };
     sine-bootloader = {
@@ -59,7 +59,7 @@
       flake = false;
     };
     nebula-zen = {
-      url = "github:JustAdumbPrsn/Zen-Nebula/d5dd37455aa4c12e89c188c02f0c3a56841eee6f";
+      url = "github:JustAdumbPrsn/Zen-Nebula";
       flake = false;
     };
     susfs4ksu = {

@@ -3,6 +3,7 @@
   pkgs,
   inputs,
   config,
+  lib,
   ...
 }:
 let
@@ -38,12 +39,23 @@ in
 
   amd-ai.enable = false;
 
+  my-services = {
+
+    cloudflare-ddns.enable = true;
+
+    nginx = {
+      enable = true;
+      website.enable = true;
+    };
+
+  };
+
   environment = {
 
     systemPackages = with pkgs; [ nvtopPackages.full ];
 
     etc."crypttab".text = ''
-      Games /dev/disk/by-label/Games-encrypted /var/lib/private/games.key luks,discard,no-read-workqueue,no-write-workqueue,noauto
+      Games /dev/disk/by-label/Games-encrypted /etc/secrets/games.key luks,discard,no-read-workqueue,no-write-workqueue,noauto
     '';
 
   };

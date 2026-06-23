@@ -57,15 +57,13 @@
 
   i18n.defaultLocale = "ru_RU.UTF-8";
 
-  console.keyMap = "ru";
-
   system.stateVersion = "24.11";
 
   wivrn.enable = true;
 
   nix.gc.automatic = true;
 
-  singbox.enable = true;
+  sing-box.enable = true;
 
   plymouth.enable = true;
 
@@ -83,28 +81,11 @@
     users = [ user ];
   };
 
-  nix-mineral = {
+  console = {
     enable = true;
-    preset = "performance";
-    filesystems.enable = false;
-    settings = {
-      debug.debugfs = true;
-      network.tcp-sack = true;
-      etc = {
-        generic-machine-id = false;
-        kicksecure-gitconfig = false;
-      };
-      kernel = {
-        amd-iommu-force-isolation = false;
-        strict-iommu = false;
-        binfmt-misc = true;
-        sysrq = "none";
-      };
-      system = {
-        multilib = true;
-        yama = "relaxed";
-      };
-    };
+    keyMap = "ru";
+    font = "ter-u28b";
+    packages = [ pkgs.terminus_font ];
   };
 
   hardware = {
@@ -163,6 +144,33 @@
       "io.github.Soundux"
     ];
 
+  };
+
+  nix-mineral = {
+    enable = true;
+    preset = "performance";
+    filesystems.enable = false;
+    settings = {
+      debug.debugfs = true;
+      network = {
+        random-mac = false;
+        tcp-sack = true;
+      };
+      etc = {
+        generic-machine-id = false;
+        kicksecure-gitconfig = false;
+      };
+      kernel = {
+        amd-iommu-force-isolation = false;
+        strict-iommu = false;
+        binfmt-misc = true;
+        sysrq = "none";
+      };
+      system = {
+        multilib = true;
+        yama = "relaxed";
+      };
+    };
   };
 
   fonts = {
@@ -445,8 +453,8 @@
   systemd = {
 
     user = {
-      extraConfig = "DefaultTimeoutStopSec=1s";
-      targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+      settings.Manager.DefaultTimeoutStopSec = "1s";
+      # targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
       services.dbus-broker.serviceConfig = {
         Type = "notify";
         ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
@@ -502,6 +510,11 @@
     systembus-notify.enable = true;
 
     gnome.gnome-keyring.enable = true;
+
+    journald.extraConfig = ''
+      SystemMaxUse=1G
+      RuntimeMaxUse=1G
+    '';
 
     hardware.openrgb = {
       enable = true;
@@ -589,6 +602,11 @@
   };
 
   programs = {
+
+    ssh.extraConfig = ''
+      ServerAliveInterval 60
+      ServerAliveCountMax 3
+    '';
 
     screen.enable = true;
 

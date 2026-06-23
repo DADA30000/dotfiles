@@ -60,7 +60,10 @@ in
               flake = builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}"; 
               nixpkgs = import flake.inputs.nixpkgs { 
                 system = "${pkgs.stdenv.hostPlatform.system}";
-                config.allowUnfree = true;
+                config = {
+                  allowUnfree = true;
+                  android_sdk.accept_license = true;
+                };
                 overlays = [
                   (
                     final: prev:

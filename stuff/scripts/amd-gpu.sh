@@ -1,3 +1,5 @@
+trap - SIGPIPE
+
 GPU_PATH=""
 for dev in /sys/bus/pci/devices/*; do
   if [ -e "$dev/driver" ] && [[ "$(readlink "$dev/driver")" =~ "amdgpu" ]]; then
@@ -7,11 +9,17 @@ for dev in /sys/bus/pci/devices/*; do
 done
 
 if [ -z "$GPU_PATH" ]; then
+  echo "{\"text\":\"error\",\"tooltip\":\"No AMD GPU found\"}" 2>/dev/null
   exit 1
 fi
 
-HWMON_DIR=$(find "$GPU_PATH/hwmon" 2>/dev/null | head -n 1)
-HWMON_PATH="$GPU_PATH/hwmon/$HWMON_DIR"
+HWMON_PATH=""
+for d in "$GPU_PATH"/hwmon/hwmon*; do
+  if [ -d "$d" ]; then
+    HWMON_PATH="$d"
+    break
+  fi
+done
 
 if [ -d "$HWMON_PATH" ]; then
   usage=$(cat "$HWMON_PATH/device/gpu_busy_percent" 2>/dev/null || echo "0")
@@ -19,12 +27,20 @@ if [ -d "$HWMON_PATH" ]; then
   power=$(($(cat "$HWMON_PATH/power1_average" 2>/dev/null || echo "0") / 1000000))
 
   pci_addr=$(basename "$GPU_PATH")
-  name=$(lspci -s "$pci_addr" | cut -d ':' -f3- | sed 's/^ //')
+
+  CACHE_FILE="/tmp/gpu_name_$pci_addr"
+  if [ -f "$CACHE_FILE" ]; then
+    name=$(cat "$CACHE_FILE")
+  else
+    name=$(lspci -s "$pci_addr" 2>/dev/null | cut -d ':' -f3- | sed 's/^ //')
+    name=${name:-"AMD GPU"}
+    echo "$name" >"$CACHE_FILE" 2>/dev/null
+  fi
 
   text="<span color='#990000'>  ${usage}%  󰢮 </span>"
   tooltip="$name\rUsage: ${usage}%\rTemp: ${temp}°C\rPower: ${power}W"
 
-  echo "{\"text\":\"$text\",\"tooltip\":\"$tooltip\"}"
+  echo "{\"text\":\"$text\",\"tooltip\":\"$tooltip\"}" 2>/dev/null
 else
-  echo "{\"text\":\"error\",\"tooltip\":\"No hwmon found\"}"
+  echo "{\"text\":\"error\",\"tooltip\":\"No hwmon found\"}" 2>/dev/null
 fi

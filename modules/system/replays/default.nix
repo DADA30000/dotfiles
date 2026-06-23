@@ -34,7 +34,7 @@ in
           if [ -n "$mon" ]; then
             mkdir -p "$HOME/Games/Replays/$mon"
             # gpu-screen-recorder -w "$mon" -s 1920x1080 -k h264 -q ultra -a default_output -a default_input -f 60 -r 300 -c mkv -o "$HOME/Games/Replays/$mon" -encoder cpu &
-            gpu-screen-recorder -w "$mon" -s 1920x1080 -k hevc -q ultra -a default_output -a default_input -f 60 -r 300 -c mkv -o "$HOME/Games/Replays/$mon" &
+            gpu-screen-recorder -w "$mon" -s 1920x1080 -k hevc -q ultra -a default_output -a default_input -f 60 -r 300 -c mkv -o "$HOME/Games/Replays/$mon" &> /dev/null &
           fi
         done
 
