@@ -122,6 +122,10 @@
       url = "github:vinceliuice/Fluent-gtk-theme";
       flake = false;
     };
+    bibata-modern-hyprcursor = {
+      url = "github:LOSEARDES77/Bibata-Cursor-hyprcursor";
+      flake = false;
+    };
     helium = {
       url = "github:schembriaiden/helium-browser-nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";

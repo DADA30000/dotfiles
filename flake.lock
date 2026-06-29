@@ -73,6 +73,22 @@
         "type": "github"
       }
     },
+    "bibata-modern-hyprcursor": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782222622,
+        "narHash": "sha256-z1Q116HXSV4cnFu5idktWuNgt86nMfT0QHvngzKINLQ=",
+        "owner": "LOSEARDES77",
+        "repo": "Bibata-Cursor-hyprcursor",
+        "rev": "4fa5756f6946b378f2aa6e920d05c047f9566eb0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "LOSEARDES77",
+        "repo": "Bibata-Cursor-hyprcursor",
+        "type": "github"
+      }
+    },
     "blueprint": {
       "inputs": {
         "nixpkgs": [
@@ -1834,6 +1850,7 @@
       "inputs": {
         "android-kernel-src": "android-kernel-src",
         "android-nixpkgs": "android-nixpkgs",
+        "bibata-modern-hyprcursor": "bibata-modern-hyprcursor",
         "btop": "btop",
         "cape": "cape",
         "chaotic": "chaotic",
