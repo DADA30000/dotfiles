@@ -137,7 +137,8 @@ in
         )
       );
       boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
-        pkgs.writeShellScript "find-nixos-closure" ''
+        pkgs.writeScript "find-nixos-closure" ''
+          #!/bin/bash
           mkdir -p /etc
           INIT_PATH=""
           for path in /sysroot/nix/store/*-nixos-system-iso-*; do
@@ -155,6 +156,9 @@ in
           fi
         ''
       );
+      boot.initrd.systemd.storePaths = [
+        config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
+      ];
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
