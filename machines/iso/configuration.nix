@@ -139,7 +139,20 @@ in
       boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
         pkgs.writeShellScript "find-nixos-closure" ''
           mkdir -p /etc
-          echo "NEW_INIT=${config.system.build.toplevel}/init" > /etc/switch-root.conf
+          INIT_PATH=""
+          for path in /sysroot/nix/store/*-nixos-system-iso-*; do
+            if [ -x "$path/init" ]; then
+              INIT_PATH="$path/init"
+              break
+            fi
+          done
+
+          if [ -n "$INIT_PATH" ]; then
+            echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
+          else
+            echo "Failed to dynamically discover NixOS init path!" >&2
+            exit 1
+          fi
         ''
       );
       home-manager.users.${user} = import ./home.nix;
