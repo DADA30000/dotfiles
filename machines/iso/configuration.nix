@@ -138,8 +138,6 @@ in
       );
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
-      boot.loader.grub.enable = lib.mkForce false;
-      boot.loader.systemd-boot.enable = lib.mkForce false;
       networking.hostName = "iso";
 
       systemd.user.services.replays.wantedBy = lib.mkForce [ ];
@@ -238,6 +236,7 @@ in
       hardware.enableAllHardware = true;
       hardware.enableRedistributableFirmware = true;
       graphics.nvidia.enable = lib.mkForce true;
+      boot.loader.grub.enable = false;
     }
   ];
 }
