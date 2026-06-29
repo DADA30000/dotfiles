@@ -138,6 +138,8 @@ in
       );
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
+      boot.loader.grub.enable = lib.mkForce false;
+      boot.loader.systemd-boot.enable = lib.mkForce false;
       networking.hostName = "iso";
 
       systemd.user.services.replays.wantedBy = lib.mkForce [ ];
