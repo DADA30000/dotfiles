@@ -142,7 +142,8 @@ in
           mkdir -p /etc
           INIT_PATH=""
           for path in /sysroot/nix/store/*-nixos-system-iso-*; do
-            if [ -x "$path/init" ]; then
+            # Safely verify the presence of our static /etc marker file
+            if [ -f "$path/etc/is-live-iso" ]; then
               INIT_PATH="$path/init"
               break
             fi
@@ -159,6 +160,7 @@ in
       boot.initrd.systemd.storePaths = [
         config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
       ];
+      environment.etc."is-live-iso".text = "true";
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
