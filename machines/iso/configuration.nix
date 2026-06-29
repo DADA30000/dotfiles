@@ -209,8 +209,6 @@ in
 
       boot.loader.timeout = lib.mkForce 0;
 
-      boot.initrd.systemd.enable = lib.mkForce false;
-
       fonts.fontconfig.enable = true;
 
       xdg = {
