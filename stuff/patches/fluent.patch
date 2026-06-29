@@ -1,0 +1,228 @@
+diff --git a/src/_sass/_colors.scss b/src/_sass/_colors.scss
+index 0af230c..f3270e3 100644
+--- a/src/_sass/_colors.scss
++++ b/src/_sass/_colors.scss
+@@ -182,4 +182,16 @@ $titlebar-divider:                      on($titlebar, divider);
+ $titlebar-fill:                         on($titlebar, fill);
+ 
+ // workaround for GTK3 @placeholder_text_color which doesn't allow translucent colors
+-$placeholder_text_color:                if($variant == 'light', mix(black, $base, percentage(0.6)), mix(white, $base, percentage(0.7)));
++$placeholder_text_color:                if($variant == 'light', $grey-600, $grey-500);
++
++// Force 0.01 deep transparency for all backgrounds in the Dark Variant
++@if $variant == 'dark' {
++  $background:                          rgba(#333333, 0.01);
++  $surface:                             rgba(#3C3C3C, 0.01);
++  $base:                                rgba(#2B2B2B, 0.01);
++  $base-alt:                            rgba(#303030, 0.01);
++  $titlebar:                            rgba(#202020, 0.01);
++  $titlebar-backdrop:                   rgba(#2C2C2C, 0.01);
++  $menu:                                rgba(#3C3C3C, 0.01);
++  $panel:                               rgba(#1F1F1F, 0.01);
++}
+diff --git a/src/_sass/_variables.scss b/src/_sass/_variables.scss
+index e6eabf6..0fea186 100644
+--- a/src/_sass/_variables.scss
++++ b/src/_sass/_variables.scss
+@@ -21,7 +21,7 @@ $menuitem-size: 28px;
+ //
+ 
+ $window-radius: if($window == 'round', 8px, 3px);
+-$corner-radius: if($window == 'round', 4px, 2px);
++$corner-radius: if($window == 'round', 15px, 2px);
+ $menu-radius: $corner-radius + 3px;
+ $popover-radius: if($window == 'round', $corner-radius + $space-size, 6px);
+ $circular-radius: 9999px;
+diff --git a/src/_sass/gtk/_common-3.20.scss b/src/_sass/gtk/_common-3.20.scss
+index 2bd9aa5..dd187f4 100644
+--- a/src/_sass/gtk/_common-3.20.scss
++++ b/src/_sass/gtk/_common-3.20.scss
+@@ -535,12 +535,18 @@ button {
+   border: 1px solid $border;
+   @include button(normal);
+ 
+-  &:focus, &:checked:focus {
++  &:focus {
+     @include button(focus);
+   }
+ 
++  &:focus {
++    @include button(focus);
++    background-color: rgba(white, 0.15);
++  }
++
+   &:hover {
+     @include button(hover);
++    background-color: rgba(white, 0.08);
+   }
+ 
+   &:active {
+@@ -2952,7 +2958,7 @@ scrollbar {
+ 
+     &.dragging,
+     &.hovering {
+-      background-color: rgba($surface, 0.9);
++      background-color: transparent;
+     }
+   }
+ 
+@@ -4966,4 +4972,4 @@ popover.emoji-completion {
+   .emoji:hover {
+     background-color: $overlay-hover;
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/_sass/gtk/_common-4.0.scss b/src/_sass/gtk/_common-4.0.scss
+index f6de12e..0fc9df9 100644
+--- a/src/_sass/gtk/_common-4.0.scss
++++ b/src/_sass/gtk/_common-4.0.scss
+@@ -519,12 +519,18 @@ treeview entry {
+   background-clip: padding-box;
+   @include button(normal);
+ 
+-  &:focus, &:checked:focus {
++  &:focus {
++    @include button(focus);
++    background-color: rgba(white, 0.15);
++  }
++
++  &:checked:focus {
+     @include button(focus);
+   }
+ 
+   &:hover {
+     @include button(hover);
++    background-color: rgba(white, 0.08);
+   }
+ 
+   &:active {
+@@ -3360,7 +3366,7 @@ scrollbar {
+ 
+     &.dragging,
+     &.hovering {
+-      background-color: rgba($surface, 0.9);
++      background-color: transparent;
+     }
+   }
+ 
+@@ -5450,4 +5456,4 @@ popover.entry-completion > contents {
+ 
+ statusbar {
+   padding: $space-size $space-size * 2;
+-}
+\ No newline at end of file
++}
+diff --git a/src/_sass/gtk/_drawing-3.20.scss b/src/_sass/gtk/_drawing-3.20.scss
+index aad5e09..46d5526 100644
+--- a/src/_sass/gtk/_drawing-3.20.scss
++++ b/src/_sass/gtk/_drawing-3.20.scss
+@@ -48,13 +48,13 @@
+   }
+ 
+   @if $t == hover {
+-    background-color: $base;
++    background-color: rgba(white, 0.08);
+     box-shadow: inset 0 0 0 1px transparent;
+     border-color: $text-disabled;
+   }
+ 
+   @if $t == focus {
+-    background-color: $base;
++    background-color: rgba(white, 0.15);
+     box-shadow: inset 0 0 0 1px if($fc == $primary, $text-disabled, $fc);
+     border-color: if($fc == $primary, $text-disabled, $fc);
+   }
+@@ -120,7 +120,7 @@
+ 
+   @if $t == hover {
+     box-shadow: inset 0 0 0 1px transparent, 0 0 0 2px transparent;
+-    // background-color: $base;
++    background-color: $base;
+     border-color: $track;
+   }
+ 
+diff --git a/src/_sass/gtk/_drawing-4.0.scss b/src/_sass/gtk/_drawing-4.0.scss
+index 3377bc1..981b64d 100644
+--- a/src/_sass/gtk/_drawing-4.0.scss
++++ b/src/_sass/gtk/_drawing-4.0.scss
+@@ -26,13 +26,13 @@
+   }
+ 
+   @if $t == hover {
+-    background-color: $base;
++    background-color: rgba(white, 0.08);
+     box-shadow: inset 0 0 0 1px transparent;
+     border-color: $text-disabled;
+   }
+ 
+   @if $t == focus {
+-    background-color: $base;
++    background-color: rgba(white, 0.15);
+     box-shadow: inset 0 0 0 1px if($fc == $primary, $text-disabled, $fc);
+     border-color: if($fc == $primary, $text-disabled, $fc);
+     outline: none;
+diff --git a/src/_sass/gtk/apps/_gnome-3.22.scss b/src/_sass/gtk/apps/_gnome-3.22.scss
+index f538800..5b676e9 100644
+--- a/src/_sass/gtk/apps/_gnome-3.22.scss
++++ b/src/_sass/gtk/apps/_gnome-3.22.scss
+@@ -256,6 +256,19 @@
+   .icon-item-background {
+     padding: $space-size;
+     border-radius: $bar-size;
++    transition: background-color $duration $ease-out;
++  }
++
++  &:hover {
++    .icon-item-background {
++      background-color: rgba(white, 0.08);
++    }
++  }
++
++  &:active {
++    .icon-item-background {
++      background-color: $overlay-active;
++    }
+   }
+ 
+   &:selected {
+diff --git a/src/_sass/gtk/apps/_gnome-40.0.scss b/src/_sass/gtk/apps/_gnome-40.0.scss
+index a2f27f1..77d5f46 100644
+--- a/src/_sass/gtk/apps/_gnome-40.0.scss
++++ b/src/_sass/gtk/apps/_gnome-40.0.scss
+@@ -11,9 +11,18 @@ placesview {
+   child.activatable {
+     padding: 0;
+     border-radius: $corner-radius * 2;
++    transition: background-color $duration $ease-out;
++
++    &:hover {
++      background-color: rgba(white, 0.08);
++    }
++
++    &:active {
++      background-color: $overlay-active;
++    }
+ 
+     &:selected {
+-      background-color: gtkalpha($primary, 0.1);
++      background-color: gtkalpha($primary, 0.15);
+     }
+ 
+     #NautilusViewCell {
+@@ -59,7 +68,7 @@ placesview {
+       }
+ 
+       &:nth-child(odd):not(:disabled) {
+-        background-image: image(gtkalpha(currentColor, 0.03));
++        background-image: none;
+       }
+     }
+   }
+@@ -1321,4 +1330,4 @@ window.org-gnome-TextEditor {
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}

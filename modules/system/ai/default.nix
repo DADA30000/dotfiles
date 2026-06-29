@@ -8,6 +8,7 @@
 }@args:
 let
   cfg = config.amd-ai;
+  xrt = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt" { };
   ik_llama-cpp = pkgs.cudaPackages.backendStdenv.mkDerivation {
     pname = "ik-llama-cpp";
     version = "latest";
@@ -42,31 +43,32 @@ let
   };
 in
 {
-  options.amd-ai.enable = lib.mkEnableOption "amd ai stuff";
+  options.amd-ai = {
+    enable = lib.mkEnableOption "amd ai stuff";
+    heavy.enable = lib.mkEnableOption "heavy general ai stuff";
+  };
 
   imports = [
     (import "${inputs.nix-amd-ai}/modules/amd-npu.nix" (
       args
       // {
-        pkgs =
-          let
-            xrt = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt" { };
-          in
-          pkgs
-          // {
+        pkgs = pkgs // {
+          inherit xrt;
+          fastflowlm = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/fastflowlm" { inherit xrt; };
+          xrt-plugin-amdxdna = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt-plugin-amdxdna" {
             inherit xrt;
-            fastflowlm = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/fastflowlm" { inherit xrt; };
-            xrt-plugin-amdxdna = pkgs.callPackage "${inputs.nix-amd-ai}/pkgs/xrt-plugin-amdxdna" {
-              inherit xrt;
-            };
           };
+        };
       }
     ))
   ];
 
   config = lib.mkIf cfg.enable {
-    boot.kernelParams = [ "amd_iommu=off" ];
+    # boot.kernelParams = [ "amd_iommu=off" ];
     environment.systemPackages = [
+      xrt
+    ]
+    ++ lib.optionals cfg.heavy.enable [
       pkgs.alpaca
       ik_llama-cpp
     ];
@@ -76,7 +78,7 @@ in
       enableFastFlowLM = true;
       enableLemonade = false;
     };
-    systemd.services.llama-server = {
+    systemd.services.llama-server = lib.mkIf cfg.heavy.enable {
       description = "ik_llama.cpp local API server";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
@@ -150,7 +152,7 @@ in
         };
       };
 
-      open-webui = {
+      open-webui = lib.mkIf cfg.heavy.enable {
         enable = true;
         host = "127.0.0.1";
         port = 8070;

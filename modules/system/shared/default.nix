@@ -57,7 +57,7 @@
 
   i18n.defaultLocale = "ru_RU.UTF-8";
 
-  system.stateVersion = "24.11";
+  system.stateVersion = "26.05";
 
   wivrn.enable = true;
 
@@ -304,10 +304,7 @@
 
     vulkan_video = true;
 
-    amdgpu = {
-      enable = true;
-      pro = false;
-    };
+    amdgpu.enable = true;
 
   };
 
@@ -396,7 +393,8 @@
       #__GLX_VENDOR_LIBRARY_NAME = "mesa";
       #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
       # To fix Telegram sound in Discord screenshare
-      MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=shift+F12,toggle_fps_limit=shift+F4,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
+      GDK_PIXBUF_MODULE_FILE = "${pkgs.librsvg}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache";
+      MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=Delete,toggle_fps_limit=Shift_R+backslash,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
       ALSOFT_DRIVERS = "pulse";
       APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
       QT_QPA_PLATFORMTHEME = "qt5ct";
@@ -453,6 +451,7 @@
   systemd = {
 
     user = {
+      targets."xdg-desktop-autostart".enable = false;
       settings.Manager.DefaultTimeoutStopSec = "1s";
       # targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
       services.dbus-broker.serviceConfig = {
@@ -492,6 +491,8 @@
   };
 
   services = {
+
+    lact.enable = true;
 
     logind.settings.Login.HandlePowerKey = "suspend";
 
@@ -643,6 +644,7 @@
       package =
         let
           overriddenSteam = pkgs.steam.override {
+            privateTmp = false;
             extraEnv = {
               MANGOHUD = true;
               OBS_VKCAPTURE = true;
@@ -656,37 +658,44 @@
 
           sandboxed = mkSandbox {
             appId = "com.valvesoftware.Steam";
-            network_singbox = true;
+            network = true;
             audio = true;
             gpu = true;
             wayland = true;
-            x11 = true;
             nvidia_gpu = true;
-            additional_wrap_commands = "rust-bridge sandbox 127.0.0.1:57343 \"$SANDBOXED_RUNTIME_DIR/steam\" &";
-            additional_prestart_commands = "rust-bridge host \"$XDG_RUNTIME_DIR/steam\" 127.0.0.1:57343 &";
+            use_landlock = false;
+            pass_shm = true;
+            pass_tmp = true;
+            additional_outside_commands = ''
+              rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
+            '';
+            additional_inside_commands = ''
+              rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d
+            '';
             additional_args =
               { sloth, ... }:
               {
+                dbus.policies = {
+                  "com.steampowered.Steam" = "own";
+                  "com.steampowered.Steam.*" = "own";
+                  "com.feralinteractive.GameMode" = "talk";
+                };
                 bubblewrap = {
+                  sharePid = true;
                   bind = {
                     ro = [
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                     ];
-                    rw = [
+                    rw = lib.mkAfter [
                       [
                         "/home/${user}/Games/steam"
                         (sloth.mkdir "/Games")
                       ]
+                      "/tmp"
                     ];
                   };
-                  sharePid = true;
-                };
-                dbus.policies = {
-                  "com.steampowered.Steam" = "own";
-                  "com.steampowered.Steam.*" = "own";
-                  "com.feralinteractive.GameMode" = "talk";
                 };
               };
             package = overriddenSteam;

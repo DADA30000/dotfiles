@@ -27,8 +27,6 @@
 
   zen.enable = true;
 
-  home.stateVersion = "25.05";
-
   spicetify.enable = true;
 
   home.file.".config/mpv".source = ../../../stuff/mpv;
@@ -148,7 +146,16 @@
 
   };
 
-  services.easyeffects.enable = true;
+  services = {
+
+    easyeffects.enable = true;
+
+    kdeconnect = {
+      enable = true;
+      indicator = true;
+    };
+
+  };
 
   mpd = {
 

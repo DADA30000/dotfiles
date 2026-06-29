@@ -114,6 +114,14 @@
       url = "github:KhronosGroup/SPIRV-Reflect/vulkan-sdk-1.4.321.0";
       flake = false;
     };
+    btop = {
+      url = "github:aristocratos/btop";
+      flake = false;
+    };
+    fluent-gtk-theme = {
+      url = "github:vinceliuice/Fluent-gtk-theme";
+      flake = false;
+    };
     helium = {
       url = "github:schembriaiden/helium-browser-nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -339,10 +347,11 @@
             overwriteBackup = true;
             useGlobalPkgs = true;
             useUserPackages = true;
-            users.${user} = {
-              imports = home-modules;
-            };
             users.root = import ./modules/home/shared/home-root.nix;
+            sharedModules = [
+              { home.stateVersion = "26.05"; }
+            ]
+            ++ home-modules;
           };
         }
       ]

@@ -25,13 +25,20 @@ in
       graphics = {
         enable = true;
         enable32Bit = true;
-        extraPackages = [
+        extraPackages = with pkgs; [
+          rocmPackages.clr
           inputs.chaotic.packages.${pkgs.stdenv.hostPlatform.system}.low-latency-layer
         ];
       };
       amdgpu = mkMerge [
         (mkIf cfg.amdgpu.enable { initrd.enable = false; })
-        (mkIf cfg.amdgpu.pro { opencl.enable = true; })
+        (mkIf cfg.amdgpu.pro {
+          opencl.enable = true;
+          overdrive = {
+            enable = true;
+            ppfeaturemask = "0xffffffff";
+          };
+        })
       ];
       nvidia = mkIf cfg.nvidia.enable {
         dynamicBoost.enable = true;
@@ -65,7 +72,7 @@ in
     ];
     environment.variables = {
       # NVD_BACKEND = mkIf (cfg.nvidia.enable) "direct";
-      ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
+      # ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
       RADV_EXPERIMENTAL = mkIf cfg.vulkan_video "video_decode,video_encode";
       ANV_DEBUG = mkIf cfg.vulkan_video "video-decode,video-encode";
       ANV_VIDEO_DECODE = mkIf cfg.vulkan_video 1;

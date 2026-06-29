@@ -98,6 +98,22 @@
         "type": "github"
       }
     },
+    "btop": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782159907,
+        "narHash": "sha256-+dyKtfE4O9qW+OmU8nfc/gRYLQh+2SdPicvoFtWV9A4=",
+        "owner": "aristocratos",
+        "repo": "btop",
+        "rev": "8813e1ca0a3a7439af09f76c6de0616a2961b14e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aristocratos",
+        "repo": "btop",
+        "type": "github"
+      }
+    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -533,6 +549,22 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "fluent-gtk-theme": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1765343820,
+        "narHash": "sha256-KeMU8pF9x5JbPwkAb4cIA550IUuXRLonQv/DFvPZr70=",
+        "owner": "vinceliuice",
+        "repo": "Fluent-gtk-theme",
+        "rev": "9fc52910aeda73804c41bfcebf2bbd29205a4756",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vinceliuice",
+        "repo": "Fluent-gtk-theme",
         "type": "github"
       }
     },
@@ -1802,9 +1834,11 @@
       "inputs": {
         "android-kernel-src": "android-kernel-src",
         "android-nixpkgs": "android-nixpkgs",
+        "btop": "btop",
         "cape": "cape",
         "chaotic": "chaotic",
         "firefox-addons": "firefox-addons",
+        "fluent-gtk-theme": "fluent-gtk-theme",
         "gigabyte-laptop-wmi": "gigabyte-laptop-wmi",
         "hazy": "hazy",
         "helium": "helium",

@@ -1,12 +1,15 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
 }:
 with lib;
 let
-  package = pkgs.btop;
+  package = (pkgs.btop.override { cudaSupport = true; }).overrideAttrs {
+    src = inputs.btop;
+  };
   cfg = config.btop;
 in
 {

@@ -7,6 +7,16 @@
   ...
 }:
 let
+  giTypelibPath = lib.makeSearchPathOutput "lib" "lib/girepository-1.0" [
+    pkgs.gtk3
+    pkgs.pango
+    pkgs.gdk-pixbuf
+    pkgs.at-spi2-core
+    pkgs.harfbuzz
+    pkgs.glib
+    pkgs.cairo
+    pkgs.gobject-introspection
+  ];
   # Возвращаемся на clangStdenv для получения move_only_function из GCC libstdc++
   waywallen = pkgs.clangStdenv.mkDerivation rec {
     pname = "waywallen";
@@ -193,6 +203,7 @@ let
 
   excludeList = [
     "notify_trunc.py"
+    "power-menu.py"
   ];
 
   handlers = {
@@ -317,6 +328,7 @@ in
         lsd
         kdiskmark
         nixfmt
+        sshfs
         gdu
         nixd
         wget
@@ -326,6 +338,7 @@ in
         zip
         adwaita-icon-theme
         vmpk
+        socat
         wl-clipboard
         networkmanager_dmenu
         neovide
@@ -383,6 +396,20 @@ in
             hash = prev.src.hash;
           };
         }))
+        (pkgs.writeShellScriptBin "power-menu" ''
+          export GI_TYPELIB_PATH="${giTypelibPath}"
+          # Set XDG_DATA_DIRS to expose required desktop schemas to the GIO backend
+          export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:${pkgs.adwaita-icon-theme}/share:${pkgs.hicolor-icon-theme}/share:$XDG_DATA_DIRS"
+          # Dynamically resolve GDK_PIXBUF_MODULE_FILE via findutils to prevent hardcoded version directory conflicts
+          GDK_PIXBUF_CACHE_FILE=$(${pkgs.findutils}/bin/find "${pkgs.librsvg}/lib/gdk-pixbuf-2.0" -name "loaders.cache" -print -quit 2>/dev/null)
+          if [[ -n "$GDK_PIXBUF_CACHE_FILE" ]]; then
+            export GDK_PIXBUF_MODULE_FILE="$GDK_PIXBUF_CACHE_FILE"
+          fi
+          exec ${pkgs.python3.withPackages (ps: [ ps.pygobject3 ])}/bin/python3 ${
+            pkgs.writeText "power-menu.py" (evalAndSubstitute {
+              string = builtins.readFile ../../../stuff/scripts/power-menu.py;
+            })
+          } "$@"'')
         (writers.writePython3Bin "notify_trunc"
           {
             libraries = [
@@ -527,7 +554,7 @@ in
                 bind.ro = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
               };
             };
-          additional_wrap_commands = "ln -sf \"$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0\" \"$XDG_RUNTIME_DIR/discord-ipc-0\"";
+          additional_outside_commands = "ln -sf \"$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0\" \"$XDG_RUNTIME_DIR/discord-ipc-0\"";
           package = discord-canary.override {
             withOpenASAR = true;
             withVencord = true;

@@ -37,7 +37,7 @@ in
         fit-to-screen = false;
         relative-timestamps = true;
         control-center-width = 370;
-        control-center-height = 1030;
+        control-center-height = 950;
         notification-window-width = 350;
         keyboard-shortcuts = true;
         image-visibility = "when-available";
@@ -74,7 +74,6 @@ in
         /*
         * vim: ft=less
         */
-
         @define-color cc-bg rgba(0, 0, 0, 0.01);
 
         @define-color noti-border-color transparent;

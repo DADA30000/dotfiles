@@ -160,12 +160,15 @@ let
         wayland_full ? false,
         x11_shared ? false,
         x11 ? false,
+        use_landlock ? true,
         portals_for_files ? true,
         nvidia_gpu ? false,
+        pass_shm ? false,
+        pass_tmp ? false,
         main_desktop_file ? "none",
         additional_args ? { },
-        additional_prestart_commands ? "",
-        additional_wrap_commands ? "",
+        additional_inside_commands ? "",
+        additional_outside_commands ? "",
         extraAttrs ? [ ],
       }:
       let
@@ -236,9 +239,9 @@ let
               mkfifo "$READY_PIPE"
               exec 5<> "$READY_PIPE"
               mkdir "$MY_CGROUP/inside"
-              ${additional_wrap_commands}
+              ${additional_outside_commands}
               ${lib.optionalString network_singbox ''
-                ${rust-bridge}/bin/rust-bridge host "$SANDBOXED_RUNTIME_DIR/sing-box" 127.0.0.1:1919 &
+                ${rust-bridge}/bin/rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
               ''}
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
@@ -271,12 +274,13 @@ let
                 export ORIG_UID="$(id -u)"
                 export ORIG_GID="$(id -g)"
               ''}
-              ${landlock}/bin/landlock "$SANDBOXED_DASH"/bin/dash -c '
-                ${additional_prestart_commands}
+              ${lib.optionalString use_landlock "${landlock}/bin/landlock \\"}
+              "$SANDBOXED_DASH"/bin/dash -c '
+                ${additional_inside_commands}
                 ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
                 ${lib.optionalString network_singbox ''
                   ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
-                  ${rust-bridge}/bin/rust-bridge sandbox 127.0.0.1:1919 "$XDG_RUNTIME_DIR/sing-box" &
+                  ${rust-bridge}/bin/rust-bridge -r listen -s "$XDG_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 -d
                   exec ${landlock}/bin/landlock ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${pkgs.dash}/bin/dash -c "
                 ''}
                 ${lib.optionalString (!network_singbox) ''
@@ -383,6 +387,7 @@ let
                         [ ]
                         ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
                         ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
+                        ++ (lib.optionals pass_shm [ "/dev/shm" ])
                         ++ (lib.optionals nvidia_gpu [
                           "/dev/nvidia0"
                           "/dev/nvidiactl"
@@ -397,14 +402,6 @@ let
                           (sloth.mkdir "/sys/fs/cgroup")
                         ]
                         [
-                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
-                          "/dev/shm"
-                        ]
-                        [
-                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
-                          "/tmp"
-                        ]
-                        [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/runtime")
                           sloth.runtimeDir
                         ]
@@ -412,7 +409,20 @@ let
                           (mkdir-concat sloth.homeDir "/.nixpak/${appId}/home")
                           sloth.homeDir
                         ]
-                      ];
+                      ]
+                      ++ (lib.optionals (!pass_shm) [
+                        [
+                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
+                          "/dev/shm"
+                        ]
+                      ])
+                      ++ (lib.optionals (!pass_tmp) [
+                        [
+                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
+                          "/tmp"
+                        ]
+                      ])
+                      ++ (lib.optionals pass_tmp [ "/tmp" ]);
 
                       ro = [
                         "/etc/xdg"

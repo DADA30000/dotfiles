@@ -99,6 +99,7 @@ in
           "/website"
           "/etc/nixos"
           "/etc/ssh"
+          "/etc/lact"
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/lib/sbctl"

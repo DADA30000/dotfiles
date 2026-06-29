@@ -2,11 +2,46 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 with lib;
 let
   cfg = config.theming;
+  fluent-dark-pre =
+    (pkgs.fluent-gtk-theme.overrideAttrs (prev: {
+      src = inputs.fluent-gtk-theme;
+      patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/fluent.patch ];
+    })).override
+      {
+        tweaks = [
+          "noborder"
+          "round"
+          "blur"
+        ];
+      };
+  fluent-dark = pkgs.runCommand "fluent-dark" { } ''
+    cp -rL "${fluent-dark-pre}/share/themes/Fluent-round-Dark" "$out"
+  '';
+  customMoreWaita = pkgs.morewaita-icon-theme.overrideAttrs (oldAttrs: {
+    # 1. Propagate the Papirus theme to make it a runtime dependency.
+    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [ pkgs.papirus-icon-theme ];
+
+    # 2. Tell the Qt build hooks not to look for binaries to wrap.
+    dontWrapQtApps = true;
+
+    postInstall = (oldAttrs.postInstall or "") + ''
+      theme_file="$out/share/icons/MoreWaita/index.theme"
+      if [ -f "$theme_file" ]; then
+        substituteInPlace "$theme_file" \
+          --replace "Inherits=Adwaita,hicolor" "Inherits=Papirus-Dark,Adwaita,hicolor"
+      fi
+
+      # 3. Create absolute symlinks so the fallback theme resolves correctly in the Nix store.
+      ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus $out/share/icons/Papirus
+      ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus-Dark $out/share/icons/Papirus-Dark
+    '';
+  });
   # https://github.com/Vendicated/Vencord/tree/main/src/plugins
   vencord_settings = (pkgs.formats.json { }).generate "settings.json" {
     autoUpdate = true;
@@ -87,54 +122,55 @@ in
 
   config = mkIf cfg.enable {
 
-    home.activation = {
-      gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ -z "''${DRY_RUN:-}" ]]; then
-          if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
-            mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
-            cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
-            find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
-            find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+    home = {
+      packages = with pkgs; [
+        papirus-icon-theme
+        adwaita-icon-theme
+      ];
+      activation = {
+        gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          if [[ -z "''${DRY_RUN:-}" ]]; then
+            if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
+              mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
+              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
+              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
+              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+            fi
           fi
-        fi
-      '';
-      bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ -z "''${DRY_RUN:-}" ]]; then
-          if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
-            mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
-            touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
-            BOOKMARKS="
-              file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
-              file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
-              file://${config.xdg.userDirs.pictures} Изображения
-              File://${config.xdg.userDirs.music} Музыка
-              file://${config.xdg.userDirs.documents} Документы
-              file://${config.xdg.userDirs.download} Загрузки
-              file://${config.xdg.userDirs.videos} Видео
-              admin:/// / (корень, от рута)
-              file:/// / (корень)
-            "
-            echo "$BOOKMARKS" | sed 's/^[[:space:]]*//' | sed '/^$/d' > "${config.xdg.configHome}/gtk-3.0/bookmarks"
-          fi
-        fi
-      '';
-      #prismLauncher = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      #  if [[ ! -z DRY_RUN ]]; then
-      #    if [[ ! -f ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json ]]; then
-      #      mkdir -p $VERBOSE_ARG "${config.home.homeDirectory}/.local/share/PrismLauncher"
-      #      echo '{"accounts": [{"entitlement": {"canPlayMinecraft": true,"ownsMinecraft": true},"type": "MSA"}],"formatVersion": 3}' > ${config.home.homeDirectory}/.local/share/PrismLauncher/accounts.json
-      #    fi
-      #  fi
-      #'';
-    };
-    home.file = {
-      ".themes".source = ../../../stuff/.themes;
-      "Templates" = {
-        recursive = true;
-        source = pkgs.runCommand "templates" {} ''
-          mkdir -p $out
-          touch $out/new_file.{py,txt,sh}
         '';
+        bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          if [[ -z "''${DRY_RUN:-}" ]]; then
+            if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
+              mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
+              touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
+              BOOKMARKS="
+                file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
+                file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
+                file://${config.xdg.userDirs.pictures} Изображения
+                File://${config.xdg.userDirs.music} Музыка
+                file://${config.xdg.userDirs.documents} Документы
+                file://${config.xdg.userDirs.download} Загрузки
+                file://${config.xdg.userDirs.videos} Видео
+                admin:/// / (корень, от рута)
+                file:/// / (корень)
+              "
+              echo "$BOOKMARKS" | sed 's/^[[:space:]]*//' | sed '/^$/d' > "${config.xdg.configHome}/gtk-3.0/bookmarks"
+            fi
+          fi
+        '';
+      };
+      file = {
+        ".themes/Fluent-Dark" = {
+          recursive = true;
+          source = fluent-dark;
+        };
+        "Templates" = {
+          recursive = true;
+          source = pkgs.runCommand "templates" { } ''
+            mkdir -p $out
+            touch $out/new_file.{py,txt,sh}
+          '';
+        };
       };
     };
     xdg.userDirs = {
@@ -177,16 +213,21 @@ in
         "qimgv.conf" = ../../../stuff/qimgv/qimgv.conf;
         "theme.conf" = ../../../stuff/qimgv/theme.conf;
       })
-      // (mkSourcePrefix "gtk-4.0" {
-        assets = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/assets;
-        icons = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk-dark.css;
-        "gtk.css" = ../../../stuff/.themes/Fluent-Dark/gtk-4.0/gtk.css;
-      })
       // (mkSourcePrefix "vesktop" {
         themes = ./themes;
         "settings/settings.json" = vencord_settings;
         "settings.json" = vesktop_settings;
       })
+      // (mkSourcePrefix "gtk-4.0" {
+        assets = "${fluent-dark}/gtk-4.0/assets";
+        "gtk-dark.css" = "${fluent-dark}/gtk-4.0/gtk-dark.css";
+        "gtk.css" = "${fluent-dark}/gtk-4.0/gtk-dark.css";
+      })
+      # // (mkSourcePrefix "gtk-3.0" {
+      #   assets = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/assets";
+      #   "gtk-dark.css" = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/gtk-dark.css";
+      #   "gtk.css" = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/gtk-dark.css";
+      # })
       // (mkSourcePrefix "Vencord" {
         themes = ./themes;
         "settings/settings.json" = vencord_settings;
@@ -260,7 +301,7 @@ in
       };
       iconTheme = {
         name = "MoreWaita";
-        package = pkgs.morewaita-icon-theme;
+        package = customMoreWaita;
       };
       font = {
         name = "Noto Sans Medium";

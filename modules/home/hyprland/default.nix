@@ -236,6 +236,24 @@ in
           curve = [
             {
               _args = [
+                "easeIn"
+                {
+                  type = "bezier";
+                  points = [
+                    [
+                      0.38
+                      0.04
+                    ]
+                    [
+                      1
+                      0.075
+                    ]
+                  ];
+                }
+              ];
+            }
+            {
+              _args = [
                 "fade"
                 {
                   type = "bezier";
@@ -319,6 +337,18 @@ in
               bezier = "fade";
             }
             {
+              leaf = "fadeLayers";
+              enabled = true;
+              speed = 3;
+              bezier = "fade";
+            }
+            {
+              leaf = "fadeLayersOut";
+              enabled = true;
+              speed = 2;
+              bezier = "easeIn";
+            }
+            {
               leaf = "workspaces";
               enabled = true;
               speed = 4;
@@ -331,6 +361,13 @@ in
               speed = 3;
               bezier = "fade";
               style = "popin 90%";
+            }
+            {
+              leaf = "layersOut";
+              enabled = true;
+              speed = 2;
+              bezier = "easeIn";
+              style = "slide";
             }
           ];
           config = {
@@ -870,16 +907,13 @@ in
               match.namespace = ".*";
             }
             {
+              ignore_alpha = 0.9;
               no_anim = true;
               match.namespace = "selection";
             }
             {
               no_anim = true;
               match.namespace = "hyprpicker";
-            }
-            {
-              ignore_alpha = 0.9;
-              match.namespace = "selection";
             }
             {
               ignore_alpha = 0;
@@ -890,8 +924,13 @@ in
               match.namespace = "^(rofi|logout_dialog)$";
             }
             {
+              ignore_alpha = 0.02;
               animation = "slide left";
               match.namespace = "swaync-control-center";
+            }
+            {
+              ignore_alpha = 0.02;
+              match.namespace = "swaync-notification-window";
             }
           ];
           on = [
@@ -900,12 +939,13 @@ in
                 "hyprland.start"
                 (lib.generators.mkLuaInline ''
                   function () 
-                                  ${mkPluginExecEntries plugins}
-                                  hl.exec_cmd [[kbuildsycoca6]]
-                                  hl.exec_cmd [[${nautilus-listener}/bin/nautilis-listener]]
-                                  hl.exec_cmd [[app2unit -- wl-paste --watch cliphist store]]
-                                  hl.exec_cmd [[fumon]]
-                                end'')
+                    ${mkPluginExecEntries plugins}
+                    hl.exec_cmd [[kbuildsycoca6]]
+                    hl.exec_cmd [[${nautilus-listener}/bin/nautilis-listener]]
+                    hl.exec_cmd [[app2unit -- wl-paste --watch cliphist store]]
+                    hl.exec_cmd [[fumon]]
+                  end
+                '')
               ];
             }
           ];

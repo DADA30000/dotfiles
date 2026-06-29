@@ -15,6 +15,7 @@ let
       pynvim
     ]
   );
+
   rust-toolchain = pkgs.symlinkJoin {
     name = "nixos-system-toolchain";
     paths = with pkgs; [
@@ -25,7 +26,12 @@ let
       clippy
       rust-analyzer
     ];
+    postBuild = ''
+      mkdir -p $out/lib/rustlib/src
+      ln -s ${pkgs.rustPlatform.rustLibSrc} $out/lib/rustlib/src/rust
+    '';
   };
+
   rustupInitScript = pkgs.writeShellScript "rustup-init" ''
     export PATH="${
       lib.makeBinPath [
@@ -49,9 +55,13 @@ let
     vim.api.nvim_create_autocmd('FileType', {
       pattern = '*',
       callback = function()
-        pcall(vim.treesitter.start)
+        local lang = vim.treesitter.language.get_lang(vim.bo.filetype)
+        if lang then
+          pcall(vim.treesitter.start)
+        end
       end,
     })
+
     local dap = require("dap")
     local dapui = require("dapui")
     dapui.setup()
@@ -97,7 +107,7 @@ let
         type = "cppdbg",
         request = "launch",
         program = function() return pick_binary(vim.fn.getcwd() .. '/') end,
-        cwd = '${"\${workspaceFolder}"}',
+        cwd = "''${workspaceFolder}",
         stopAtEntry = false,
         setupCommands = {
           {
@@ -168,17 +178,12 @@ let
       set smartindent
     ]])
     require("ibl").setup {
-      indent = { char = "│" },  -- Vertical indentation line
-      scope = { enabled = true, show_start = true, show_end = true }, -- Enable scope guides
+      indent = { char = "│" },  
+      scope = { enabled = true, show_start = true, show_end = true }, 
     }
     if vim.g.neovide == true then
-      -- Copy to system clipboard (Normal/Visual mode)
       vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
-      
-      -- Paste from system clipboard (Normal/Visual mode)
       vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
-      
-      -- Paste from system clipboard (Insert mode)
       vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
     end
 
@@ -218,20 +223,21 @@ let
 
     require("cord").setup({})
 
-    -- === AUTO-SAVE SETUP (Using standard auto-save-nvim package) ===
+    -- === AUTO-SAVE SETUP ===
     require("auto-save").setup({
       enabled = true,
       trigger_events = {
         immediate_save = { "FocusLost", "BufLeave" },
-        defer_save = { "InsertLeave", "TextChanged" },
+        defer_save = { "InsertLeave" }, 
         cancel_deferred_save = { "InsertEnter" },
       },
-      -- Save without triggering blocking standard autocommands
       noautocmd = true,
       debounce_delay = 1000,
     })
   '';
   lsp_cmp_cfg = /* lua */ ''
+    local lspconfig = require("lspconfig")
+
     local luasnip = require("luasnip")
     require("luasnip.loaders.from_vscode").lazy_load()
 
@@ -250,19 +256,12 @@ let
         end,
       },
       mapping = cmp.mapping.preset.insert({
-        -- Remap <C-f> and <C-b> to scroll float windows/popups
         ['<C-b>'] = cmp.mapping.scroll_docs(-4),
         ['<C-f>'] = cmp.mapping.scroll_docs(4),
-        -- Use <c-space> to trigger completion
         ['<C-Space>'] = cmp.mapping.complete(),
         ['<C-e>'] = cmp.mapping.abort(),
-        
-        -- 1. Map Shift + Enter to accept completion
         ['<S-CR>'] = cmp.mapping.confirm({ select = true }),
-        -- 2. Keep Enter for new lines and auto-format (without accepting completion)
         ['<CR>'] = cmp.mapping.confirm({ select = false }), 
-        
-        -- Use Tab for trigger completion with characters ahead and navigate
         ['<Tab>'] = cmp.mapping(function(fallback)
           if cmp.visible() then
             cmp.select_next_item()
@@ -274,7 +273,6 @@ let
             fallback()
           end
         end, { "i", "s" }),
-        
         ['<S-Tab>'] = cmp.mapping(function(fallback)
           if cmp.visible() then
             cmp.select_prev_item()
@@ -301,32 +299,42 @@ let
         lua = { "stylua" },
         python = { "ruff_format" },
         rust = { "rustfmt" },
-        nix = { "nixfmt" }, -- Direct fast CLI formatter (avoids nixd timeouts)
+        nix = { "nixfmt" }, 
       },
       default_format_opts = {
         lsp_format = "fallback",
       },
-      -- format_on_save runs formatting synchronously inside BufWritePre
-      -- Auto-saves bypass this because we use 'noautocmd write' in auto-save config!
       format_on_save = {
         lsp_format = "fallback",
-        timeout_ms = 10000, -- 10-second safety timeout so it never drops manual saves
+        timeout_ms = 10000, 
       },
     })
 
-    -- Manual `:Format` user command is fully synchronous (blocks until complete)
     vim.api.nvim_create_user_command("Format", function()
       conform.format({ async = false, lsp_format = "fallback" })
     end, {})
 
-    -- === ASYNC AUTO-FORMAT ON AUTO-SAVE ===
-    -- When the background auto-save writes successfully, we run conform asynchronously.
-    -- This ensures the file is still auto-formatted, but without blocking your cursor.
+    -- === ASYNC AUTO-FORMAT ON AUTO-SAVE (WITH STATE LOCK) ===
+    local is_formatting = false
     vim.api.nvim_create_autocmd("User", {
       pattern = "AutoSaveWritePost",
       group = vim.api.nvim_create_augroup("AutoSaveAsyncFormat", { clear = true }),
       callback = function()
-        conform.format({ async = true, lsp_format = "fallback" })
+        if is_formatting then return end
+        if not vim.bo.modifiable then return end
+
+        is_formatting = true
+        conform.format({
+          async = true,
+          lsp_format = "fallback",
+          callback = function()
+            is_formatting = false
+            -- Write changes to disk silently without triggering standard autocmds
+            if vim.bo.modified then
+              vim.cmd("silent! noautocmd write")
+            end
+          end,
+        })
       end,
     })
 
@@ -343,17 +351,14 @@ let
       },
     })
 
-    -- Show diagnostics on hover
     vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
       callback = function()
         vim.diagnostic.open_float(nil, { focusable = false, scope = "cursor" })
       end
     })
 
-    -- Use `[g` and `]g` to navigate diagnostics
     vim.keymap.set('n', '[g', vim.diagnostic.goto_prev, { desc = "Previous Diagnostic" })
     vim.keymap.set('n', ']g', vim.diagnostic.goto_next, { desc = "Next Diagnostic" })
-    -- Show all diagnostics
     vim.keymap.set('n', '<space>a', vim.diagnostic.setqflist, { desc = "Workspace Diagnostics" })
 
     vim.api.nvim_create_autocmd('LspAttach', {
@@ -362,23 +367,15 @@ let
         local opts = { buffer = ev.buf, silent = true }
         local bind = vim.keymap.set
 
-        -- GoTo code navigation
         bind('n', 'gd', vim.lsp.buf.definition, opts)
         bind('n', 'gy', vim.lsp.buf.type_definition, opts)
         bind('n', 'gi', vim.lsp.buf.implementation, opts)
         bind('n', 'gr', vim.lsp.buf.references, opts)
-        -- Use K to show documentation in preview window
         bind('n', 'K', vim.lsp.buf.hover, opts)
-        -- Symbol renaming
         bind('n', '<leader>rn', vim.lsp.buf.rename, opts)
-        
-        -- Formatting selected code (conform handles this)
         bind({'n', 'x'}, '<leader>f', function() conform.format({ async = false, lsp_format = "fallback" }) end, opts)
-        -- Apply codeAction to the selected region
         bind({'n', 'x'}, '<leader>a', vim.lsp.buf.code_action, opts)
-        -- Remap keys for apply code actions at the cursor position.
         bind('n', '<leader>ac', vim.lsp.buf.code_action, opts)
-        -- Run the Code Lens actions on the current line
         bind('n', '<leader>cl', vim.lsp.codelens.run, opts)
       end,
     })
@@ -391,8 +388,44 @@ let
 
     local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
+    -- Compliant Neovim 0.11+ configuration style via vim.lsp.config.
     vim.lsp.config('rust_analyzer', {
       capabilities = capabilities,
+      root_dir = function(bufnr, cb)
+        local fname = vim.api.nvim_buf_get_name(bufnr)
+        if fname == "" then
+          return
+        end
+        local root = vim.fs.root(fname, { 'Cargo.toml', 'rust-project.json' })
+        cb(root) -- Pass nil if we are not inside a Cargo workspace
+      end,
+      before_init = function(params, config)
+        -- 1. Ensure settings['rust-analyzer'] is properly loaded into initializationOptions.
+        -- Overriding before_init replaces the default handler, so we must merge this manually.
+        if config.settings and config.settings['rust-analyzer'] then
+          params.initializationOptions = vim.tbl_deep_extend(
+            "force",
+            params.initializationOptions or {},
+            config.settings['rust-analyzer']
+          )
+        end
+
+        -- 2. Configure detached/single-file mode if not in a workspace
+        local fname = vim.api.nvim_buf_get_name(0)
+        if fname ~= "" then
+          local root = vim.fs.root(fname, { 'Cargo.toml', 'rust-project.json' })
+          if not root then
+            -- Force-nullify workspace paths using vim.NIL to prevent fallback to the editor's cwd
+            params.rootPath = vim.NIL
+            params.rootUri = vim.NIL
+            params.workspaceFolders = vim.NIL
+
+            -- Configure the detached files directly in initializationOptions
+            params.initializationOptions = params.initializationOptions or {}
+            params.initializationOptions.detachedFiles = { fname }
+          end
+        end
+      end,
       settings = {
         ["rust-analyzer"] = {
           check = {
@@ -535,7 +568,23 @@ in
       hexpatch
       tinyxxd
       bash-language-server
-      vscode-langservers-extracted
+
+      # Patches ESM main files to prepend Node's createRequire helper
+      (
+        (vscode-langservers-extracted.override {
+          buildNpmPackage = buildNpmPackage.override { nodejs = nodejs_22; };
+        }).overrideAttrs
+        (oldAttrs: {
+          postInstall = (oldAttrs.postInstall or "") + ''
+            for f in $(find $out -name "*ServerMain.js"); do
+              echo 'import { createRequire } from "module"; const require = createRequire(import.meta.url);' > temp.js
+              cat "$f" >> temp.js
+              mv temp.js "$f"
+            done
+          '';
+        })
+      )
+
       jdt-language-server
       lua-language-server
       taplo
