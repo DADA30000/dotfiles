@@ -236,6 +236,14 @@ let
     })
   '';
   lsp_cmp_cfg = /* lua */ ''
+    require("fidget").setup({
+      notification = {
+        window = {
+          winblend = 100,
+        },
+      },
+    })
+
     local lspconfig = require("lspconfig")
 
     local luasnip = require("luasnip")
@@ -639,6 +647,7 @@ in
         luasnip
         cmp_luasnip
         friendly-snippets
+        fidget-nvim
         onedark-nvim
       ];
       initLua = config_lua + lsp_cmp_cfg;
