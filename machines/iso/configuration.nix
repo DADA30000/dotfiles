@@ -136,6 +136,12 @@ in
           }
         )
       );
+      boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
+        pkgs.writeShellScript "find-nixos-closure" ''
+          mkdir -p /etc
+          echo "NEW_INIT=${config.system.build.toplevel}/init" > /etc/switch-root.conf
+        ''
+      );
       home-manager.users.${user} = import ./home.nix;
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
