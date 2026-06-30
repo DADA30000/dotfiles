@@ -136,27 +136,16 @@ in
           }
         )
       );
-      boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
-        pkgs.writeScript "find-nixos-closure" ''
-          #!/bin/bash
-          mkdir -p /etc
-          INIT_PATH=""
-          for path in /sysroot/nix/store/*-nixos-system-iso-*; do
-            # Safely verify the presence of our static /etc marker file
-            if [ -f "$path/etc/is-live-iso" ]; then
-              INIT_PATH="$path/init"
-              break
-            fi
-          done
-
-          if [ -n "$INIT_PATH" ]; then
+      boot.initrd.systemd.services.initrd-find-nixos-closure = {
+        serviceConfig.ExecStart = lib.mkForce (
+          pkgs.writeScript "find-nixos-closure" ''
+            #!/bin/bash
+            mkdir -p /etc
+            INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
             echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
-          else
-            echo "Failed to dynamically discover NixOS init path!" >&2
-            exit 1
-          fi
-        ''
-      );
+          ''
+        );
+      };
       boot.initrd.systemd.storePaths = [
         config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
       ];
