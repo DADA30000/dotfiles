@@ -326,6 +326,13 @@ in
             "nix-search --index-path \"${index}\" \"$@\""
           }
           }
+          fix-dbx() {
+            local DEFAULT_DBX_PATH=$(ls /sys/firmware/efi/efivars/dbxDefault-*)
+            DEFAULT_DBX_PATH=$(ls /sys/firmware/efi/efivars/dbxDefault-*)
+            sudo tail -c +5 "$DEFAULT_DBX_PATH" > /tmp/dbxDefault.esl
+            sudo efi-updatevar -e -k /var/lib/sbctl/keys/KEK/KEK.key -f /tmp/dbxDefault.esl dbx
+            sudo rm /tmp/dbxDefault.esl
+          }
           7z() { 7zz "$@" }
           u-test() { nh os test /etc/nixos "$@" }
           u-boot() { nh os boot /etc/nixos "$@" }

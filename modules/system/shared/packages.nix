@@ -326,6 +326,8 @@ in
         mpv
         gnome-boxes
         lsd
+        e2fsprogs
+        efitools
         kdiskmark
         nixfmt
         sshfs

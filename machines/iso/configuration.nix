@@ -157,6 +157,7 @@ in
       };
       boot.initrd.systemd.storePaths = [
         config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
+        config.boot.initrd.systemd.services.initrd-nixos-activation.serviceConfig.ExecStart
       ];
       environment.etc."is-live-iso".text = "true";
       home-manager.users.${user} = import ./home.nix;

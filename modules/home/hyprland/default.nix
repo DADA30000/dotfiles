@@ -367,7 +367,7 @@ in
               enabled = true;
               speed = 2;
               bezier = "easeIn";
-              style = "slide";
+              style = "popin 90%";
             }
           ];
           config = {
