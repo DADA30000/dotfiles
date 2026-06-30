@@ -138,7 +138,7 @@ in
     stable = mkEnableOption "Use Hyprland from nixpkgs";
     enable-plugins = mkEnableOption "Hyprland plugins";
     mpvpaper = mkEnableOption "video wallpapers with mpvpaper";
-    hyprpaper = mkEnableOption "image wallpapers with hyprpaper";
+    wallpaper = mkEnableOption "image wallpapers with swaybg";
     wlogout = mkEnableOption "power options menu";
     hyprlock = mkEnableOption "locking program";
     rofi = mkEnableOption "rofi (used as applauncher and dmenu)";
@@ -1065,29 +1065,21 @@ in
           ];
         };
       };
-      hyprpaper = mkIf (cfg.hyprpaper && !cfg.mpvpaper) {
-        enable = true;
-        settings = {
-          ipc = "on";
-          splash = false;
-          wallpaper = {
-            monitor = "";
-            path = "${../../../stuff/wallpaper.png}";
-            fit_mode = "cover";
-          };
-        };
-      };
     };
-    #systemd.user.services.hyprpaper.Service.ExecStartPre = mkIf (cfg.hyprpaper && !cfg.mpvpaper) "${pkgs.coreutils-full}/bin/sleep 1.8";
-    systemd.user.services.mpvpaper = mkIf (!cfg.hyprpaper && cfg.mpvpaper) {
-      Unit = {
-        Description = "Play video wallpaper.";
+    systemd.user.services = {
+      swaybg = {
+        Service = {
+          ExecStart = "${pkgs.swaybg}/bin/swaybg -m fill -i ${../../../stuff/wallpaper.png}";
+          Restart = "on-failure";
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
       };
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
-      };
-      Service = {
-        ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket hwdec=auto' '*' ${../../../stuff/wallpaper.mp4}";
+      mpvpaper = mkIf (!cfg.wallpaper && cfg.mpvpaper) {
+        Install.WantedBy = [ "graphical-session.target" ];
+        Service = {
+          ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket hwdec=auto' '*' ${../../../stuff/wallpaper.mp4}";
+          Restart = "on-failure";
+        };
       };
     };
     programs.rofi = mkIf cfg.rofi {

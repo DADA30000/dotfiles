@@ -188,7 +188,7 @@
 
     mpvpaper = false;
 
-    hyprpaper = true;
+    wallpaper = true;
 
     wlogout = true;
 
