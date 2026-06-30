@@ -136,13 +136,22 @@ in
           }
         )
       );
-      boot.initrd.systemd.services.initrd-find-nixos-closure = {
-        serviceConfig.ExecStart = lib.mkForce (
+      boot.initrd.systemd.services = {
+        initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
           pkgs.writeScript "find-nixos-closure" ''
             #!/bin/bash
             mkdir -p /etc
             INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
             echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
+          ''
+        );
+        initrd-nixos-activation.serviceConfig.ExecStart = lib.mkForce (
+          pkgs.writeScript "initrd-nixos-activation" ''
+            #!/bin/bash
+            closure_raw=$(echo /sysroot/nix/store/*-nixos-system-iso-*)
+            closure=''${closure_raw#/sysroot}
+            ln -sfn "$closure" /sysroot/nixos-closure
+            exec chroot /sysroot /nixos-closure/prepare-root
           ''
         );
       };
