@@ -84,7 +84,7 @@ let
         name = "service-prompter";
         src = evalAndSubstitute {
           string = builtins.readFile ../../stuff/prompt.py;
-          scope = { inherit servicesJson installScript; };
+          scope = { inherit pkgs servicesJson installScript; };
         };
       };
 

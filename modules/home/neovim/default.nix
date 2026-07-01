@@ -176,6 +176,7 @@ let
       colorscheme onedark
       highlight Visual guibg=#4e5a6b guifg=#ffffff
       highlight Normal guifg=#bbddff
+      highlight TabLineSel guifg=#ffffff gui=bold ctermfg=white cterm=bold
       map! <S-Insert> <C-R>+
       map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
       map !hh :silent! tabnew +Man! ${kekma.home}<cr>
@@ -295,10 +296,10 @@ let
     -- Prevents the file status, line count, and byte count from printing on save.
     -- Using 'silent' suppresses standard output while still displaying write errors if they occur.
     local silent_commands = {
-      w = "silent w",
+      -- w = "silent w",
       wq = "silent wq",
       x = "silent x",
-      wa = "silent wa",
+      -- wa = "silent wa",
       wqa = "silent wqa",
       xa = "silent xa",
     }
@@ -435,6 +436,15 @@ let
             vim.cmd("noautocmd call winrestview({'topline': " .. max_topline .. "})")
           end
         end
+      end,
+    })
+
+    -- === DYNAMIC TABLINE UPDATE FOR TERMINAL TITLES ===
+    -- Forces Neovim to redraw your custom tabline whenever terminal programs change their title (OSC sequences)
+    vim.api.nvim_create_autocmd({ "TermRequest", "TermResponse" }, {
+      pattern = "*",
+      callback = function()
+        vim.cmd("redrawtabline")
       end,
     })
 
@@ -915,6 +925,7 @@ in
     };
     home.packages = with pkgs; [
       neovide-term
+      neovim-remote
       stylua
       delve
       rustup

@@ -370,11 +370,26 @@ in
           let
             zshConfig = /* zsh */ ''
               if [ -n "$NVIM" ]; then
-                alias nvim="nvim --headless --server \"$NVIM\" --remote-tab"
-                alias v="nvim --headless --server \"$NVIM\" --remote-tab"
-                export SUDO_EDITOR="nvim --headless --server $NVIM --remote-tab-wait"
-                export VISUAL="nvim --headless --server $NVIM --remote-tab-wait"
-                export EDITOR="nvim --headless --server $NVIM --remote-tab-wait"
+                nvim() {
+                  if (( $# == 0 )); then
+                    command nvim --headless --server "$NVIM" --remote-send "<C-\><C-n>:tabnew<CR>"
+                  else
+                    local args=()
+                    for arg in "$@"; do
+                      if [[ "$arg" == -* ]]; then
+                        args+=("$arg")
+                      else
+                        args+=("''${arg:A}")
+                      fi
+                    done
+                    command nvim --headless --server "$NVIM" --remote-tab "''${args[@]}"
+                  fi
+                }
+                alias v="nvim"
+                
+                export SUDO_EDITOR="nvr --servername $NVIM --remote-tab-wait +let&l:bufhidden=\"wipe\""
+                export VISUAL="nvr --servername $NVIM --remote-tab-wait +let&l:bufhidden=\"wipe\""
+                export EDITOR="nvr --servername $NVIM --remote-tab-wait +let&l:bufhidden=\"wipe\""
               fi
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
