@@ -94,8 +94,8 @@ let
           Unit = {
             ConditionEnvironment = "WAYLAND_DISPLAY";
             Description = "Graphical service manager and installer prompt";
-            After = [ config.wayland.systemd.target ];
-            PartOf = [ config.wayland.systemd.target ];
+            After = [ config.home-manager.${user}.wayland.systemd.target ];
+            PartOf = [ config.home-manager.${user}.wayland.systemd.target ];
           };
           Service = {
             ExecStart = "${servicePrompterApp}/bin/service-prompter";
