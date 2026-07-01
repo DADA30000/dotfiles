@@ -599,7 +599,7 @@ in
               ] # change later to "Satty" https://github.com/gabm/Satty
               [
                 "${mod} + CTRL + Q"
-                "app2unit -- neovide --frame none +term +startinsert '+set laststatus=0 ruler' '+set cmdheight=0' '+map <c-t> :tabnew +term<enter>'"
+                "app2unit -- kitty"
               ]
               [
                 "${mod} + CTRL + R"
@@ -655,7 +655,7 @@ in
               ]
               [
                 "${mod} + Q"
-                "app2unit -- kitty"
+                "app2unit -- neovide-term"
               ]
               [
                 "${mod} + Z"
@@ -1068,11 +1068,24 @@ in
     };
     systemd.user.services = {
       swaybg = {
-        Service = {
-          ExecStart = "${pkgs.swaybg}/bin/swaybg -m fill -i ${../../../stuff/wallpaper.png}";
-          Restart = "on-failure";
+        Install.WantedBy = [ config.wayland.systemd.target ];
+        Unit = {
+          ConditionEnvironment = "WAYLAND_DISPLAY";
+          Description = "swaybg wallpaper daemon";
+          After = [ config.wayland.systemd.target ];
+          PartOf = [ config.wayland.systemd.target ];
         };
-        Install.WantedBy = [ "graphical-session.target" ];
+        Service = {
+          ExecStart = lib.escapeShellArgs [
+            "${lib.getExe pkgs.swaybg}"
+            "-i"
+            "${../../../stuff/wallpaper.png}"
+            "-m"
+            "fill"
+          ];
+          Restart = "always";
+          RestartSec = "10";
+        };
       };
       mpvpaper = mkIf (!cfg.wallpaper && cfg.mpvpaper) {
         Install.WantedBy = [ "graphical-session.target" ];

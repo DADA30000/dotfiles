@@ -6,13 +6,106 @@
   orig,
   config,
   inputs,
+  evalAndSubstitute,
   ...
 }:
 let
-  #bundle = pkgs.fetchurl {
-  #  url = "https://github.com/DADA30000/dotfiles/releases/download/vmware/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle";
-  #  hash = "sha256-eVdZF3KN7UxtC4n0q2qBvpp3PADuto0dEqwNsSVHjuA=";
-  #};
+  mkPyApp =
+    {
+      name,
+      src,
+      pathDeps ? [ ],
+    }:
+    pkgs.stdenv.mkDerivation {
+      pname = name;
+      version = "1.0";
+      src = pkgs.writeText "${name}-src" src;
+      dontUnpack = true;
+
+      nativeBuildInputs = [
+        pkgs.wrapGAppsHook3
+        pkgs.gobject-introspection
+      ];
+      buildInputs = [
+        pkgs.gtk3
+        pkgs.gsettings-desktop-schemas
+        pkgs.adwaita-icon-theme
+      ];
+
+      pythonEnv = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
+
+      installPhase = ''
+        mkdir -p $out/bin
+        echo "#!$pythonEnv/bin/python" > $out/bin/${name}
+        cat $src >> $out/bin/${name}
+        chmod +x $out/bin/${name}
+      '';
+
+      preFixup = ''
+        gappsWrapperArgs+=(
+          --prefix PATH : "${lib.makeBinPath pathDeps}"
+        )
+      '';
+    };
+  disableServices =
+    list:
+    let
+      disabledAttrs = lib.foldl' (
+        acc: item:
+        let
+          parts = lib.splitString "/" item;
+          type = lib.elemAt parts 0;
+          name = lib.elemAt parts 1;
+          path =
+            if type == "user" then
+              [
+                "user"
+                "services"
+                name
+                "wantedBy"
+              ]
+            else
+              [
+                "services"
+                name
+                "wantedBy"
+              ];
+        in
+        lib.recursiveUpdate acc (lib.setAttrByPath path (lib.mkForce [ ]))
+      ) { } list;
+
+      servicesJson = pkgs.writeText "services.json" (builtins.toJSON list);
+
+      installScript = pkgs.writeShellScript "install-script" ''
+        neovide-term "zsh -c 'nix-install; exec zsh -i'"
+      '';
+
+      servicePrompterApp = mkPyApp {
+        name = "service-prompter";
+        src = evalAndSubstitute {
+          string = builtins.readFile ../../stuff/test.py;
+          scope = { inherit servicesJson installScript; };
+        };
+      };
+
+      prompterService = {
+        user.services.service-prompter = {
+          Install.WantedBy = [ config.wayland.systemd.target ];
+          Unit = {
+            ConditionEnvironment = "WAYLAND_DISPLAY";
+            Description = "Graphical service manager and installer prompt";
+            After = [ config.wayland.systemd.target ];
+            PartOf = [ config.wayland.systemd.target ];
+          };
+          Service = {
+            ExecStart = "${servicePrompterApp}/bin/service-prompter";
+            Restart = "on-failure";
+            RestartSec = "10";
+          };
+        };
+      };
+    in
+    lib.recursiveUpdate disabledAttrs prompterService;
   patchGrubDir =
     dir:
     pkgs.runCommand "patched-efi-dir" { } ''
@@ -156,13 +249,23 @@ in
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
 
-      systemd.user.services.replays.wantedBy = lib.mkForce [ ];
-
-      systemd.user.services.opentabletdriver.wantedBy = lib.mkForce [ ];
-
-      systemd.services.singbox.wantedBy = lib.mkForce [ ];
-
-      systemd.services.sshd.wantedBy = lib.mkForce [ ];
+      systemd = disableServices [
+        "user/replays"
+        "user/opentabletdriver"
+        "user/sunshine"
+        "user/kdeconnect-indicator"
+        "user/kdeconnect"
+        "user/wivrn"
+        "user/easyeffects"
+        "system/zerotierone"
+        "system/tailscaled"
+        "system/sing-box"
+        "system/sshd"
+        "system/cups"
+        "system/cups-browsed"
+        "system/openrgb"
+        "system/ydotool"
+      ];
 
       security.polkit.extraConfig = ''
         polkit.addRule(function(action, subject) {

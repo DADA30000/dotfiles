@@ -269,7 +269,7 @@ in
         color-scheme = "prefer-dark";
       };
       "com/github/stunkymonkey/nautilus-open-any-terminal" = {
-        terminal = "kitty";
+        terminal = "neovide-term";
       };
     };
     qt = {

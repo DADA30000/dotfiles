@@ -204,7 +204,5 @@
 
     zsh-start = true;
 
-    logo-path = ../../../stuff/logo.png;
-
   };
 }

@@ -220,7 +220,7 @@ def is_replays_running():
 
 class ControlPanelWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="System Control Panel")
+        super().__init__(title="Power menu")
         self.set_border_width(15)
         self.set_default_size(480, -1)
         self.set_position(Gtk.WindowPosition.CENTER)
@@ -268,13 +268,13 @@ class ControlPanelWindow(Gtk.Window):
         vbox.pack_start(title_box, False, False, 0)
 
         icon_img = Gtk.Image.new_from_icon_name(
-            "preferences-system-power", Gtk.IconSize.LARGE_TOOLBAR
+            "battery-full-symbolic", Gtk.IconSize.LARGE_TOOLBAR
         )
         title_box.pack_start(icon_img, False, False, 0)
 
         lbl_title = Gtk.Label()
         lbl_title.set_markup(
-            "<span size='large' weight='bold'>System Control Center</span>"
+            "<span size='large' weight='bold'>Power menu</span>"
         )
         title_box.pack_start(lbl_title, False, False, 0)
 

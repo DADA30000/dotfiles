@@ -4,9 +4,83 @@
   inputs,
   mkSandbox,
   listFiles,
+  config,
   ...
 }:
 let
+  mkPyApp =
+    {
+      name,
+      src,
+      pathDeps ? [ ],
+    }:
+    pkgs.stdenv.mkDerivation {
+      pname = name;
+      version = "1.0";
+      src = pkgs.writeText "${name}-src" src;
+      dontUnpack = true;
+
+      nativeBuildInputs = [
+        pkgs.wrapGAppsHook3
+        pkgs.gobject-introspection
+      ];
+      buildInputs = [
+        pkgs.gtk3
+        pkgs.gsettings-desktop-schemas
+        pkgs.adwaita-icon-theme
+      ];
+
+      pythonEnv = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
+
+      installPhase = ''
+        mkdir -p $out/bin
+        echo "#!$pythonEnv/bin/python" > $out/bin/${name}
+        cat $src >> $out/bin/${name}
+        chmod +x $out/bin/${name}
+      '';
+
+      preFixup = ''
+        gappsWrapperArgs+=(
+          --prefix PATH : "${lib.makeBinPath pathDeps}"
+        )
+      '';
+    };
+  nv-blindfold-pkg = pkgs.stdenv.mkDerivation {
+    name = "nv-blindfold";
+    src = pkgs.writeText "nv-blindfold.c" (builtins.readFile ../../../stuff/nv-blindfold.c);
+    unpackPhase = "true";
+    buildPhase = ''
+      gcc -O2 $src -o nv-blindfold
+    '';
+    installPhase = ''
+      mkdir -p $out/bin
+      cp nv-blindfold $out/bin/
+    '';
+  };
+  fan-control-pkg = pkgs.stdenv.mkDerivation {
+    name = "fan-control";
+    src = pkgs.writeText "fan-control.c" (builtins.readFile ../../../stuff/fan-control.c);
+    unpackPhase = "true";
+    buildPhase = "gcc -O2 $src -o fan-control";
+    installPhase = "mkdir -p $out/bin && cp fan-control $out/bin/";
+  };
+  gigabyte-laptop-wmi = pkgs.stdenv.mkDerivation {
+    pname = "aorus-laptop";
+    version = inputs.gigabyte-laptop-wmi.shortRev;
+
+    src = inputs.gigabyte-laptop-wmi;
+
+    makeFlags = [
+      "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"
+    ];
+
+    installPhase = ''
+      dir=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/platform/x86
+      mkdir -p $dir
+      cp aorus-laptop.ko $dir/
+    '';
+
+  };
   giTypelibPath = lib.makeSearchPathOutput "lib" "lib/girepository-1.0" [
     pkgs.gtk3
     pkgs.pango
@@ -303,6 +377,31 @@ in
 {
   config = {
     _module.args.evalAndSubstitute = evalAndSubstitute;
+    boot.extraModulePackages = [ gigabyte-laptop-wmi ];
+    systemd.services.load-aorus-laptop = {
+      description = "Load Gigabyte Aorus Laptop driver asynchronously";
+      after = [ "basic.target" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.kmod}/bin/modprobe aorus_laptop";
+        RemainAfterExit = true;
+      };
+    };
+    security.wrappers = {
+      nv-blindfold = {
+        setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${nv-blindfold-pkg}/bin/nv-blindfold";
+      };
+      fan-control = {
+        setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${fan-control-pkg}/bin/fan-control";
+      };
+    };
     environment.systemPackages =
       with pkgs;
       with inputs;
@@ -328,6 +427,7 @@ in
         lsd
         e2fsprogs
         efitools
+        efibootmgr
         kdiskmark
         nixfmt
         sshfs
@@ -350,6 +450,7 @@ in
         lndir
         texinfo
         xkbcomp
+        nvtopPackages.full
         xkeyboard-config
         libX11
         scanmem
@@ -561,6 +662,10 @@ in
             withOpenASAR = true;
             withVencord = true;
           };
+        })
+        (mkPyApp {
+          name = "testma";
+          src = evalAndSubstitute { string = builtins.readFile ../../../stuff/test.py; };
         })
         # Below are for offline build
         (python3.withPackages (

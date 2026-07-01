@@ -369,15 +369,13 @@ in
         initContent =
           let
             zshConfig = /* zsh */ ''
-              nixos_ascii () {
-              echo -n $'\E[34m'
-              cat << "EOF"
-                _  _ _      ___  ___ 
-               | \| (_)_ __/ _ \/ __|
-               | .` | \ \ / (_) \__ \
-               |_|\_|_/_\_\\___/|___/
-              EOF
-              }
+              if [ -n "$NVIM" ]; then
+                alias nvim="nvim --headless --server \"$NVIM\" --remote-tab"
+                alias v="nvim --headless --server \"$NVIM\" --remote-tab"
+                export SUDO_EDITOR="nvim --headless --server $NVIM --remote-tab-wait"
+                export VISUAL="nvim --headless --server $NVIM --remote-tab-wait"
+                export EDITOR="nvim --headless --server $NVIM --remote-tab-wait"
+              fi
               export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
               setopt correct

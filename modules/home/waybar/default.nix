@@ -643,7 +643,7 @@ in
           "cpu" = {
             interval = 2;
             format = "{usage}%  ";
-            on-click = "kitty btop";
+            on-click = "neovide-term btop";
           };
           "custom/cputemp" = {
             interval = 3;
@@ -690,19 +690,19 @@ in
             on-click = "~/.config/hypr/bin/camera-toggle";
             signal = 3;
           };
-          #"custom/nvidia-gpu" = {
-          #  interval = 1;
-          #  exec-if = "nvidia-gpu";
-          #  exec = "nvidia-gpu";
-          #  on-click = "kitty nvtop";
-          #  return-type = "json";
-          #  format = "{}";
-          #  tooltip = true;
-          #};
+          "custom/nvidia-gpu" = {
+            interval = 1;
+            exec-if = "nvidia-gpu";
+            exec = "nvidia-gpu";
+            on-click = "neovide-term nvtop";
+            return-type = "json";
+            format = "{}";
+            tooltip = true;
+          };
           "custom/amd-gpu" = {
             interval = 2;
             exec = "amd-gpu";
-            on-click = "kitty nvtop";
+            on-click = "neovide-term nvtop";
             return-type = "json";
             format = "{}";
             tooltip = true;

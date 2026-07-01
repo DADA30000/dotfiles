@@ -186,11 +186,21 @@
       vista-fonts
       corefonts
       noto-fonts
+      noto-fonts-monochrome-emoji
       liberation_ttf
       nerd-fonts.jetbrains-mono
+      nerd-fonts.caskaydia-cove
+      jetbrains-mono
+      maple-mono.NF-CN
+      unscii
     ];
 
     fontconfig.defaultFonts = {
+      emoji = [
+        "JetBrainsMono Nerd Font"
+        "Noto Emoji"
+        "Noto Color Emoji"
+      ];
       serif = [
         "Noto Serif"
         "Liberation Serif"
@@ -304,7 +314,10 @@
 
     vulkan_video = true;
 
-    amdgpu.enable = true;
+    amdgpu = {
+      enable = true;
+      pro = true;
+    };
 
   };
 
@@ -392,7 +405,6 @@
       #AQ_NO_MODESET_PROBE = "1";
       #__GLX_VENDOR_LIBRARY_NAME = "mesa";
       #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
-      # To fix Telegram sound in Discord screenshare
       GDK_PIXBUF_MODULE_FILE = "${pkgs.librsvg}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache";
       MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=Delete,toggle_fps_limit=Shift_R+backslash,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
       ALSOFT_DRIVERS = "pulse";
@@ -402,7 +414,7 @@
       GTK_THEME = "Fluent-Dark";
       ENVFS_RESOLVE_ALWAYS = "1";
       MOZ_ENABLE_WAYLAND = "1";
-      TERMINAL = "kitty";
+      TERMINAL = "neovide-term";
       EGL_PLATFORM = "wayland";
       MOZ_DISABLE_RDD_SANDBOX = "1";
       NIXPKGS_ALLOW_UNFREE = "1";
@@ -492,6 +504,8 @@
 
   services = {
 
+    fwupd.enable = true;
+
     lact.enable = true;
 
     logind.settings.Login.HandlePowerKey = "suspend";
@@ -527,11 +541,11 @@
       enable = true;
       settings = {
         initial_session = {
-          command = "uwsm start hyprland-uwsm.desktop";
+          command = "uwsm start hyprland-uwsm.desktop > /dev/null 2>&1";
           user = user;
         };
         default_session = {
-          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd \"uwsm start hyprland-uwsm.desktop\"";
+          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd \"uwsm start hyprland-uwsm.desktop\" > /dev/null 2>&1";
           user = "greeter";
         };
       };
@@ -579,6 +593,46 @@
       alsa.support32Bit = true;
       jack.enable = true;
       pulse.enable = true;
+    };
+
+    tlp = {
+      enable = true;
+      pd.enable = true;
+      settings = {
+        CPU_DRIVER_OPMODE_ON_AC = "active";
+        CPU_SCALING_GOVERNOR_ON_AC = "performance";
+        CPU_ENERGY_PERF_POLICY_ON_AC = "performance";
+        CPU_BOOST_ON_AC = 1;
+        PLATFORM_PROFILE_ON_AC = "performance";
+        AMDGPU_ABM_LEVEL_ON_AC = 0;
+        PCIE_ASPM_ON_AC = "default";
+        RUNTIME_PM_ON_AC = "on";
+        WIFI_PWR_ON_AC = "off";
+        CPU_DRIVER_OPMODE_ON_BAT = "active";
+        CPU_SCALING_GOVERNOR_ON_BAT = "powersave";
+        CPU_ENERGY_PERF_POLICY_ON_BAT = "balance_power";
+        CPU_BOOST_ON_BAT = 1;
+        PLATFORM_PROFILE_ON_BAT = "low-power";
+        AMDGPU_ABM_LEVEL_ON_BAT = 0;
+        PCIE_ASPM_ON_BAT = "powersupersave";
+        RUNTIME_PM_ON_BAT = "auto";
+        WIFI_PWR_ON_BAT = "on";
+        CPU_DRIVER_OPMODE_ON_SAV = "active";
+        CPU_SCALING_GOVERNOR_ON_SAV = "powersave";
+        CPU_ENERGY_PERF_POLICY_ON_SAV = "power";
+        CPU_BOOST_ON_SAV = 0;
+        CPU_HWP_DYN_BOOST_ON_SAV = 0;
+        PLATFORM_PROFILE_ON_SAV = "low-power";
+        CPU_MIN_PERF_ON_SAV = 0;
+        CPU_MAX_PERF_ON_SAV = 1;
+        AMDGPU_ABM_LEVEL_ON_SAV = 0;
+        NMI_WATCHDOG = 0;
+        SOUND_POWER_SAVE_ON_AC = 0;
+        SOUND_POWER_SAVE_ON_BAT = 1;
+        SOUND_POWER_SAVE_CONTROLLER = "Y";
+        USB_AUTOSUSPEND = 1;
+        USB_EXCLUDE_AUDIO = 0; # Allows idle USB audio devices to sleep
+      };
     };
 
   };
@@ -777,7 +831,7 @@
     enable = true;
 
     settings.default = [
-      "kitty.desktop"
+      "neovide-term.desktop"
     ];
 
   };

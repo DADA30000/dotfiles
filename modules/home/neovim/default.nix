@@ -8,6 +8,24 @@
 with lib;
 let
   cfg = config.neovim;
+  neovide-config = (pkgs.formats.toml { }).generate "neovide-config" {
+    font = {
+      normal = [
+        "JetBrainsMono NF"
+        "Noto Emoji"
+        "Maple Mono NF CN"
+      ];
+      size = 12;
+    };
+  };
+  neovide-term = pkgs.writers.writeDashBin "neovide-term" ''
+    exec neovide --frame none --no-idle --mouse-cursor-icon i-beam "+term''${1:+ $*}" +startinsert \
+      '+set laststatus=0' \
+      '+set cmdheight=0' \
+      '+nnoremap <C-S-t> :tabnew +term<CR>' \
+      '+inoremap <C-S-t> <C-o>:tabnew +term<CR>' \
+      '+tnoremap <C-S-t> <C-\><C-n>:tabnew +term<CR>'
+  '';
   python = pkgs.python3.withPackages (
     ps: with ps; [
       tkinter
@@ -152,10 +170,11 @@ let
     vim.keymap.set('n', '<F12>', function() dap.step_out() end, { desc = "Debug: Step Out" })
     vim.keymap.set('n', '<leader>b', function() dap.toggle_breakpoint() end, { desc = "Debug: Breakpoint" })
     vim.cmd([[
-      autocmd TermClose * execute 'bdelete! ' . expand('<abuf>')
+      autocmd TermClose * if expand("<abuf>") == bufnr() | silent! quit! | endif
       let g:onedark_config = { 'style': 'deep', }
       let g:netrw_keepdir = 0
       colorscheme onedark
+      highlight Visual guibg=#4e5a6b guifg=#ffffff
       highlight Normal guifg=#bbddff
       map! <S-Insert> <C-R>+
       map !aa :tabnew $NEOVIDE_MOUNT_POINT<cr>
@@ -170,6 +189,7 @@ let
       highlight Normal ctermbg=none
       highlight NonText ctermbg=none
       highlight StatusLine guibg=none
+      set report=99999
       set tabstop=2
       set softtabstop=2
       set shiftwidth=2
@@ -193,23 +213,324 @@ let
       vim.cmd('startinsert')
     end
 
+    -- Define a custom, beautiful tablined
+    _G.MyTabLine = function()
+      local s = ""
+      for i = 1, vim.fn.tabpagenr("$") do
+        -- Highlight the active tab differently from inactive tabs
+        if i == vim.fn.tabpagenr() then
+          s = s .. "%#TabLineSel#"
+        else
+          s = s .. "%#TabLine#"
+        end
+
+        -- Map the click target to this tab number (for mouse support)
+        s = s .. "%" .. i .. "T"
+
+        -- Find the active buffer in this tab
+        local buflist = vim.fn.tabpagebuflist(i)
+        local winnr = vim.fn.tabpagewinnr(i)
+        local bufnr = buflist and buflist[winnr]
+        local bufname = bufnr and vim.api.nvim_buf_get_name(bufnr) or ""
+
+        local tabname = ""
+        if bufnr and vim.bo[bufnr].buftype == "terminal" then
+          -- Fetch the dynamic process title set by your shell/program
+          local term_title = vim.b[bufnr].term_title
+          if term_title and term_title ~= "" then
+            -- Clean up any paths (e.g., "/bin/zsh" -> "zsh")
+            local cmd = term_title:match("([^/]+)$") or term_title
+            -- Strip trailing flags or arguments (e.g., "htop -d 10" -> "htop")
+            cmd = cmd:match("^([^%s]+)") or cmd
+            tabname = " " .. cmd
+          else
+            tabname = " term"
+          end
+        elseif bufname == "" then
+          tabname = "[No Name]"
+        else
+          local filename = vim.fn.fnamemodify(bufname, ":t")
+          if filename == "default.nix" then
+            -- "my-module"
+            tabname = vim.fn.fnamemodify(bufname, ":h:t")
+            -- "my-module/default.nix"
+            -- tabname = vim.fn.fnamemodify(bufname, ":h:t") .. "/" .. filename
+          else
+            tabname = filename
+          end
+        end
+
+        -- Add clean padding and the tab index
+        s = s .. " " .. i .. ": " .. tabname .. " "
+      end
+
+      -- Fill the rest of the bar and reset highlight
+      s = s .. "%#TabLineFill#%T"
+      return s
+    end
+
+    -- === HORIZONTAL TRACKPAD SCROLLING IN TERMINALS ===
+    -- Translates horizontal trackpad swipes to Left/Right arrow keys in terminal mode
+    vim.keymap.set('t', '<ScrollWheelLeft>', '<Left>', { silent = true, desc = "Scroll left in terminal" })
+    vim.keymap.set('t', '<ScrollWheelRight>', '<Right>', { silent = true, desc = "Scroll right in terminal" })
+
+    -- Set the tabline to use our Lua function
+    vim.o.tabline = "%!v:lua.MyTabLine()"
+
     vim.api.nvim_create_user_command('Hh', open_nos_terminal, {
       desc = 'Open `nos` in a smart terminal',
     })
 
     vim.keymap.set('n', '!nos', ':Hh<CR>', { desc = 'Open nos terminal', noremap = true, silent = true })
 
-    vim.api.nvim_create_autocmd("BufEnter", {
+    -- Remember the last active mode of each terminal buffer and restore it when entering
+    vim.api.nvim_create_autocmd("BufLeave", {
+      pattern = "term://*",
+      callback = function()
+        vim.b.last_mode = vim.fn.mode()
+      end,
+    })
+
+    -- === SILENT MANUAL SAVING ===
+    -- Prevents the file status, line count, and byte count from printing on save.
+    -- Using 'silent' suppresses standard output while still displaying write errors if they occur.
+    local silent_commands = {
+      w = "silent w",
+      wq = "silent wq",
+      x = "silent x",
+      wa = "silent wa",
+      wqa = "silent wqa",
+      xa = "silent xa",
+    }
+    for abbrev, replacement in pairs(silent_commands) do
+      vim.cmd(string.format(
+        "cnoreabbrev <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? '%s' : '%s'",
+        abbrev, abbrev, replacement, abbrev
+      ))
+    end
+
+    -- === TERMINAL VS FILE LAYOUT AUTO-TOGGLE ===
+    vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
       pattern = "*",
       callback = function()
-        if vim.bo.buftype == "terminal" and vim.b.auto_terminal_mode == true then
-          vim.cmd("startinsert")
+        if vim.bo.buftype == "terminal" then
+          -- Hide UI elements for terminal buffers
+          vim.o.laststatus = 0
+          vim.o.cmdheight = 0
+
+          -- If new tab (nil) or left in Insert mode (t), restore Insert mode automatically!
+          if vim.b.last_mode == nil or vim.b.last_mode == "t" then
+            vim.cmd("startinsert")
+          end
+        else
+          -- Restore UI elements for standard files
+          vim.o.laststatus = 2 -- Use 3 if you prefer Neovim's global statusline
+          vim.o.cmdheight = 1
         end
       end,
     })
 
-    vim.keymap.set('t', '<C-PageDown>', '<C-\\><C-n>:tabnext<CR>', { desc = 'Next Tab', noremap = true, silent = true })
-    vim.keymap.set('t', '<C-PageUp>',   '<C-\\><C-n>:tabprevious<CR>', { desc = 'Previous Tab', noremap = true, silent = true })
+    -- Make the cursor a vertical line in Terminal-Insert mode
+    vim.opt.guicursor:append("t:ver25")
+
+    -- Global Tab-Switching Wrapper
+    -- Temporarily mutes ALL animations (scroll, cursor, and position) only during the tab switch,
+    -- preventing any visual delay or sluggish "catching up" when switching buffers.
+    _G.InstantTabSwitch = function(cmd)
+      -- Save all active animation lengths
+      local old_scroll = vim.g.neovide_scroll_animation_length or 0.3
+      local old_cursor = vim.g.neovide_cursor_animation_length or 0.13
+      local old_pos = vim.g.neovide_position_animation_length or 0.15
+      
+      -- 1. Mute all animations *before* Neovim switches states
+      vim.g.neovide_scroll_animation_length = 0
+      vim.g.neovide_cursor_animation_length = 0
+      vim.g.neovide_position_animation_length = 0
+      
+      -- 2. Switch the tab
+      vim.cmd(cmd)
+      
+      -- 3. Instantly restore your smooth animations on the next event loop tick
+      vim.schedule(function()
+        vim.g.neovide_scroll_animation_length = old_scroll
+        vim.g.neovide_cursor_animation_length = old_cursor
+        vim.g.neovide_position_animation_length = old_pos
+      end)
+    end
+
+    -- Map your tab controls to use the InstantTabSwitch wrapper
+    for _, mode in ipairs({ "n", "i", "t" }) do
+      vim.keymap.set(mode, "<C-S-Right>", "<Cmd>lua InstantTabSwitch('tabnext')<CR>", { desc = "Next Tab", silent = true })
+      vim.keymap.set(mode, "<C-S-Left>", "<Cmd>lua InstantTabSwitch('tabprevious')<CR>", { desc = "Previous Tab", silent = true })
+      vim.keymap.set(mode, "<C-S-w>", "<Cmd>lua InstantTabSwitch('tabclose')<CR>", { desc = "Close Tab", silent = true })
+    end
+
+    -- Define a hidden cursor style (100% transparent)
+    vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
+
+    -- Hide cursor during Normal (nt) / Visual (v/V) scrolling in terminals, restore in Insert (t)
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      pattern = "*",
+      callback = function()
+        if vim.bo.buftype == "terminal" then
+          local mode = vim.api.nvim_get_mode().mode
+          if mode == "nt" or mode == "v" or mode == "V" then
+            vim.opt.guicursor:append("n-v:HiddenCursor")
+          else
+            vim.opt.guicursor:remove("n-v:HiddenCursor")
+          end
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+      pattern = "term://*",
+      callback = function()
+        vim.opt.guicursor:remove("n-v:HiddenCursor")
+      end
+    })
+
+    -- 1. Hard physical stop for Touchpad/Mouse scrolling (prevents bouncy rubber-banding)
+    -- (Checks if prompt is at the bottom, and completely discards any further scroll-down inputs)
+    vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
+      if vim.bo.buftype == "terminal" then
+        local bufnr = vim.api.nvim_get_current_buf()
+        local last_line = vim.api.nvim_buf_line_count(bufnr)
+        local win_height = vim.fn.winheight(0)
+        
+        local win_info = vim.fn.getwininfo(vim.fn.win_getid())[1]
+        local topline = win_info and win_info.topline
+        
+        if topline and win_height and last_line then
+          local max_topline = last_line - win_height + 1
+          if max_topline < 1 then max_topline = 1 end
+          
+          -- Return an empty string "" to execute a silent, error-free No-Op
+          -- (This avoids "<Nop>" which contains "N", triggering the "search previous" error)
+          if topline >= max_topline then
+            return ""
+          end
+        end
+      end
+      -- Pass standard scroll wheel down natively (Neovim translates this automatically)
+      return "<ScrollWheelDown>"
+    end, { expr = true, silent = true, desc = "Hard stop scroll down" })
+
+    -- 2. Autocommand fallback safety (handles keyboard-based overscrolls like PageDown)
+    vim.api.nvim_create_autocmd({ "WinScrolled", "CursorMoved" }, {
+      pattern = "term://*",
+      callback = function()
+        local bufnr = vim.api.nvim_get_current_buf()
+        local last_line = vim.api.nvim_buf_line_count(bufnr)
+        local win_height = vim.fn.winheight(0)
+        
+        local win_info = vim.fn.getwininfo(vim.fn.win_getid())[1]
+        local topline = win_info and win_info.topline
+        
+        if topline and win_height and last_line then
+          local max_topline = last_line - win_height + 1
+          if max_topline < 1 then max_topline = 1 end
+          
+          -- Fallback view lock (silent and non-recursive)
+          if topline > max_topline then
+            vim.cmd("noautocmd call winrestview({'topline': " .. max_topline .. "})")
+          end
+        end
+      end,
+    })
+
+    -- Auto-snap to terminal prompt when you start typing, pasting, or using shortcuts while scrolled up
+    vim.api.nvim_create_autocmd("TermOpen", {
+      pattern = "term://*",
+      callback = function(args)
+        local bufnr = args.buf
+
+        -- Instantly start insert mode and scroll to the bottom ONLY when spawned
+        vim.cmd("startinsert")
+
+        -- Absolutely all printable ASCII characters
+        local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-=~!@#$%^&*()_+[]{}|;:',./<>?"
+
+        -- Complete Russian alphabet (safe to map completely since Vim commands use ASCII)
+        local cyrillic = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+
+        -- Split cleanly into UTF-8 characters
+        local char_list = vim.fn.split(chars .. cyrillic, [[\zs]])
+        
+        -- Programmatic transition function for Visual/Select modes (v)
+        -- Prevents Neovim from flushing or discarding keys during mode switches
+        local function exit_visual_and_type(char)
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+          vim.schedule(function()
+            vim.cmd("startinsert")
+            vim.schedule(function()
+              vim.api.nvim_feedkeys(char, "m", true)
+            end)
+          end)
+        end
+
+        -- Register typing mappings for both Normal mode (n) and Visual/Select modes (v)
+        -- (This captures absolutely every key, including 'y' and 'Y')
+        for _, mode in ipairs({ "n", "v" }) do
+          local prefix = (mode == "v" and "<Esc>i" or "i")
+          for _, char in ipairs(char_list) do
+            vim.keymap.set(mode, char, prefix .. char, { buffer = bufnr, nowait = true, silent = true })
+          end
+          -- Map Space, Enter, Backspace, and Arrow keys to also jump back
+          vim.keymap.set(mode, "<Space>", prefix .. " ", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<CR>", prefix .. "<CR>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<BS>", prefix .. "<BS>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<Up>", prefix .. "<Up>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<Down>", prefix .. "<Down>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<Left>", prefix .. "<Left>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<Right>", prefix .. "<Right>", { buffer = bufnr, nowait = true, silent = true })
+
+          -- === ADD: Horizontal scroll mappings for Normal (n) and Visual/Select (v) ===
+          vim.keymap.set(mode, "<ScrollWheelLeft>", prefix .. "<Left>", { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set(mode, "<ScrollWheelRight>", prefix .. "<Right>", { buffer = bufnr, nowait = true, silent = true })
+        end
+
+        -- 3. Common terminal control shortcuts (safely passing Ctrl+C, Ctrl+D, Ctrl+L, etc.)
+        local ctrl_keys = { "a", "b", "c", "d", "e", "f", "g", "h", "k", "l", "p", "r", "u", "z" }
+        for _, key in ipairs(ctrl_keys) do
+          local keycode = "<C-" .. key .. ">"
+          vim.keymap.set("n", keycode, "i" .. keycode, { buffer = bufnr, nowait = true, silent = true })
+          vim.keymap.set("v", keycode, function()
+            exit_visual_and_type(vim.api.nvim_replace_termcodes(keycode, true, false, true))
+          end, { buffer = bufnr, nowait = true, silent = true })
+        end
+
+        -- === ADD: Horizontal scroll mappings for Terminal mode (t) ===
+        vim.keymap.set("t", "<ScrollWheelLeft>", "<Left>", { buffer = bufnr, silent = true })
+        vim.keymap.set("t", "<ScrollWheelRight>", "<Right>", { buffer = bufnr, silent = true })
+
+        -- Native clipboard paste mapping for Terminal mode (t) - prevents printing ^V
+        vim.keymap.set("t", "<C-S-v>", function()
+          vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+        end, { buffer = bufnr, silent = true })
+
+        -- Paste mappings for Normal (n) and Visual/Select (v) modes that automatically enter insert mode first
+        vim.keymap.set("n", "<C-S-v>", function()
+          vim.cmd("startinsert")
+          vim.schedule(function()
+            vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+          end)
+        end, { buffer = bufnr, silent = true })
+
+        vim.keymap.set("v", "<C-S-v>", function()
+          vim.cmd([[normal! \<Esc>]])
+          vim.cmd("startinsert")
+          vim.schedule(function()
+            vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+          end)
+        end, { buffer = bufnr, silent = true })
+      end,
+    })
+
+    -- General copy/paste configuration (works in standard Neovim and GUI)
+    -- (Configured with 'v' so you can use Ctrl+Shift+C inside both Visual and Select modes!)
+    vim.keymap.set({"n", "v"}, "<C-S-c>", "\"+y", { desc = "Copy system clipboard" })
+    vim.keymap.set({"n", "v"}, "<C-S-v>", "\"+p", { desc = "Paste system clipboard" })
+    vim.keymap.set("i", "<C-S-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
 
     vim.opt.updatetime = 100
     vim.opt.undofile = true
@@ -536,21 +857,45 @@ in
 
   config = mkIf cfg.enable {
     xdg = {
-      configFile."ruff/ruff.toml".source = (pkgs.formats.toml { }).generate "ruff.toml" {
-        line-length = 79;
-        lint = {
-          select = [
-            "E"
-            "W"
-            "F"
-            "C90"
-          ];
-          preview = true;
-          ignore = [ ];
-          mccabe.max-complexity = 10;
+      configFile = {
+        "neovide/config.toml".source = neovide-config;
+        "ruff/ruff.toml".source = (pkgs.formats.toml { }).generate "ruff.toml" {
+          line-length = 79;
+          lint = {
+            select = [
+              "E"
+              "W"
+              "F"
+              "C90"
+            ];
+            preview = true;
+            ignore = [ ];
+            mccabe.max-complexity = 10;
+          };
         };
       };
       dataFile.nix-system-toolchain.source = rust-toolchain;
+
+      # Create desktop entry for neovide-term
+      desktopEntries.neovide-term = {
+        name = "neovide-term";
+        genericName = "Terminal emulator";
+        comment = "Fast, feature-rich, GPU based terminal inside Neovide";
+        exec = "${neovide-term}/bin/neovide-term";
+        icon = "neovide";
+        categories = [
+          "System"
+          "TerminalEmulator"
+        ];
+        startupNotify = true;
+        settings = {
+          X-TerminalArgExec = "--";
+          X-TerminalArgTitle = "--title";
+          X-TerminalArgAppId = "--class";
+          X-TerminalArgDir = "--working-directory";
+          X-TerminalArgHold = "--hold";
+        };
+      };
     };
     systemd.user.services.rustup-init = {
       Unit = {
@@ -569,6 +914,7 @@ in
       };
     };
     home.packages = with pkgs; [
+      neovide-term
       stylua
       delve
       rustup
@@ -653,11 +999,17 @@ in
       initLua = config_lua + lsp_cmp_cfg;
       extraConfig = ''
         if exists("g:neovide")
-            let g:neovide_padding_top = 15
-            let g:neovide_opacity = 0.2
-            let g:neovide_floating_shadow = v:false
-            let g:neovide_floating_blur_amount_x = 8.0
-            let g:neovide_floating_blur_amount_y = 8.0
+          let g:neovide_scroll_animation_length = 0.15
+          let g:neovide_cursor_animation_length = 0.05
+          let g:neovide_cursor_trail_size = 0.2
+          let g:neovide_refresh_rate_idle = 165
+          let g:neovide_padding_top = 20
+          let g:neovide_padding_left = 20
+          let g:neovide_padding_right = 20
+          let g:neovide_opacity = 0.2
+          let g:neovide_floating_shadow = v:false
+          let g:neovide_floating_blur_amount_x = 8.0
+          let g:neovide_floating_blur_amount_y = 8.0
         endif
       '';
     };

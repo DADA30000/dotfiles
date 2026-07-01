@@ -500,6 +500,7 @@ in
         wantedBy = [ "graphical.target" ];
         serviceConfig = {
           LoadCredential = "config.json:/etc/secrets/config.json";
+          SetCredential = "config.json:${pkgs.writeText "empty" ""}";
           ExecStart = "${start-sing-box} %d";
           DynamicUser = true;
           RuntimeDirectory = "sing-box";
