@@ -90,12 +90,12 @@ let
 
       prompterService = {
         user.services.service-prompter = {
-          Install.WantedBy = [ config.home-manager.${user}.wayland.systemd.target ];
+          Install.WantedBy = [ config.home-manager.users.${user}.wayland.systemd.target ];
           Unit = {
             ConditionEnvironment = "WAYLAND_DISPLAY";
             Description = "Graphical service manager and installer prompt";
-            After = [ config.home-manager.${user}.wayland.systemd.target ];
-            PartOf = [ config.home-manager.${user}.wayland.systemd.target ];
+            After = [ config.home-manager.users.${user}.wayland.systemd.target ];
+            PartOf = [ config.home-manager.users.${user}.wayland.systemd.target ];
           };
           Service = {
             ExecStart = "${servicePrompterApp}/bin/service-prompter";
