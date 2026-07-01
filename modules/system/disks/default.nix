@@ -113,14 +113,8 @@ in
             mode = "u=rwx,g=,o=";
           }
           {
-            directory = "/etc/secrets";
+            directory = "/etc/credstore";
             mode = "u=rwx,g=,o=";
-          }
-          {
-            directory = "/etc/secrets/sing-box";
-            user = "sing-box";
-            group = "sing-box";
-            mode = "u=rwx,g=rx,o=rx";
           }
           {
             directory = "/var/lib/acme";

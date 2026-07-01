@@ -83,7 +83,7 @@ let
       servicePrompterApp = mkPyApp {
         name = "service-prompter";
         src = evalAndSubstitute {
-          string = builtins.readFile ../../stuff/test.py;
+          string = builtins.readFile ../../stuff/prompt.py;
           scope = { inherit servicesJson installScript; };
         };
       };
@@ -273,40 +273,20 @@ in
         });
       '';
 
-      warnings = lib.mkIf (!builtins.pathExists ../../stuff/singbox/config.json) [
-        "singbox module: config.json doesn't exist, singbox config file won't be copied."
-      ];
+      system.activationScripts.repo = {
 
-      system.activationScripts = {
+        # Run after /dev has been mounted
+        deps = [ "specialfs" ];
 
-        repo = {
-
-          # Run after /dev has been mounted
-          deps = [ "specialfs" ];
-
-          text = ''
-            PATH="$PATH:${pkgs.coreutils-full}/bin"
-            if [[ ! -d /repo ]]; then
-              rm -rf /repo
-              cp -r --no-preserve=mode "${inputs.self}" /repo
-              mkdir -p /etc/nixos
-              cp -r /repo/{machines,stuff,modules,flake.nix,flake.lock} /etc/nixos
-            fi
-          '';
-
-        };
-
-        singbox = lib.mkIf (builtins.pathExists ../../stuff/singbox/config.json && wrapped) {
-
-          deps = [ "specialfs" ];
-
-          text = ''
-            PATH="$PATH:${pkgs.coreutils}/bin"
-            cp ${../../stuff/singbox/config.json} /config.json
-            chmod 400 /config.json
-          '';
-
-        };
+        text = ''
+          PATH="$PATH:${pkgs.coreutils-full}/bin"
+          if [[ ! -d /repo ]]; then
+            rm -rf /repo
+            cp -r --no-preserve=mode "${inputs.self}" /repo
+            mkdir -p /etc/nixos
+            cp -r /repo/{machines,stuff,modules,flake.nix,flake.lock} /etc/nixos
+          fi
+        '';
 
       };
 

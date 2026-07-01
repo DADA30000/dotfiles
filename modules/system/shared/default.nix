@@ -83,8 +83,9 @@
 
   console = {
     enable = true;
+    earlySetup = true;
     keyMap = "ru";
-    font = "ter-u28b";
+    font = "${pkgs.terminus_font}/share/consolefonts/ter-u28b.psf.gz";
     packages = [ pkgs.terminus_font ];
   };
 

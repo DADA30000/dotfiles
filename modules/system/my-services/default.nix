@@ -150,7 +150,7 @@ in
           wants = [ "network-online.target" ];
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/secrets/cloudflare-ddns";
+            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/credstore/cloudflare-ddns";
           };
         };
         "acme-order-renew-ip.sanic.space" = {

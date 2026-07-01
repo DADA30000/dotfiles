@@ -7,23 +7,8 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GLib
 
-# Hardcoded services list for local testing [1]
-SERVICES_LIST = [
-    "user/replays",
-    "user/opentabletdriver",
-    "user/sunshine",
-    "user/kdeconnect-indicator",
-    "user/kdeconnect",
-    "user/wivrn",
-    "system/zerotierone",
-    "system/tailscaled",
-    "system/lactd",
-    "system/sing-box",
-    "system/sshd",
-]
-
-# Mock install command [2]
-INSTALL_CMD = "echo 'Тестовая установка запущена!'"
+SERVICES_JSON = "%{{{servicesJson}}}"
+INSTALL_CMD = "%{{{installScript}}}"
 
 
 def get_service_description(name, is_user):
@@ -71,7 +56,7 @@ class ServiceRow(Gtk.ListBoxRow):
         self.service_name = parts[1]
         self.is_user = self.service_type == "user"
 
-        # Retrieve actual description via systemd
+        # Fetch description dynamically at runtime
         self.service_desc = get_service_description(
             self.service_name, self.is_user
         )
@@ -114,7 +99,7 @@ class ServiceRow(Gtk.ListBoxRow):
 
 class ServicePrompterWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="Управление службами (Тест)")
+        super().__init__(title="Управление службами")
         self.set_border_width(15)
         self.set_default_size(500, 400)
         self.set_position(Gtk.WindowPosition.CENTER)
@@ -164,9 +149,13 @@ class ServicePrompterWindow(Gtk.Window):
 
         self.listbox.set_filter_func(filter_func)
 
-        # Build list using local array
-        for srv_str in SERVICES_LIST:
-            self.listbox.add(ServiceRow(srv_str))
+        try:
+            with open(SERVICES_JSON, "r") as f:
+                services_list = json.load(f)
+                for srv_str in services_list:
+                    self.listbox.add(ServiceRow(srv_str))
+        except Exception as e:
+            print(f"Failed to load services: {e}")
 
         vbox.pack_start(
             Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL),
@@ -196,8 +185,7 @@ class ServicePrompterWindow(Gtk.Window):
 
     def on_install_clicked(self, button):
         try:
-            print(f"Running command: {INSTALL_CMD}")
-            subprocess.Popen([INSTALL_CMD], shell=True)
+            subprocess.Popen([INSTALL_CMD])
         except Exception as e:
             print(f"Failed to run installer: {e}")
 
