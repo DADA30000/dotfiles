@@ -29,18 +29,33 @@ let
     '';
   };
 
-  proton-umu = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-umu";
-    version = "10.0-4";
-    src = pkgs.fetchurl {
-      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/UMU-Proton-${finalAttrs.version}/UMU-Proton-${finalAttrs.version}.tar.gz";
-      hash = "sha256-YumeApoY+jE+b6Y9QjkJGBAXMKlA40kcVNnVjKuIfGk=";
-    };
-    installPhase = ''
-      mkdir -p "$out"
-      tar -xaf "$src" --strip-components=1 -C "$out"
-    '';
-  });
+  protonVersions = [
+    {
+      name = "Proton GE (Latest)";
+      path = "${config.xdg.dataHome}/umu/proton/proton-ge-latest";
+    }
+    {
+      name = "Proton UMU 10";
+      path = "${config.xdg.dataHome}/umu/proton/proton-umu-10";
+      default = true;
+    }
+    {
+      name = "Proton UMU 9";
+      path = "${config.xdg.dataHome}/umu/proton/proton-umu-9";
+    }
+    {
+      name = "Proton UMU 8";
+      path = "${config.xdg.dataHome}/umu/proton/proton-umu-8";
+    }
+  ];
+
+  # Locates the default choice, falling back to the first defined entry if default = true is omitted
+  defaultProton = findFirst (v: v.default or false) (builtins.head protonVersions) protonVersions;
+
+  # Generates the case statement choices for umu-run-wrapper using the version name as the key
+  protonCaseBranches = concatStringsSep "\n" (
+    map (v: ''"${v.name}") export PROTONPATH="${v.path}" ;;'') protonVersions
+  );
 
   openal =
     (pkgs.pkgsCross.mingw32.openal.override {
@@ -74,33 +89,6 @@ let
       });
 
   cfg = config.umu;
-  runtime_data = fromJSON (readFile ../../../stuff/steamrt3.json);
-  runtime = pkgs.fetchurl {
-    url = "https://repo.steampowered.com/steamrt3/images/${runtime_data.version}/SteamLinuxRuntime_sniper.tar.xz";
-    hash = runtime_data.hash;
-  };
-
-  umu-tar = (
-    pkgs.writeShellScriptBin "umu-tar" ''
-      LOCAL_DIR="${config.xdg.dataHome}"
-      LOCK_FILE="$LOCAL_DIR/umu-extraction.lock"
-      mkdir -p "$LOCAL_DIR"
-      exec 9> "$LOCK_FILE"
-      flock 9
-      PATH="$PATH:${pkgs.coreutils-full}/bin:${pkgs.xz}/bin:${pkgs.gnutar}/bin:${pkgs.util-linux}/bin"
-      if [[ ! -d "$LOCAL_DIR/umu" ]]; then
-        rm -rf "$LOCAL_DIR/steamrt3.tmp"; mkdir -p "$LOCAL_DIR/steamrt3.tmp"
-        tar -xaf "${runtime}" --strip-components=1 -C "$LOCAL_DIR/steamrt3.tmp"
-        cd "$LOCAL_DIR/steamrt3.tmp"
-        ln -s "_v2-entry-point" "umu"
-        echo "ok" > ".installed.ok"
-        umount -qf "$LOCAL_DIR/umu" 2>/dev/null || true 
-        rm -rf "$LOCAL_DIR/umu"; mkdir -p "$LOCAL_DIR/umu"
-        mv "$LOCAL_DIR/steamrt3.tmp" "$LOCAL_DIR/umu/steamrt3"
-      fi
-      flock -u 9
-    ''
-  );
 
   # Declarative PyGObject application wrapper leveraging Nixpkgs setup hooks
   mkPyApp =
@@ -135,10 +123,20 @@ let
         chmod +x $out/bin/${name}
       '';
 
-      # Appends runtime command dependencies onto the wrapped PATH
+      # Appends runtime command dependencies onto the wrapped PATH and injects the JSON list of Proton versions
       preFixup = ''
         gappsWrapperArgs+=(
           --prefix PATH : "${lib.makeBinPath pathDeps}"
+          --set UMU_PROTON_VERSIONS_JSON ${
+            lib.escapeShellArg (
+              builtins.toJSON (
+                map (v: {
+                  inherit (v) name;
+                  default = v.default or false;
+                }) protonVersions
+              )
+            )
+          }
         )
       '';
     };
@@ -149,52 +147,56 @@ in
   };
 
   config = mkIf cfg.enable {
-    xdg.mimeApps.defaultApplications = {
-      "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
-      "application/x-msi" = "run-exe.desktop";
-      "application/x-msdownload" = "run-exe.desktop";
-      "application/x-ms-shortcut" = "run-exe.desktop";
-      "application/x-mswinurl" = "run-exe.desktop";
-      "application/x-ms-dos-executable" = "run-exe.desktop";
-      "application/x-bat" = "run-exe.desktop";
-    };
-    xdg.desktopEntries.run-exe = {
-      exec = "run-exe %f";
-      mimeType = [
-        "application/vnd.microsoft.portable-executable"
-        "application/x-msi"
-        "application/x-msdownload"
-        "application/x-ms-shortcut"
-        "application/x-bat"
-        "application/x-ms-dos-executable"
-        "application/x-mswinurl"
-      ];
-      name = "Execute Windows file";
-      type = "Application";
-      icon = "wine";
-      settings.StartupWMClass = "run-exe";
-    };
-    xdg.desktopEntries.manage-umu-shortcuts = {
-      exec = "manage-umu-shortcuts";
-      name = "Manage UMU Shortcuts";
-      type = "Application";
-      icon = "system-run";
-      categories = [
-        "Settings"
-        "Utility"
-      ];
-      settings.StartupWMClass = "manage-umu-shortcuts";
-    };
-    xdg.desktopEntries.manage-umu-prefixes = {
-      exec = "manage-umu-prefixes";
-      name = "Manage UMU Prefixes";
-      type = "Application";
-      icon = "folder-wine";
-      categories = [
-        "Settings"
-        "Utility"
-      ];
-      settings.StartupWMClass = "manage-umu-prefixes";
+    xdg = {
+      mimeApps.defaultApplications = {
+        "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
+        "application/x-msi" = "run-exe.desktop";
+        "application/x-msdownload" = "run-exe.desktop";
+        "application/x-ms-shortcut" = "run-exe.desktop";
+        "application/x-mswinurl" = "run-exe.desktop";
+        "application/x-ms-dos-executable" = "run-exe.desktop";
+        "application/x-bat" = "run-exe.desktop";
+      };
+      desktopEntries = {
+        run-exe = {
+          exec = "run-exe %f";
+          mimeType = [
+            "application/vnd.microsoft.portable-executable"
+            "application/x-msi"
+            "application/x-msdownload"
+            "application/x-ms-shortcut"
+            "application/x-bat"
+            "application/x-ms-dos-executable"
+            "application/x-mswinurl"
+          ];
+          name = "Execute Windows file";
+          type = "Application";
+          icon = "wine";
+          settings.StartupWMClass = "run-exe";
+        };
+        manage-umu-shortcuts = {
+          exec = "manage-umu-shortcuts";
+          name = "Manage UMU Shortcuts";
+          type = "Application";
+          icon = "system-run";
+          categories = [
+            "Settings"
+            "Utility"
+          ];
+          settings.StartupWMClass = "manage-umu-shortcuts";
+        };
+        manage-umu-prefixes = {
+          exec = "manage-umu-prefixes";
+          name = "Manage UMU Prefixes";
+          type = "Application";
+          icon = "folder-wine";
+          categories = [
+            "Settings"
+            "Utility"
+          ];
+          settings.StartupWMClass = "manage-umu-prefixes";
+        };
+      };
     };
     home.packages = [
       pkgs.yad
@@ -235,25 +237,20 @@ in
           prefix_name=''${UMU_PREFIX_NAME:-default}
           export WINEPREFIX=$HOME/.umu/$prefix_name
         fi
-        if [[ ! -d "${config.xdg.dataHome}/umu" ]]; then
-          ${pkgs.libnotify}/bin/notify-send "Please wait..." "Preparing umu runtime (only on first launch)"
-          ${umu-tar}/bin/umu-tar
-        fi
         if [[ ! -f "$WINEPREFIX/check-do_not_delete_this" ]]; then
           mkdir -p "$WINEPREFIX/drive_c/windows/syswow64"
           cp --no-preserve=mode "${openal}/bin/OpenAL32.dll" "$WINEPREFIX/drive_c/windows/syswow64/OpenAL32.dll"
           touch "$WINEPREFIX/check-do_not_delete_this"
         fi
-        while [[ ! -d "${config.xdg.dataHome}/umu" ]]; do
-          sleep 0.2
-        done
         ${pkgs.libnotify}/bin/notify-send "Starting UMU"
+
         if [[ -z "$(printenv PROTONPATH)" ]]; then
-          if [[ "$USE_PROTON_UMU" == 1 ]]; then
-            export PROTONPATH="${proton-umu}"
-          else
-            export PROTONPATH="${pkgs.proton-ge-bin.steamcompattool}"
-          fi
+          case "$UMU_PROTON_TYPE" in
+            ${protonCaseBranches}
+            *)
+              export PROTONPATH="${defaultProton.path}"
+              ;;
+          esac
         fi
 
         mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
@@ -273,6 +270,23 @@ in
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.libGL}/lib:${pkgs.pkgsi686Linux.libGL}/lib"
         fi
 
+        MOUNT_DIR="${config.xdg.dataHome}/umu"
+        if [[ -x "/run/wrappers/bin/prepare-umu" ]]; then
+          /run/wrappers/bin/prepare-umu
+          t=10
+          while ! mountpoint -q "$MOUNT_DIR" || [ $(find "$MOUNT_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l) -lt 2 ]; do
+            sleep 0.1
+            if ((--t <= 0)); then
+              ${pkgs.libnotify}/bin/notify-send "Closed" "Timeout. Mount failed."
+              exit 1
+            fi
+          done
+        else
+          ${pkgs.libnotify}/bin/notify-send "Closed" "prepare-umu not found"
+          exit 1
+        fi
+
+        unset ALSOFT_DRIVERS
         export UMU_RUNTIME_UPDATE=0
         export PROTON_ENABLE_WAYLAND=''${PROTON_ENABLE_WAYLAND:-1}
         cd "$(dirname "$1")" &> /dev/null || true
@@ -434,7 +448,7 @@ in
         env_mangohud=''${USE_MANGOHUD:-1}
         env_wayland=''${PROTON_ENABLE_WAYLAND:-1}
         env_prefix_name=''${UMU_PREFIX_NAME:-default}
-        env_umu=''${USE_PROTON_UMU:-0}
+        env_proton_type=''${UMU_PROTON_TYPE:-"${defaultProton.name}"}
         env_gpu_select=''${UMU_GPU_SELECT:-Автоматически}
         env_steam=''${USE_STEAM_INTEGRATION:-0}
         env_overlay=''${USE_STEAM_OVERLAY:-0}
@@ -535,7 +549,7 @@ in
             ;;
           esac
 
-          EXEC_BASE="env USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name USE_PROTON_UMU=$env_umu USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay $GPU_ENV umu-run-wrapper \"$actual_exe\""
+          EXEC_BASE="env USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay $GPU_ENV umu-run-wrapper \"$actual_exe\""
 
           if [[ "$args" == *"%command%"* ]]; then
             EXEC_CMD=$(echo "$args" | sed "s|%command%|$EXEC_BASE|g")
@@ -559,6 +573,7 @@ in
         X-UMU-GPU-Select=$env_gpu_select
         X-UMU-Steam-Integration=$env_steam
         X-UMU-Steam-Overlay=$env_overlay
+        X-UMU-Proton-Type=$env_proton_type
         EOF
 
           chmod +x "$DESKTOP_FILE"

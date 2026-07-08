@@ -61,7 +61,7 @@
 
   wivrn.enable = true;
 
-  nix.gc.automatic = true;
+  nix.gc.automatic = false;
 
   sing-box.enable = true;
 
@@ -91,11 +91,16 @@
 
   hardware = {
 
+    steam-hardware.enable = true;
+
+    xpadneo.enable = true;
+
     opentabletdriver.enable = true;
 
     bluetooth = {
       enable = true;
       powerOnBoot = false;
+      input.General.ClassicBondedOnly = false;
     };
 
   };
@@ -391,7 +396,8 @@
   environment = {
 
     etc = {
-      "libxkbcommon".source = pkgs.libxkbcommon;
+      stdenv.source = pkgs.stdenv;
+      libxkbcommon.source = pkgs.libxkbcommon;
       "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
     };
 
@@ -570,6 +576,7 @@
     };
 
     udev.extraRules = ''
+      SUBSYSTEMS=="usb", ATTRS{idVendor}=="0414", ATTRS{idProduct}=="8104", MODE="0660", TAG+="uaccess"
       ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2833", ATTR{idProduct}=="5013", RUN+="${pkgs.systemd}/bin/systemctl restart quest-adb-reverse.service"
     '';
 
@@ -719,7 +726,6 @@
             wayland = true;
             nvidia_gpu = true;
             use_landlock = false;
-            pass_shm = true;
             pass_tmp = true;
             additional_outside_commands = ''
               rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
@@ -731,13 +737,13 @@
               { sloth, ... }:
               {
                 dbus.policies = {
-                  "com.steampowered.Steam" = "own";
-                  "com.steampowered.Steam.*" = "own";
+                  "com.steampowered.*" = "own";
                   "com.feralinteractive.GameMode" = "talk";
                 };
                 bubblewrap = {
                   sharePid = true;
                   bind = {
+                    dev = [ "/dev" ];
                     ro = [
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
@@ -748,7 +754,12 @@
                         "/home/${user}/Games/steam"
                         (sloth.mkdir "/Games")
                       ]
-                      "/tmp"
+                      "/sys/class"
+                      "/sys/bus"
+                      "/sys/dev"
+                      "/sys/devices"
+                      "/sys/block"
+                      "/run/udev"
                     ];
                   };
                 };
@@ -762,7 +773,6 @@
           run = overriddenSteam.run;
         };
       protontricks.enable = true;
-      extraCompatPackages = [ pkgs.proton-ge-bin ];
       extraPackages = with pkgs; [
         libgdiplus
         fontconfig

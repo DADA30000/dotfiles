@@ -83,7 +83,7 @@ let
     version = "unstable";
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
     src = pkgs.lib.cleanSource "${inputs.way-secure}";
-    patches = [ ../../../stuff/patches/way-secure.patch ];
+    # patches = [ ../../../stuff/patches/way-secure.patch ];
   };
   landlock = pkgs.stdenv.mkDerivation {
     pname = "landlock";
@@ -422,7 +422,8 @@ let
                           "/tmp"
                         ]
                       ])
-                      ++ (lib.optionals pass_tmp [ "/tmp" ]);
+                      ++ (lib.optionals pass_tmp [ "/tmp" ])
+                      ++ [ (concat sloth.runtimeDir "/doc") ];
 
                       ro = [
                         "/etc/xdg"
@@ -449,7 +450,6 @@ let
                         (concat sloth.homeDir "/.local/state/nix/profile")
                         (concat sloth.homeDir "/.icons")
                         (concat sloth.homeDir "/.themes")
-                        (concat sloth.runtimeDir "/doc")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.dirs")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.conf")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-4.0")

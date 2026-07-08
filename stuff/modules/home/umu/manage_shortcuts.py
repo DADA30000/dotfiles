@@ -3,10 +3,35 @@ import os
 import re
 import subprocess
 import configparser
+import json
 import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf
+
+# Verify and parse environment configuration. Exit with printed error if missing.
+proton_versions_json = os.environ.get("UMU_PROTON_VERSIONS_JSON")
+if not proton_versions_json:
+    print(
+        "Error: UMU_PROTON_VERSIONS_JSON environment variable is not set. Please run this application through the proper Nix wrapper.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+try:
+    proton_versions = json.loads(proton_versions_json)
+except Exception as e:
+    print(
+        f"Error: Failed to parse UMU_PROTON_VERSIONS_JSON: {e}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+# Find configured Nix default version name, otherwise fallback to the first entry in the list
+default_proton_name = next(
+    (v["name"] for v in proton_versions if v.get("default")),
+    proton_versions[0]["name"],
+)
 
 
 def scan_gpus():
@@ -81,8 +106,12 @@ class EditDialog(Gtk.Dialog):
             "Desktop Entry", "X-UMU-GPU-Select", fallback="Автоматически"
         )
 
+        # Retrieve Proton version name from the shortcut. No backwards-compatibility fallbacks.
+        self.proton_type = self.config.get(
+            "Desktop Entry", "X-UMU-Proton-Type", fallback=default_proton_name
+        )
+
         exec_line = self.config.get("Desktop Entry", "Exec", fallback="")
-        self.umu_enabled = "USE_PROTON_UMU=1" in exec_line
         self.wayland_enabled = "PROTON_ENABLE_WAYLAND=0" not in exec_line
         self.gamemode_enabled = "USE_GAMEMODE=0" not in exec_line
         self.mangohud_enabled = "USE_MANGOHUD=0" not in exec_line
@@ -115,12 +144,16 @@ class EditDialog(Gtk.Dialog):
         grid = Gtk.Grid(column_spacing=15, row_spacing=10)
         vbox.pack_start(grid, False, False, 0)
 
-        lbl_umu = Gtk.Label(label="Использовать Proton UMU:")
-        lbl_umu.set_alignment(0, 0.5)
-        self.chk_umu = Gtk.CheckButton()
-        self.chk_umu.set_active(self.umu_enabled)
-        grid.attach(lbl_umu, 0, 0, 1, 1)
-        grid.attach(self.chk_umu, 1, 0, 1, 1)
+        # Proton selection dropdown (using version name as unique ID)
+        lbl_proton = Gtk.Label(label="Версия Proton:")
+        lbl_proton.set_alignment(0, 0.5)
+        self.cmb_proton = Gtk.ComboBoxText()
+        for v in proton_versions:
+            self.cmb_proton.append(v["name"], v["name"])
+        if not self.cmb_proton.set_active_id(self.proton_type):
+            self.cmb_proton.set_active(0)
+        grid.attach(lbl_proton, 0, 0, 1, 1)
+        grid.attach(self.cmb_proton, 1, 0, 1, 1)
 
         lbl_gamemode = Gtk.Label(label="Использовать GameMode:")
         lbl_gamemode.set_alignment(0, 0.5)
@@ -355,8 +388,8 @@ class EditDialog(Gtk.Dialog):
         new_args = self.args_entry.get_text().strip()
         new_prefix = self.prefix_entry.get_text().strip()
         new_gpu = self.gpu_combo.get_active_text()
+        new_proton = self.cmb_proton.get_active_id() or default_proton_name
 
-        env_umu = "1" if self.chk_umu.get_active() else "0"
         env_gamemode = "1" if self.chk_gamemode.get_active() else "0"
         env_mangohud = "1" if self.chk_mangohud.get_active() else "0"
         env_wayland = "1" if self.chk_wayland.get_active() else "0"
@@ -373,7 +406,7 @@ class EditDialog(Gtk.Dialog):
         elif new_gpu == "Intel" and self.intel_id:
             gpu_env = f"DRI_PRIME={self.intel_id}! MESA_VK_DEVICE_SELECT={self.intel_id}!"
 
-        exec_base = f"env USE_GAMEMODE={env_gamemode} USE_MANGOHUD={env_mangohud} PROTON_ENABLE_WAYLAND={env_wayland} UMU_PREFIX_NAME={new_prefix} USE_PROTON_UMU={env_umu} USE_STEAM_INTEGRATION={env_steam} USE_STEAM_OVERLAY={env_overlay} {gpu_env}".strip()
+        exec_base = f'env USE_GAMEMODE={env_gamemode} USE_MANGOHUD={env_mangohud} PROTON_ENABLE_WAYLAND={env_wayland} UMU_PREFIX_NAME={new_prefix} UMU_PROTON_TYPE="{new_proton}" USE_STEAM_INTEGRATION={env_steam} USE_STEAM_OVERLAY={env_overlay} {gpu_env}'.strip()
         exec_base += " umu-run-wrapper"
 
         if "%command%" in new_args:
@@ -391,6 +424,7 @@ class EditDialog(Gtk.Dialog):
         self.config["Desktop Entry"]["X-UMU-GPU-Select"] = new_gpu
         self.config["Desktop Entry"]["X-UMU-Steam-Integration"] = env_steam
         self.config["Desktop Entry"]["X-UMU-Steam-Overlay"] = env_overlay
+        self.config["Desktop Entry"]["X-UMU-Proton-Type"] = new_proton
 
         with open(self.desktop_path, "w", encoding="utf-8") as f:
             self.config.write(f, space_around_delimiters=False)

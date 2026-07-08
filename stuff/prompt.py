@@ -40,7 +40,7 @@ def toggle_service(name, is_user, enable):
     if is_user:
         cmd = ["systemctl", "--user", action, name]
     else:
-        cmd = ["pkexec", "systemctl", action, name]
+        cmd = ["/run/wrappers/bin/pkexec", "systemctl", action, name]
     try:
         subprocess.run(cmd, check=True)
         return True

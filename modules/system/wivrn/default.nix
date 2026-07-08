@@ -27,16 +27,15 @@ let
       cmakeFlags = (old.cmakeFlags or [ ]) ++ [ "-DOPENSSL_NO_ASM=ON" ];
     });
   };
-  pkg_wivrn =
-    (inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-      cudaSupport = true;
-      xrizer = xrizer_multilib;
-      opencomposite = opencomposite_multilib;
-      cudaPackages = pkgs.cudaPackages;
-    }).overrideAttrs
-      (prevAttrs: {
-        env.NIX_CFLAGS_COMPILE = (prevAttrs.env.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
-      });
+  pkg_wivrn = inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+    cudaSupport = true;
+    xrizer = xrizer_multilib;
+    opencomposite = opencomposite_multilib;
+  };
+  #.overrideAttrs
+  #  (prevAttrs: {
+  #    env.NIX_CFLAGS_COMPILE = (prevAttrs.env.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
+  #  });
   # pkg_wivrn = (
   #   inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
   #     cudaSupport = true;

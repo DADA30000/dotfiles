@@ -275,11 +275,16 @@ in
               sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
+              echo "Fetching steamrt4 version and hash"
+              STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/VERSION.txt -O -)"
+              STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+              echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt4.json
+              echo "Finished fetching steamrt4"
               echo "Fetching steamrt3 version and hash"
               STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/VERSION.txt -O -)"
               STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
               echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
-              echo "Finished fetching"
+              echo "Finished fetching steamrt3"
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
               sudo nix flake update --flake /etc/nixos
               nh os switch /etc/nixos -- --extra-substituters "https://attic.xuyh0120.win/lantian" --option connect-timeout 5

@@ -67,7 +67,10 @@ let
           }
         ];
         class = "homeManager";
-        specialArgs = { inherit inputs; osConfig = config; }; # osConfig might cause trouble !ATTENTION
+        specialArgs = {
+          inherit inputs;
+          osConfig = config;
+        }; # osConfig might cause trouble !ATTENTION
       };
       prefixesToStrip = map (p: "${toString p}/") [ inputs.self ];
       stripAnyPrefixes = flip (foldr removePrefix) prefixesToStrip;
@@ -125,9 +128,15 @@ let
     (pkgs.callPackage "${inputs.home-manager}/docs/home-manager-manual.nix" {
       inherit revision;
       home-manager-options = {
-        home-manager = customHmOptionsDocs.optionsJSON;
-        nixos = nixosOptionsDocs.optionsJSON;
-        nix-darwin = nixDarwinOptionsDocs.optionsJSON;
+        home-manager = {
+          json = customHmOptionsDocs.optionsJSON;
+        };
+        nixos = {
+          json = nixosOptionsDocs.optionsJSON;
+        };
+        nix-darwin = {
+          json = nixDarwinOptionsDocs.optionsJSON;
+        };
       };
     }).overrideAttrs
       {

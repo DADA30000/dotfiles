@@ -23,7 +23,7 @@ let
       #pkgs.hyprlandPlugins.hyprtrails
     ]
     ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
-      inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
+      #inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
       #inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
     ]
     ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
@@ -176,6 +176,7 @@ in
       hyprpicker
       wttrbar
     ];
+
     wayland.windowManager.hyprland = {
       portalPackage = mkMerge [
         (mkIf (
@@ -195,6 +196,21 @@ in
       ];
       enable = true;
       configType = "lua";
+      extraLuaFiles."00-init" = {
+        autoLoad = true;
+        content = ''
+          smw = require('plugins.split-monitor-workspaces')
+          smw.setup({ enable_persistent_workspaces = false })
+        '';
+      };
+      submaps.passthrough.settings.bind = [
+        {
+          _args = [
+            "escape"
+            (lib.generators.mkLuaInline "hl.dsp.submap('reset')")
+          ];
+        }
+      ];
       settings =
         let
           mod = "SUPER";
@@ -373,7 +389,6 @@ in
           config = {
             xwayland.force_zero_scaling = true;
             plugin = mkIf cfg.enable-plugins {
-              split_monitor_workspaces.enable_persistent_workspaces = 0;
               #hyprexpo = {
               #  columns = 3;
               #  gap_size = 5;
@@ -467,7 +482,7 @@ in
               preserve_split = true;
             };
             misc = {
-              vrr = 1;
+              vrr = 0;
               disable_watchdog_warning = true;
               disable_hyprland_logo = true;
               background_color = "0x000000";
@@ -638,10 +653,6 @@ in
                 "app2unit -- toggle-restriction"
               ]
               [
-                "${mod} + F1"
-                "app2unit -- gamemode.sh"
-              ]
-              [
                 "${mod} + F2"
                 "app2unit -- sheesh.sh"
               ]
@@ -721,83 +732,83 @@ in
               ]
               [
                 "${mod} + 1"
-                "function() hl.plugin.split_monitor_workspaces.workspace(1) end"
+                "smw.workspace('1')"
               ]
               [
                 "${mod} + 2"
-                "function() hl.plugin.split_monitor_workspaces.workspace(2) end"
+                "smw.workspace('2')"
               ]
               [
                 "${mod} + 3"
-                "function() hl.plugin.split_monitor_workspaces.workspace(3) end"
+                "smw.workspace('3')"
               ]
               [
                 "${mod} + 4"
-                "function() hl.plugin.split_monitor_workspaces.workspace(4) end"
+                "smw.workspace('4')"
               ]
               [
                 "${mod} + 5"
-                "function() hl.plugin.split_monitor_workspaces.workspace(5) end"
+                "smw.workspace('5')"
               ]
               [
                 "${mod} + 6"
-                "function() hl.plugin.split_monitor_workspaces.workspace(6) end"
+                "smw.workspace('6')"
               ]
               [
                 "${mod} + 7"
-                "function() hl.plugin.split_monitor_workspaces.workspace(7) end"
+                "smw.workspace('7')"
               ]
               [
                 "${mod} + 8"
-                "function() hl.plugin.split_monitor_workspaces.workspace(8) end"
+                "smw.workspace('8')"
               ]
               [
                 "${mod} + 9"
-                "function() hl.plugin.split_monitor_workspaces.workspace(9) end"
+                "smw.workspace('9')"
               ]
               [
                 "${mod} + 0"
-                "function() hl.plugin.split_monitor_workspaces.workspace(10) end"
+                "smw.workspace('10')"
               ]
               [
                 "${mod} + SHIFT + 1"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(1) end"
+                "smw.move_to_workspace('1')"
               ]
               [
                 "${mod} + SHIFT + 2"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(2) end"
+                "smw.move_to_workspace('2')"
               ]
               [
                 "${mod} + SHIFT + 3"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(3) end"
+                "smw.move_to_workspace('3')"
               ]
               [
                 "${mod} + SHIFT + 4"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(4) end"
+                "smw.move_to_workspace('4')"
               ]
               [
                 "${mod} + SHIFT + 5"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(5) end"
+                "smw.move_to_workspace('5')"
               ]
               [
                 "${mod} + SHIFT + 6"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(6) end"
+                "smw.move_to_workspace('6')"
               ]
               [
                 "${mod} + SHIFT + 7"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(7) end"
+                "smw.move_to_workspace('7')"
               ]
               [
                 "${mod} + SHIFT + 8"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(8) end"
+                "smw.move_to_workspace('8')"
               ]
               [
                 "${mod} + SHIFT + 9"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(9) end"
+                "smw.move_to_workspace('9')"
               ]
               [
                 "${mod} + SHIFT + 0"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace(10) end"
+                "smw.move_to_workspace('10')"
               ]
               [
                 "${mod} + S"
@@ -805,15 +816,15 @@ in
               ]
               [
                 "${mod} + SHIFT + S"
-                "function() hl.plugin.split_monitor_workspaces.move_to_workspace 'special:magic' end"
+                "smw.move_to_workspace 'special:magic'"
               ]
               [
                 "${mod} + mouse_down"
-                "function() hl.plugin.split_monitor_workspaces.workspace 'e+1' end"
+                "smw.workspace 'e+1'"
               ]
               [
                 "${mod} + mouse_up"
-                "function() hl.plugin.split_monitor_workspaces.workspace 'e-1' end"
+                "smw.workspace 'e-1'"
               ]
               [
                 "${mod} + CTRL + ${mod}_L "
@@ -950,14 +961,6 @@ in
             }
           ];
         };
-      #extraConfig = ''
-      #  hl.submap({
-      #    name = "passthrough",
-      #    binds = {
-      #      { mods = {}, key = "escape", dispatcher = "submap", args = "reset" }
-      #    }
-      #  })
-      #'';
     };
     systemd.user.services.polkit_mate = {
       Install = {
@@ -970,6 +973,7 @@ in
       };
     };
     xdg = {
+      configFile."hypr/plugins/split-monitor-workspaces".source = inputs.split-monitor-workspaces;
       dataFile.nautilus-python = {
         source = "${nautilus-extensions}/share/nautilus-python";
         recursive = true;

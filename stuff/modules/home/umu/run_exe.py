@@ -6,10 +6,35 @@ import subprocess
 import tempfile
 import hashlib
 import shutil
+import json
 import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf
+
+# Verify and parse environment configuration. Exit with printed error if missing.
+proton_versions_json = os.environ.get("UMU_PROTON_VERSIONS_JSON")
+if not proton_versions_json:
+    print(
+        "Error: UMU_PROTON_VERSIONS_JSON environment variable is not set. Please run this application through the proper Nix wrapper.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+try:
+    proton_versions = json.loads(proton_versions_json)
+except Exception as e:
+    print(
+        f"Error: Failed to parse UMU_PROTON_VERSIONS_JSON: {e}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+# Find configured Nix default version name, otherwise fallback to the first entry in the list
+default_proton_name = next(
+    (v["name"] for v in proton_versions if v.get("default")),
+    proton_versions[0]["name"],
+)
 
 
 def scan_gpus():
@@ -72,13 +97,17 @@ class LauncherWindow(Gtk.Window):
         grid = Gtk.Grid(column_spacing=15, row_spacing=10)
         vbox.pack_start(grid, False, False, 0)
 
-        # proton-umu toggle
-        lbl_umu = Gtk.Label(label="Использовать Proton UMU:")
-        lbl_umu.set_alignment(0, 0.5)
-        self.chk_umu = Gtk.CheckButton()
-        self.chk_umu.set_active(os.environ.get("USE_PROTON_UMU") == "1")
-        grid.attach(lbl_umu, 0, 0, 1, 1)
-        grid.attach(self.chk_umu, 1, 0, 1, 1)
+        # Proton selection dropdown (using version name as unique ID)
+        lbl_proton = Gtk.Label(label="Версия Proton:")
+        lbl_proton.set_alignment(0, 0.5)
+        self.cmb_proton = Gtk.ComboBoxText()
+        for v in proton_versions:
+            self.cmb_proton.append(v["name"], v["name"])
+        cur_proton = os.environ.get("UMU_PROTON_TYPE", default_proton_name)
+        if not self.cmb_proton.set_active_id(cur_proton):
+            self.cmb_proton.set_active(0)
+        grid.attach(lbl_proton, 0, 0, 1, 1)
+        grid.attach(self.cmb_proton, 1, 0, 1, 1)
 
         # gamemode toggle
         lbl_gamemode = Gtk.Label(label="Использовать GameMode:")
@@ -470,7 +499,9 @@ class LauncherWindow(Gtk.Window):
 
     def on_run_clicked(self, widget):
         env = os.environ.copy()
-        env["USE_PROTON_UMU"] = "1" if self.chk_umu.get_active() else "0"
+        env["UMU_PROTON_TYPE"] = (
+            self.cmb_proton.get_active_id() or default_proton_name
+        )
         env["USE_GAMEMODE"] = "1" if self.chk_gamemode.get_active() else "0"
         env["USE_MANGOHUD"] = "1" if self.chk_mangohud.get_active() else "0"
         env["PROTON_ENABLE_WAYLAND"] = (
@@ -491,7 +522,9 @@ class LauncherWindow(Gtk.Window):
 
     def on_save_clicked(self, widget):
         env = os.environ.copy()
-        env["USE_PROTON_UMU"] = "1" if self.chk_umu.get_active() else "0"
+        env["UMU_PROTON_TYPE"] = (
+            self.cmb_proton.get_active_id() or default_proton_name
+        )
         env["USE_GAMEMODE"] = "1" if self.chk_gamemode.get_active() else "0"
         env["USE_MANGOHUD"] = "1" if self.chk_mangohud.get_active() else "0"
         env["PROTON_ENABLE_WAYLAND"] = (

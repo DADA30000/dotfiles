@@ -643,7 +643,7 @@ in
           "cpu" = {
             interval = 2;
             format = "{usage}%  ";
-            on-click = "neovide-term btop";
+            on-click = "kitty btop";
           };
           "custom/cputemp" = {
             interval = 3;
@@ -692,9 +692,8 @@ in
           };
           "custom/nvidia-gpu" = {
             interval = 1;
-            exec-if = "nvidia-gpu";
             exec = "nvidia-gpu";
-            on-click = "neovide-term nvtop";
+            on-click = "kitty nvtop";
             return-type = "json";
             format = "{}";
             tooltip = true;
@@ -702,7 +701,7 @@ in
           "custom/amd-gpu" = {
             interval = 2;
             exec = "amd-gpu";
-            on-click = "neovide-term nvtop";
+            on-click = "kitty nvtop";
             return-type = "json";
             format = "{}";
             tooltip = true;

@@ -88,6 +88,8 @@ def get_fan_mode():
                 mode = f.read().strip()
                 if mode == "5":
                     return "max"
+                elif mode == "3":
+                    return "quiet"
     except Exception:
         pass
     return "auto"
@@ -395,7 +397,7 @@ class ControlPanelWindow(Gtk.Window):
         lact_box.pack_start(self.btn_lact_perf, True, True, 0)
         grid_hw.attach(lact_box, 1, 2, 1, 1)
 
-        # Hardware Row 3: Fan Mode Selection (Auto / Max)
+        # Hardware Row 3: Fan Mode Selection (Auto / Quiet / Max)
         lbl_fan = Gtk.Label()
         lbl_fan.set_markup(
             "<b>Fan Control:</b>\n"
@@ -410,19 +412,31 @@ class ControlPanelWindow(Gtk.Window):
         fan_box.set_valign(Gtk.Align.CENTER)
         fan_box.set_halign(Gtk.Align.END)
 
-        self.btn_fan_auto = Gtk.RadioButton.new_with_label(None, "Auto")
+        self.btn_fan_quiet = Gtk.RadioButton.new_with_label(None, "Quiet")
+        self.btn_fan_quiet.set_mode(False)
+        self.btn_fan_quiet.set_hexpand(True)
+        self.btn_fan_quiet.connect("toggled", self.on_fan_toggled, "quiet")
+
+        self.btn_fan_auto = Gtk.RadioButton.new_with_label_from_widget(
+            self.btn_fan_quiet, "Auto"
+        )
         self.btn_fan_auto.set_mode(False)
         self.btn_fan_auto.set_hexpand(True)
         self.btn_fan_auto.connect("toggled", self.on_fan_toggled, "auto")
 
         self.btn_fan_max = Gtk.RadioButton.new_with_label_from_widget(
-            self.btn_fan_auto, "Max"
+            self.btn_fan_quiet, "Max"
         )
         self.btn_fan_max.set_mode(False)
         self.btn_fan_max.set_hexpand(True)
         self.btn_fan_max.connect("toggled", self.on_fan_toggled, "max")
 
+        fan_box.pack_start(self.btn_fan_quiet, True, True, 0)
         fan_box.pack_start(self.btn_fan_auto, True, True, 0)
+        fan_box.pack_start(self.btn_fan_max, True, True, 0)
+
+        fan_box.pack_start(self.btn_fan_auto, True, True, 0)
+        fan_box.pack_start(self.btn_fan_quiet, True, True, 0)
         fan_box.pack_start(self.btn_fan_max, True, True, 0)
         grid_hw.attach(fan_box, 1, 3, 1, 1)
 
@@ -558,6 +572,8 @@ class ControlPanelWindow(Gtk.Window):
         fan_mode = get_fan_mode()
         if fan_mode == "max":
             self.btn_fan_max.set_active(True)
+        elif fan_mode == "quiet":
+            self.btn_fan_quiet.set_active(True)
         else:
             self.btn_fan_auto.set_active(True)
 

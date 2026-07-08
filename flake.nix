@@ -79,7 +79,11 @@
       flake = false;
     };
     gigabyte-laptop-wmi = {
-      url = "github:tangalbert919/gigabyte-laptop-wmi";
+      url = "github:DADA30000/gigabyte-laptop-wmi/fan-pwm";
+      flake = false;
+    };
+    aero-control-center = {
+      url = "github:DADA30000/AeroControlCenter";
       flake = false;
     };
     waywallen = {

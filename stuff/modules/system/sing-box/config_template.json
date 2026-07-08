@@ -1,6 +1,11 @@
 {
   "outbounds": [
     {
+      "tag": "proxy-awg",
+      "type": "direct",
+      "bind_interface": "awg0"
+    },
+    {
       "tag": "proxy2",
       "type": "vless",
       "server": "ip.address.here",
@@ -45,4 +50,3 @@
     }
   ]
 }
-

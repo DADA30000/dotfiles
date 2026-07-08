@@ -27,7 +27,7 @@ in
         enable32Bit = true;
         extraPackages = with pkgs; [
           rocmPackages.clr
-          inputs.chaotic.packages.${pkgs.stdenv.hostPlatform.system}.low-latency-layer
+          inputs.chaotic.legacyPackages.${pkgs.stdenv.hostPlatform.system}.low-latency-layer
         ];
       };
       amdgpu = mkMerge [

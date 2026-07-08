@@ -19,7 +19,7 @@ let
     };
   };
   neovide-term = pkgs.writers.writeDashBin "neovide-term" ''
-    exec neovide --frame none --no-idle --mouse-cursor-icon i-beam "+term''${1:+ $*}" +startinsert \
+    exec neovide --frame none --mouse-cursor-icon i-beam "+term''${1:+ $*}" +startinsert \
       '+set laststatus=0' \
       '+set cmdheight=0' \
       '+nnoremap <C-S-t> :tabnew +term<CR>' \
@@ -533,14 +533,34 @@ let
             vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
           end)
         end, { buffer = bufnr, silent = true })
+
+        -- === STRIP CTRL & CTRL+SHIFT FROM MOUSE ACTIONS ===
+        -- Prevents accidental Tag Jumps (<C-]>) when holding Ctrl or Ctrl+Shift during selections
+        local mouse_events = { 
+          "<C-LeftMouse>", "<C-S-LeftMouse>", 
+          "<C-LeftDrag>", "<C-S-LeftDrag>", 
+          "<C-LeftRelease>", "<C-S-LeftRelease>" 
+        }
+        local standard_events = { 
+          "<LeftMouse>", "<LeftMouse>", 
+          "<LeftDrag>", "<LeftDrag>", 
+          "<LeftRelease>", "<LeftRelease>" 
+        }
+        for i, event in ipairs(mouse_events) do
+          vim.keymap.set({ "n", "v", "t" }, event, standard_events[i], { buffer = bufnr, silent = true })
+        end
       end,
     })
 
     -- General copy/paste configuration (works in standard Neovim and GUI)
-    -- (Configured with 'v' so you can use Ctrl+Shift+C inside both Visual and Select modes!)
-    vim.keymap.set({"n", "v"}, "<C-S-c>", "\"+y", { desc = "Copy system clipboard" })
-    vim.keymap.set({"n", "v"}, "<C-S-v>", "\"+p", { desc = "Paste system clipboard" })
-    vim.keymap.set("i", "<C-S-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
+    -- (Configured with 'x' for Visual-only mode to prevent Select-mode corruption)
+    vim.keymap.set({"n", "x"}, "<C-S-c>", "\"+y", { desc = "Copy system clipboard" })
+    vim.keymap.set({"n", "x"}, "<C-S-v>", "\"+p", { desc = "Paste system clipboard" })
+
+    -- Dedicated Select-mode copy/paste (e.g., inside snippet placeholders)
+    -- Toggles to Visual mode via <C-g>, performs the action, and exits cleanly
+    vim.keymap.set("s", "<C-S-c>", "<C-g>\"+y", { silent = true, desc = "Copy selection in Select mode" })
+    vim.keymap.set("s", "<C-S-v>", "<C-g>\"+p", { silent = true, desc = "Paste/Replace in Select mode" })
 
     vim.opt.updatetime = 100
     vim.opt.undofile = true
@@ -652,6 +672,43 @@ let
     vim.api.nvim_create_user_command("Format", function()
       conform.format({ async = false, lsp_format = "fallback" })
     end, {})
+
+    -- === TERMINAL AUTOMATIC SCROLLBACK PRUNING ===
+    -- Periodically prunes terminal history to maintain smooth scrolling without losing history
+    vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
+      pattern = "term://*",
+      callback = function(args)
+        local bufnr = args.buf
+        if not vim.api.nvim_buf_is_valid(bufnr) then return end
+
+        local line_count = vim.api.nvim_buf_line_count(bufnr)
+        -- Trigger pruning when the buffer grows past 3,000 lines
+        if line_count > 3000 then
+          local win_id = vim.fn.bufwinid(bufnr)
+          if win_id == -1 then return end
+          
+          local win_info = vim.fn.getwininfo(win_id)[1]
+          local topline = win_info and win_info.topline
+          local win_height = vim.fn.winheight(win_id)
+          local max_topline = line_count - win_height + 1
+          
+          -- If you are currently scrolled up reading history, postpone pruning
+          if topline and topline < max_topline - 5 then
+            return
+          end
+
+          -- Temporarily drop the capacity to 1,000 lines to prune the oldest 2,000 lines
+          vim.opt_local.scrollback = 1000
+          
+          -- Defer restoring the capacity so Neovim has a frame to process the truncation
+          vim.defer_fn(function()
+            if vim.api.nvim_buf_is_valid(bufnr) then
+              vim.opt_local.scrollback = 100000
+            end
+          end, 50)
+        end
+      end,
+    })
 
     -- === ASYNC AUTO-FORMAT ON AUTO-SAVE (WITH STATE LOCK) ===
     local is_formatting = false
@@ -933,23 +990,7 @@ in
       hexpatch
       tinyxxd
       bash-language-server
-
-      # Patches ESM main files to prepend Node's createRequire helper
-      (
-        (vscode-langservers-extracted.override {
-          buildNpmPackage = buildNpmPackage.override { nodejs = nodejs_22; };
-        }).overrideAttrs
-        (oldAttrs: {
-          postInstall = (oldAttrs.postInstall or "") + ''
-            for f in $(find $out -name "*ServerMain.js"); do
-              echo 'import { createRequire } from "module"; const require = createRequire(import.meta.url);' > temp.js
-              cat "$f" >> temp.js
-              mv temp.js "$f"
-            done
-          '';
-        })
-      )
-
+      vscode-langservers-extracted
       jdt-language-server
       lua-language-server
       taplo
@@ -1013,7 +1054,6 @@ in
           let g:neovide_scroll_animation_length = 0.15
           let g:neovide_cursor_animation_length = 0.05
           let g:neovide_cursor_trail_size = 0.2
-          let g:neovide_refresh_rate_idle = 165
           let g:neovide_padding_top = 20
           let g:neovide_padding_left = 20
           let g:neovide_padding_right = 20
