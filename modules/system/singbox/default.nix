@@ -131,6 +131,7 @@ let
             "geekbench.com"
             "website-files.com"
             "localizeapi.com"
+            "steamcmd.net"
           ];
         }
         {

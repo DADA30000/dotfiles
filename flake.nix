@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    steam-app-id-list = {
+      url = "github:jsnli/steamappidlist";
+      flake = false;
+    };
     llama-cpp = {
       url = "github:ikawrakow/ik_llama.cpp";
       flake = false;

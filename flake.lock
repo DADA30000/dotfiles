@@ -1864,6 +1864,7 @@
         "spicetify-nix": "spicetify-nix",
         "spirv-reflect": "spirv-reflect",
         "split-monitor-workspaces": "split-monitor-workspaces",
+        "steam-app-id-list": "steam-app-id-list",
         "susfs4ksu": "susfs4ksu",
         "uv2nix": "uv2nix",
         "vencord-src": "vencord-src",
@@ -2003,6 +2004,22 @@
       "original": {
         "owner": "zjeffer",
         "repo": "split-monitor-workspaces",
+        "type": "github"
+      }
+    },
+    "steam-app-id-list": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783568114,
+        "narHash": "sha256-chCJaJ2by/Z+oK49FOoJPKPUwfKsZ2CULdsR/qbbp14=",
+        "owner": "jsnli",
+        "repo": "steamappidlist",
+        "rev": "3160f93acf391a28dfc623b17e03b869e26e3a15",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jsnli",
+        "repo": "steamappidlist",
         "type": "github"
       }
     },

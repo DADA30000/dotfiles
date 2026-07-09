@@ -111,7 +111,8 @@ class PrefixManager(Gtk.Window):
         if name == "default":
             dialog = Gtk.MessageDialog(
                 transient_for=self,
-                flags=Gtk.DialogFlags.MODAL,
+                modal=True,
+                destroy_with_parent=True,
                 type=Gtk.MessageType.ERROR,
                 buttons=Gtk.ButtonsType.OK,
                 message_format="Нельзя удалить префикс по умолчанию ('default')!",
@@ -122,7 +123,8 @@ class PrefixManager(Gtk.Window):
 
         confirm = Gtk.MessageDialog(
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL,
+            modal=True,
+            destroy_with_parent=True,
             type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.YES_NO,
             message_format=f"Вы уверены, что хотите полностью удалить префикс '{name}'? Все установленные туда игры и сохранения будут утеряны!",
@@ -139,7 +141,8 @@ class PrefixManager(Gtk.Window):
             except Exception as e:
                 err_dialog = Gtk.MessageDialog(
                     transient_for=self,
-                    flags=Gtk.DialogFlags.MODAL,
+                    modal=True,
+                    destroy_with_parent=True,
                     type=Gtk.MessageType.ERROR,
                     buttons=Gtk.ButtonsType.OK,
                     message_format=f"Ошибка удаления префикса: {e}",

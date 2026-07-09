@@ -166,7 +166,6 @@ in
       file-roller
       cliphist
       libnotify
-      swappy
       brightnessctl
       qimgv
       myxer
@@ -499,6 +498,11 @@ in
           };
           bind =
             let
+              save-replay = pkgs.writers.writeDash "save-replay" ''
+                MON_NAME=$(hyprctl activeworkspace -j | ${pkgs.jq}/bin/jq -r '.monitor')
+                pkill -SIGUSR1 -f "gpu-screen-recorder.*-w $MON_NAME.*" && \
+                notify-send 'GPU-Screen-Recorder' "Повтор с $MON_NAME успешно сохранён"
+              '';
               rofi = pkgs.writers.writeDash "rofi" ''
                 pkill rofi || rofi \
                   -show drun \
@@ -590,35 +594,35 @@ in
               ]
               [
                 "CTRL + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | satty -f -"
               ]
               [
                 "CTRL + ${mod} + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | satty -f -"
               ]
               [
                 "CTRL + SHIFT + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -"
-              ] # change later to "Satty" https://github.com/gabm/Satty
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | satty -f -"
+              ]
               [
                 "CTRL + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | swappy -f -"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | satty -f -"
               ]
               [
                 "CTRL + ALT + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | swappy -f -"
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | satty -f -"
               ]
               [
                 "CTRL + SHIFT + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | swappy -f -"
-              ] # change later to "Satty" https://github.com/gabm/Satty
+                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | satty -f -"
+              ]
               [
                 "${mod} + CTRL + Q"
                 "app2unit -- kitty"
               ]
               [
                 "${mod} + CTRL + R"
-                "app2unit -- killall -SIGUSR1 gpu-screen-recorder && notify-send 'GPU-Screen-Recorder' 'Повтор успешно сохранён'"
+                "app2unit -- ${save-replay}"
               ]
               [
                 "${mod} + CTRL + U"
@@ -986,69 +990,131 @@ in
         config.common.default = "*";
       };
     };
-    programs.hyprlock = mkIf cfg.hyprlock {
-      enable = true;
-      settings = {
-        background = [
-          {
-            monitor = "";
-            color = "rgba(0, 0, 0, 1)";
-          }
-        ];
+    programs = {
+      satty = {
+        enable = true;
+        settings = {
+          general = {
+            fullscreen = false;
+            resize.mode = "smart";
+            floating-hack = true;
+            auto-copy = false;
+            early-exit = [ "all" ];
+            corner-roundness = 12;
+            initial-tool = "brush";
+            copy-command = "wl-copy";
+            annotation-size-factor = 2;
+            output-filename = "${config.xdg.userDirs.pictures}/satty-%Y-%m-%d_%H:%M:%S.png";
+            save-after-copy = true;
+            default-hide-toolbars = false;
+            focus-toggles-toolbars = false;
+            default-fill-shapes = false;
+            primary-highlighter = "block";
+            disable-notifications = false;
+            actions-on-enter = [ "save-to-clipboard" ];
+            actions-on-escape = [ "exit" ];
+            action-on-enter = "save-to-clipboard";
+            right-click-copy = false;
+            no-window-decoration = true;
+            brush-smooth-history-size = 0;
+            pan-step-size = 50.0;
+            zoom-factor = 1.1;
+            text-move-length = 50.0;
+            input-scale = 1.0;
+            title = "Satty";
+            app-id = "org.satty.satty";
+          };
+          keybinds = {
+            pointer = "p";
+            crop = "c";
+            brush = "b";
+            line = "i";
+            arrow = "z";
+            rectangle = "r";
+            ellipse = "e";
+            text = "t";
+            marker = "m";
+            blur = "u";
+            highlight = "g";
+          };
+          font = {
+            family = "JetBrainsMono NF";
+            style = "Regular";
+            fallback = [ "Noto Sans CJK SC" ];
+          };
+          color-palette.palette = [
+            "#f0932bff"
+            "#eb4d4bff"
+            "#6ab04cff"
+            "#22a6b3ff"
+            "#130f40FF"
+          ];
+        };
+      };
+      hyprlock = mkIf cfg.hyprlock {
+        enable = true;
+        settings = {
+          background = [
+            {
+              monitor = "";
+              color = "rgba(0, 0, 0, 1)";
+            }
+          ];
 
-        input-field = [
-          {
-            monitor = "";
-            size = "12.5%, 5%";
-            outline_thickness = 2;
-            dots_size = 0.2;
-            dots_spacing = 0.15;
-            dots_center = true;
-            outer_color = "rgb(000000)";
-            inner_color = "rgb(000000)";
-            font_color = "rgb(255, 255, 255)";
-            fade_on_empty = true;
-            fail_text = "";
-            placeholder_text = "";
-            hide_input = false;
-            position = "0%, 0%";
-            halign = "center";
-            valign = "center";
-          }
-        ];
+          input-field = [
+            {
+              monitor = "";
+              size = "12.5%, 5%";
+              outline_thickness = 2;
+              dots_size = 0.2;
+              dots_spacing = 0.15;
+              dots_center = true;
+              outer_color = "rgb(000000)";
+              inner_color = "rgb(000000)";
+              font_color = "rgb(255, 255, 255)";
+              fade_on_empty = true;
+              fail_text = "";
+              placeholder_text = "";
+              hide_input = false;
+              position = "0%, 0%";
+              halign = "center";
+              valign = "center";
+            }
+          ];
 
-        label = [
-          {
-            monitor = "";
-            text = "$TIME";
-            color = "rgb(255, 255, 255)";
-            font_size = 50;
-            font_family = "Noto Sans";
-            position = "0%, 30%";
-            halign = "center";
-            valign = "center";
-          }
-          {
-            monitor = "";
-            text = "Введите пароль от пользователя $USER";
-            color = "rgb(255, 255, 255)";
-            font_size = 25;
-            font_family = "Noto Sans";
-            position = "0%, 15%";
-            halign = "center";
-            valign = "center";
-          }
-          {
-            monitor = "";
-            text = "$ATTEMPTS[]";
-            color = "rgb(255, 255, 255, 0.05)";
-            font_size = 25;
-            font_family = "Noto Sans";
-            position = "-48%, -48%";
-            halign = "center";
-            valign = "center";
-          }
-        ];
+          label = [
+            {
+              monitor = "";
+              text = "$TIME";
+              color = "rgb(255, 255, 255)";
+              font_size = 50;
+              font_family = "Noto Sans";
+              position = "0%, 30%";
+              halign = "center";
+              valign = "center";
+            }
+            {
+              monitor = "";
+              text = "Введите пароль от пользователя $USER";
+              color = "rgb(255, 255, 255)";
+              font_size = 25;
+              font_family = "Noto Sans";
+              position = "0%, 15%";
+              halign = "center";
+              valign = "center";
+            }
+            {
+              monitor = "";
+              text = "$ATTEMPTS[]";
+              color = "rgb(255, 255, 255, 0.05)";
+              font_size = 25;
+              font_family = "Noto Sans";
+              position = "-48%, -48%";
+              halign = "center";
+              valign = "center";
+            }
+          ];
+        };
       };
     };
     services = {
