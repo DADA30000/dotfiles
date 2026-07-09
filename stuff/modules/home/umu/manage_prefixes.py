@@ -20,7 +20,8 @@ class PrefixManager(Gtk.Window):
 
         lbl = Gtk.Label()
         lbl.set_markup("<b>Выберите префикс для настройки или управления:</b>")
-        lbl.set_alignment(0, 0.5)
+        lbl.set_xalign(0.0)
+        lbl.set_yalign(0.5)
         vbox.pack_start(lbl, False, False, 5)
 
         self.store = Gtk.ListStore(str, str)

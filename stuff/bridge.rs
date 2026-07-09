@@ -7,7 +7,7 @@ use std::os::raw::c_char;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 extern "C" {
     fn fork() -> i32;
@@ -40,29 +40,44 @@ static LOG_PATH: OnceLock<String> = OnceLock::new();
 fn log_bridge(msg: &str) {
     if let Some(path) = LOG_PATH.get() {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(file, "{}", msg);
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let _ = writeln!(file, "[{}] {}", timestamp, msg);
         }
     }
 }
 
 fn daemonize() {
     unsafe {
-        if fork() < 0 {
+        // First fork
+        let pid1 = fork();
+        if pid1 < 0 {
+            log_bridge("Error: First fork failed");
             std::process::exit(1);
         }
-        if fork() > 0 {
-            std::process::exit(0);
-        }
-        if setsid() < 0 {
-            std::process::exit(1);
-        }
-        if fork() < 0 {
-            std::process::exit(1);
-        }
-        if fork() > 0 {
-            std::process::exit(0);
+        if pid1 > 0 {
+            std::process::exit(0); // Parent exits
         }
 
+        // Create new session
+        if setsid() < 0 {
+            log_bridge("Error: setsid failed");
+            std::process::exit(1);
+        }
+
+        // Second fork
+        let pid2 = fork();
+        if pid2 < 0 {
+            log_bridge("Error: Second fork failed");
+            std::process::exit(1);
+        }
+        if pid2 > 0 {
+            std::process::exit(0); // First child exits, grandchild continues
+        }
+
+        // Redirect standard file descriptors
         let dev_null = b"/dev/null\0".as_ptr() as *const c_char;
         let fd = open(dev_null, O_RDWR);
         if fd != -1 {
@@ -88,7 +103,7 @@ fn print_help() {
     );
     println!("  -s, --socket <path>        Path to the UNIX domain socket");
     println!("  -a, --auto <ip>            Scan active TCP ports for this IP (pass role only)");
-    println!("  --address <ip:ports>       Static IP and ports to bind (listen role only)");
+    println!("  --address <ip:ports>       Static IP and ports to bind");
     println!("                             Format: IP:PORT or IP:[PORT1,PORT2]");
     println!("  -d, --detach               Detach and run in the background");
     println!("  -l, --log <path>           Optional log file path");
@@ -184,37 +199,54 @@ fn run_pass_role(
 
     let _ = fs::remove_file(&socket_path);
 
+    log_bridge(&format!(
+        "Starting PASS role. Binding UNIX socket at {}",
+        socket_path
+    ));
+
     match UnixListener::bind(&socket_path) {
         Ok(listener) => {
+            log_bridge("Waiting for LISTEN role to connect...");
             if let Some(Ok(mut unix_stream)) = listener.incoming().next() {
                 let mut header = [0u8; PACKET_SIZE];
                 if unix_stream.read_exact(&mut header).is_ok() && header[0] == PACKET_TYPE_CONTROL {
+                    log_bridge("Control stream connected. Exchanging configurations...");
                     let local_bytes = local_config.as_bytes();
                     let local_len = local_bytes.len() as u32;
 
                     if unix_stream.write_all(&local_len.to_be_bytes()).is_err()
                         || unix_stream.write_all(local_bytes).is_err()
                     {
+                        log_bridge("Error: Failed to send local configuration.");
                         std::process::exit(1);
                     }
 
                     let mut remote_len_bytes = [0u8; CONFIG_LEN_SIZE];
                     if unix_stream.read_exact(&mut remote_len_bytes).is_err() {
+                        log_bridge("Error: Failed to read remote configuration length.");
                         std::process::exit(1);
                     }
 
                     let remote_len = u32::from_be_bytes(remote_len_bytes) as usize;
                     let mut remote_bytes = vec![0u8; remote_len];
                     if unix_stream.read_exact(&mut remote_bytes).is_err() {
+                        log_bridge("Error: Failed to read remote configuration data.");
                         std::process::exit(1);
                     }
 
                     let remote_config = String::from_utf8_lossy(&remote_bytes).into_owned();
                     if local_config != remote_config {
+                        log_bridge(&format!(
+                            "Error: Configuration mismatch!\nLocal: {}\nRemote: {}",
+                            local_config, remote_config
+                        ));
                         std::process::exit(1);
                     }
 
+                    log_bridge("Configuration handshake successful.");
+
                     if detach {
+                        log_bridge("Detaching PASS process to the background...");
                         daemonize();
                     }
 
@@ -227,11 +259,13 @@ fn run_pass_role(
                         thread::spawn(move || {
                             let mut buf = [0u8; HEARTBEAT_SIZE];
                             let _ = ms.read(&mut buf);
+                            log_bridge("Control stream disconnected. Exiting PASS role.");
                             std::process::exit(0);
                         });
                     }
 
                     if !auto_ips.is_empty() {
+                        log_bridge("Starting auto-port discovery thread...");
                         thread::spawn(move || {
                             let mut known_ports = HashSet::new();
                             loop {
@@ -247,6 +281,10 @@ fn run_pass_role(
                                 for (ip_str, port) in &current_active {
                                     if !known_ports.contains(&(ip_str.clone(), *port)) {
                                         known_ports.insert((ip_str.clone(), *port));
+                                        log_bridge(&format!(
+                                            "Auto-detected new bind target: {}:{}",
+                                            ip_str, port
+                                        ));
                                         send_control_message(
                                             &control_stream_scan,
                                             CONTROL_COMMAND_BIND,
@@ -264,6 +302,10 @@ fn run_pass_role(
 
                                 for (ip_str, port) in to_remove {
                                     known_ports.remove(&(ip_str.clone(), port));
+                                    log_bridge(&format!(
+                                        "Removing stale bind target: {}:{}",
+                                        ip_str, port
+                                    ));
                                     send_control_message(
                                         &control_stream_scan,
                                         CONTROL_COMMAND_UNBIND,
@@ -277,6 +319,7 @@ fn run_pass_role(
                         });
                     }
 
+                    log_bridge("Ready to handle incoming data streams.");
                     for subsequent_stream in listener.incoming().flatten() {
                         let mut data_unix_stream = subsequent_stream;
                         thread::spawn(move || {
@@ -293,18 +336,31 @@ fn run_pass_role(
                                 let port = u16::from_be_bytes([data_header[5], data_header[6]]);
                                 let target = format!("{}:{}", ip, port);
 
+                                log_bridge(&format!(
+                                    "Forwarding data packet out to TCP {}:{}",
+                                    ip, port
+                                ));
                                 if let Ok(tcp_stream) = TcpStream::connect(&target) {
                                     handle_connection(tcp_stream, data_unix_stream);
+                                } else {
+                                    log_bridge(&format!(
+                                        "Failed to connect to outbound TCP target: {}:{}",
+                                        ip, port
+                                    ));
                                 }
                             }
                         });
                     }
                 } else {
+                    log_bridge("Error: Invalid initial packet received (not a control packet).");
                     std::process::exit(1);
                 }
             }
         }
-        Err(_) => std::process::exit(1),
+        Err(e) => {
+            log_bridge(&format!("Error: Failed to bind UNIX listener: {}", e));
+            std::process::exit(1);
+        }
     }
 
     fn send_control_message(control: &Mutex<Option<UnixStream>>, cmd: u8, ip_str: &str, port: u16) {
@@ -323,6 +379,7 @@ fn run_pass_role(
                         port_bytes[1],
                     ];
                     if stream.write_all(&packet).is_err() {
+                        log_bridge("Error writing control message, exiting stream process.");
                         std::process::exit(0);
                     }
                 }
@@ -341,6 +398,11 @@ fn run_listen_role(
     let active_listeners_clone = Arc::clone(&active_listeners);
     let local_config = generate_canonical_config(&auto_ips, &static_addresses);
 
+    log_bridge(&format!(
+        "Starting LISTEN role. Seeking UNIX socket at {}",
+        socket_path
+    ));
+
     let mut stream = loop {
         match UnixStream::connect(&socket_path) {
             Ok(s) => break s,
@@ -348,18 +410,23 @@ fn run_listen_role(
         }
     };
 
+    log_bridge("Connected to PASS role control socket. Exchanging configurations...");
+
     let handshake = [0u8; PACKET_SIZE];
     if stream.write_all(&handshake).is_err() {
+        log_bridge("Error: Failed to send handshake.");
         std::process::exit(1);
     }
 
     let mut remote_len_bytes = [0u8; CONFIG_LEN_SIZE];
     if stream.read_exact(&mut remote_len_bytes).is_err() {
+        log_bridge("Error: Failed to read remote config length.");
         std::process::exit(1);
     }
     let remote_len = u32::from_be_bytes(remote_len_bytes) as usize;
     let mut remote_bytes = vec![0u8; remote_len];
     if stream.read_exact(&mut remote_bytes).is_err() {
+        log_bridge("Error: Failed to read remote config data.");
         std::process::exit(1);
     }
     let remote_config = String::from_utf8_lossy(&remote_bytes).into_owned();
@@ -368,14 +435,22 @@ fn run_listen_role(
     let local_len = local_bytes.len() as u32;
     if stream.write_all(&local_len.to_be_bytes()).is_err() || stream.write_all(local_bytes).is_err()
     {
+        log_bridge("Error: Failed to write local configuration.");
         std::process::exit(1);
     }
 
     if local_config != remote_config {
+        log_bridge(&format!(
+            "Error: Configuration mismatch!\nLocal: {}\nRemote: {}",
+            local_config, remote_config
+        ));
         std::process::exit(1);
     }
 
+    log_bridge("Configuration handshake successful.");
+
     if detach {
+        log_bridge("Detaching LISTEN process to the background...");
         daemonize();
     }
 
@@ -392,14 +467,23 @@ fn run_listen_role(
         let port = u16::from_be_bytes([buf[5], buf[6]]);
 
         if cmd == CONTROL_COMMAND_BIND {
+            log_bridge(&format!(
+                "Received dynamic BIND request for {}:{}",
+                ip, port
+            ));
             spawn_listener(&active_listeners, &socket_path, ip, port);
         } else if cmd == CONTROL_COMMAND_UNBIND {
+            log_bridge(&format!(
+                "Received dynamic UNBIND request for {}:{}",
+                ip, port
+            ));
             if let Ok(mut active) = active_listeners.lock() {
                 active.remove(&(ip, port));
             }
         }
     }
 
+    log_bridge("Control stream disconnected. Exiting LISTEN role.");
     std::process::exit(0);
 
     fn spawn_listener(
@@ -414,6 +498,8 @@ fn run_listen_role(
                 active.insert(key.clone());
                 let active_clone = Arc::clone(active_listeners);
                 let socket_path_clone = socket_path.to_string();
+
+                log_bridge(&format!("Spawning TCP Listener on {}:{}", ip, port));
 
                 thread::spawn(move || {
                     let listen_target = format!("{}:{}", ip, port);
@@ -430,7 +516,11 @@ fn run_listen_role(
                             }
 
                             match listener.accept() {
-                                Ok((tcp_stream, _)) => {
+                                Ok((tcp_stream, source_addr)) => {
+                                    log_bridge(&format!(
+                                        "Accepted connection on {}:{} from {}",
+                                        ip, port, source_addr
+                                    ));
                                     let socket_path_deep = socket_path_clone.clone();
                                     let ip_parsed_str = ip.clone();
                                     thread::spawn(move || {
@@ -463,9 +553,13 @@ fn run_listen_role(
                                 Err(_) => break,
                             }
                         }
+                    } else {
+                        log_bridge(&format!("Failed to bind TCP Listener on {}:{}", ip, port));
                     }
+
                     if let Ok(mut a) = active_clone.lock() {
                         a.remove(&key);
+                        log_bridge(&format!("Stopped TCP Listener on {}:{}", ip, port));
                     }
                 });
             }
@@ -491,6 +585,7 @@ fn main() {
                 if let Some(r) = args.next() {
                     role = Some(r);
                 } else {
+                    eprintln!("Error: Missing role argument after {}", arg);
                     std::process::exit(1);
                 }
             }
@@ -498,6 +593,7 @@ fn main() {
                 if let Some(s) = args.next() {
                     socket_path = Some(s);
                 } else {
+                    eprintln!("Error: Missing socket path after {}", arg);
                     std::process::exit(1);
                 }
             }
@@ -505,6 +601,7 @@ fn main() {
                 if let Some(ip) = args.next() {
                     auto_ips.push(ip);
                 } else {
+                    eprintln!("Error: Missing IP argument after {}", arg);
                     std::process::exit(1);
                 }
             }
@@ -515,6 +612,7 @@ fn main() {
                 if let Some(l) = args.next() {
                     let _ = LOG_PATH.set(l);
                 } else {
+                    eprintln!("Error: Missing log path argument after {}", arg);
                     std::process::exit(1);
                 }
             }
@@ -536,26 +634,47 @@ fn main() {
                             .entry(ip.to_string())
                             .or_default()
                             .extend(ports);
+                    } else {
+                        eprintln!("Error: Invalid address format: {}", addr_str);
+                        std::process::exit(1);
                     }
                 } else {
+                    eprintln!("Error: Missing address argument after {}", arg);
                     std::process::exit(1);
                 }
             }
-            _ => std::process::exit(1),
+            _ => {
+                eprintln!("Error: Unknown argument: {}", arg);
+                std::process::exit(1);
+            }
         }
     }
 
     let role = match role {
         Some(r) if r == ROLE_PASS || r == ROLE_LISTEN => r,
-        _ => std::process::exit(1),
+        _ => {
+            eprintln!("Error: A valid role (-r <pass|listen>) is required.");
+            std::process::exit(1);
+        }
     };
 
     let socket_path = match socket_path {
         Some(s) => s,
-        None => std::process::exit(1),
+        None => {
+            eprintln!("Error: A socket path (-s <path>) is required.");
+            std::process::exit(1);
+        }
     };
 
-    if address_maps.is_empty() {
+    if role == ROLE_LISTEN && address_maps.is_empty() {
+        eprintln!("Error: The 'listen' role requires at least one '--address' binding.");
+        std::process::exit(1);
+    }
+
+    if role == ROLE_PASS && address_maps.is_empty() && auto_ips.is_empty() {
+        eprintln!(
+            "Error: The 'pass' role requires at least one '--address' or '--auto' definition."
+        );
         std::process::exit(1);
     }
 

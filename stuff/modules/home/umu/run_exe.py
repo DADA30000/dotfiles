@@ -99,7 +99,8 @@ class LauncherWindow(Gtk.Window):
 
         # Proton selection dropdown (using version name as unique ID)
         lbl_proton = Gtk.Label(label="Версия Proton:")
-        lbl_proton.set_alignment(0, 0.5)
+        lbl_proton.set_xalign(0.0)
+        lbl_proton.set_yalign(0.5)
         self.cmb_proton = Gtk.ComboBoxText()
         for v in proton_versions:
             self.cmb_proton.append(v["name"], v["name"])
@@ -111,7 +112,8 @@ class LauncherWindow(Gtk.Window):
 
         # gamemode toggle
         lbl_gamemode = Gtk.Label(label="Использовать GameMode:")
-        lbl_gamemode.set_alignment(0, 0.5)
+        lbl_gamemode.set_xalign(0.0)
+        lbl_gamemode.set_yalign(0.5)
         self.chk_gamemode = Gtk.CheckButton()
         self.chk_gamemode.set_active(
             os.environ.get("USE_GAMEMODE", "1") != "0"
@@ -121,7 +123,8 @@ class LauncherWindow(Gtk.Window):
 
         # mangohud toggle
         lbl_mangohud = Gtk.Label(label="Использовать MangoHud:")
-        lbl_mangohud.set_alignment(0, 0.5)
+        lbl_mangohud.set_xalign(0.0)
+        lbl_mangohud.set_yalign(0.5)
         self.chk_mangohud = Gtk.CheckButton()
         self.chk_mangohud.set_active(
             os.environ.get("USE_MANGOHUD", "1") != "0"
@@ -131,7 +134,8 @@ class LauncherWindow(Gtk.Window):
 
         # wayland toggle
         lbl_wayland = Gtk.Label(label="Использовать Wayland:")
-        lbl_wayland.set_alignment(0, 0.5)
+        lbl_wayland.set_xalign(0.0)
+        lbl_wayland.set_yalign(0.5)
         self.chk_wayland = Gtk.CheckButton()
         self.chk_wayland.set_active(
             os.environ.get("PROTON_ENABLE_WAYLAND", "1") != "0"
@@ -141,7 +145,8 @@ class LauncherWindow(Gtk.Window):
 
         # steam integration toggle
         lbl_steam = Gtk.Label(label="Интеграция со Steam:")
-        lbl_steam.set_alignment(0, 0.5)
+        lbl_steam.set_xalign(0.0)
+        lbl_steam.set_yalign(0.5)
         self.chk_steam = Gtk.CheckButton()
         self.chk_steam.set_active(
             os.environ.get("USE_STEAM_INTEGRATION", "0") == "1"
@@ -151,13 +156,23 @@ class LauncherWindow(Gtk.Window):
 
         # steam overlay toggle
         lbl_overlay = Gtk.Label(label="Оверлей Steam:")
-        lbl_overlay.set_alignment(0, 0.5)
+        lbl_overlay.set_xalign(0.0)
+        lbl_overlay.set_yalign(0.5)
         self.chk_overlay = Gtk.CheckButton()
         self.chk_overlay.set_active(
             os.environ.get("USE_STEAM_OVERLAY", "0") == "1"
         )
         grid.attach(lbl_overlay, 0, 5, 1, 1)
         grid.attach(self.chk_overlay, 1, 5, 1, 1)
+
+        # VPN toggle
+        lbl_vpn = Gtk.Label(label="Через VPN:")
+        lbl_vpn.set_xalign(0.0)
+        lbl_vpn.set_yalign(0.5)
+        self.chk_vpn = Gtk.CheckButton()
+        self.chk_vpn.set_active(os.environ.get("USE_VPN", "0") == "1")
+        grid.attach(lbl_vpn, 0, 6, 1, 1)
+        grid.attach(self.chk_vpn, 1, 6, 1, 1)
 
         self.lock_signals = False
         self.chk_overlay.connect("toggled", self.on_overlay_toggled)
@@ -172,15 +187,17 @@ class LauncherWindow(Gtk.Window):
 
         # prefix name
         lbl_prefix = Gtk.Label(label="Имя префикса (в ~/.umu/):")
-        lbl_prefix.set_alignment(0, 0.5)
+        lbl_prefix.set_xalign(0.0)
+        lbl_prefix.set_yalign(0.5)
         self.ent_prefix = Gtk.Entry()
         self.ent_prefix.set_text(os.environ.get("UMU_PREFIX_NAME", "default"))
-        grid.attach(lbl_prefix, 0, 6, 1, 1)
-        grid.attach(self.ent_prefix, 1, 6, 1, 1)
+        grid.attach(lbl_prefix, 0, 7, 1, 1)
+        grid.attach(self.ent_prefix, 1, 7, 1, 1)
 
         # GPU combo selection
         lbl_gpu = Gtk.Label(label="Видеокарта:")
-        lbl_gpu.set_alignment(0, 0.5)
+        lbl_gpu.set_xalign(0.0)
+        lbl_gpu.set_yalign(0.5)
         self.cmb_gpu = Gtk.ComboBoxText()
         gpu_opts = ["Автоматически", "AMD", "Nvidia", "Intel"]
         for opt in gpu_opts:
@@ -191,8 +208,8 @@ class LauncherWindow(Gtk.Window):
             self.cmb_gpu.set_active(gpu_opts.index(cur_gpu))
         else:
             self.cmb_gpu.set_active(0)
-        grid.attach(lbl_gpu, 0, 7, 1, 1)
-        grid.attach(self.cmb_gpu, 1, 7, 1, 1)
+        grid.attach(lbl_gpu, 0, 8, 1, 1)
+        grid.attach(self.cmb_gpu, 1, 8, 1, 1)
 
         self.desktop_box = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=10
@@ -206,7 +223,8 @@ class LauncherWindow(Gtk.Window):
         self.desktop_box.pack_start(c_grid, False, False, 0)
 
         lbl_name = Gtk.Label(label="Название ярлыка:")
-        lbl_name.set_alignment(0, 0.5)
+        lbl_name.set_xalign(0.0)
+        lbl_name.set_yalign(0.5)
         self.ent_name = Gtk.Entry()
 
         if self.filepath.lower().endswith(".lnk"):
@@ -242,7 +260,8 @@ class LauncherWindow(Gtk.Window):
                 pass
 
         lbl_args = Gtk.Label(label="Аргументы запуска:")
-        lbl_args.set_alignment(0, 0.5)
+        lbl_args.set_xalign(0.0)
+        lbl_args.set_yalign(0.5)
         self.ent_args = Gtk.Entry()
         self.ent_args.set_text(orig_args)
         self.ent_args.set_placeholder_text("ENV=1 %command% --arg-here")
@@ -250,7 +269,8 @@ class LauncherWindow(Gtk.Window):
         c_grid.attach(self.ent_args, 1, 1, 1, 1)
 
         lbl_icon = Gtk.Label(label="Иконка (файл):")
-        lbl_icon.set_alignment(0, 0.5)
+        lbl_icon.set_xalign(0.0)
+        lbl_icon.set_yalign(0.5)
         self.btn_icon = Gtk.FileChooserButton(
             title="Выберите иконку", action=Gtk.FileChooserAction.OPEN
         )
@@ -515,6 +535,7 @@ class LauncherWindow(Gtk.Window):
         env["USE_STEAM_OVERLAY"] = (
             "1" if self.chk_overlay.get_active() else "0"
         )
+        env["USE_VPN"] = "1" if self.chk_vpn.get_active() else "0"
 
         cmd = f"umu-run-wrapper {shlex.quote(self.filepath)}; scan-umu-for-lnk"
         subprocess.Popen(cmd, shell=True, env=env)
@@ -538,6 +559,7 @@ class LauncherWindow(Gtk.Window):
         env["USE_STEAM_OVERLAY"] = (
             "1" if self.chk_overlay.get_active() else "0"
         )
+        env["USE_VPN"] = "1" if self.chk_vpn.get_active() else "0"
 
         name = self.ent_name.get_text().strip()
         icon = self.btn_icon.get_filename()

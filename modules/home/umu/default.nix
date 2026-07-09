@@ -263,13 +263,6 @@ in
           export WINEDLLOVERRIDES="voices38,dxgi,winhttp,winmm,version=n,b"
         fi
 
-        if [[ "$USE_STEAM_OVERLAY" == "1" ]]; then
-          export SteamGameId=480
-          export ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
-          export LD_PRELOAD="$LD_PRELOAD:$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so"
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.libGL}/lib:${pkgs.pkgsi686Linux.libGL}/lib"
-        fi
-
         MOUNT_DIR="${config.xdg.dataHome}/umu"
         if [[ -x "/run/wrappers/bin/prepare-umu" ]]; then
           /run/wrappers/bin/prepare-umu
@@ -328,7 +321,34 @@ in
         fi
         CMD+=(${umu}/bin/umu-run "$@")
 
-        "''${CMD[@]}"
+        if [[ "$USE_STEAM_OVERLAY" == "1" ]]; then
+          export SteamGameId=480
+          export ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
+          export LD_PRELOAD="$LD_PRELOAD:$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.libGL}/lib:${pkgs.pkgsi686Linux.libGL}/lib"
+        fi
+
+        if [[ "$USE_VPN" == "1" ]]; then
+           export SOCKET_DIR=$(mktemp -d /tmp/umu-vpn-XXXXXX)
+           export SOCKET_PATH="$SOCKET_DIR/steam_pass"
+
+           # Start outside bridge
+           rust-bridge -r pass --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" &
+
+           cleanup_vpn() {
+             pkill -f "rust-bridge.*$SOCKET_PATH" 2>/dev/null || true
+             rm -rf "$SOCKET_DIR"
+           }
+           trap cleanup_vpn EXIT INT TERM
+
+           # Execute inside namespace
+           vpnify sh -c "rust-bridge -r listen --address \"127.0.0.1:[57343,27060]\" -s \"$SOCKET_PATH\" -d; BR_PID=\$!; \"\$@\"; ss -lntup; kill -n 15 \$BR_PID" -- "''${CMD[@]}"
+          # vpnify "''${CMD[@]}"
+
+        else
+          "''${CMD[@]}"
+        fi
+
         ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
       '')
       (pkgs.writeShellScriptBin "scan-umu-for-lnk" ''
@@ -452,6 +472,7 @@ in
         env_gpu_select=''${UMU_GPU_SELECT:-Автоматически}
         env_steam=''${USE_STEAM_INTEGRATION:-0}
         env_overlay=''${USE_STEAM_OVERLAY:-0}
+        env_vpn=''${USE_VPN:-0}
 
         export WINEPREFIX=$HOME/.umu/$env_prefix_name
 
@@ -549,7 +570,7 @@ in
             ;;
           esac
 
-          EXEC_BASE="env USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay $GPU_ENV umu-run-wrapper \"$actual_exe\""
+          EXEC_BASE="env USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn $GPU_ENV umu-run-wrapper \"$actual_exe\""
 
           if [[ "$args" == *"%command%"* ]]; then
             EXEC_CMD=$(echo "$args" | sed "s|%command%|$EXEC_BASE|g")
@@ -574,6 +595,7 @@ in
         X-UMU-Steam-Integration=$env_steam
         X-UMU-Steam-Overlay=$env_overlay
         X-UMU-Proton-Type=$env_proton_type
+        X-UMU-VPN=$env_vpn
         EOF
 
           chmod +x "$DESKTOP_FILE"

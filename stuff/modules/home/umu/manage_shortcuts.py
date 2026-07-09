@@ -126,6 +126,11 @@ class EditDialog(Gtk.Dialog):
         )
         self.overlay_enabled = overlay_val == "1"
 
+        vpn_val = self.config.get(
+            "Desktop Entry", "X-UMU-VPN", fallback="0"
+        )
+        self.vpn_enabled = vpn_val == "1"
+
         content_area = self.get_content_area()
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         content_area.pack_start(vbox, True, True, 0)
@@ -190,6 +195,14 @@ class EditDialog(Gtk.Dialog):
         grid.attach(lbl_overlay, 0, 5, 1, 1)
         grid.attach(self.chk_overlay, 1, 5, 1, 1)
 
+        # VPN toggle
+        lbl_vpn = Gtk.Label(label="Через VPN:")
+        lbl_vpn.set_alignment(0, 0.5)
+        self.chk_vpn = Gtk.CheckButton()
+        self.chk_vpn.set_active(self.vpn_enabled)
+        grid.attach(lbl_vpn, 0, 6, 1, 1)
+        grid.attach(self.chk_vpn, 1, 6, 1, 1)
+
         self.lock_signals = False
         self.chk_overlay.connect("toggled", self.on_overlay_toggled)
         self.chk_wayland.connect("toggled", self.on_wayland_toggled)
@@ -205,8 +218,8 @@ class EditDialog(Gtk.Dialog):
         lbl_prefix.set_alignment(0, 0.5)
         self.prefix_entry = Gtk.Entry()
         self.prefix_entry.set_text(self.prefix_name)
-        grid.attach(lbl_prefix, 0, 6, 1, 1)
-        grid.attach(self.prefix_entry, 1, 6, 1, 1)
+        grid.attach(lbl_prefix, 0, 7, 1, 1)
+        grid.attach(self.prefix_entry, 1, 7, 1, 1)
 
         lbl_gpu = Gtk.Label(label="Видеокарта:")
         lbl_gpu.set_alignment(0, 0.5)
@@ -220,15 +233,15 @@ class EditDialog(Gtk.Dialog):
         for opt in gpu_cb_list:
             self.gpu_combo.append_text(opt)
         self.gpu_combo.set_active(0)
-        grid.attach(lbl_gpu, 0, 7, 1, 1)
-        grid.attach(self.gpu_combo, 1, 7, 1, 1)
+        grid.attach(lbl_gpu, 0, 8, 1, 1)
+        grid.attach(self.gpu_combo, 1, 8, 1, 1)
 
         lbl_name = Gtk.Label(label="Название:")
         lbl_name.set_alignment(0, 0.5)
         self.name_entry = Gtk.Entry()
         self.name_entry.set_text(self.current_name)
-        grid.attach(lbl_name, 0, 8, 1, 1)
-        grid.attach(self.name_entry, 1, 8, 1, 1)
+        grid.attach(lbl_name, 0, 9, 1, 1)
+        grid.attach(self.name_entry, 1, 9, 1, 1)
 
         lbl_icon = Gtk.Label(label="Иконка (файл):")
         lbl_icon.set_alignment(0, 0.5)
@@ -236,7 +249,7 @@ class EditDialog(Gtk.Dialog):
             title="Выберите иконку", action=Gtk.FileChooserAction.OPEN
         )
         self.icon_chooser.set_filename(self.current_icon)
-        grid.attach(lbl_icon, 0, 9, 1, 1)
+        grid.attach(lbl_icon, 0, 10, 1, 1)
 
         icon_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         icon_hbox.pack_start(self.icon_chooser, True, True, 0)
@@ -244,15 +257,15 @@ class EditDialog(Gtk.Dialog):
         self.btn_reset = Gtk.Button(label="Сбросить")
         self.btn_reset.connect("clicked", self.on_reset_clicked)
         icon_hbox.pack_start(self.btn_reset, False, False, 0)
-        grid.attach(icon_hbox, 1, 9, 1, 1)
+        grid.attach(icon_hbox, 1, 10, 1, 1)
 
         lbl_args = Gtk.Label(label="Аргументы запуска:")
         lbl_args.set_alignment(0, 0.5)
         self.args_entry = Gtk.Entry()
         self.args_entry.set_text(self.raw_args)
         self.args_entry.set_placeholder_text("ENV=1 %command% --arg-here")
-        grid.attach(lbl_args, 0, 10, 1, 1)
-        grid.attach(self.args_entry, 1, 10, 1, 1)
+        grid.attach(lbl_args, 0, 11, 1, 1)
+        grid.attach(self.args_entry, 1, 11, 1, 1)
 
         preview_hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, spacing=10
@@ -395,6 +408,7 @@ class EditDialog(Gtk.Dialog):
         env_wayland = "1" if self.chk_wayland.get_active() else "0"
         env_steam = "1" if self.chk_steam.get_active() else "0"
         env_overlay = "1" if self.chk_overlay.get_active() else "0"
+        env_vpn = "1" if self.chk_vpn.get_active() else "0"
 
         gpu_env = ""
         if new_gpu == "Nvidia":
@@ -406,7 +420,7 @@ class EditDialog(Gtk.Dialog):
         elif new_gpu == "Intel" and self.intel_id:
             gpu_env = f"DRI_PRIME={self.intel_id}! MESA_VK_DEVICE_SELECT={self.intel_id}!"
 
-        exec_base = f'env USE_GAMEMODE={env_gamemode} USE_MANGOHUD={env_mangohud} PROTON_ENABLE_WAYLAND={env_wayland} UMU_PREFIX_NAME={new_prefix} UMU_PROTON_TYPE="{new_proton}" USE_STEAM_INTEGRATION={env_steam} USE_STEAM_OVERLAY={env_overlay} {gpu_env}'.strip()
+        exec_base = f'env USE_GAMEMODE={env_gamemode} USE_MANGOHUD={env_mangohud} PROTON_ENABLE_WAYLAND={env_wayland} UMU_PREFIX_NAME={new_prefix} UMU_PROTON_TYPE="{new_proton}" USE_STEAM_INTEGRATION={env_steam} USE_STEAM_OVERLAY={env_overlay} USE_VPN={env_vpn} {gpu_env}'.strip()
         exec_base += " umu-run-wrapper"
 
         if "%command%" in new_args:
@@ -425,6 +439,7 @@ class EditDialog(Gtk.Dialog):
         self.config["Desktop Entry"]["X-UMU-Steam-Integration"] = env_steam
         self.config["Desktop Entry"]["X-UMU-Steam-Overlay"] = env_overlay
         self.config["Desktop Entry"]["X-UMU-Proton-Type"] = new_proton
+        self.config["Desktop Entry"]["X-UMU-VPN"] = env_vpn
 
         with open(self.desktop_path, "w", encoding="utf-8") as f:
             self.config.write(f, space_around_delimiters=False)
