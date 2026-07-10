@@ -258,16 +258,6 @@ in
           esac
         fi
 
-        mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
-        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
-        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
-
-        if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
-          export WINEDLLOVERRIDES="steamclient64,voices38,dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
-        else
-          export WINEDLLOVERRIDES="voices38,dxgi,winhttp,winmm,version=n,b"
-        fi
-
         MOUNT_DIR="${config.xdg.dataHome}/umu"
         if [[ -x "/run/wrappers/bin/prepare-umu" ]]; then
           /run/wrappers/bin/prepare-umu
@@ -282,6 +272,16 @@ in
         else
           ${pkgs.libnotify}/bin/notify-send "Closed" "prepare-umu not found"
           exit 1
+        fi
+
+        mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
+        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
+        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
+
+        if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
+          export WINEDLLOVERRIDES="steamclient64,voices38,dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
+        else
+          export WINEDLLOVERRIDES="voices38,dxgi,winhttp,winmm,version=n,b"
         fi
 
         unset ALSOFT_DRIVERS

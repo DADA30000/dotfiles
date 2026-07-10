@@ -80,7 +80,10 @@ class SteamSearchDialog(Gtk.Dialog):
         self.set_default_size(550, 500)
         self.set_border_width(10)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
-        self.set_resizable(True)
+
+        # WM Floating Hack
+        self.set_resizable(False)
+        GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         self.selected_game = None
         self.search_id = 0
@@ -401,10 +404,11 @@ class LauncherWindow(Gtk.Window):
         self.set_border_width(15)
         self.set_default_size(460, -1)
         self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_resizable(
-            False
-        )  # <-- REVERTED to False so WM floats the window
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+
+        # WM Floating Hack
+        self.set_resizable(False)
+        GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         self.amd_id, self.nvidia_id, self.intel_id = scan_gpus()
 
@@ -539,7 +543,7 @@ class LauncherWindow(Gtk.Window):
         )
         self.ent_gameid = Gtk.Entry()
         self.ent_gameid.set_text(os.environ.get("GAMEID", ""))
-        self.ent_gameid.set_placeholder_text("Например: umu-292030")
+        self.ent_gameid.set_placeholder_text("Например: 292030 (AppID)")
         gameid_hbox.pack_start(self.ent_gameid, True, True, 0)
 
         self.btn_steam_search = Gtk.Button(label="Поиск в Steam")
@@ -696,8 +700,7 @@ class LauncherWindow(Gtk.Window):
             selected = dialog.get_selected_game()
             if selected:
                 name, appid, icon_path = selected
-                game_id = f"umu-{appid}" if appid.isdigit() else appid
-                self.ent_gameid.set_text(game_id)
+                self.ent_gameid.set_text(appid)
 
                 current_name = self.ent_name.get_text().strip()
                 if not current_name or current_name == self.default_name:
@@ -764,7 +767,11 @@ class LauncherWindow(Gtk.Window):
         zoom_win.set_border_width(10)
         zoom_win.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         zoom_win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
-        zoom_win.set_resizable(False)  # <-- REVERTED to False
+
+        # WM Floating Hack
+        zoom_win.set_resizable(False)
+        GLib.timeout_add(150, lambda: zoom_win.set_resizable(True) or False)
+
         zoom_win.set_transient_for(self)
         zoom_win.set_modal(True)
 

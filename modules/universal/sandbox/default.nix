@@ -163,8 +163,8 @@ let
         use_landlock ? true,
         portals_for_files ? true,
         nvidia_gpu ? false,
-        pass_shm ? false,
-        pass_tmp ? false,
+        sandbox_shm ? true,
+        sandbox_tmp ? true,
         main_desktop_file ? "none",
         additional_args ? { },
         additional_inside_commands ? "",
@@ -387,7 +387,6 @@ let
                         [ ]
                         ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
                         ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
-                        ++ (lib.optionals pass_shm [ "/dev/shm" ])
                         ++ (lib.optionals nvidia_gpu [
                           "/dev/nvidia0"
                           "/dev/nvidiactl"
@@ -410,19 +409,18 @@ let
                           sloth.homeDir
                         ]
                       ]
-                      ++ (lib.optionals (!pass_shm) [
+                      ++ (lib.optionals (sandbox_shm) [
                         [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
                           "/dev/shm"
                         ]
                       ])
-                      ++ (lib.optionals (!pass_tmp) [
+                      ++ (lib.optionals (sandbox_tmp) [
                         [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
                           "/tmp"
                         ]
                       ])
-                      ++ (lib.optionals pass_tmp [ "/tmp" ])
                       ++ [ (concat sloth.runtimeDir "/doc") ];
 
                       ro = [

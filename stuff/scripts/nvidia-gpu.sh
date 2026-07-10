@@ -14,13 +14,39 @@ fi
 status=$(cat "$NVIDIA_PATH/power/runtime_status")
 
 if [ "$status" != "active" ]; then
-  echo '{"text":"<span color=\"#555555\"> 󰢮 0W </span>","tooltip":"GPU is suspended","class":"sleep"}'
+  # Fluent-style suspended tooltip
+  tooltip="<b>NVIDIA GeForce GPU</b>\n"
+  tooltip="${tooltip}<span foreground='#888888'>●</span> Status: <span foreground='#888888'>Suspended (D3cold)</span>\n"
+  tooltip="${tooltip}────────────────────────────\n"
+  tooltip="${tooltip}The graphics adapter has entered sleep mode to preserve power."
+
+  echo "{\"text\":\"<span color='#555555'> 󰢮 0W </span>\",\"tooltip\":\"${tooltip}\",\"class\":\"sleep\"}"
 else
-  stats=$(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits 2>/dev/null)
-  if [ -n "$stats" ]; then
-    usage=$(echo "$stats" | cut -d',' -f1 | tr -d ' ')
-    temp=$(echo "$stats" | cut -d',' -f2 | tr -d ' ')
-    power=$(echo "$stats" | cut -d',' -f3 | tr -d ' ')
-    echo "{\"text\":\"<span color='#00ff00'>  ${usage}%  󰢮 </span>\",\"tooltip\":\"NVIDIA GPU\rUsage: ${usage}%\rTemp: ${temp}°C\rPower: ${power}W\",\"class\":\"active\"}"
+  # Safely run nvidia-smi capturing stdout and stderr
+  stats_output=$(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits 2>&1)
+  exit_code=$?
+
+  # Catch blocked or failed driver communication states gracefully
+  if [ $exit_code -ne 0 ] || echo "$stats_output" | grep -iq "fail"; then
+    tooltip="<b>NVIDIA GeForce GPU</b>\n"
+    tooltip="${tooltip}<span foreground='#fa8c16'>●</span> Status: <span foreground='#fa8c16'>Blocked / Transitioning</span>\n"
+    tooltip="${tooltip}────────────────────────────\n"
+    tooltip="${tooltip}The driver is currently locked or preparing for hibernation."
+
+    echo "{\"text\":\"<span color='#fa8c16'> Blocked  󰢮 </span>\",\"tooltip\":\"${tooltip}\",\"class\":\"blocked\"}"
+  else
+    usage=$(echo "$stats_output" | cut -d',' -f1 | tr -d ' ')
+    temp=$(echo "$stats_output" | cut -d',' -f2 | tr -d ' ')
+    power=$(echo "$stats_output" | cut -d',' -f3 | tr -d ' ')
+
+    # Fluent-style active layout
+    tooltip="<b>NVIDIA GeForce GPU</b>\n"
+    tooltip="${tooltip}<span foreground='#357a38'>●</span> Status: <span foreground='#357a38'>Active</span>\n"
+    tooltip="${tooltip}────────────────────────────\n"
+    tooltip="${tooltip}<b>Usage:</b>   ${usage}%\n"
+    tooltip="${tooltip}<b>Temp:</b>    ${temp}°C\n"
+    tooltip="${tooltip}<b>Power:</b>   ${power}W"
+
+    echo "{\"text\":\"<span color='#357a38'>  ${usage}%  󰢮 </span>\",\"tooltip\":\"${tooltip}\",\"class\":\"active\"}"
   fi
 fi

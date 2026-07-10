@@ -83,7 +83,7 @@ in
 
   config = mkIf cfg.enable {
 
-    hardware.block.scheduler."nvme[0-9]*" = "none";
+    hardware.block.scheduler."*" = "bfq";
 
     environment.persistence."/persistent" = mkMerge [
       (mkIf (!cfg.impermanence) { enable = false; })

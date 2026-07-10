@@ -7,12 +7,28 @@
 }:
 let
   cfg = config.wivrn;
+  patchXrizer =
+    pkg: loader:
+    pkg.overrideAttrs (prev: {
+      buildInputs = (prev.buildInputs or [ ]) ++ [ loader ];
+      nativeBuildInputs = (prev.nativeBuildInputs or [ ]) ++ [ pkgs.patchelf ];
+      postFixup = (prev.postFixup or "") + ''
+        find $out -type f \( -name "*.so*" -o -name "xrizer" -o -executable \) -exec patchelf --add-rpath "${loader}/lib" {} \;
+      '';
+    });
   pkg_xrizer =
-    inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer.overrideAttrs
-      (prev: {
-        #patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/xrizer.patch ];
-      });
+    patchXrizer inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer
+      pkgs.openxr-loader;
   pkg_opencomposite = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.opencomposite;
+  xrizer_multilib = pkgs.symlinkJoin {
+    name = "xrizer-multilib";
+    paths = [
+      pkg_xrizer
+      (patchXrizer (pkgs.pkgsi686Linux.callPackage pkg_xrizer.override
+        { }
+      ) pkgs.pkgsi686Linux.openxr-loader)
+    ];
+  };
   opencomposite_multilib = pkgs.symlinkJoin {
     name = "opencomposite-multilib";
     paths = [
@@ -20,53 +36,17 @@ let
       (pkgs.pkgsi686Linux.callPackage pkg_opencomposite.override { })
     ];
   };
+  pkg_wivrn = inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+    cudaSupport = true;
+    xrizer = xrizer_multilib;
+    opencomposite = opencomposite_multilib;
+  };
   wivrn_i686 = pkgs.pkgsi686Linux.callPackage (pkg_wivrn.override) {
     clientLibOnly = true;
     git = pkgs.pkgsi686Linux.git.override { withManual = false; };
     android-tools = pkgs.android-tools.overrideAttrs (old: {
       cmakeFlags = (old.cmakeFlags or [ ]) ++ [ "-DOPENSSL_NO_ASM=ON" ];
     });
-  };
-  pkg_wivrn = inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-    cudaSupport = true;
-    xrizer = xrizer_multilib;
-    opencomposite = opencomposite_multilib;
-  };
-  #.overrideAttrs
-  #  (prevAttrs: {
-  #    env.NIX_CFLAGS_COMPILE = (prevAttrs.env.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
-  #  });
-  # pkg_wivrn = (
-  #   inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.wivrn.override {
-  #     cudaSupport = true;
-  #     xrizer = xrizer_multilib;
-  #     opencomposite = opencomposite_multilib;
-  #     cudaPackages = pkgs.cudaPackages;
-  #   }
-  # ); # .overrideAttrs
-  # (prevAttrs: {
-  # # patches = (prevAttrs.patches or [ ]) ++ [ ../../../stuff/wivrn_debug.patch ];
-  # NIX_CFLAGS_COMPILE = (prevAttrs.NIX_CFLAGS_COMPILE or "") + " -march=native -O3";
-  # postUnpack = "";
-  # buildInputs = (prevAttrs.buildInputs or [ ]) ++ [
-  #   pkgs.kdePackages.kirigami-addons
-  # ];
-  # src = inputs.wivrn // {
-  #   name = "${inputs.wivrn}";
-  # };
-  # monado = prevAttrs.monado.overrideAttrs (oldAttrs: {
-  #   src = inputs.monado;
-  #   # patches = (oldAttrs.patches or [ ]) ++ [
-  #   #   ../../../stuff/monado_debug.patch
-  #   # ];
-  # });
-  # });
-  xrizer_multilib = pkgs.symlinkJoin {
-    name = "xrizer-multilib";
-    paths = [
-      pkg_xrizer
-      (pkgs.pkgsi686Linux.callPackage pkg_xrizer.override { })
-    ];
   };
 in
 with lib;

@@ -95,7 +95,14 @@
 
     xpadneo.enable = true;
 
+    xone.enable = true;
+
     opentabletdriver.enable = true;
+
+    cpu.amd = {
+      updateMicrocode = true;
+      ryzen-smu.enable = true;
+    };
 
     bluetooth = {
       enable = true;
@@ -371,6 +378,11 @@
 
     kernelPackages = lib.mkDefault pkgs.linuxPackages_latest;
 
+    kernelParams = lib.mkAfter [
+      "iommu=pt"
+      "iommu.passthrough=1"
+    ];
+
     initrd.systemd.enable = true;
 
     kernel.sysctl = {
@@ -469,13 +481,76 @@
 
   systemd = {
 
+    oomd = {
+      enable = true;
+      enableUserSlices = true;
+      enableSystemSlice = true;
+      enableRootSlice = true;
+      settings.OOM = {
+        SwapUsedLimit = "90%";
+        DefaultMemoryPressureLimit = "40%";
+        DefaultMemoryPressureDurationSec = "2";
+      };
+    };
+
     user = {
       targets."xdg-desktop-autostart".enable = false;
-      settings.Manager.DefaultTimeoutStopSec = "1s";
+      settings.Manager = {
+        DefaultTimeoutStopSec = "1s";
+        DefaultTasksMax = 4096;
+      };
       # targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
-      services.dbus-broker.serviceConfig = {
-        Type = "notify";
-        ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
+      services = {
+        cgroup-executioner = {
+          description = "Automatically terminate any application scope that hits TasksMax";
+          wantedBy = [ "graphical-session.target" ];
+          after = [ "graphical-session.target" ];
+
+          serviceConfig = {
+            ExecStart = "${pkgs.writeShellScript "cgroup-executioner" ''
+              CGROUP_ROOT="/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service"
+
+              echo "Cgroup Executioner active (Pure Builtins). Polling root: $CGROUP_ROOT"
+
+              while true; do
+                  # Use Bash globbing instead of the 'find' binary
+                  for event_file in "$CGROUP_ROOT"/*/*.scope/pids.events "$CGROUP_ROOT"/*/*/*.scope/pids.events; do
+                      # Ensure the file actually exists (prevents raw glob string literal issues)
+                      [[ -f "$event_file" ]] || continue
+                      
+                      # Read pids.events purely in Bash without 'grep'
+                      while IFS= read -r line; do
+                          if [[ "$line" == max\ [1-9]* ]]; then
+                              
+                              # Extract path structures natively without 'dirname' or 'basename'
+                              scope_dir="''${event_file%/pids.events}"
+                              scope_name="''${scope_dir##*/}"
+                              
+                              # Read current tasks purely in Bash without 'cat'
+                              if [[ -f "$scope_dir/pids.current" ]]; then
+                                  IFS= read -r current_tasks < "$scope_dir/pids.current"
+                                  
+                                  if [[ "$current_tasks" -gt 0 && "$scope_name" == *.scope ]]; then
+                                      echo "CRITICAL: $scope_name breached TasksMax! Enforcing full teardown."
+                                      ${pkgs.systemd}/bin/systemctl --user stop "$scope_name"
+                                  fi
+                              fi
+                              break
+                          fi
+                      done < "$event_file"
+                  done
+                  
+                  sleep 0.5
+              done
+            ''}";
+            Restart = "always";
+            RestartSec = "2s";
+          };
+        };
+        dbus-broker.serviceConfig = {
+          Type = "notify";
+          ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
+        };
       };
     };
 
@@ -570,11 +645,6 @@
       openFirewall = true;
     };
 
-    earlyoom = {
-      enable = true;
-      enableNotifications = true;
-    };
-
     udev.extraRules = ''
       SUBSYSTEMS=="usb", ATTRS{idVendor}=="0414", ATTRS{idProduct}=="8104", MODE="0660", TAG+="uaccess"
       ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2833", ATTR{idProduct}=="5013", RUN+="${pkgs.systemd}/bin/systemctl restart quest-adb-reverse.service"
@@ -607,6 +677,8 @@
       enable = true;
       pd.enable = true;
       settings = {
+        #RADEON_DPM_PERF_LEVEL_ON_AC = "auto";
+        #RADEON_DPM_PERF_LEVEL_ON_BAT = "low";
         CPU_DRIVER_OPMODE_ON_AC = "active";
         CPU_SCALING_GOVERNOR_ON_AC = "performance";
         CPU_ENERGY_PERF_POLICY_ON_AC = "performance";
@@ -726,7 +798,8 @@
             wayland = true;
             nvidia_gpu = true;
             use_landlock = false;
-            pass_tmp = true;
+            sandbox_tmp = false;
+            sandbox_shm = false;
             additional_outside_commands = ''
               rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
             '';
@@ -754,6 +827,7 @@
                         "/home/${user}/Games/steam"
                         (sloth.mkdir "/Games")
                       ]
+                      "/tmp"
                       "/sys/class"
                       "/sys/bus"
                       "/sys/dev"

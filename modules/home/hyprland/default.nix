@@ -149,32 +149,35 @@ in
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [
-      gtk3
-      kdePackages.kservice
-      rofi-bluetooth
-      tesseract
-      imagemagick
-      libsForQt5.qtsvg
-      kdePackages.qtsvg
-      kdePackages.dolphin
-      kdePackages.ark
-      app2unit
-      pulseaudio
-      hyprshot
-      nautilus
-      file-roller
-      cliphist
-      libnotify
-      brightnessctl
-      qimgv
-      myxer
-      ffmpeg-full
-      gpu-screen-recorder
-      ffmpegthumbnailer
-      hyprpicker
-      wttrbar
-    ];
+    home = {
+      sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
+      packages = with pkgs; [
+        gtk3
+        kdePackages.kservice
+        rofi-bluetooth
+        tesseract
+        imagemagick
+        libsForQt5.qtsvg
+        kdePackages.qtsvg
+        kdePackages.dolphin
+        kdePackages.ark
+        app2unit
+        pulseaudio
+        hyprshot
+        nautilus
+        file-roller
+        cliphist
+        libnotify
+        brightnessctl
+        qimgv
+        myxer
+        ffmpeg-full
+        gpu-screen-recorder
+        ffmpegthumbnailer
+        hyprpicker
+        wttrbar
+      ];
+    };
 
     wayland.windowManager.hyprland = {
       portalPackage = mkMerge [
@@ -482,6 +485,7 @@ in
             };
             misc = {
               vrr = 0;
+              enable_anr_dialog = false;
               disable_watchdog_warning = true;
               disable_hyprland_logo = true;
               background_color = "0x000000";
@@ -594,15 +598,15 @@ in
               ]
               [
                 "CTRL + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | satty -f -"
+                "app2unit -- hyprshot -z -m region -r d | satty -f -"
               ]
               [
                 "CTRL + ${mod} + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | satty -f -"
+                "app2unit -- hyprshot -z -m window -r d | satty -f -"
               ]
               [
                 "CTRL + SHIFT + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | satty -f -"
+                "app2unit -- hyprshot -z -m output -r d | satty -f -"
               ]
               [
                 "CTRL + ${mod} + O"
@@ -686,7 +690,7 @@ in
               ]
               [
                 "${mod} + E"
-                "app2unit -- pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & env NAUTILUS_4_EXTENSION_DIR='${pkgs.nautilus-python}/lib/nautilus/extensions-4' nautilus -w"
+                "app2unit -a nautilus -- sh -c 'pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & nautilus -w'"
               ]
             ]
             ++ bind [
@@ -1002,7 +1006,7 @@ in
             early-exit = [ "all" ];
             corner-roundness = 12;
             initial-tool = "brush";
-            copy-command = "wl-copy";
+            copy-command = "wl-copy --type image/png";
             annotation-size-factor = 2;
             output-filename = "${config.xdg.userDirs.pictures}/satty-%Y-%m-%d_%H:%M:%S.png";
             save-after-copy = true;
@@ -1181,7 +1185,7 @@ in
         }
         {
           label = "logout";
-          action = "uwsm stop";
+          action = "uwsm stop; loginctl terminate-user \"\"";
           text = "Logout";
           keybind = "e";
         }

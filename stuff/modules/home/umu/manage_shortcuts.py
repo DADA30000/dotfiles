@@ -79,7 +79,10 @@ class SteamSearchDialog(Gtk.Dialog):
         self.set_default_size(550, 500)
         self.set_border_width(10)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
-        self.set_resizable(True)
+
+        # WM Floating Hack
+        self.set_resizable(False)
+        GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         self.selected_game = None
         self.search_id = 0
@@ -404,7 +407,10 @@ class EditDialog(Gtk.Dialog):
         self.set_border_width(15)
         self.set_default_size(500, -1)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
-        self.set_resizable(False)  # <-- REVERTED to False
+
+        # WM Floating Hack
+        self.set_resizable(False)
+        GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         self.desktop_path = desktop_path
         self.amd_id, self.nvidia_id, self.intel_id = scan_gpus()
@@ -613,7 +619,7 @@ class EditDialog(Gtk.Dialog):
         )
         self.gameid_entry = Gtk.Entry()
         self.gameid_entry.set_text(self.gameid)
-        self.gameid_entry.set_placeholder_text("Например: umu-292030")
+        self.gameid_entry.set_placeholder_text("Например: 292030 (AppID)")
         gameid_hbox.pack_start(self.gameid_entry, True, True, 0)
 
         self.btn_steam_search = Gtk.Button(label="Поиск в Steam")
@@ -664,8 +670,7 @@ class EditDialog(Gtk.Dialog):
             selected = dialog.get_selected_game()
             if selected:
                 name, appid, icon_path = selected
-                game_id = f"umu-{appid}" if appid.isdigit() else appid
-                self.gameid_entry.set_text(game_id)
+                self.gameid_entry.set_text(appid)
                 self.name_entry.set_text(name)
                 if icon_path:
                     self.icon_chooser.set_filename(icon_path)
@@ -723,7 +728,11 @@ class EditDialog(Gtk.Dialog):
         zoom_win.set_border_width(10)
         zoom_win.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         zoom_win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
-        zoom_win.set_resizable(False)  # <-- REVERTED to False
+
+        # WM Floating Hack
+        zoom_win.set_resizable(False)
+        GLib.timeout_add(150, lambda: zoom_win.set_resizable(True) or False)
+
         zoom_win.set_transient_for(self)
         zoom_win.set_modal(True)
 
@@ -835,6 +844,10 @@ class ShortcutsManager(Gtk.Window):
         self.set_default_size(750, 480)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_border_width(10)
+
+        # WM Floating Hack
+        self.set_resizable(False)
+        GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.add(vbox)
