@@ -6,6 +6,11 @@
   ...
 }:
 let
+  kernel-src = fetchGit {
+    url = "https://android.googlesource.com/kernel/common";
+    rev = "c59f0172f39e77d3edc4335f973f4c7d908a0536";
+    shallow = true;
+  };
   cfg = config.android;
 
   shared-start = /* bash */ ''
@@ -158,7 +163,7 @@ let
 
   sdkPath = "${config.xdg.dataHome}/android";
 
-  makefile = builtins.readFile (inputs.android-kernel-src + "/Makefile");
+  makefile = builtins.readFile (kernel-src + "/Makefile");
   makefileLines = lib.splitString "\n" makefile;
 
   getMakeVar =
@@ -213,7 +218,7 @@ in
           stdenv = pkgs.llvmPackages_18.stdenv;
           version = "${kernelVersion}-android16";
           modDirVersion = kernelVersion;
-          src = inputs.android-kernel-src;
+          src = kernel-src;
           defconfig = "gki_defconfig";
 
           enableCommonConfig = false;

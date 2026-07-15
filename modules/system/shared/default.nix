@@ -779,11 +779,7 @@
         let
           overriddenSteam = pkgs.steam.override {
             privateTmp = false;
-            extraEnv = {
-              MANGOHUD = true;
-              OBS_VKCAPTURE = true;
-              RADV_TEX_ANISO = 16;
-            };
+            extraEnv.RADV_TEX_ANISO = 16;
             extraLibraries =
               p: with p; [
                 atk

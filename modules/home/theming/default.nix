@@ -282,6 +282,7 @@ in
         HYPRCURSOR_SIZE = cfg.cursor_size;
       };
       pointerCursor = {
+        enable = true;
         gtk.enable = true;
         x11.enable = true;
         package = pkgs.stdenv.mkDerivation {

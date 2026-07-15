@@ -30,32 +30,11 @@ let
       arch = "x64";
     };
   };
-  #cape_with_uv = pkgs.runCommand "patch_cape" {} ''
-  #  mkdir -p "$out"
-  #  TEMPDIR=$(mktemp -d)
-  #  ${pkgs.rsync}/bin/rsync -r --no-links ${inputs.cape}/. "$TEMPDIR"
-  #  cd "$TEMPDIR"
-  #  chmod -R u+w .
-  #  rm pyproject.toml
-  #  cp ${./pyproject.toml} $TEMPDIR
-  #  cp ${./uv.lock} $TEMPDIR/uv.lock
-  #  chmod -R u+w .
-  #  mkdir dummy
-  #  echo "print(\"Hello World\")" > dummy/kek.py
-  #  echo "
-  #  [tool.hatch.build.targets.wheel]
-  #  packages = [
-  #    \"dummy\"
-  #  ]
-  #  " >> pyproject.toml
-  #  rm -rf .[^.]*
-  #  mv $TEMPDIR/* $out
-  #'';
   hacks = pkgs.callPackage inputs.pyproject-nix.build.hacks { };
   add_setuptools =
     final: prev: list:
     builtins.listToAttrs (
-      builtins.map (x: {
+      map (x: {
         name = x;
         value = prev.${x}.overrideAttrs (old: {
           propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [ final.setuptools ];
@@ -127,7 +106,7 @@ let
       "ruamel-yaml-clibz"
     ]
     // builtins.listToAttrs (
-      builtins.map (x: {
+      map (x: {
         name = x;
         value = hacks.nixpkgsPrebuilt {
           from = pkgs.python312Packages.${x};
@@ -140,7 +119,7 @@ let
   cape_python_venv = pySet.mkVirtualEnv "cape_with_uv-env" (
     workspace.deps.all
     // builtins.listToAttrs (
-      builtins.map (x: {
+      map (x: {
         name = x;
         value = [ ];
       }) add_from_nixpkgs
@@ -1035,7 +1014,7 @@ in
     users.groups.pcap = { };
     users.users =
       builtins.listToAttrs (
-        builtins.map (x: {
+        map (x: {
           name = x;
           value = {
             extraGroups = [

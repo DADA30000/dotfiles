@@ -27,7 +27,15 @@ let
     in
     lib.flatten results;
   allInputsRaw = collectUniqueInputs (removeAttrs inputs [ "self" ]) [ ];
-  groupedByName = lib.groupBy (x: x.name) allInputsRaw;
+  uniqueInputs = lib.attrValues (
+    lib.listToAttrs (
+      map (item: {
+        name = "${item.name}\n${builtins.unsafeDiscardStringContext (toString item.path)}";
+        value = item;
+      }) allInputsRaw
+    )
+  );
+  groupedByName = lib.groupBy (x: x.name) uniqueInputs;
   finalInputsList = lib.flatten (
     lib.mapAttrsToList (
       name: group:
@@ -45,7 +53,7 @@ let
     name = "offline-bridge";
     src = ../../../flake.nix;
     nativeBuildInputs = [ pkgs.git ];
-    
+
     GIT_AUTHOR_NAME = "Nix Builder";
     GIT_AUTHOR_EMAIL = "nix@example.com";
     GIT_COMMITTER_NAME = "Nix Builder";
@@ -74,12 +82,12 @@ in
     offline-path = lib.mkOption {
       type = lib.types.package;
       internal = true;
-      visible = false; 
+      visible = false;
     };
     offline-rev = lib.mkOption {
       type = lib.types.str;
       internal = true;
-      visible = false; 
+      visible = false;
     };
   };
   config = {
@@ -87,9 +95,11 @@ in
     # IFD
     offline-rev = builtins.readFile "${nix-path}/rev";
     offline-path = nix-path;
-  } // lib.optionalAttrs (options ? environment.etc) {
+  }
+  // lib.optionalAttrs (options ? environment.etc) {
     environment.etc.inputs.source = inputsFarm;
-  } // lib.optionalAttrs (options ? xdg.dataFile) {
+  }
+  // lib.optionalAttrs (options ? xdg.dataFile) {
     xdg.dataFile.inputs.source = inputsFarm;
   };
 }

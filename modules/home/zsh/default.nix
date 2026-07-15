@@ -400,6 +400,13 @@ in
               printf '\n%.0s' {1..100}
               setopt correct
 
+              # Optimize path completion (especially for giant dirs like /nix/store)
+              zstyle ':completion:*' accept-exact-dirs true
+
+              # Prefer exact matches first before attempting case-insensitive or fuzzy/substring matches.
+              # Prepending "" ensures precise inputs complete instantly without initiating heavy fuzzy directory scans.
+              zstyle ':completion:*' matcher-list "" 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
+
               _ns_completer() {
                 local subcommand
                 subcommand="$1"
@@ -469,17 +476,17 @@ in
                     local -a packages
                     packages=(''${(f)packages_string})
 
-                    # Match Categorization
+                    # Match Categorization (using case-insensitive patterns to coordinate with compadd)
                     local -a exact_matches prefix_matches substring_matches
 
-                    exact_matches=( ''${(M)packages:#"$curr_word"} )
+                    exact_matches=( ''${(M)packages:#(#i)"$curr_word"} )
                     exact_matches=( "''${(@)exact_matches/#''${attr_prefix}/}" )
 
-                    prefix_matches=( ''${(M)packages:#"$curr_word"*} )
+                    prefix_matches=( ''${(M)packages:#(#i)"$curr_word"*} )
                     prefix_matches=( "''${(@)prefix_matches/#''${attr_prefix}/}" )
                     prefix_matches=( ''${prefix_matches:|exact_matches} )
 
-                    substring_matches=( ''${(M)packages:#*"$curr_word"*} )
+                    substring_matches=( ''${(M)packages:#(#i)*"$curr_word"*} )
                     substring_matches=( "''${(@)substring_matches/#''${attr_prefix}/}" )
                     substring_matches=( ''${substring_matches:|exact_matches} )
                     substring_matches=( ''${substring_matches:|prefix_matches} )
@@ -489,21 +496,22 @@ in
 
                     if (( total_prefixes == 1 )); then
                       # EXACTLY 1 match: Give it to Zsh exclusively so it skips the menu and instantly auto-completes.
+                      # m:{[:lower:]}={[:upper:]} preserves your lowercase typed prefixes and avoids case forced capitalization.
                       if (( ''${#exact_matches[@]} == 1 )); then
-                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -a exact_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a exact_matches
                       else
-                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -a prefix_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a prefix_matches
                       fi
                     else
                       # 0 or >1 prefix matches: Still show substring matches!
                       if (( ''${#exact_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -J exact -a exact_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J exact -a exact_matches
                       fi
                       if (( ''${#prefix_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=*' -J prefix -a prefix_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J prefix -a prefix_matches
                       fi
                       if (( ''${#substring_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
                       fi
                     fi
                   fi

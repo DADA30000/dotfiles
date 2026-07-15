@@ -1,20 +1,17 @@
 #define _GNU_SOURCE
-#include "asm/unistd_64.h" // for __NR_mount_setattr, __NR_move_mount, __NR...
-#include "linux/mount.h"   // for OPEN_TREE_CLOEXEC
-#include <fcntl.h> // for open, O_CLOEXEC, O_RDONLY, O_PATH, O_DIRECTORY, AT_EMPTY_PATH
-#include <linux/loop.h> // for loop_info64, LOOP_CLR_FD, LOOP_CTL_GET_FREE
-#include <pwd.h>        // for passwd, getpwuid
-#include <sched.h>      // for CLONE_NEWUSER, unshare
-#include <signal.h>     // for SIGKILL, kill
-#include <stdint.h>     // for uint64_t
-#include <stdio.h>      // for snprintf, NULL
-#include <stdlib.h>     // for exit, mkdtemp
-#include <sys/ioctl.h>  // for ioctl
-#include <sys/mount.h>  // for MNT_DETACH, umount2, MS_NODEV, MS_NOSUID
-#include <sys/stat.h>   // for stat, mkdir, fstat
-#include <sys/types.h>  // for uid_t, gid_t, pid_t
-#include <sys/wait.h>   // for waitpid
-#include <unistd.h>     // for close, rmdir, setegid, seteuid, syscall
+#include "asm/unistd_64.h" // for __NR_fsconfig, __NR_fsmount, __NR_fsopen
+#include <fcntl.h>         // for open, O_CLOEXEC, O_DIRECTORY, O_NOFOLLOW
+#include <pwd.h>           // for passwd, getpwuid
+#include <sched.h>         // for CLONE_NEWUSER, unshare
+#include <signal.h>        // for SIGKILL, kill
+#include <stdint.h>        // for uint64_t
+#include <stdio.h>         // for perror, snprintf, NULL, fprintf, stderr
+#include <stdlib.h>        // for exit, mkdtemp
+#include <sys/mount.h>     // for MNT_DETACH, umount2, FSMOUNT_CLOEXEC, FSO...
+#include <sys/stat.h>      // for mkdir, stat, fstat
+#include <sys/types.h>     // for uid_t, gid_t, pid_t
+#include <sys/wait.h>      // for waitpid
+#include <unistd.h>        // for close, setegid, seteuid, syscall, rmdir
 
 struct clone_mount_attr {
   uint64_t attr_set;
@@ -132,8 +129,10 @@ int main(void) {
   int ret = 1;
 
   struct passwd *pw = getpwuid(uid);
-  if (!pw || !pw->pw_dir)
+  if (!pw || !pw->pw_dir) {
+    fprintf(stderr, "Failed to resolve user home directory\n");
     return 1;
+  }
 
   char target[512];
   if (snprintf(target, sizeof(target), "%s/.local/share/umu", pw->pw_dir) >=
@@ -142,8 +141,10 @@ int main(void) {
   }
 
   // Drop privileges temporarily to safely resolve and unmount existing paths
-  if (setegid(gid) != 0 || seteuid(uid) != 0)
+  if (setegid(gid) != 0 || seteuid(uid) != 0) {
+    perror("Failed to drop privileges temporarily");
     return 1;
+  }
 
   // SECURE AUTO-UNMOUNT: Loop until all stale overlay layers are peeled away.
   if (seteuid(euid) == 0 && setegid(egid) == 0) {
@@ -174,32 +175,44 @@ int main(void) {
   // Create base target and get secure FD as user
   mkdir(target, 0755);
   target_fd = open_safe_dir(target, uid);
-  if (target_fd < 0)
+  if (target_fd < 0) {
+    perror("Failed to securely open target directory");
     return 1;
+  }
 
   char upper_tmp[] = "/tmp/.umu-up-XXXXXX";
   char tmp_path[] = "/tmp/.umu-XXXXXX";
-  if (!mkdtemp(upper_tmp))
+  if (!mkdtemp(upper_tmp)) {
+    perror("mkdtemp(upper_tmp) failed");
     goto cleanup_fds;
+  }
   if (!mkdtemp(tmp_path)) {
+    perror("mkdtemp(tmp_path) failed");
     rmdir(upper_tmp);
     goto cleanup_fds;
   }
 
   // Restore SUID capability to mount our upper/work tmpfs
-  if (seteuid(euid) != 0 || setegid(egid) != 0)
+  if (seteuid(euid) != 0 || setegid(egid) != 0) {
+    perror("Failed to restore privileges for tmpfs mount");
     goto cleanup_dirs;
+  }
 
   char mount_opts[128];
   // Size limit removed. Defaults to 50% RAM. Perfectly safe and unbreakable.
   snprintf(mount_opts, sizeof(mount_opts), "mode=755,uid=%u,gid=%u", uid, gid);
 
-  if (mount("tmpfs", upper_tmp, "tmpfs", MS_NODEV | MS_NOSUID, mount_opts) != 0)
+  if (mount("tmpfs", upper_tmp, "tmpfs", MS_NODEV | MS_NOSUID, mount_opts) !=
+      0) {
+    perror("mount(tmpfs) failed");
     goto cleanup_dirs;
+  }
 
   // Drop to user to initialize tmpfs directories securely
-  if (setegid(gid) != 0 || seteuid(uid) != 0)
+  if (setegid(gid) != 0 || seteuid(uid) != 0) {
+    perror("Failed to drop privileges for initializing tmpfs");
     goto cleanup_upper;
+  }
 
   char upper[256], work[256];
   snprintf(upper, sizeof(upper), "%s/upper", upper_tmp);
@@ -210,55 +223,76 @@ int main(void) {
 
   upper_fd = open_safe_dir(upper, uid);
   work_fd = open_safe_dir(work, uid);
-  if (upper_fd < 0 || work_fd < 0)
+  if (upper_fd < 0 || work_fd < 0) {
+    perror("Failed to securely open upper/work directories");
     goto cleanup_upper;
+  }
 
-  // Restore SUID capability to actually perform loop setup and overlay mount
-  if (seteuid(euid) != 0 || setegid(egid) != 0)
+  // Restore SUID capability to actually perform filesystem setup and overlay
+  // mount
+  if (seteuid(euid) != 0 || setegid(egid) != 0) {
+    perror("Failed to restore privileges for erofs mount");
     goto cleanup_upper;
-
-  int ctrl_fd = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
-  if (ctrl_fd < 0)
-    goto cleanup_upper;
-  int dev_num = ioctl(ctrl_fd, LOOP_CTL_GET_FREE);
-  close(ctrl_fd);
-  if (dev_num < 0)
-    goto cleanup_upper;
-
-  char loop_dev[64];
-  snprintf(loop_dev, sizeof(loop_dev), "/dev/loop%d", dev_num);
+  }
 
   int img_fd = open(TRUSTED_LOWER_IMG, O_RDONLY | O_CLOEXEC);
-  int loop_fd = open(loop_dev, O_RDONLY | O_CLOEXEC);
-  if (img_fd < 0 || loop_fd < 0 || ioctl(loop_fd, LOOP_SET_FD, img_fd) < 0) {
-    if (img_fd >= 0)
-      close(img_fd);
-    if (loop_fd >= 0)
-      close(loop_fd);
+  if (img_fd < 0) {
+    perror("Failed to open TRUSTED_LOWER_IMG");
     goto cleanup_upper;
   }
+
+  // Open an unconfigured EROFS filesystem context
+  int fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
+  if (fs_fd < 0) {
+    perror("fsopen(erofs) failed");
+    close(img_fd);
+    goto cleanup_upper;
+  }
+
+  // Supply the image file descriptor directly as the backing source
+  if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FD, "source", NULL, img_fd) <
+      0) {
+
+    // FALLBACK: If the kernel supports file-backed EROFS but rejects
+    // FSCONFIG_SET_FD for "source", pass the /proc/self/fd/ path as a string.
+    // The kernel's filp_open will handle it.
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", img_fd);
+
+    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_STRING, "source", fd_path,
+                0) < 0) {
+      perror("fsconfig(SET_STRING, source) failed - missing "
+             "CONFIG_EROFS_FS_BACKED_BY_FILE");
+      close(img_fd);
+      close(fs_fd);
+      goto cleanup_upper;
+    }
+  }
+
+  // Execute mount superblock creation
+  if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
+    perror("fsconfig(CMD_CREATE) failed");
+    close(fs_fd);
+    goto cleanup_upper;
+  }
+
   close(img_fd);
 
-  struct loop_info64 info = {.lo_flags =
-                                 LO_FLAGS_READ_ONLY | LO_FLAGS_AUTOCLEAR};
-  if (ioctl(loop_fd, LOOP_SET_STATUS64, &info) < 0 ||
-      mount(loop_dev, tmp_path, "erofs", MS_RDONLY | MS_NOSUID | MS_NODEV,
-            NULL) != 0) {
-    ioctl(loop_fd, LOOP_CLR_FD, 0);
-    close(loop_fd);
+  // Create a detached mount tree from the fs context, directly applying
+  // security attributes
+  int tree_fd =
+      syscall(__NR_fsmount, fs_fd, FSMOUNT_CLOEXEC,
+              MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV);
+  close(fs_fd);
+  if (tree_fd < 0) {
+    perror("fsmount failed");
     goto cleanup_upper;
   }
-  close(loop_fd);
-
-  int tree_fd = syscall(__NR_open_tree, AT_FDCWD, tmp_path,
-                        OPEN_TREE_CLOEXEC | 1); // 1 is OPEN_TREE_CLONE
-  umount2(tmp_path, MNT_DETACH); // Instantly detach origin from namespace
-  if (tree_fd < 0)
-    goto cleanup_upper;
 
   if (IMAGE_UID != uid || IMAGE_GID != gid) {
     int userns_fd = create_userns(IMAGE_UID, uid, IMAGE_GID, gid);
     if (userns_fd < 0) {
+      perror("create_userns failed");
       close(tree_fd);
       goto cleanup_upper;
     }
@@ -267,6 +301,7 @@ int main(void) {
                                     .userns_fd = userns_fd};
     if (syscall(__NR_mount_setattr, tree_fd, "", AT_EMPTY_PATH | AT_RECURSIVE,
                 &attr, sizeof(attr)) != 0) {
+      perror("mount_setattr (IDMAP) failed");
       close(userns_fd);
       close(tree_fd);
       goto cleanup_upper;
@@ -276,6 +311,7 @@ int main(void) {
 
   if (syscall(__NR_move_mount, tree_fd, "", AT_FDCWD, tmp_path,
               MOVE_MOUNT_F_EMPTY_PATH) != 0) {
+    perror("move_mount failed");
     close(tree_fd);
     goto cleanup_upper;
   }
@@ -291,6 +327,8 @@ int main(void) {
   if (mount("overlay", target_proc, "overlay", MS_NOSUID | MS_NODEV, opts) ==
       0) {
     ret = 0; // Success
+  } else {
+    perror("mount(overlay) failed");
   }
 
   umount2(tmp_path, MNT_DETACH);

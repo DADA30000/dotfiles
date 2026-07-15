@@ -8,6 +8,95 @@
   ...
 }:
 let
+  anicli-ru =
+    let
+      workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
+        workspaceRoot = inputs.anicli-ru;
+      };
+      overlay = workspace.mkPyprojectOverlay {
+        sourcePreference = "wheel";
+      };
+      pythonSet =
+        (pkgs.callPackage inputs.pyproject-nix.build.packages { python = pkgs.python312; }).overrideScope
+          (
+            lib.composeManyExtensions [
+              inputs.pyproject-build-systems.overlays.default
+              overlay
+            ]
+          );
+      anicliPkg = pythonSet.anicli-ru;
+      venv = pythonSet.mkVirtualEnv "anicli-ru-env" (
+        workspace.deps.default // { anicli-ru = [ "all" ]; }
+      );
+    in
+    pkgs.symlinkJoin {
+      name = "anicli-ru-${anicliPkg.version or "latest"}";
+      paths = [ venv ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        rm $out/bin/anicli-ru
+        makeWrapper ${venv}/bin/anicli-ru $out/bin/anicli-ru \
+          --prefix PATH : ${
+            lib.makeBinPath [
+              pkgs.mpv
+            ]
+          }
+      '';
+    };
+  fetchDepsFromJSON =
+    srcPath:
+    let
+      depsFile = srcPath + "/deps.json";
+      depsList =
+        if builtins.pathExists depsFile then builtins.fromJSON (builtins.readFile depsFile) else [ ];
+
+      isCorrectArch =
+        dep:
+        if !(dep ? "only-arches") then
+          true
+        else
+          builtins.elem (builtins.head (
+            lib.splitString "-" pkgs.stdenv.hostPlatform.system
+          )) dep."only-arches";
+
+      filteredDepsList = builtins.filter isCorrectArch depsList;
+
+      fetchDep = dep: {
+        name = dep.x-cmake.name;
+        value =
+          if dep.type or "" == "git" then
+            fetchGit {
+              shallow = true;
+              url = dep.url;
+              rev = dep.commit;
+              lfs = dep.x-cmake.name == "qml_material";
+            }
+          else if dep.type or "" == "archive" || dep.type or "" == "file" then
+            fetchTarball {
+              url = dep.url;
+              sha256 =
+                if
+                  dep.url
+                  == "https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/vulkan-sdk-1.4.321.0.tar.gz"
+                then
+                  "0c62j4hpaw5grxf4winpgs8ri68fxa59ah63aa7phra3fn82zs64"
+                else if
+                  dep.url
+                  == "https://cef-builds.spotifycdn.com/cef_binary_149.0.4%2Bg2f1bfd8%2Bchromium-149.0.7827.156_linux64_minimal.tar.bz2"
+                then
+                  "056abl41zbh4wdh7cf5pg9v3hx5w1n39daavkymg887623qajh8i"
+                else
+                  dep.sha256;
+            }
+          else
+            throw "Unsupported dependency type: ${dep.type or "unknown"}";
+      };
+    in
+    builtins.listToAttrs (map fetchDep filteredDepsList);
+
+  # Dynamically evaluate the correct dependency trees
+  waywallenDeps = fetchDepsFromJSON inputs.waywallen;
+  oweDeps = fetchDepsFromJSON inputs.open-wallpaper-engine;
   aero-control-center = pkgs.stdenv.mkDerivation {
     pname = "aero-control-center";
     version = "0.1.0";
@@ -229,21 +318,46 @@ let
     '';
 
   };
-  # Возвращаемся на clangStdenv для получения move_only_function из GCC libstdc++
+  waywallen-layer-shell = pkgs.rustPlatform.buildRustPackage rec {
+    pname = "waywallen-layer-shell";
+    version = src.shortRev;
+
+    src = inputs.waywallen-display;
+
+    cargoLock.lockFile = "${inputs.waywallen-display}/Cargo.lock";
+
+    nativeBuildInputs = with pkgs; [
+      pkg-config
+      makeWrapper
+    ];
+
+    buildInputs = with pkgs; [
+      wayland
+      libxkbcommon
+      libGL
+      vulkan-loader
+    ];
+
+    # Prepend vulkan-loader to LD_LIBRARY_PATH so dlopen can find libvulkan.so.1
+    postFixup = ''
+      wrapProgram $out/bin/waywallen-layer-shell \
+        --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ pkgs.vulkan-loader ]}
+    '';
+  };
   waywallen = pkgs.clangStdenv.mkDerivation rec {
     pname = "waywallen";
     version = src.shortRev;
 
     src = inputs.waywallen;
 
-    patches = [ ../../../stuff/patches/0001-use-system-deps-waywallen.patch ];
+    patches = [ "${inputs.waywallen-aur}/0001-use-system-deps.diff" ];
 
     hardeningDisable = [ "fortify" ];
 
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       inherit src;
       name = "${pname}-${version}-vendor";
-      hash = "sha256-aFIWolhaOIReNrVJVpDZWGcFhcsaWTdbPnQGEZzvXUw=";
+      hash = "sha256-AM+dd/4OJ7iRjM7XpdoQZS/xLSLA7/URff2A+eULXXM=";
     };
 
     nativeBuildInputs = with pkgs; [
@@ -265,13 +379,15 @@ let
       grpc
       protobuf
       pulseaudio
-      curl
+      (curl.override { websocketSupport = true; })
       mesa
+      libgbm
       sqlite
       vulkan-loader
       qt6.qtbase
       qt6.qtdeclarative
       qt6.qtgrpc
+      qt6.qtwebsockets
       pipewire
       asio
       pegtl
@@ -285,21 +401,44 @@ let
       "-DCMAKE_CXX_COMPILER=clang++"
       "-DCMAKE_LINKER_TYPE=LLD"
       "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-      "-DFETCHCONTENT_SOURCE_DIR_RSTD=/build/rstd"
+      "-DFETCHCONTENT_SOURCE_DIR_RSTD=/build/rstd" # Point to the patched, writable copy
       "-DFETCHCONTENT_SOURCE_DIR_QEXTRA=/build/qextra"
       "-DFETCHCONTENT_SOURCE_DIR_QML_MATERIAL=/build/qml_material"
-      "-DFETCHCONTENT_SOURCE_DIR_NCREQUEST=${inputs.ncrequest}"
-      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${inputs.wavsen}"
+      "-DFETCHCONTENT_SOURCE_DIR_NCREQUEST=${waywallenDeps.ncrequest}"
+      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${waywallenDeps.wavsen}"
       "-DCMAKE_MODULE_PATH=${pkgs.qt6.qtgrpc}/lib/cmake/Qt6"
       "-DWAYWALLEN_BUILD_MPV_PLUGIN=OFF"
       "-DWAYWALLEN_CARGO_OFFLINE=ON"
+      "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+      "-DQML_MATERIAL_BUILD_TYPE=STATIC"
     ];
+
+    qtWrapperArgs = [
+      "--prefix QML2_IMPORT_PATH : $out/lib/qt6/qml"
+    ];
+
+    postPatch = ''
+      # Remove CMAKE_INSTALL_RPATH overrides that strip Nix store paths during installation
+      substituteInPlace CMakeLists.txt \
+        --replace-fail "set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)" "" \
+        --replace-fail "set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)" ""
+
+      substituteInPlace ui/CMakeLists.txt \
+        --replace-fail 'INSTALL_RPATH "''${WAYWALLEN_BIN_RPATH}"' "CXX_SCAN_FOR_MODULES ON" \
+        --replace-fail "set(QT_QML_GENERATE_QMLLS_INI ON)" "set(QT_QML_GENERATE_QMLLS_INI OFF)"
+
+      substituteInPlace plugins/org.waywallen.image/CMakeLists.txt \
+        --replace-fail 'INSTALL_RPATH "''${WAYWALLEN_BIN_RPATH}"' "POSITION_INDEPENDENT_CODE ON"
+
+      substituteInPlace plugins/org.waywallen.video/CMakeLists.txt \
+        --replace-fail 'INSTALL_RPATH "''${WAYWALLEN_BIN_RPATH}"' "POSITION_INDEPENDENT_CODE ON"
+    '';
 
     preConfigure = ''
       sed -i '1s|^|#include <cstdlib>\n#include <cmath>\n#include <string>\n#include <string_view>\n|' plugins/org.waywallen.video/src/main.cpp
       sed -i '1s|^|#include <cstdlib>\n#include <cmath>\n#include <string>\n#include <string_view>\n|' plugins/org.waywallen.image/src/main.cpp
 
-      cp -r ${inputs.rstd} /build/rstd
+      cp -r ${waywallenDeps.rstd} /build/rstd
       chmod -R +w /build/rstd
       sed -i '/export using std::make_shared;/d' /build/rstd/src/cppstd/cppstd.cppm
       sed -i '/export using std::allocate_shared;/d' /build/rstd/src/cppstd/cppstd.cppm
@@ -309,10 +448,14 @@ let
       sed -i '/export using std::operator</d' /build/rstd/src/cppstd/cppstd.cppm
       sed -i '/export using std::operator>/d' /build/rstd/src/cppstd/cppstd.cppm
 
-      cp -r ${inputs.qmlmaterial} /build/qml_material
+      # Patch rstd's equality trait constraint to avoid incomplete type dependency under Clang 21
+      substituteInPlace /build/rstd/src/core/include/rstd/macro.hpp \
+        --replace-fail "requires rstd::Impled<Self, rstd::cmp::PartialEq<_USE_TRAIT_T>>" "requires true"
+
+      cp -r ${waywallenDeps.qml_material} /build/qml_material
       chmod -R +w /build/qml_material
 
-      cp -r ${inputs.qextra} /build/qextra
+      cp -r ${waywallenDeps.QExtra} /build/qextra
       chmod -R +w /build/qextra
       sed -i 's|^module;|module;\n#include <memory>|' /build/qextra/src/global_static.cpp
 
@@ -351,6 +494,65 @@ let
       export C_INCLUDE_PATH="$inc_paths_str:$qt_inc_paths_str:$std_paths_str:$C_INCLUDE_PATH"
       export CPLUS_INCLUDE_PATH="$inc_paths_str:$qt_inc_paths_str:$std_paths_str:$CPLUS_INCLUDE_PATH"
     '';
+
+    postBuild = ''
+      unset C_INCLUDE_PATH
+      unset CPLUS_INCLUDE_PATH
+    '';
+
+    postInstall = ''
+      ln -s ${waywallen-layer-shell}/bin/waywallen-layer-shell $out/bin/waywallen-layer-shell
+
+      # Ensure waywallen-ui is compiled with correct RPATH store paths to resolve Qt6 dependencies
+      patchelf --add-rpath "$out/lib:${
+        lib.makeLibraryPath [
+          pkgs.qt6.qtgrpc
+          pkgs.qt6.qtbase
+          pkgs.qt6.qtdeclarative
+          pkgs.qt6.qtwebsockets
+          (pkgs.curl.override { websocketSupport = true; })
+          pkgs.ffmpeg
+          pkgs.vulkan-loader
+          pkgs.pipewire
+          pkgs.pulseaudio
+          pkgs.libgbm
+          pkgs.stdenv.cc.cc.lib
+        ]
+      }" $out/bin/waywallen-ui
+
+      for bin in $out/bin/waywallen-image-renderer $out/bin/waywallen-video-renderer; do
+        if [ -f "$bin" ]; then
+          patchelf --add-rpath "$out/lib:${
+            lib.makeLibraryPath [
+              pkgs.ffmpeg
+              pkgs.vulkan-loader
+              pkgs.pipewire
+              pkgs.pulseaudio
+              (pkgs.curl.override { websocketSupport = true; })
+              pkgs.libgbm
+              pkgs.stdenv.cc.cc.lib
+            ]
+          }" "$bin"
+        fi
+      done
+
+      # Patch all internal shared libraries in $out/lib to ensure they can resolve system dependencies
+      for lib_file in $out/lib/*.so*; do
+        if [ -f "$lib_file" ] && [ ! -L "$lib_file" ]; then
+          patchelf --add-rpath "${
+            lib.makeLibraryPath [
+              pkgs.ffmpeg
+              pkgs.vulkan-loader
+              pkgs.pipewire
+              pkgs.pulseaudio
+              (pkgs.curl.override { websocketSupport = true; })
+              pkgs.libgbm
+              pkgs.stdenv.cc.cc.lib
+            ]
+          }" "$lib_file"
+        fi
+      done
+    '';
   };
   open-wallpaper-engine = pkgs.clangStdenv.mkDerivation rec {
     pname = "open-wallpaper-engine";
@@ -358,31 +560,63 @@ let
 
     src = inputs.open-wallpaper-engine;
 
-    patches = [ ../../../stuff/patches/0001-use-system-deps-open-wallpaper-engine.patch ];
+    # No patch needed. We build with default FetchContent using sandboxed Nix paths.
+    patches = [ ];
 
     nativeBuildInputs = with pkgs; [
       cmake
       ninja
       lld
+      pkg-config
+      file
+      glslang
+      removeReferencesTo
+      addDriverRunpath
     ];
 
     buildInputs = with pkgs; [
+      libpulseaudio
       lz4
       freetype
-      libpulseaudio
       ffmpeg
       vulkan-loader
       vulkan-headers
-      cef-binary
-      glslang
       fontconfig
-      quickjs-ng
-      argparse
-      eigen
-      python3Packages.glad
       glfw
       nlohmann_json
       waywallen
+      libgbm
+      glslang
+      quickjs-ng
+      argparse
+      eigen
+      # CEF and Chromium dependencies
+      alsa-lib
+      gtk3
+      nss
+      nspr
+      libxkbcommon
+      wayland
+      libx11
+      libxcomposite
+      libxdamage
+      libxext
+      libxfixes
+      libxrandr
+      libxrender
+      libxscrnsaver
+      libxcb
+      glib
+      atk
+      at-spi2-atk
+      cairo
+      gdk-pixbuf
+      pango
+      dbus
+      expat
+      cups
+      udev
+      at-spi2-core
     ];
 
     cmakeFlags = [
@@ -390,14 +624,162 @@ let
       "-DCMAKE_CXX_COMPILER=clang++"
       "-DCMAKE_LINKER_TYPE=LLD"
       "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-      "-DFETCHCONTENT_SOURCE_DIR_SPIRV_REFLECT=${inputs.spirv-reflect}"
-      "-DFETCHCONTENT_SOURCE_DIR_RSTD=${inputs.rstd}"
-      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${inputs.wavsen}"
+      "-DFETCHCONTENT_SOURCE_DIR_EIGEN=${oweDeps.eigen}"
+      "-DFETCHCONTENT_SOURCE_DIR_SPIRV_REFLECT=${oweDeps.spirv_reflect}"
+      "-DFETCHCONTENT_SOURCE_DIR_GLSLANG=${oweDeps.glslang}"
+      "-DFETCHCONTENT_SOURCE_DIR_ARGPARSE=${oweDeps.argparse}"
+      "-DFETCHCONTENT_SOURCE_DIR_RSTD=/build/rstd"
+      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${oweDeps.wavsen}"
+      "-DFETCHCONTENT_SOURCE_DIR_QUICKJS=${oweDeps.quickjs}"
+      "-DFETCHCONTENT_SOURCE_DIR_CEF=${oweDeps.cef}"
+      "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
     ];
 
+    hardeningDisable = [ "fortify" ];
+
+    postPatch = ''
+      # Remove CMake version check that fails on Nixpkgs CMake 3.x
+      substituteInPlace CMakeLists.txt \
+        --replace-fail 'if(CMAKE_VERSION VERSION_LESS_EQUAL "4.3.0")' 'if(FALSE)'
+
+      # Fix Clang 21 + GCC 15 transitive module header bugs by explicitly including <memory> and <algorithm>
+      # in all C++ source files across the entire repository
+      find src waywallen viewer -type f \( -name "*.cpp" -o -name "*.cppm" -o -name "*.hpp" -o -name "*.h" \) | while read -r file; do
+        if grep -q -E '^[[:space:]]*module;$' "$file"; then
+          # Already has a global module fragment header -> insert headers right after it
+          substituteInPlace "$file" --replace-fail "module;" $'module;\n#include <memory>\n#include <algorithm>'
+        elif grep -q -E '^[[:space:]]*(export[[:space:]]+)?module[[:space:]]+[a-zA-Z0-9_.:]+;' "$file"; then
+          # Is a C++20 module file but lacks a global module fragment -> prepend module; and headers
+          sed -i '1s|^|module;\n#include <memory>\n#include <algorithm>\n|' "$file"
+        else
+          # Traditional C++ source or header file -> prepend headers
+          sed -i '1s|^|#include <memory>\n#include <algorithm>\n|' "$file"
+        fi
+      done
+    '';
+
     preConfigure = ''
-      export NIX_CFLAGS_COMPILE="$(echo "$NIX_CFLAGS_COMPILE" | sed 's/-Wp,-D_FORTIFY_SOURCE=3//')"
-      export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -Wno-error=undefined-var-template -Wno-error=unused-private-field"
+      declare -a inc_paths
+      next_is_path=0
+      for flag in $NIX_CFLAGS_COMPILE; do
+        if [ "$next_is_path" -eq 1 ]; then
+          inc_paths+=("$flag")
+          next_is_path=0
+        elif [ "$flag" = "-isystem" ] || [ "$flag" = "-I" ]; then
+          next_is_path=1
+        elif [[ "$flag" == -I* ]]; then
+          inc_paths+=("''${flag#-I}")
+        fi
+      done
+
+      declare -a std_paths
+      while read -r line; do
+        clean_path=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -d "$clean_path" ]; then
+          std_paths+=("$clean_path")
+        fi
+      done < <(clang++ -v -E -x c++ - < /dev/null 2>&1 | sed -n '/#include <...>/,/End of search list./p' | grep -v '#include' | grep -v 'End of search list')
+
+      IFS=: eval 'inc_paths_str="''${inc_paths[*]}"'
+      IFS=: eval 'std_paths_str="''${std_paths[*]}"'
+
+      export C_INCLUDE_PATH="$inc_paths_str:$C_INCLUDE_PATH"
+      export CPLUS_INCLUDE_PATH="$inc_paths_str:$std_paths_str:$CPLUS_INCLUDE_PATH"
+
+      # Patch rstd (C++20 module library) to compile cleanly under Clang 21 and GCC 15
+      cp -r ${oweDeps.rstd} /build/rstd
+      chmod -R +w /build/rstd
+      sed -i '/export using std::make_shared;/d' /build/rstd/src/cppstd/cppstd.cppm
+      sed -i '/export using std::allocate_shared;/d' /build/rstd/src/cppstd/cppstd.cppm
+
+      sed -i '/export using std::copy;/d' /build/rstd/src/cppstd/cppstd.cppm
+      sed -i '/export using std::find;/d' /build/rstd/src/cppstd/cppstd.cppm
+      sed -i '/export using std::advance;/d' /build/rstd/src/cppstd/cppstd.cppm
+
+      # Patch rstd's equality trait constraint to avoid incomplete type dependency under Clang 21
+      substituteInPlace /build/rstd/src/core/include/rstd/macro.hpp \
+        --replace-fail "requires rstd::Impled<Self, rstd::cmp::PartialEq<_USE_TRAIT_T>>" "requires true"
+    '';
+
+    postBuild = ''
+      unset C_INCLUDE_PATH
+      unset CPLUS_INCLUDE_PATH
+    '';
+
+    postInstall = ''
+      # 1. Patch waywallen-wescene-renderer (does NOT need weweb in its RPATH)
+      patchelf --set-rpath "$out/lib:${waywallen}/lib:${
+        lib.makeLibraryPath [
+          pkgs.vulkan-loader
+          pkgs.ffmpeg
+          pkgs.libgbm
+          pkgs.freetype
+          pkgs.fontconfig
+          pkgs.glfw
+          pkgs.libpulseaudio
+          pkgs.lz4
+          pkgs.stdenv.cc.cc.lib
+        ]
+      }" $out/bin/waywallen-wescene-renderer
+
+      # 2. Patch waywallen-weweb-renderer and other CEF binaries (needs weweb in RPATH, but AFTER system libraries to prioritize the system's patched Vulkan loader)
+      for bin in $(find $out/bin/weweb -type f 2>/dev/null || true); do
+        if [ -f "$bin" ] && (file "$bin" | grep -q "ELF"); then
+          patchelf --set-rpath "${
+            lib.makeLibraryPath [
+              pkgs.vulkan-loader
+              pkgs.ffmpeg
+              pkgs.libgbm
+              pkgs.freetype
+              pkgs.fontconfig
+              pkgs.glfw
+              pkgs.libpulseaudio
+              pkgs.lz4
+              pkgs.alsa-lib
+              pkgs.gtk3
+              pkgs.nss
+              pkgs.nspr
+              pkgs.libxkbcommon
+              pkgs.wayland
+              pkgs.libx11
+              pkgs.libxcomposite
+              pkgs.libxdamage
+              pkgs.libxext
+              pkgs.libxfixes
+              pkgs.libxrandr
+              pkgs.libxrender
+              pkgs.libxscrnsaver
+              pkgs.libxcb
+              pkgs.stdenv.cc.cc.lib
+              pkgs.glib
+              pkgs.atk
+              pkgs.at-spi2-atk
+              pkgs.cairo
+              pkgs.gdk-pixbuf
+              pkgs.pango
+              pkgs.dbus
+              pkgs.expat
+              pkgs.cups
+              pkgs.udev
+              pkgs.at-spi2-core
+            ]
+          }:$out/bin/weweb:$out/lib:${waywallen}/lib" "$bin"
+        fi
+      done
+
+      # 3. Add driver runpath and remove-references-to for all built binaries
+      for bin in $out/bin/waywallen-wescene-renderer $(find $out/bin/weweb -type f 2>/dev/null || true); do
+        if [ -f "$bin" ] && (file "$bin" | grep -q "ELF"); then
+          # Add OpenGL/Vulkan driver path to RPATH for NixOS compatibility (resolves VK_ERROR_INCOMPATIBLE_DRIVER on Nvidia)
+          addDriverRunpath "$bin"
+
+          # Selectively remove build-time source references from the binary, leaving Glibc/Vulkan intact
+          remove-references-to -t ${src} "$bin"
+          for src_path in ${builtins.concatStringsSep " " (builtins.attrValues oweDeps)}; do
+            remove-references-to -t "$src_path" "$bin"
+          done
+        fi
+      done
     '';
   };
   stripExtension =
@@ -519,6 +901,9 @@ in
       evalAndSubstitute = evalAndSubstitute;
       mkPyApp = mkPyApp;
     };
+    environment.pathsToLink = [
+      "/share/waywallen"
+    ];
     boot.extraModulePackages = [
       gigabyte-laptop-wmi
     ];
@@ -591,6 +976,8 @@ in
         killall
         unrar
         zip
+        dmidecode
+        usbutils
         adwaita-icon-theme
         vmpk
         socat
@@ -635,6 +1022,7 @@ in
         erofs-utils
         gsettings-desktop-schemas
         resources
+        quickshell
         hunspell
         hunspellDicts.en_US-large
         hunspellDicts.ru_RU
@@ -644,8 +1032,15 @@ in
         kdePackages.qtdeclarative
         kdePackages.kdenlive
         kdePackages.kdeconnect-kde
-        quickshell.packages.${stdenv.hostPlatform.system}.default
-        nix-alien.packages.${stdenv.hostPlatform.system}.default
+        (nix-alien.packages.${stdenv.hostPlatform.system}.default.override {
+          python3 = pkgs.python3.override {
+            packageOverrides = pyFinal: pyPrev: {
+              dpcontracts = pyPrev.dpcontracts.overridePythonAttrs (oldAttrs: {
+                doCheck = false;
+              });
+            };
+          };
+        })
         nix-search.packages.${stdenv.hostPlatform.system}.default
         (helium.packages.${stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
           src = (import <nix/fetchurl.nix>) {
@@ -830,9 +1225,10 @@ in
         ))
       ]
       ++ [
-        #waywallen
-        #open-wallpaper-engine
+        waywallen
+        open-wallpaper-engine
         aero-control-center
+        anicli-ru
       ]
       ++ processedResults;
   };

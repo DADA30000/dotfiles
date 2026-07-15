@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    anicli-ru = {
+      url = "github:vypivshiy/ani-cli-ru";
+      flake = false;
+    };
     steam-app-id-list = {
       url = "github:jsnli/steamappidlist";
       flake = false;
@@ -18,8 +22,9 @@
       url = "sourcehut:~whynothugo/way-secure";
       flake = false;
     };
+    # CHANGE THIS LATER AFTER 1-2 WEEKS
     zapret-flowseal = {
-      url = "github:Flowseal/zapret-discord-youtube";
+      url = "github:V3nilla/zapret-discord-youtube";
       flake = false;
     };
     vencord-src = {
@@ -70,10 +75,6 @@
       url = "gitlab:simonpunk/susfs4ksu/gki-android16-6.12";
       flake = false;
     };
-    android-kernel-src = {
-      url = "git+https://android.googlesource.com/kernel/common?ref=refs/heads/android16-6.12-2025-12&shallow=1";
-      flake = false;
-    };
     ksu-next = {
       url = "git+https://github.com/pershoot/KernelSU-Next?ref=dev-susfs";
       flake = false;
@@ -90,36 +91,24 @@
       url = "github:DADA30000/AeroControlCenter";
       flake = false;
     };
+    waywallen-display = {
+      url = "github:waywallen/waywallen-display";
+      flake = false;
+    };
     waywallen = {
-      url = "github:waywallen/waywallen/v0.2.0";
+      url = "github:waywallen/waywallen";
+      flake = false;
+    };
+    waywallen-aur = {
+      url = "git+https://aur.archlinux.org/waywallen.git?ref=master";
       flake = false;
     };
     open-wallpaper-engine = {
-      url = "github:waywallen/open-wallpaper-engine/v0.1.6";
+      url = "github:waywallen/open-wallpaper-engine";
       flake = false;
     };
-    rstd = {
-      url = "github:hypengw/rstd/629bda81eb98856ca023f0f87f57dde8d22b4823";
-      flake = false;
-    };
-    ncrequest = {
-      url = "github:hypengw/ncrequest/404868aa2aa4481e262f25d8f7d053f42b61b7b8";
-      flake = false;
-    };
-    wavsen = {
-      url = "github:hypengw/wavsen/c714a4fc59a689a80b3b537ee8ef501c363a841f";
-      flake = false;
-    };
-    qmlmaterial = {
-      url = "github:hypengw/QmlMaterial/c36528593c70d67c8bac8fc7dea579702a7e8aff";
-      flake = false;
-    };
-    qextra = {
-      url = "github:hypengw/QExtra/26e4b4134a05d35676f02f8b0e82a6130d877695";
-      flake = false;
-    };
-    spirv-reflect = {
-      url = "github:KhronosGroup/SPIRV-Reflect/vulkan-sdk-1.4.321.0";
+    open-wallpaper-engine-aur = {
+      url = "git+https://aur.archlinux.org/open-wallpaper-engine.git?ref=master";
       flake = false;
     };
     btop = {
@@ -154,12 +143,8 @@
       url = "github:DADA30000/nixpak";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-cachyos-kernel = {
-      url = "github:xddxdd/nix-cachyos-kernel/release";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     lanzaboote = {
-      url = "github:nix-community/lanzaboote/v1.0.0";
+      url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     split-monitor-workspaces = {
@@ -192,10 +177,6 @@
     };
     home-manager = {
       url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    quickshell = {
-      url = "github:quickshell-mirror/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland = {

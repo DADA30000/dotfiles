@@ -206,7 +206,7 @@ in
   config = lib.mkMerge [
     (lib.mkIf wrapped {
       system.build.isoImage = lib.mkForce (
-        pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
+        (pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
           {
             inherit (config.isoImage) compressImage volumeID;
             contents = patchedContents;
@@ -225,7 +225,31 @@ in
             efiBootable = true;
             efiBootImage = "boot/efi.img";
           }
-        )
+        )).overrideAttrs
+          (oldAttrs: {
+            nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ pkgs.erofs-utils ];
+            squashfsCommand = ''
+              closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
+              cp $closureInfo/registration nix-path-registration
+              sed 's|^/nix/store/||' $closureInfo/store-paths > relative-store-paths
+              tar -cf - \
+                --mode='u+w' \
+                -C . nix-path-registration \
+                -C /nix/store \
+                -T relative-store-paths \
+                | mkfs.erofs \
+                    --force-uid=0 \
+                    --force-gid=0 \
+                    -z zstd,19 \
+                    -C 1048576 \
+                    -E dedupe,all-fragments,fragdedupe=full,dot-omitted,force-inode-compact \
+                    -T 0 \
+                    --ignore-mtime \
+                    --tar=f \
+                    "$out" \
+                    /dev/stdin
+            '';
+          })
       );
       boot.initrd.systemd.services.initrd-find-nixos-closure = {
         serviceConfig.ExecStart = lib.mkForce (
@@ -325,6 +349,17 @@ in
         (writeShellScriptBin "nix-install" nix-install)
         (writeShellScriptBin "install-offline" install-offline)
       ];
+
+      # Configure the loopback store mount using the EROFS driver
+      fileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
+        fsType = "erofs";
+        device = "${lib.optionalString config.boot.initrd.systemd.enable "/sysroot"}/iso/nix-store.squashfs";
+        options = [ "loop" ];
+        neededForBoot = true;
+      };
+
+      # Add the EROFS driver to the available kernel modules in stage 1
+      boot.initrd.availableKernelModules = [ "erofs" ];
     })
     {
       nixpkgs.hostPlatform = "x86_64-linux";
