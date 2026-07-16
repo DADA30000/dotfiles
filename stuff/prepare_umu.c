@@ -1,17 +1,20 @@
 #define _GNU_SOURCE
-#include "asm/unistd_64.h" // for __NR_fsconfig, __NR_fsmount, __NR_fsopen
+#include "asm/unistd_64.h" // for __NR_fsconfig, __NR_fsopen, __NR_fsmount
+#include "linux/mount.h"   // for fsconfig_command
 #include <fcntl.h>         // for open, O_CLOEXEC, O_DIRECTORY, O_NOFOLLOW
+#include <linux/loop.h>    // for loop_info64, LOOP_CTL_GET_FREE, LOOP_SET_FD
 #include <pwd.h>           // for passwd, getpwuid
 #include <sched.h>         // for CLONE_NEWUSER, unshare
 #include <signal.h>        // for SIGKILL, kill
 #include <stdint.h>        // for uint64_t
 #include <stdio.h>         // for perror, snprintf, NULL, fprintf, stderr
 #include <stdlib.h>        // for exit, mkdtemp
-#include <sys/mount.h>     // for MNT_DETACH, umount2, FSMOUNT_CLOEXEC, FSO...
+#include <sys/ioctl.h>     // for ioctl
+#include <sys/mount.h>     // for MNT_DETACH, umount2, FSOPEN_CLOEXEC, MS_N...
 #include <sys/stat.h>      // for mkdir, stat, fstat
 #include <sys/types.h>     // for uid_t, gid_t, pid_t
 #include <sys/wait.h>      // for waitpid
-#include <unistd.h>        // for close, setegid, seteuid, syscall, rmdir
+#include <unistd.h>        // for close, syscall, setegid, seteuid, rmdir
 
 struct clone_mount_attr {
   uint64_t attr_set;
@@ -249,31 +252,105 @@ int main(void) {
     goto cleanup_upper;
   }
 
-  // Supply the image file descriptor directly as the backing source
+  int needs_loop = 0;
+
+  // Attempt 1: Direct file-backed mount using SET_FD
   if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FD, "source", NULL, img_fd) <
       0) {
-
-    // FALLBACK: If the kernel supports file-backed EROFS but rejects
-    // FSCONFIG_SET_FD for "source", pass the /proc/self/fd/ path as a string.
-    // The kernel's filp_open will handle it.
+    // Attempt 2: Direct file-backed mount using /proc/self/fd string mapping
     char fd_path[64];
     snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", img_fd);
 
     if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_STRING, "source", fd_path,
                 0) < 0) {
-      perror("fsconfig(SET_STRING, source) failed - missing "
-             "CONFIG_EROFS_FS_BACKED_BY_FILE");
-      close(img_fd);
-      close(fs_fd);
-      goto cleanup_upper;
+      needs_loop = 1;
     }
   }
 
-  // Execute mount superblock creation
-  if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
-    perror("fsconfig(CMD_CREATE) failed");
+  // Attempt to create the superblock. If the backing filesystem (e.g.
+  // OverlayFS) rejects it, it will return ENOTBLK or EINVAL.
+  if (!needs_loop &&
+      syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
+    needs_loop = 1;
+  }
+
+  // FALLBACK: The kernel rejected direct file-backed mounting.
+  // Securely allocate and bind a loopback device.
+  if (needs_loop) {
+    // The previous fs_fd context is tainted by the failed source. Discard it.
     close(fs_fd);
-    goto cleanup_upper;
+
+    int loop_ctl = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
+    if (loop_ctl < 0) {
+      perror("Failed to open /dev/loop-control");
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    int dev_nr = ioctl(loop_ctl, LOOP_CTL_GET_FREE);
+    close(loop_ctl);
+    if (dev_nr < 0) {
+      perror("Failed to allocate free loop device");
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    char loop_name[64];
+    snprintf(loop_name, sizeof(loop_name), "/dev/loop%d", dev_nr);
+
+    // Open the assigned loop device
+    int loop_fd = open(loop_name, O_RDWR | O_CLOEXEC);
+    if (loop_fd < 0) {
+      perror("Failed to open allocated loop device");
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    // Securely bind our read-only image FD to the loop device
+    if (ioctl(loop_fd, LOOP_SET_FD, img_fd) < 0) {
+      perror("Failed to bind image to loop device");
+      close(loop_fd);
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    // Enforce read-only constraint and AUTOCLEAR so it auto-destroys on umount
+    struct loop_info64 li = {0};
+    li.lo_flags = LO_FLAGS_AUTOCLEAR | LO_FLAGS_READ_ONLY;
+    if (ioctl(loop_fd, LOOP_SET_STATUS64, &li) < 0) {
+      perror("Warning: Failed to set loop flags (AUTOCLEAR/READ_ONLY)");
+    }
+
+    // Setup a fresh mount context using our newly minted loop device
+    fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
+    if (fs_fd < 0) {
+      perror("fsopen(erofs) fallback failed");
+      close(loop_fd);
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_STRING, "source", loop_name,
+                0) < 0) {
+      perror("fsconfig(SET_STRING, loop_name) failed");
+      close(loop_fd);
+      close(fs_fd);
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
+      perror("fsconfig(CMD_CREATE, loop_name) failed");
+      close(loop_fd);
+      close(fs_fd);
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    // The kernel mount API now holds a reference to the loop block device.
+    // We can safely close our user-space file descriptors. AUTOCLEAR handles
+    // the rest.
+    close(loop_fd);
   }
 
   close(img_fd);

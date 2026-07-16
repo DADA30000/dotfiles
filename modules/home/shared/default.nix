@@ -182,7 +182,7 @@
 
     from-unstable = false;
 
-    stable = false;
+    stable = true;
 
     enable-plugins = true;
 
