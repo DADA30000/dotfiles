@@ -242,10 +242,12 @@ in
                     --force-gid=0 \
                     -z zstd,19 \
                     -C 1048576 \
+                    -m 1048576:zstd,19 \
                     --workers $NIX_BUILD_CORES \
-                    -E dot-omitted \
+                    -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
                     -T 0 \
                     --ignore-mtime \
+                    --zD=1 \
                     --tar=f \
                     "$out" \
                     /dev/stdin
