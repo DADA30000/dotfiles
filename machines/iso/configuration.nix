@@ -260,10 +260,15 @@ in
           #!/bin/sh
           mkdir -p /etc
           INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
-          echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
           closure_raw=$(dirname "$INIT_PATH")
           closure=''${closure_raw#/sysroot}
           ln -sfn "$closure" /nixos-closure
+          if [ -x "/sysroot$closure/prepare-root" ]; then
+            echo 'NEW_INIT=' > /etc/switch-root.conf
+          else
+            echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
+            echo "$closure does not look like a NixOS installation - not activating"
+          fi
         ''
       );
       boot.initrd.systemd.storePaths = [
