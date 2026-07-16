@@ -28,7 +28,7 @@
 
   };
 
-  environment.etc."crypttab".text = ''
+  environment.etc.crypttab.text = ''
     Games /dev/disk/by-label/Games-encrypted /etc/credstore/games.key luks,discard,no-read-workqueue,no-write-workqueue,noauto
   '';
 

@@ -47,32 +47,45 @@ let
         )
       '';
     };
+
   disableServices =
     list:
     let
-      disabledAttrs = lib.foldl' (
-        acc: item:
+      # Parse the system/user service items
+      parsed = map (
+        item:
         let
           parts = lib.splitString "/" item;
           type = lib.elemAt parts 0;
           name = lib.elemAt parts 1;
-          path =
-            if type == "user" then
-              [
-                "user"
-                "services"
-                name
-                "wantedBy"
-              ]
-            else
-              [
-                "services"
-                name
-                "wantedBy"
-              ];
         in
-        lib.recursiveUpdate acc (lib.setAttrByPath path (lib.mkForce [ ]))
-      ) { } list;
+        {
+          inherit type name;
+        }
+      ) list;
+
+      systemServicesList = lib.filter (x: x.type == "system") parsed;
+      userServicesList = lib.filter (x: x.type == "user") parsed;
+
+      # Create systemd overrides for NixOS system services
+      systemdServices = lib.listToAttrs (
+        map (x: {
+          name = x.name;
+          value = {
+            wantedBy = lib.mkForce [ ];
+          };
+        }) systemServicesList
+      );
+
+      # Create systemd overrides for NixOS-level user services
+      systemdUserServices = lib.listToAttrs (
+        map (x: {
+          name = x.name;
+          value = {
+            wantedBy = lib.mkForce [ ];
+          };
+        }) userServicesList
+      );
 
       servicesJson = pkgs.writeText "services.json" (builtins.toJSON list);
 
@@ -89,7 +102,7 @@ let
       };
 
       prompterService = {
-        user.services.service-prompter = {
+        service-prompter = {
           wantedBy = [ config.home-manager.users.${user}.wayland.systemd.target ];
           description = "Graphical service manager and installer prompt";
           after = [ config.home-manager.users.${user}.wayland.systemd.target ];
@@ -103,7 +116,27 @@ let
         };
       };
     in
-    lib.recursiveUpdate disabledAttrs prompterService;
+    {
+      systemd = {
+        services = systemdServices;
+        user.services = systemdUserServices // prompterService;
+      };
+
+      # Also disable the user services globally for all Home Manager users
+      home-manager.sharedModules = [
+        {
+          systemd.user.services = lib.listToAttrs (
+            map (x: {
+              name = x.name;
+              value = {
+                wantedBy = lib.mkForce [ ];
+              };
+            }) userServicesList
+          );
+        }
+      ];
+    };
+
   patchGrubDir =
     dir:
     pkgs.runCommand "patched-efi-dir" { } ''
@@ -136,6 +169,7 @@ let
     else
       item
   ) config.isoImage.contents;
+
   nix-install = ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
@@ -191,6 +225,7 @@ let
       fi
     fi
   '';
+
   install-offline =
     if wrapped then
       ''
@@ -278,24 +313,6 @@ in
       boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
 
-      systemd = disableServices [
-        "user/replays"
-        "user/opentabletdriver"
-        "user/sunshine"
-        "user/kdeconnect-indicator"
-        "user/kdeconnect"
-        "user/wivrn"
-        "user/easyeffects"
-        "system/zerotierone"
-        "system/tailscaled"
-        "system/sing-box"
-        "system/sshd"
-        "system/cups"
-        "system/cups-browsed"
-        "system/openrgb"
-        "system/ydotool"
-      ];
-
       security.polkit.extraConfig = ''
         polkit.addRule(function(action, subject) {
           if (subject.isInGroup("wheel")) {
@@ -305,10 +322,7 @@ in
       '';
 
       system.activationScripts.repo = {
-
-        # Run after /dev has been mounted
         deps = [ "specialfs" ];
-
         text = ''
           PATH="$PATH:${pkgs.coreutils-full}/bin"
           if [[ ! -d /repo ]]; then
@@ -318,25 +332,16 @@ in
             cp -r /repo/{machines,stuff,modules,flake.nix,flake.lock} /etc/nixos
           fi
         '';
-
       };
 
       boot.kernel.sysctl."vm.swappiness" = 200;
-
       services.ollama.enable = lib.mkForce false;
-
       graphics.amdgpu.pro = lib.mkForce false;
-
       disks.enable = lib.mkForce false;
-
       my-services.cloudflare-ddns.enable = lib.mkForce false;
-
       my-services.nginx.enable = lib.mkForce false;
-
       cape.enable = lib.mkForce false;
-
       boot.loader.timeout = lib.mkForce 0;
-
       fonts.fontconfig.enable = true;
 
       xdg = {
@@ -363,9 +368,28 @@ in
         neededForBoot = true;
       };
 
-      # Add the EROFS driver to the available kernel modules in stage 1
       boot.initrd.availableKernelModules = [ "erofs" ];
     })
+
+    # Call disableServices as a top-level module when wrapped is active
+    (lib.mkIf wrapped (disableServices [
+      "user/replays"
+      "user/opentabletdriver"
+      "user/sunshine"
+      "user/kdeconnect-indicator"
+      "user/kdeconnect"
+      "user/wivrn"
+      "user/easyeffects"
+      "system/zerotierone"
+      "system/tailscaled"
+      "system/sing-box"
+      "system/sshd"
+      "system/cups"
+      "system/cups-browsed"
+      "system/openrgb"
+      "system/ydotool"
+    ]))
+
     {
       nixpkgs.hostPlatform = "x86_64-linux";
       hardware.enableAllHardware = true;
