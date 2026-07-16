@@ -360,6 +360,13 @@ in
         neededForBoot = true;
       };
 
+      config.lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
+        fsType = "erofs";
+        device = "${lib.optionalString config.boot.initrd.systemd.enable "/sysroot"}/iso/nix-store.squashfs";
+        options = [ "loop" ];
+        neededForBoot = true;
+      };
+
       # Add the EROFS driver to the available kernel modules in stage 1
       boot.initrd.availableKernelModules = [ "erofs" ];
     })
