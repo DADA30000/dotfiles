@@ -242,7 +242,7 @@ in
                     --force-gid=0 \
                     -z zstd,19 \
                     -C 1048576 \
-                    -P $NIX_BUILD_CORES \
+                    --workers $NIX_BUILD_CORES \
                     -E all-fragments,fragdedupe=full,dot-omitted \
                     -T 0 \
                     --ignore-mtime \
