@@ -357,18 +357,9 @@ in
         (writeShellScriptBin "install-offline" install-offline)
       ];
 
-      # Configure the loopback store mount using the EROFS driver
-      fileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
-        fsType = "erofs";
-        device = "${lib.optionalString config.boot.initrd.systemd.enable "/sysroot"}/iso/nix-store.squashfs";
-        options = [ "loop" ];
-        neededForBoot = true;
-      };
-
       lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
         fsType = "erofs";
         device = "${lib.optionalString config.boot.initrd.systemd.enable "/sysroot"}/iso/nix-store.squashfs";
-        options = [ "loop" ];
         neededForBoot = true;
       };
 
