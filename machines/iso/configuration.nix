@@ -240,9 +240,9 @@ in
                 | mkfs.erofs \
                     --force-uid=0 \
                     --force-gid=0 \
-                    -z zstd,19 \
-                    -C 1048576 \
-                    -m 1048576:zstd,19 \
+                    -z zstd,3 \
+                    -C 65536 \
+                    -m 65536:zstd,3 \
                     --workers $NIX_BUILD_CORES \
                     -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
                     -T 0 \
