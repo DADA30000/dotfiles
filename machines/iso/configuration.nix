@@ -246,6 +246,8 @@ in
                     --workers $NIX_BUILD_CORES \
                     -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
                     -T 0 \
+                    -x -1 \
+                    --MZ \
                     --ignore-mtime \
                     --zD=1 \
                     --tar=f \
@@ -254,19 +256,17 @@ in
             '';
           })
       );
-      boot.initrd.systemd.services.initrd-find-nixos-closure = {
-        serviceConfig.ExecStart = lib.mkForce (
-          pkgs.writeScript "find-nixos-closure" ''
-            #!/bin/bash
-            mkdir -p /etc
-            INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
-            echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
-            closure_raw=''${INIT_PATH%/init}
-            closure=''${closure_raw#/sysroot}
-            ln -sfn "$closure" /nixos-closure
-          ''
-        );
-      };
+      boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
+        pkgs.writeScript "find-nixos-closure" ''
+          #!/bin/bash
+          mkdir -p /etc
+          INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
+          echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
+          closure_raw=''${INIT_PATH%/init}
+          closure=''${closure_raw#/sysroot}
+          ln -sfn "$closure" /nixos-closure
+        ''
+      );
       boot.initrd.systemd.storePaths = [
         config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
       ];
