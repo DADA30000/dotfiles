@@ -360,7 +360,7 @@ in
         neededForBoot = true;
       };
 
-      config.lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
+      lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
         fsType = "erofs";
         device = "${lib.optionalString config.boot.initrd.systemd.enable "/sysroot"}/iso/nix-store.squashfs";
         options = [ "loop" ];
