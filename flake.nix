@@ -107,10 +107,6 @@
       url = "github:waywallen/open-wallpaper-engine";
       flake = false;
     };
-    open-wallpaper-engine-aur = {
-      url = "git+https://aur.archlinux.org/open-wallpaper-engine.git?ref=master";
-      flake = false;
-    };
     btop = {
       url = "github:aristocratos/btop";
       flake = false;
