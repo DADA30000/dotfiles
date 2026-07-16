@@ -257,11 +257,11 @@ in
       );
       boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
         pkgs.writeScript "find-nixos-closure" ''
-          #!/bin/bash
+          #!/bin/sh
           mkdir -p /etc
           INIT_PATH=$(echo /sysroot/nix/store/*-nixos-system-iso-*/init)
           echo "NEW_INIT=''${INIT_PATH#/sysroot}" > /etc/switch-root.conf
-          closure_raw=''${INIT_PATH%/init}
+          closure_raw=$(dirname "$INIT_PATH")
           closure=''${closure_raw#/sysroot}
           ln -sfn "$closure" /nixos-closure
         ''
