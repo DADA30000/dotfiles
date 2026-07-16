@@ -1514,23 +1514,6 @@
         "type": "github"
       }
     },
-    "open-wallpaper-engine-aur": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1783561325,
-        "narHash": "sha256-vlYO8IJHfLlA95PCVdEdy3QcxH2ZIWR9Q74NsB6/1bI=",
-        "ref": "master",
-        "rev": "247f725dd37c31e978507a32731d15ff7c986adb",
-        "revCount": 16,
-        "type": "git",
-        "url": "https://aur.archlinux.org/open-wallpaper-engine.git"
-      },
-      "original": {
-        "ref": "master",
-        "type": "git",
-        "url": "https://aur.archlinux.org/open-wallpaper-engine.git"
-      }
-    },
     "pipewire-screenaudio": {
       "inputs": {
         "nixpkgs": [
@@ -1696,7 +1679,6 @@
         "nixpkgs-xr": "nixpkgs-xr",
         "nos": "nos",
         "open-wallpaper-engine": "open-wallpaper-engine",
-        "open-wallpaper-engine-aur": "open-wallpaper-engine-aur",
         "pipewire-screenaudio": "pipewire-screenaudio",
         "pmparser": "pmparser",
         "pyproject-build-systems": "pyproject-build-systems",
