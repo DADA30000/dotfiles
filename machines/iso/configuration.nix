@@ -67,7 +67,7 @@ let
       systemServicesList = lib.filter (x: x.type == "system") parsed;
       userServicesList = lib.filter (x: x.type == "user") parsed;
 
-      # Create systemd overrides for NixOS system services
+      # Create systemd overrides for NixOS system services (NixOS flat syntax)
       systemdServices = lib.listToAttrs (
         map (x: {
           name = x.name;
@@ -77,7 +77,7 @@ let
         }) systemServicesList
       );
 
-      # Create systemd overrides for NixOS-level user services
+      # Create systemd overrides for NixOS-level user services (NixOS flat syntax)
       systemdUserServices = lib.listToAttrs (
         map (x: {
           name = x.name;
@@ -122,14 +122,14 @@ let
         user.services = systemdUserServices // prompterService;
       };
 
-      # Also disable the user services globally for all Home Manager users
+      # Disable user services globally for Home Manager users (Home Manager INI syntax)
       home-manager.sharedModules = [
         {
           systemd.user.services = lib.listToAttrs (
             map (x: {
               name = x.name;
               value = {
-                wantedBy = lib.mkForce [ ];
+                Install.WantedBy = lib.mkForce [ ];
               };
             }) userServicesList
           );
