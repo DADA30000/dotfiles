@@ -246,7 +246,6 @@ in
                     --workers $NIX_BUILD_CORES \
                     -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
                     -T 0 \
-                    -x -1 \
                     --MZ \
                     --ignore-mtime \
                     --zD=1 \
