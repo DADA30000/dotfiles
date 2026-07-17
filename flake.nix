@@ -24,7 +24,7 @@
     };
     # CHANGE THIS LATER AFTER 1-2 WEEKS
     zapret-flowseal = {
-      url = "github:V3nilla/zapret-discord-youtube";
+      url = "github:sch-izo/shizapret/reupload";
       flake = false;
     };
     vencord-src = {

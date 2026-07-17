@@ -882,7 +882,7 @@
         hyprland = {
           prettyName = "Hyprland";
           comment = "Hyprland compositor managed by UWSM";
-          binPath = "${inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
+          binPath = "${pkgs.hyprland}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
         };
       };
     };

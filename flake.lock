@@ -2202,16 +2202,17 @@
     "zapret-flowseal": {
       "flake": false,
       "locked": {
-        "lastModified": 1783690794,
-        "narHash": "sha256-1mS+X5Tq2lzXvfdYCNI1A6XvVx7rn/bbFqy1R4YikE8=",
-        "owner": "V3nilla",
-        "repo": "zapret-discord-youtube",
-        "rev": "0560e455b1b378285ce8d72bb490771910a632aa",
+        "lastModified": 1783190817,
+        "narHash": "sha256-8hNSwkVREf+16npV4mYnaNeyb9MGicxwSN9TZnZ9E1A=",
+        "owner": "sch-izo",
+        "repo": "shizapret",
+        "rev": "d75903b44cb7c8e7eedb998c3dd9ff674d10880a",
         "type": "github"
       },
       "original": {
-        "owner": "V3nilla",
-        "repo": "zapret-discord-youtube",
+        "owner": "sch-izo",
+        "ref": "reupload",
+        "repo": "shizapret",
         "type": "github"
       }
     },
