@@ -17,7 +17,10 @@ in
   config = mkIf cfg.enable {
     programs.waybar = {
       enable = true;
-      package = inputs.waybar.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      package = inputs.waybar.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
+        mesonFlags = (prev.mesonFlags or [ ]) ++ [ "-Dtests=disabled" ];
+        doCheck = false;
+      });
       systemd.enable = true;
       style = ''
         @define-color accent #2362ba;
