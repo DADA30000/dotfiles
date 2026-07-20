@@ -262,19 +262,39 @@ in
           }
         )).overrideAttrs
           (oldAttrs: {
-            nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ pkgs.erofs-utils ];
+            nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
+              pkgs.erofs-utils
+              pkgs.bubblewrap
+            ];
+
             squashfsCommand = ''
               closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
-              realOut="${placeholder "out"}"
-              mkdir -p "$realOut/erofs_root"
-              cp "$closureInfo/registration" "$realOut/erofs_root/nix-path-registration"
 
+              # Create the physical mountpoint directories
+              mkdir -p erofs_root
+
+              # Construct the bubblewrap bind-mount arguments dynamically.
+              # We bind-mount our active working directory as writable,
+              # and bind-mount /nix/store as read-only.
+              bwrap_args=(
+                --bind "$(pwd)" "$(pwd)"
+                --ro-bind /nix/store /nix/store
+                --dev-bind /dev /dev
+                --proc /proc
+                --ro-bind "$closureInfo/registration" "$(pwd)/erofs_root/nix-path-registration"
+              )
+
+              # Map each store path in the closure to a virtual mountpoint inside erofs_root
               while IFS= read -r path; do
                 [ -z "$path" ] && continue
-                cp -al "$path" "$realOut/erofs_root/"
+                basename=$(basename "$path")
+                bwrap_args+=("--ro-bind" "$path" "$(pwd)/erofs_root/$basename")
               done < "$closureInfo/store-paths"
 
-              mkfs.erofs \
+              # Run mkfs.erofs inside the private bubblewrap mount namespace.
+              # It reads directly from `/nix/store` via native kernel namespace mounts,
+              # completely bypassing uncompressed temporary extractions and disk limits.
+              bwrap "''${bwrap_args[@]}" mkfs.erofs \
                 --force-uid=0 \
                 --force-gid=0 \
                 -z zstd,19 \
@@ -287,9 +307,10 @@ in
                 --ignore-mtime \
                 --zD=1 \
                 "$out" \
-                "$realOut/erofs_root"
+                "$(pwd)/erofs_root"
 
-              rm -rf "$realOut"
+              # Clean up our local mountpoint shell structures
+              rm -rf erofs_root relative-store-paths nix-path-registration
             '';
           })
       );
