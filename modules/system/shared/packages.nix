@@ -855,7 +855,7 @@ let
           --run '
             CONF_DIR="$XDG_DATA_HOME/PrismLauncher"
             CONF="$CONF_DIR/prismlauncher.cfg"
-            GEOM="AdnQywADAAAAAAAAAAAAAAAABDYAAAO/AAAAAAAAAAD////+/////gAAAAACAAAABkAAAAAAAAAAAAAABDYAAAO/"
+            GEOM="\"AdnQywADAAAAAAAAAAAAAAAABDYAAAO/AAAAAAAAAAD////+/////gAAAAACAAAABkAAAAAAAAAAAAAABDYAAAO/\""
             
             mkdir -p "$CONF_DIR"
 

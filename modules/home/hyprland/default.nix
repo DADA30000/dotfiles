@@ -316,6 +316,10 @@ in
           ];
           animation = [
             {
+              leaf = "fadePopups";
+              enabled = false;
+            }
+            {
               leaf = "windowsMove";
               enabled = true;
               speed = 5;

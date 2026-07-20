@@ -265,28 +265,28 @@ in
             nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ pkgs.erofs-utils ];
             squashfsCommand = ''
               closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
-              cp $closureInfo/registration nix-path-registration
-              sed 's|^/nix/store/||' $closureInfo/store-paths > relative-store-paths
-              tar -cf - \
-                --mode='u+w' \
-                -C . nix-path-registration \
-                -C /nix/store \
-                -T relative-store-paths \
-                | mkfs.erofs \
-                    --force-uid=0 \
-                    --force-gid=0 \
-                    -z zstd,19 \
-                    -C 1048576 \
-                    -m 1048576:zstd,19 \
-                    --workers $NIX_BUILD_CORES \
-                    -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
-                    -T 0 \
-                    -x -1 \
-                    --ignore-mtime \
-                    --zD=1 \
-                    --tar=f \
-                    "$out" \
-                    /dev/stdin
+              mkdir erofs_root
+              cp "$closureInfo/registration" erofs_root/nix-path-registration
+
+              while IFS= read -r path; do
+                [ -z "$path" ] && continue
+                cp -al "$path" erofs_root/
+              done < "$closureInfo/store-paths"
+
+              mkfs.erofs \
+                --force-uid=0 \
+                --force-gid=0 \
+                -z zstd,19 \
+                -C 1048576 \
+                -m 1048576:zstd,19 \
+                --workers $NIX_BUILD_CORES \
+                -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
+                -T 0 \
+                -x -1 \
+                --ignore-mtime \
+                --zD=1 \
+                "$out" \
+                erofs_root
             '';
           })
       );

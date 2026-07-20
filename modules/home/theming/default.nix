@@ -34,10 +34,9 @@ let
       theme_file="$out/share/icons/MoreWaita/index.theme"
       if [ -f "$theme_file" ]; then
         substituteInPlace "$theme_file" \
-          --replace "Inherits=Adwaita,hicolor" "Inherits=Papirus-Dark,Adwaita,hicolor"
+          --replace-fail "Inherits=Adwaita,AdwaitaLegacy,hicolor" "Inherits=Adwaita,Papirus-Dark,hicolor"
       fi
 
-      # 3. Create absolute symlinks so the fallback theme resolves correctly in the Nix store.
       ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus $out/share/icons/Papirus
       ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus-Dark $out/share/icons/Papirus-Dark
     '';
