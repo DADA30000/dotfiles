@@ -269,33 +269,46 @@ in
 
             squashfsCommand = ''
               closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
+
+              # Create a shell script to execute inside our private namespace
               cat << 'EOF' > run-unshared.sh
               #!/bin/sh
               set -e
 
+              # We are root inside this private mount namespace.
+              # Create mountpoints and perform bind mounts.
               mkdir -p erofs_root
+
+              # Mount a tiny tmpfs over erofs_root to dynamically host our virtual mountpoints
               mount -t tmpfs -o size=20M tmpfs erofs_root
+
+              # Copy the path registration file
               cp "$1" erofs_root/nix-path-registration
 
-              # Loop through each store path and perform a bind-mount.
-              # Since this is a standard loop, there are no argument limits!
+              # Loop through each store path and perform either a symlink recreation or a bind-mount.
               while IFS= read -r path; do
                 [ -z "$path" ] && continue
                 basename=$(basename "$path")
                 target="erofs_root/$basename"
                 
-                if [ -d "$path" ]; then
-                  mkdir -p "$target"
+                if [ -L "$path" ]; then
+                  # If it's a symbolic link, recreate the link natively.
+                  # This avoids dereferencing non-existent sandboxed targets.
+                  link_target=$(readlink "$path")
+                  ln -s "$link_target" "$target"
                 else
-                  touch "$target"
+                  # It is a physical file/directory. Bind-mount it.
+                  if [ -d "$path" ]; then
+                    mkdir -p "$target"
+                  else
+                    touch "$target"
+                  fi
+                  mount --bind "$path" "$target"
                 fi
-                
-                # Bind-mount the read-only package path to our virtual folder
-                mount --bind "$path" "$target"
               done < "$2"
 
               # Run mkfs.erofs on our virtually populated erofs_root.
-              # This compiles on-the-fly directly to the output.
+              # It compiles directly to the output on-the-fly.
               mkfs.erofs \
                 --force-uid=0 \
                 --force-gid=0 \
@@ -313,8 +326,13 @@ in
               EOF
               chmod +x run-unshared.sh
 
+              # Run the script inside the unshared namespace.
+              # -m unshares the mount namespace.
+              # -U unshares the user namespace.
+              # -r maps our build user to root inside this private namespace.
               unshare -m -U -r ./run-unshared.sh "$closureInfo/registration" "$closureInfo/store-paths" "$out"
 
+              # Clean up temporary helper script
               rm -f run-unshared.sh
             '';
           })
