@@ -265,12 +265,12 @@ in
             nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ pkgs.erofs-utils ];
             squashfsCommand = ''
               closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
-              mkdir erofs_root
-              cp "$closureInfo/registration" erofs_root/nix-path-registration
+              mkdir -p "$out/erofs_root"
+              cp "$closureInfo/registration" "$out/erofs_root/nix-path-registration"
 
               while IFS= read -r path; do
                 [ -z "$path" ] && continue
-                cp -al "$path" erofs_root/
+                cp -al "$path" "$out/erofs_root/"
               done < "$closureInfo/store-paths"
 
               mkfs.erofs \
@@ -285,8 +285,11 @@ in
                 -x -1 \
                 --ignore-mtime \
                 --zD=1 \
-                "$out" \
-                erofs_root
+                temp_img.erofs \
+                "$out/erofs_root"
+
+              rm -rf "$out"
+              mv temp_img.erofs "$out"
             '';
           })
       );

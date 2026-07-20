@@ -949,15 +949,12 @@ in
         tonelib-gfx
         sbctl
         virt-manager
-        gemini-cli
         jq
         wayvr
         bs-manager
         xhost
         dante
         ente-auth
-        mtkclient
-        sidequest
         patchelf
         file
         mpv
@@ -1017,7 +1014,6 @@ in
         gimp3-with-plugins
         gamescope
         android-tools
-        heroic
         compsize
         erofs-utils
         gsettings-desktop-schemas
