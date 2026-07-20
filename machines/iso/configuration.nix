@@ -264,53 +264,71 @@ in
           (oldAttrs: {
             nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
               pkgs.erofs-utils
-              pkgs.bubblewrap
+              pkgs.util-linux
             ];
 
             squashfsCommand = ''
-              closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
+                            closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
+                            
+                            # Create a shell script to execute inside our private namespace
+                            cat << 'EOF' > run-unshared.sh
+                            #!/bin/sh
+                            set -e
 
-              # Create the physical mountpoint directories
-              mkdir -p erofs_root
+                            # We are root inside this private mount namespace.
+                            # Create mountpoints and perform bind mounts.
+                            mkdir -p erofs_root
+                            
+                            # Mount a tiny tmpfs over erofs_root to dynamically host our virtual mountpoints
+                            mount -t tmpfs -o size=20M tmpfs erofs_root
+                            
+                            # Copy the path registration file
+                            cp "$1" erofs_root/nix-path-registration
 
-              # Construct the bubblewrap bind-mount arguments dynamically.
-              # We bind-mount our active working directory as writable,
-              # and bind-mount /nix/store as read-only.
-              bwrap_args=(
-                --bind "$(pwd)" "$(pwd)"
-                --ro-bind /nix/store /nix/store
-                --dev-bind /dev /dev
-                --proc /proc
-                --ro-bind "$closureInfo/registration" "$(pwd)/erofs_root/nix-path-registration"
-              )
+                            # Loop through each store path and perform a bind-mount.
+                            # Since this is a standard loop, there are no argument limits!
+                            while IFS= read -r path; do
+                              [ -z "$path" ] && continue
+                              basename=$(basename "$path")
+                              target="erofs_root/$basename"
+                              
+                              if [ -d "$path" ]; then
+                                mkdir -p "$target"
+                              else
+                                touch "$target"
+                              fi
+                              
+                              # Bind-mount the read-only package path to our virtual folder
+                              mount --bind "$path" "$target"
+                            done < "$2"
 
-              # Map each store path in the closure to a virtual mountpoint inside erofs_root
-              while IFS= read -r path; do
-                [ -z "$path" ] && continue
-                basename=$(basename "$path")
-                bwrap_args+=("--ro-bind" "$path" "$(pwd)/erofs_root/$basename")
-              done < "$closureInfo/store-paths"
+                            # Run mkfs.erofs on our virtually populated erofs_root.
+                            # This compiles on-the-fly directly to the output.
+                            mkfs.erofs \
+                              --force-uid=0 \
+                              --force-gid=0 \
+                              -z zstd,19 \
+                              -C 1048576 \
+                              -m 1048576:zstd,19 \
+                              --workers "$NIX_BUILD_CORES" \
+                              -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
+                              -T 0 \
+                              -x -1 \
+                              --ignore-mtime \
+                              --zD=1 \
+                              "$3" \
+                              erofs_root
+              EOF
+                            chmod +x run-unshared.sh
 
-              # Run mkfs.erofs inside the private bubblewrap mount namespace.
-              # It reads directly from `/nix/store` via native kernel namespace mounts,
-              # completely bypassing uncompressed temporary extractions and disk limits.
-              bwrap "''${bwrap_args[@]}" mkfs.erofs \
-                --force-uid=0 \
-                --force-gid=0 \
-                -z zstd,19 \
-                -C 1048576 \
-                -m 1048576:zstd,19 \
-                --workers $NIX_BUILD_CORES \
-                -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
-                -T 0 \
-                -x -1 \
-                --ignore-mtime \
-                --zD=1 \
-                "$out" \
-                "$(pwd)/erofs_root"
+                            # Run the script inside the unshared namespace.
+                            # -m unshares the mount namespace.
+                            # -U unshares the user namespace.
+                            # -r maps our build user to root inside this private namespace.
+                            unshare -m -U -r ./run-unshared.sh "$closureInfo/registration" "$closureInfo/store-paths" "$out"
 
-              # Clean up our local mountpoint shell structures
-              rm -rf erofs_root relative-store-paths nix-path-registration
+                            # Clean up temporary helper script
+                            rm -f run-unshared.sh
             '';
           })
       );
