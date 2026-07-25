@@ -143,6 +143,44 @@ let
       end,
     })
 
+    -- === TAB ORIGIN TRACKER (RETURN TO ORIGIN TAB ON CLOSE) ===
+    vim.opt.tabclose = "uselast"
+    local tab_origins = {}
+    local last_tabpage = vim.api.nvim_get_current_tabpage()
+
+    vim.api.nvim_create_autocmd("TabLeave", {
+      group = vim.api.nvim_create_augroup("TabOriginLeave", { clear = true }),
+      callback = function()
+        last_tabpage = vim.api.nvim_get_current_tabpage()
+      end,
+    })
+
+    vim.api.nvim_create_autocmd("TabNew", {
+      group = vim.api.nvim_create_augroup("TabOriginNew", { clear = true }),
+      callback = function()
+        local new_tab = vim.api.nvim_get_current_tabpage()
+        if last_tabpage and vim.api.nvim_tabpage_is_valid(last_tabpage) and last_tabpage ~= new_tab then
+          tab_origins[new_tab] = last_tabpage
+        end
+      end,
+    })
+
+    vim.api.nvim_create_autocmd("TabClosedPre", {
+      group = vim.api.nvim_create_augroup("TabOriginClose", { clear = true }),
+      callback = function()
+        local closing_tab = vim.api.nvim_get_current_tabpage()
+        local origin = tab_origins[closing_tab]
+        tab_origins[closing_tab] = nil
+        if origin and vim.api.nvim_tabpage_is_valid(origin) then
+          vim.schedule(function()
+            if vim.api.nvim_tabpage_is_valid(origin) then
+              vim.api.nvim_set_current_tabpage(origin)
+            end
+          end)
+        end
+      end,
+    })
+
     -- === BROWSER / KITTY-STYLE MOUSE DRAG AUTO-SCROLL SELECTION ===
     local drag_timer = nil
 

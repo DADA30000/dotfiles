@@ -13,45 +13,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Purge all runner bloat & mount Btrfs space at /nix (~130GB total)
+      # 1. Purge runner bloat & mount Btrfs space at /nix (~130GB total)
       - name: Nothing but Nix (Rampage Mode)
         uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: "rampage"
           witness-carnage: true
 
-      # 2. Dynamic ZRAM (100% RAM), 8GB Swap, & AppArmor tweaks
-      - name: Configure Memory, Swap, and Sysctls
+      # 2. Remount Btrfs, Install ZRAM Module, Setup 8GB Disk Swap & Sysctls
+      - name: Configure Storage, Swap, and Sysctls
         run: |
-          # Change Btrfs compression to ZSTD Level 3
+          # Remount /nix with Btrfs ZSTD Level 3 compression
+          echo "Remounting /nix with compress=zstd:3..."
           sudo mount -o remount,compress=zstd:3 /nix
 
-          # Detect 100% Total RAM
-          TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-          echo "Detected Total RAM: ${TOTAL_RAM_MB}MB"
+          # Install kernel extra modules to provide zram.ko for Azure runner kernel
+          echo "Installing linux-modules-extra for kernel $(uname -r)..."
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends linux-modules-extra-$(uname -r)
 
-          # Enable ZRAM at 100% RAM capacity
+          # Load ZRAM module and configure at 100% total RAM capacity
           sudo modprobe zram
+          TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+          echo "Configuring ZRAM at ${TOTAL_RAM_MB}MB..."
           echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
           echo "${TOTAL_RAM_MB}M" | sudo tee /sys/block/zram0/disksize
           sudo mkswap /dev/zram0
-          sudo swapon -p 10 /dev/zram0
+          sudo swapon -p 100 /dev/zram0
 
-          # Enable 8GB Disk Swap on /mnt
+          # Enable 8GB NVMe Swapfile on /mnt (priority 10, so ZRAM is used first)
+          echo "Setting up 8GB Swapfile on /mnt..."
           sudo fallocate -l 8G /mnt/swapfile
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
-          sudo swapon -p 0 /mnt/swapfile
+          sudo swapon -p 10 /mnt/swapfile
 
           # Adjust AppArmor for Nix unprivileged sandboxing
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0 || true
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
-          echo "=== System Overview ==="
+          echo "=== Active Memory & Swap Space ==="
+          swapon --show
           free -h
-          df -h
 
-      # 3. Install Nix (must run AFTER nothing-but-nix)
+      # 3. Install Nix
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -62,18 +67,22 @@ jobs:
             auto-optimise-store = true
             build-dir = /nix/build
 
-      # 4. Build ISO
+      # 4. Build ISO & Symlink File Directly
       - name: Build ISO
         run: |
           nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 32 -j 32
           nix-collect-garbage -d
           nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback
 
-      # 5. Upload ISO artifact
+          # Create a direct top-level symlink for clean artifact upload
+          ln -sf result/iso/*.iso nixos.iso
+
+      # 5. Upload Direct Non-Zipped ISO Artifact
       - name: Upload ISO to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NixOS ISO
-          path: result/iso
+          path: nixos.iso
+          archive: false
           if-no-files-found: error
           retention-days: 28
