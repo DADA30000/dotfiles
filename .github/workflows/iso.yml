@@ -27,13 +27,16 @@ jobs:
           echo "Remounting /nix with compress=zstd:3..."
           sudo mount -o remount,compress=zstd:3 /nix
 
-          # Install kernel extra modules to provide zram.ko for Azure runner kernel
+          # Install kernel extra modules quietly (without initramfs/grub triggers)
           echo "Installing linux-modules-extra for kernel $(uname -r)..."
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends linux-modules-extra-$(uname -r)
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold" \
+            linux-modules-extra-$(uname -r)
 
           # Load ZRAM module and configure at 100% total RAM capacity
-          sudo modprobe zram
+          sudo modprobe zram num_devices=1
           TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
           echo "Configuring ZRAM at ${TOTAL_RAM_MB}MB..."
           echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
@@ -41,9 +44,9 @@ jobs:
           sudo mkswap /dev/zram0
           sudo swapon -p 100 /dev/zram0
 
-          # Enable 8GB NVMe Swapfile on /mnt (priority 10, so ZRAM is used first)
+          # Enable 8GB NVMe Swapfile on /mnt using dd (prevents swapon 'Invalid argument' error)
           echo "Setting up 8GB Swapfile on /mnt..."
-          sudo fallocate -l 8G /mnt/swapfile
+          sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192 status=none
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon -p 10 /mnt/swapfile
