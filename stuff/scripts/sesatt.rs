@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 type CInt = i32;
 type CLong = i64;
@@ -502,7 +502,7 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
     let orig_termios = ffi_set_raw_mode()?;
 
     unsafe {
-        signal(SIGWINCH, sigwinch_handler as usize);
+        signal(SIGWINCH, sigwinch_handler as *const () as usize);
     }
 
     thread::spawn(move || {
@@ -549,36 +549,14 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
         }
     });
 
-    let start_time = Instant::now();
     let mut buf = [0u8; 4096];
     loop {
         let n = stream.read(&mut buf)?;
         if n == 0 {
             break;
         }
-        let chunk = &buf[..n];
-
-        if start_time.elapsed() < Duration::from_millis(300) {
-            let mut clean = Vec::with_capacity(n);
-            let mut i = 0;
-            while i < n {
-                if i + 4 <= n && (&chunk[i..i + 4] == b"\x1b[2J" || &chunk[i..i + 4] == b"\x1b[3J")
-                {
-                    i += 4;
-                } else if i + 3 <= n && &chunk[i..i + 3] == b"\x1b[H" {
-                    i += 3;
-                } else {
-                    clean.push(chunk[i]);
-                    i += 1;
-                }
-            }
-            unsafe {
-                write(1, clean.as_ptr() as *const CVoid, clean.len());
-            }
-        } else {
-            unsafe {
-                write(1, chunk.as_ptr() as *const CVoid, chunk.len());
-            }
+        unsafe {
+            write(1, buf.as_ptr() as *const CVoid, n);
         }
     }
 

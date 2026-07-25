@@ -268,7 +268,8 @@ in
               STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/VERSION.txt -O -)"
               STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
               echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt4.json
-              echo "Finished fetching steamrt3"
+              echo "Finished fetching steamrt4"
+              echo "Fetching steamrt3 version and hash"
               STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/VERSION.txt -O -)"
               STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
               echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
@@ -362,6 +363,37 @@ in
         initContent =
           let
             zshConfig = /* zsh */ ''
+              _remote_nvim() {
+                local target_server="$1"
+                shift
+                if (( ''${#} == 0 )); then
+                  command nvim --headless --server "$target_server" --remote-send "<Cmd>tabnew<CR>"
+                  return
+                fi
+
+                local arg
+                for arg in "$@"; do
+                  if [[ "$arg" == -* ]]; then
+                    command nvim "$@"
+                    return
+                  fi
+                done
+
+                local cmd_str="<Cmd>tabnew"
+                local first=1
+                for arg in "$@"; do
+                  local abs_path="''${arg:A}"
+                  if (( first == 1 )); then
+                    cmd_str="''${cmd_str} | edit ''${abs_path}"
+                    first=0
+                  else
+                    cmd_str="''${cmd_str} | tabedit ''${abs_path}"
+                  fi
+                done
+                cmd_str="''${cmd_str}<CR>"
+                command nvim --headless --server "$target_server" --remote-send "$cmd_str"
+              }
+
               if [[ -n "$INSIDE_SESATT" ]]; then
                 # === INSIDE A SESATT SESSION ===
                 get_target_nvim() {
@@ -379,26 +411,7 @@ in
                 nvim() {
                   local target_nvim="$(get_target_nvim)"
                   if [[ -n "$target_nvim" ]]; then
-                    if (( ''${#} == 0 )); then
-                      command nvim --headless --server "$target_nvim" --remote-send "<Cmd>tabnew<CR>"
-                    else
-                      local cmd_str="<Cmd>tabnew"
-                      local first=1
-                      for arg in "$@"; do
-                        if [[ "$arg" == -* ]]; then
-                          continue
-                        fi
-                        local abs_path="''${arg:A}"
-                        if (( first == 1 )); then
-                          cmd_str="''${cmd_str} | edit ''${abs_path}"
-                          first=0
-                        else
-                          cmd_str="''${cmd_str} | tabedit ''${abs_path}"
-                        fi
-                      done
-                      cmd_str="''${cmd_str}<CR>"
-                      command nvim --headless --server "$target_nvim" --remote-send "$cmd_str"
-                    fi
+                    _remote_nvim "$target_nvim" "$@"
                   else
                     command nvim "$@"
                   fi
@@ -412,26 +425,7 @@ in
               elif [[ -n "$NVIM" ]]; then
                 # === STANDARD NEOVIM TERMINAL (OUTSIDE SESATT) ===
                 nvim() {
-                  if (( ''${#} == 0 )); then
-                    command nvim --headless --server "$NVIM" --remote-send "<Cmd>tabnew<CR>"
-                  else
-                    local cmd_str="<Cmd>tabnew"
-                    local first=1
-                    for arg in "$@"; do
-                      if [[ "$arg" == -* ]]; then
-                        continue
-                      fi
-                      local abs_path="''${arg:A}"
-                      if (( first == 1 )); then
-                        cmd_str="''${cmd_str} | edit ''${abs_path}"
-                        first=0
-                      else
-                        cmd_str="''${cmd_str} | tabedit ''${abs_path}"
-                      fi
-                    done
-                    cmd_str="''${cmd_str}<CR>"
-                    command nvim --headless --server "$NVIM" --remote-send "$cmd_str"
-                  fi
+                  _remote_nvim "$NVIM" "$@"
                 }
                 alias v="nvim"
 
@@ -444,7 +438,11 @@ in
               printf '\n%.0s' {1..100}
               setopt correct
 
+              # Optimize path completion (especially for giant dirs like /nix/store)
               zstyle ':completion:*' accept-exact-dirs true
+
+              # Prefer exact matches first before attempting case-insensitive or fuzzy/substring matches.
+              # Prepending "" ensures precise inputs complete instantly without initiating heavy fuzzy directory scans.
               zstyle ':completion:*' matcher-list "" 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
 
               _ns_completer() {
@@ -468,6 +466,7 @@ in
                     local cache_dir="/tmp/nix_completer_cache_dir"
                     local current_flake_source="${config.offline-path}?rev=${config.offline-rev}"
                     
+                    # Cache invalidation if flake source changes
                     if [[ -d "$cache_dir" ]]; then
                       if [[ ! -f "$cache_dir/flake_source" || "$(<"$cache_dir/flake_source")" != "$current_flake_source" ]]; then
                         rm -rf "$cache_dir"
@@ -483,6 +482,7 @@ in
                     local eval_prefix=""
                     local start_attr="pkgs"
                     
+                    # 1-Level On-Demand Path Builder
                     if [[ "$curr_word" == *.* ]]; then
                       cache_key="''${curr_word%.*}"
                       eval_prefix="''${cache_key}."
@@ -494,8 +494,10 @@ in
                     
                     local packages_string=""
                     if [[ -f "$cache_file" ]]; then
+                      # Fast path: Load from localized cache
                       packages_string="$(<"$cache_file")"
                     else
+                      # Safe 1-level deep on-demand evaluation
                       packages_string=$(nix eval --raw --no-use-registries --expr "
                         let
                           pkgs = $NIX_FLAKE_PREAMBLE;
@@ -512,6 +514,7 @@ in
                     local -a packages
                     packages=(''${(f)packages_string})
 
+                    # Match Categorization (using case-insensitive patterns to coordinate with compadd)
                     local -a exact_matches prefix_matches substring_matches
 
                     exact_matches=( ''${(M)packages:#(#i)"$curr_word"} )
@@ -526,15 +529,19 @@ in
                     substring_matches=( ''${substring_matches:|exact_matches} )
                     substring_matches=( ''${substring_matches:|prefix_matches} )
 
+                    # Check how many exact/prefix matches we have in total
                     local total_prefixes=$(( ''${#exact_matches[@]} + ''${#prefix_matches[@]} ))
 
                     if (( total_prefixes == 1 )); then
+                      # EXACTLY 1 match: Give it to Zsh exclusively so it skips the menu and instantly auto-completes.
+                      # m:{[:lower:]}={[:upper:]} preserves your lowercase typed prefixes and avoids case forced capitalization.
                       if (( ''${#exact_matches[@]} == 1 )); then
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a exact_matches
                       else
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a prefix_matches
                       fi
                     else
+                      # 0 or >1 prefix matches: Still show substring matches!
                       if (( ''${#exact_matches[@]} > 0 )); then
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J exact -a exact_matches
                       fi

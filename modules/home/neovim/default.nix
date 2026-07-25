@@ -467,52 +467,72 @@ let
       vim.keymap.set(mode, "<C-S-t>", prefix .. "<Cmd>tabnew +term<CR>", { desc = "New Terminal Tab", silent = true })
     end
 
+    -- Define a hidden cursor style (100% transparent)
     vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
+
+    local function set_hidden_cursor(hide)
+      local current = vim.o.guicursor
+      local cleaned = current:gsub(",?n%-v:HiddenCursor", "")
+      if hide then
+        vim.o.guicursor = cleaned .. ",n-v:HiddenCursor"
+      else
+        vim.o.guicursor = cleaned
+      end
+    end
+
+    -- Hide cursor during Normal (nt) / Visual (v/V) scrolling in terminals, restore in Insert (t)
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      pattern = "*",
+      callback = function()
+        if vim.bo.buftype == "terminal" then
+          local mode = vim.api.nvim_get_mode().mode
+          if mode == "nt" or mode == "v" or mode == "V" then
+            set_hidden_cursor(true)
+          else
+            set_hidden_cursor(false)
+          end
+        end
+      end,
+    })
 
     vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
       pattern = "term://*",
       callback = function()
-        vim.opt.guicursor:remove("n-v:HiddenCursor")
+        set_hidden_cursor(false)
       end
     })
 
     vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
       if vim.bo.buftype == "terminal" then
-        local bufnr = vim.api.nvim_get_current_buf()
-        local last_line = vim.api.nvim_buf_line_count(bufnr)
-        local win_height = vim.fn.winheight(0)
-        
-        local win_info = vim.fn.getwininfo(vim.fn.win_getid())[1]
-        local topline = win_info and win_info.topline
-        
-        if topline and win_height and last_line then
-          local max_topline = last_line - win_height + 1
-          if max_topline < 1 then max_topline = 1 end
-          
-          if topline >= max_topline then
-            return ""
+        if vim.fn.line("w$") >= vim.fn.line("$") then
+          local mode = vim.api.nvim_get_mode().mode
+          if not mode:match("[vVsS\22\19]") and mode ~= "t" then
+            vim.schedule(function()
+              set_hidden_cursor(false)
+              vim.cmd("startinsert")
+            end)
           end
+          return ""
         end
       end
       return "<ScrollWheelDown>"
-    end, { expr = true, silent = true, desc = "Hard stop scroll down" })
+    end, { expr = true, silent = true, desc = "Hard stop scroll down at terminal bottom" })
 
-    vim.api.nvim_create_autocmd({ "WinScrolled", "CursorMoved" }, {
-      pattern = "term://*",
+    vim.api.nvim_create_autocmd({ "WinScrolled" }, {
+      pattern = "*",
       callback = function()
-        local bufnr = vim.api.nvim_get_current_buf()
-        local last_line = vim.api.nvim_buf_line_count(bufnr)
-        local win_height = vim.fn.winheight(0)
-        
-        local win_info = vim.fn.getwininfo(vim.fn.win_getid())[1]
-        local topline = win_info and win_info.topline
-        
-        if topline and win_height and last_line then
-          local max_topline = last_line - win_height + 1
-          if max_topline < 1 then max_topline = 1 end
-          
-          if topline > max_topline then
-            vim.cmd("noautocmd call winrestview({'topline': " .. max_topline .. "})")
+        if vim.bo.buftype == "terminal" then
+          local mode = vim.api.nvim_get_mode().mode
+          if (mode == "nt" or mode == "n") and vim.fn.line("w$") >= vim.fn.line("$") then
+            vim.schedule(function()
+              if vim.bo.buftype == "terminal" then
+                local cur_mode = vim.api.nvim_get_mode().mode
+                if cur_mode == "nt" or cur_mode == "n" then
+                  set_hidden_cursor(false)
+                  vim.cmd("startinsert")
+                end
+              end
+            end)
           end
         end
       end,
@@ -573,6 +593,8 @@ let
           end, { buffer = bufnr, nowait = true, silent = true })
         end
 
+        vim.keymap.set("t", "<ScrollWheelDown>", "<Nop>", { buffer = bufnr, silent = true })
+        vim.keymap.set("t", "<ScrollWheelUp>", "<C-\\><C-n><ScrollWheelUp>", { buffer = bufnr, silent = true })
         vim.keymap.set("t", "<ScrollWheelLeft>", "<Left>", { buffer = bufnr, silent = true })
         vim.keymap.set("t", "<ScrollWheelRight>", "<Right>", { buffer = bufnr, silent = true })
 
