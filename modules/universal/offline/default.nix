@@ -76,6 +76,21 @@ let
       echo finished
     '';
   };
+  offline-python = pkgs.python3.withPackages (
+    ps: with ps; [
+      iniparse
+      markdown-it-py
+      mdit-py-plugins
+      mdurl
+      python-dateutil
+      remarshal
+      rich
+      rich-argparse
+      tomli
+      tomlkit
+      u-msgpack-python
+    ]
+  );
 in
 {
   options = {
@@ -97,9 +112,15 @@ in
     offline-path = nix-path;
   }
   // lib.optionalAttrs (options ? environment.etc) {
-    environment.etc.inputs.source = inputsFarm;
+    environment.etc = {
+      inputs.source = inputsFarm;
+      offline-python.source = offline-python;
+    };
   }
   // lib.optionalAttrs (options ? xdg.dataFile) {
-    xdg.dataFile.inputs.source = inputsFarm;
+    xdg.dataFile = {
+      inputs.source = inputsFarm;
+      offline-python.source = offline-python;
+    };
   };
 }

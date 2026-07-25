@@ -1,6 +1,5 @@
 {
   pkgs,
-  inputs,
   user-hash,
   user,
   lib,
@@ -343,25 +342,6 @@
 
     compression = true;
 
-    second-disk = {
-      enable = true;
-      compression = true;
-      subvol = "games";
-      path = "/home/${user}/Games";
-    };
-
-    swap = {
-
-      file = {
-        enable = false;
-        path = "/var/lib/swapfile";
-        size = 4 * 1024;
-      };
-
-      partition.enable = false;
-
-    };
-
   };
 
   home-manager.extraSpecialArgs.kekma = {
@@ -494,42 +474,38 @@
     };
 
     user = {
-      targets."xdg-desktop-autostart".enable = false;
+      targets.xdg-desktop-autostart.enable = false;
       settings.Manager = {
         DefaultTimeoutStopSec = "1s";
         DefaultTasksMax = 4096;
+        DefaultCPUAccounting = true;
+        DefaultIOAccounting = true;
       };
       # targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
       services = {
+        dbus-broker.serviceConfig = {
+          Type = "notify";
+          ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
+        };
         cgroup-executioner = {
           description = "Automatically terminate any application scope that hits TasksMax";
           wantedBy = [ "graphical-session.target" ];
           after = [ "graphical-session.target" ];
-
           serviceConfig = {
+            Restart = "always";
+            RestartSec = "2s";
             ExecStart = "${pkgs.writeShellScript "cgroup-executioner" ''
               CGROUP_ROOT="/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service"
-
               echo "Cgroup Executioner active (Pure Builtins). Polling root: $CGROUP_ROOT"
-
               while true; do
-                  # Use Bash globbing instead of the 'find' binary
                   for event_file in "$CGROUP_ROOT"/*/*.scope/pids.events "$CGROUP_ROOT"/*/*/*.scope/pids.events; do
-                      # Ensure the file actually exists (prevents raw glob string literal issues)
                       [[ -f "$event_file" ]] || continue
-                      
-                      # Read pids.events purely in Bash without 'grep'
                       while IFS= read -r line; do
                           if [[ "$line" == max\ [1-9]* ]]; then
-                              
-                              # Extract path structures natively without 'dirname' or 'basename'
                               scope_dir="''${event_file%/pids.events}"
                               scope_name="''${scope_dir##*/}"
-                              
-                              # Read current tasks purely in Bash without 'cat'
                               if [[ -f "$scope_dir/pids.current" ]]; then
                                   IFS= read -r current_tasks < "$scope_dir/pids.current"
-                                  
                                   if [[ "$current_tasks" -gt 0 && "$scope_name" == *.scope ]]; then
                                       echo "CRITICAL: $scope_name breached TasksMax! Enforcing full teardown."
                                       ${pkgs.systemd}/bin/systemctl --user stop "$scope_name"
@@ -539,17 +515,10 @@
                           fi
                       done < "$event_file"
                   done
-                  
                   sleep 0.5
               done
             ''}";
-            Restart = "always";
-            RestartSec = "2s";
           };
-        };
-        dbus-broker.serviceConfig = {
-          Type = "notify";
-          ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
         };
       };
     };

@@ -8,7 +8,6 @@ let
   root_label = null;
   boot_label = null;
   swap_label = null;
-  second_label = null;
   cfg = config.disks;
   impermanence_subvolume_script = ''
     mkdir /btrfs_tmp
@@ -39,22 +38,6 @@ in
   options.disks = {
     compression = mkEnableOption "system compression";
     impermanence = mkEnableOption "impermanence (remove all files except those that are needed)";
-    second-disk = {
-      enable = mkEnableOption "additional disk (must be btrfs)";
-      compression = mkEnableOption "compression on additional disk";
-      path = mkOption {
-        type = types.str;
-        default = "/mnt/Games";
-        example = "/home/joe/Stuff";
-        description = "Path to a place where additional disk will be mounted";
-      };
-      subvol = mkOption {
-        type = types.str;
-        default = null;
-        example = "games";
-        description = "Which subvolume to mount";
-      };
-    };
     swap = {
       partition.enable = mkEnableOption "swap partition";
       file = {
@@ -225,18 +208,6 @@ in
         ];
       };
 
-      ${cfg.second-disk.path} = mkIf cfg.second-disk.enable {
-        device = "/dev/disk/by-label/${if second_label == null then "Games" else second_label}";
-        fsType = "btrfs";
-        options =
-          optionals cfg.second-disk.compression [ "compress-force=zstd" ]
-          ++ optionals (cfg.second-disk.subvol != null) [ "subvol=${cfg.second-disk.subvol}" ]
-          ++ [
-            "nofail"
-            "noauto"
-            "x-systemd.automount"
-          ];
-      };
     };
 
     swapDevices =

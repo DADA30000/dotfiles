@@ -1,8 +1,8 @@
-#include <dirent.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <dirent.h>   // for dirent, DIR, closedir, opendir, readdir
+#include <stdio.h>    // for perror, NULL, fprintf, snprintf, stderr
+#include <string.h>   // for strcmp, strncmp
+#include <sys/stat.h> // for stat, S_ISDIR, chmod
+#include <unistd.h>   // for setuid
 
 void isolate_nodes() {
   DIR *dir = opendir("/dev");
@@ -14,20 +14,18 @@ void isolate_nodes() {
   struct dirent *entry;
   while ((entry = readdir(dir)) != NULL) {
     if (strncmp(entry->d_name, "nvidia", 6) == 0) {
-      size_t len = strlen(entry->d_name);
+      char path[512];
+      snprintf(path, sizeof(path), "/dev/%s", entry->d_name);
 
-      // Skip if it already ends in .bak
-      if (len > 4 && strcmp(entry->d_name + len - 4, ".bak") == 0) {
-        continue;
-      }
+      struct stat st;
+      if (stat(path, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+          continue;
+        }
 
-      char oldpath[512];
-      char newpath[512];
-      snprintf(oldpath, sizeof(oldpath), "/dev/%s", entry->d_name);
-      snprintf(newpath, sizeof(newpath), "/dev/%s.bak", entry->d_name);
-
-      if (rename(oldpath, newpath) != 0) {
-        perror("Failed to rename device node");
+        if (chmod(path, 0000) != 0) {
+          perror("Failed to set device permissions to 000");
+        }
       }
     }
   }
@@ -44,21 +42,17 @@ void restore_nodes() {
   struct dirent *entry;
   while ((entry = readdir(dir)) != NULL) {
     if (strncmp(entry->d_name, "nvidia", 6) == 0) {
-      size_t len = strlen(entry->d_name);
+      char path[512];
+      snprintf(path, sizeof(path), "/dev/%s", entry->d_name);
 
-      // Only process if it ends in .bak
-      if (len > 4 && strcmp(entry->d_name + len - 4, ".bak") == 0) {
-        char oldpath[512];
-        char newpath[512];
-        char base_name[256];
+      struct stat st;
+      if (stat(path, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+          continue;
+        }
 
-        snprintf(oldpath, sizeof(oldpath), "/dev/%s", entry->d_name);
-        // Strip the ".bak" extension (len - 4 characters)
-        snprintf(base_name, len - 3, "%s", entry->d_name);
-        snprintf(newpath, sizeof(newpath), "/dev/%s", base_name);
-
-        if (rename(oldpath, newpath) != 0) {
-          perror("Failed to restore device node");
+        if (chmod(path, 0666) != 0) {
+          perror("Failed to set device permissions to 666");
         }
       }
     }
@@ -67,13 +61,11 @@ void restore_nodes() {
 }
 
 int main(int argc, char *argv[]) {
-  // Prevent Null Pointer Dereference if an attacker passes an empty argv array
   if (argc != 2 || argv[0] == NULL || argv[1] == NULL) {
     fprintf(stderr, "Usage: nv-blindfold [block|unblock]\n");
     return 1;
   }
 
-  // Elevate privileges to root explicitly for the execution thread
   if (setuid(0) != 0) {
     perror("Failed to acquire root privileges");
     return 1;

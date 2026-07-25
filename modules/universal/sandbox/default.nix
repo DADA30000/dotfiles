@@ -62,15 +62,22 @@ let
     pname = "rust-bridge";
     version = "1.0";
     dontUnpack = true;
+
     nativeBuildInputs = with pkgs.pkgsStatic; [
       rustc
       stdenv.cc
     ];
 
-    src = ../../../stuff/bridge.rs;
-
     buildPhase = ''
-      rustc --target x86_64-unknown-linux-musl -C target-feature=+crt-static -C linker=$CC -C opt-level=z -C lto -C codegen-units=1 -C panic=abort -C strip=symbols -O $src -o rust-bridge
+      rustc --target x86_64-unknown-linux-musl \
+        -C target-feature=+crt-static \
+        -C linker=$CC \
+        -C opt-level=s \
+        -C lto=fat \
+        -C codegen-units=1 \
+        -C panic=abort \
+        -C strip=symbols \
+        -O ${../../../stuff/bridge.rs} -o rust-bridge
     '';
 
     installPhase = ''
@@ -78,6 +85,35 @@ let
       install -m 0755 rust-bridge $out/bin/rust-bridge
     '';
   };
+
+  sandbox-migrator = pkgs.pkgsStatic.stdenv.mkDerivation {
+    pname = "sandbox-migrator";
+    version = "1.0";
+    dontUnpack = true;
+
+    nativeBuildInputs = with pkgs.pkgsStatic; [
+      rustc
+      stdenv.cc
+    ];
+
+    buildPhase = ''
+      rustc --target x86_64-unknown-linux-musl \
+        -C target-feature=+crt-static \
+        -C linker=$CC \
+        -C opt-level=s \
+        -C lto=fat \
+        -C codegen-units=1 \
+        -C panic=abort \
+        -C strip=symbols \
+        -O ${../../../stuff/sandbox-migrator.rs} -o sandbox-migrator
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin
+      install -m 0755 sandbox-migrator $out/bin/sandbox-migrator
+    '';
+  };
+
   way-secure = pkgs.rustPlatform.buildRustPackage {
     pname = "way-secure";
     version = "unstable";
@@ -215,7 +251,7 @@ let
               printf "%s\n" "$PAYLOAD" >> "$COMMAND_PIPE"
             else
               if [ -f "$SANDBOX_DIR/scope" ]; then
-                systemctl --user stop "$(< $SANDBOX_DIR/scope)"
+                systemctl --user stop "$(cat "$SANDBOX_DIR/scope")"
                 rm "$SANDBOX_DIR/cgroup_path"
                 rm "$SANDBOX_DIR/scope"
               fi
@@ -230,6 +266,10 @@ let
                   exec app2unit -a "${appId}" -- "$0" "$@"
                   ;;
               esac
+              mkdir "$MY_CGROUP/helpers"
+              echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
+              echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
+              echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control"
               export MY_CGROUP MY_SCOPE
               rm -f "$COMMAND_PIPE"
               mkdir -p "$SANDBOXED_RUNTIME_DIR"
@@ -238,6 +278,14 @@ let
               rm -f "$READY_PIPE"
               mkfifo "$READY_PIPE"
               exec 5<> "$READY_PIPE"
+              CGROUP_PIPE="$SANDBOXED_RUNTIME_DIR/cgroup_pipe"
+              rm -f "$CGROUP_PIPE"
+              mkfifo "$CGROUP_PIPE"
+              exec 6<> "$CGROUP_PIPE"
+              GO_PIPE="$SANDBOXED_RUNTIME_DIR/go_pipe"
+              rm -f "$GO_PIPE"
+              mkfifo "$GO_PIPE"
+              exec 8<> "$GO_PIPE"
               mkdir "$MY_CGROUP/inside"
               ${additional_outside_commands}
               ${lib.optionalString network_singbox ''
@@ -256,7 +304,7 @@ let
                 exec 3<> "$NOTIFY_PIPE"
 
                 ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "${appId}" -e flatpak -r 4 4> "$NOTIFY_PIPE" &
-                if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3 >/dev/null 2>&1; then
+                if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3; then
                     echo "way-secure started"
                 else
                     echo "Error: way-secure failed to start within 5 seconds" >&2
@@ -286,24 +334,46 @@ let
                 ${lib.optionalString (!network_singbox) ''
                   exec ${pkgs.dash}/bin/dash -c "
                 ''}
-                  echo \"\$$\" > "/sys/fs/cgroup/cgroup.procs"
-                  echo ready > \"\$XDG_RUNTIME_DIR/ready_pipe\"
+                  # nixpak-sandbox-bootstrap-marker:${appId}
+                  exec 7<> \"\$XDG_RUNTIME_DIR/cgroup_pipe\"
+                  exec 8<> \"\$XDG_RUNTIME_DIR/go_pipe\"
+                  echo \"ready\" >&7
+                  read -r _ <&8
+                  exec 7<&-
+                  exec 8<&-
                   (\"\$@\" &)
+                  echo \"ready\" > \"\$XDG_RUNTIME_DIR/ready_pipe\"
                   exec 3<> \"\$XDG_RUNTIME_DIR/command_pipe\"
                   while read -r cmd <&3; do 
                     (eval \"\$cmd\" &)
                   done
                 " -- "$@"
               ' -- "$TARGET" "$@" &
-              echo $! > "$SANDBOX_DIR/parent_pid"
-              if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5 >/dev/null 2>&1; then
-                  echo "timeout"
+              PARENT_PID=$!
+              echo "$PARENT_PID" > "$SANDBOX_DIR/parent_pid"
+              if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
+                  echo "Error: Timeout waiting for sandbox ready signal" >&2
+                  systemctl --user stop "$MY_SCOPE"
+                  exit 1
+              fi
+              if ! GUEST_HOST_PID=$(${sandbox-migrator}/bin/sandbox-migrator \
+                --app-id "${appId}" \
+                --scope "$MY_SCOPE" \
+                --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
+                --go-pipe "$SANDBOXED_RUNTIME_DIR/go_pipe"); then
+                  systemctl --user stop "$MY_SCOPE"
+                  exit 1
+              fi
+              exec 6<&-
+              exec 8<&-
+              if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5; then
+                  echo "Error: Timeout waiting for sandbox ready signal"
                   systemctl --user stop "$MY_SCOPE"
                   exit 1
               fi
               exec 5<&-
-              rm -f "$READY_PIPE"
-              while [ $(wc -l < "$MY_CGROUP/inside/cgroup.procs" 2>/dev/null || echo 0) -gt 1 ]; do
+              rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
+              while [ $(wc -l < "$MY_CGROUP/inside/cgroup.procs" || echo 0) -gt 1 ]; do
                 sleep 1
               done
               systemctl --user stop "$MY_SCOPE"
@@ -329,6 +399,14 @@ let
                   app.binPath = "bin/dash";
 
                   dbus.policies = {
+                    # Alternative tray
+                    "org.ayatana.indicator.application" = "talk";
+                    # Prevents system from sleeping or locking automatically
+                    "org.freedesktop.ScreenSaver" = "talk";
+                    # Window Manager Idle Monitor (Used to update your 'Online' status)
+                    "org.gnome.Mutter.IdleMonitor" = "talk";
+                    # Music control
+                    "org.mpris.MediaPlayer2.Player" = "talk";
                     # Notifications
                     "org.freedesktop.Notifications" = "talk";
                     # xdg-desktop-portal
@@ -339,8 +417,9 @@ let
                     "com.canonical.AppMenu.Registrar" = "talk";
                     # Get and store individual secrets
                     "org.freedesktop.portal.Secret" = "talk";
-
+                    # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
                     "org.freedesktop.portal.Documents" = "talk";
+                    # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
                     "org.freedesktop.FileManager1" = "talk";
                   };
 
@@ -397,10 +476,6 @@ let
 
                       rw = [
                         [
-                          (sloth.concat' (sloth.env "MY_CGROUP") "/inside")
-                          (sloth.mkdir "/sys/fs/cgroup")
-                        ]
-                        [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/runtime")
                           sloth.runtimeDir
                         ]
@@ -409,13 +484,13 @@ let
                           sloth.homeDir
                         ]
                       ]
-                      ++ (lib.optionals (sandbox_shm) [
+                      ++ (lib.optionals sandbox_shm [
                         [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
                           "/dev/shm"
                         ]
                       ])
-                      ++ (lib.optionals (sandbox_tmp) [
+                      ++ (lib.optionals sandbox_tmp [
                         [
                           (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
                           "/tmp"
@@ -455,7 +530,6 @@ let
                         (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
-                        (concat (sloth.env "XDG_CACHE_HOME") "/fontconfig")
                       ]
                       ++ (lib.optionals gpu [
                         "/run/opengl-driver-32"

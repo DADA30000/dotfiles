@@ -318,6 +318,7 @@
           ./modules/universal
         ]
         ++ [
+          inputs.nix-flatpak.homeManagerModules.nix-flatpak
           inputs.nix-index-database.homeModules.nix-index
           inputs.zen-browser.homeModules.twilight
         ];

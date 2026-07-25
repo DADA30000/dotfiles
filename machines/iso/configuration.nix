@@ -7,47 +7,10 @@
   config,
   inputs,
   evalAndSubstitute,
+  mkPyApp,
   ...
 }:
 let
-  mkPyApp =
-    {
-      name,
-      src,
-      pathDeps ? [ ],
-    }:
-    pkgs.stdenv.mkDerivation {
-      pname = name;
-      version = "1.0";
-      src = pkgs.writeText "${name}-src" src;
-      dontUnpack = true;
-
-      nativeBuildInputs = [
-        pkgs.wrapGAppsHook3
-        pkgs.gobject-introspection
-      ];
-      buildInputs = [
-        pkgs.gtk3
-        pkgs.gsettings-desktop-schemas
-        pkgs.adwaita-icon-theme
-      ];
-
-      pythonEnv = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
-
-      installPhase = ''
-        mkdir -p $out/bin
-        echo "#!$pythonEnv/bin/python" > $out/bin/${name}
-        cat $src >> $out/bin/${name}
-        chmod +x $out/bin/${name}
-      '';
-
-      preFixup = ''
-        gappsWrapperArgs+=(
-          --prefix PATH : "${lib.makeBinPath pathDeps}"
-        )
-      '';
-    };
-
   disableServices =
     list:
     let
@@ -170,7 +133,87 @@ let
       item
   ) config.isoImage.contents;
 
-  nix-install = ''
+  mkIsoImage =
+    workers:
+    (pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
+      {
+        inherit (config.isoImage) compressImage volumeID;
+        contents = patchedContents;
+        isoName = "${config.image.baseName}.iso";
+        bootable = config.isoImage.makeBiosBootable;
+        bootImage = "/isolinux/isolinux.bin";
+        syslinux = if config.isoImage.makeBiosBootable then pkgs.syslinux else null;
+        squashfsContents = config.isoImage.storeContents;
+        squashfsCompression = config.isoImage.squashfsCompression;
+      }
+      // lib.optionalAttrs (config.isoImage.makeUsbBootable && config.isoImage.makeBiosBootable) {
+        usbBootable = true;
+        isohybridMbrImage = "${pkgs.syslinux}/share/syslinux/isohdpfx.bin";
+      }
+      // lib.optionalAttrs config.isoImage.makeEfiBootable {
+        efiBootable = true;
+        efiBootImage = "boot/efi.img";
+      }
+    )).overrideAttrs
+      (oldAttrs: {
+        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
+          pkgs.erofs-utils
+          pkgs.util-linux
+        ];
+
+        squashfsCommand = ''
+          closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
+
+          cat << 'EOF' > run-unshared.sh
+          #!/bin/sh
+          set -e
+
+          mkdir -p erofs_root
+          mount -t tmpfs -o size=20M tmpfs erofs_root
+          cp "$1" erofs_root/nix-path-registration
+
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            basename=$(basename "$path")
+            target="erofs_root/$basename"
+            
+            if [ -L "$path" ]; then
+              link_target=$(readlink "$path")
+              ln -s "$link_target" "$target"
+            else
+              if [ -d "$path" ]; then
+                mkdir -p "$target"
+              else
+                touch "$target"
+              fi
+              mount --bind "$path" "$target"
+            fi
+          done < "$2"
+
+          mkfs.erofs \
+            --force-uid=0 \
+            --force-gid=0 \
+            --workers ${workers} \
+            --ignore-mtime \
+            --zD=1 \
+            -z zstd,19 \
+            -C 1048576 \
+            -m 1048576:zstd,19 \
+            -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
+            -T 0 \
+            -x -1 \
+            "$3" \
+            erofs_root
+          EOF
+          chmod +x run-unshared.sh
+
+          unshare -m -U -r ./run-unshared.sh "$closureInfo/registration" "$closureInfo/store-paths" "$out"
+
+          rm -f run-unshared.sh
+        '';
+      });
+
+  nix-install = /* bash */ ''
     if [[ $EUID -ne 0 ]]; then
       exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
     fi
@@ -240,85 +283,10 @@ in
 {
   config = lib.mkMerge [
     (lib.mkIf wrapped {
-      system.build.isoImage = lib.mkForce (
-        (pkgs.callPackage "${pkgs.path}/nixos/lib/make-iso9660-image.nix" (
-          {
-            inherit (config.isoImage) compressImage volumeID;
-            contents = patchedContents;
-            isoName = "${config.image.baseName}.iso";
-            bootable = config.isoImage.makeBiosBootable;
-            bootImage = "/isolinux/isolinux.bin";
-            syslinux = if config.isoImage.makeBiosBootable then pkgs.syslinux else null;
-            squashfsContents = config.isoImage.storeContents;
-            squashfsCompression = config.isoImage.squashfsCompression;
-          }
-          // lib.optionalAttrs (config.isoImage.makeUsbBootable && config.isoImage.makeBiosBootable) {
-            usbBootable = true;
-            isohybridMbrImage = "${pkgs.syslinux}/share/syslinux/isohdpfx.bin";
-          }
-          // lib.optionalAttrs config.isoImage.makeEfiBootable {
-            efiBootable = true;
-            efiBootImage = "boot/efi.img";
-          }
-        )).overrideAttrs
-          (oldAttrs: {
-            nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
-              pkgs.erofs-utils
-              pkgs.util-linux
-            ];
-
-            squashfsCommand = ''
-              closureInfo=${pkgs.closureInfo { rootPaths = config.isoImage.storeContents; }}
-
-              cat << 'EOF' > run-unshared.sh
-              #!/bin/sh
-              set -e
-
-              mkdir -p erofs_root
-              mount -t tmpfs -o size=20M tmpfs erofs_root
-              cp "$1" erofs_root/nix-path-registration
-
-              while IFS= read -r path; do
-                [ -z "$path" ] && continue
-                basename=$(basename "$path")
-                target="erofs_root/$basename"
-                
-                if [ -L "$path" ]; then
-                  link_target=$(readlink "$path")
-                  ln -s "$link_target" "$target"
-                else
-                  if [ -d "$path" ]; then
-                    mkdir -p "$target"
-                  else
-                    touch "$target"
-                  fi
-                  mount --bind "$path" "$target"
-                fi
-              done < "$2"
-
-              mkfs.erofs \
-                --force-uid=0 \
-                --force-gid=0 \
-                -z zstd,19 \
-                -C 1048576 \
-                -m 1048576:zstd,19 \
-                --workers "$NIX_BUILD_CORES" \
-                -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
-                -T 0 \
-                -x -1 \
-                --ignore-mtime \
-                --zD=1 \
-                "$3" \
-                erofs_root
-              EOF
-              chmod +x run-unshared.sh
-
-              unshare -m -U -r ./run-unshared.sh "$closureInfo/registration" "$closureInfo/store-paths" "$out"
-
-              rm -f run-unshared.sh
-            '';
-          })
-      );
+      system.build = {
+        isoImageCI = lib.mkForce (mkIsoImage "1");
+        isoImage = lib.mkForce (mkIsoImage "$NIX_BUILD_CORES");
+      };
       boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
         pkgs.writeScript "find-nixos-closure" ''
           #!/bin/sh
@@ -382,11 +350,6 @@ in
       networking.wireless.enable = false;
 
       environment.systemPackages = with pkgs; [
-        gum
-        lolcat
-        openssl
-        gparted
-        (python3.withPackages (ps: with ps; [ tkinter ]))
         (writeShellScriptBin "nix-install" nix-install)
         (writeShellScriptBin "install-offline" install-offline)
       ];

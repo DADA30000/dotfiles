@@ -24,11 +24,15 @@ let
       '+set cmdheight=0' \
       '+nnoremap <C-S-t> :tabnew +term<CR>' \
       '+inoremap <C-S-t> <C-o>:tabnew +term<CR>' \
-      '+tnoremap <C-S-t> <C-\><C-n>:tabnew +term<CR>'
+      '+tnoremap <C-S-t> <C-\><C-n>:tabnew +term<CR>' \
+      '+xnoremap <C-S-t> <Esc>:tabnew +term<CR>' \
+      '+snoremap <C-S-t> <Esc>:tabnew +term<CR>'
+  '';
+  nvr-remote-editor = pkgs.writeShellScriptBin "nvr-remote-editor" ''
+    exec ${pkgs.neovim-remote}/bin/nvr --servername "$NVIM" --remote-tab-wait +"setlocal bufhidden=wipe" "$@"
   '';
   python = pkgs.python3.withPackages (
     ps: with ps; [
-      tkinter
       debugpy
       pynvim
     ]
@@ -70,6 +74,130 @@ let
     fi
   '';
   config_lua = /* lua */ ''
+    -- Auto bufhidden=wipe for git and temp edit files so nvr unblocks git/sudoedit immediately on close
+    vim.api.nvim_create_autocmd({"BufReadPost", "BufNewFile"}, {
+      group = vim.api.nvim_create_augroup("AutoWipeGitAndTemp", { clear = true }),
+      pattern = {
+        "/tmp/*",
+        "/var/tmp/*",
+        "*/.git/COMMIT_EDITMSG",
+        "*/.git/git-rebase-todo",
+        "*/.git/MERGE_MSG",
+        "*/.git/SQUASH_MSG",
+      },
+      callback = function()
+        vim.bo.bufhidden = "wipe"
+      end,
+    })
+
+    -- === AUTO-STOP LSP WHEN ITS LAST BUFFER IS CLOSED ===
+    local stopping_clients = {}
+    vim.api.nvim_create_autocmd("LspDetach", {
+      group = vim.api.nvim_create_augroup("LspAutoStopOnClose", { clear = true }),
+      callback = function(ev)
+        local client_id = ev.data.client_id
+        if not client_id or stopping_clients[client_id] then return end
+
+        vim.schedule(function()
+          if stopping_clients[client_id] then return end
+          local client = vim.lsp.get_client_by_id(client_id)
+          if not client or (client.is_stopped and client.is_stopped()) then return end
+
+          local has_attached = false
+          for bufnr, is_attached in pairs(client.attached_buffers or {}) do
+            if is_attached and bufnr ~= ev.buf and vim.api.nvim_buf_is_valid(bufnr) then
+              has_attached = true
+              break
+            end
+          end
+
+          if not has_attached then
+            stopping_clients[client_id] = true
+            pcall(vim.lsp.stop_client, client_id, true)
+          end
+        end)
+      end,
+    })
+
+    -- === AUTO-WIPE UNUSED FILE BUFFERS WHEN TAB/WINDOW IS CLOSED ===
+    vim.api.nvim_create_autocmd({ "BufHidden", "TabClosed" }, {
+      group = vim.api.nvim_create_augroup("AutoWipeHiddenBuffers", { clear = true }),
+      callback = function(ev)
+        vim.schedule(function()
+          local buf = ev.buf
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          if vim.bo[buf].modified or vim.bo[buf].buftype ~= "" then return end
+
+          local is_visible = false
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
+              is_visible = true
+              break
+            end
+          end
+
+          if not is_visible then
+            pcall(vim.api.nvim_buf_delete, buf, { force = false })
+          end
+        end)
+      end,
+    })
+
+    -- === BROWSER / KITTY-STYLE MOUSE DRAG AUTO-SCROLL SELECTION ===
+    local drag_timer = nil
+
+    local function stop_drag_scroll()
+      if drag_timer then
+        pcall(function()
+          drag_timer:stop()
+          if not drag_timer:is_closing() then
+            drag_timer:close()
+          end
+        end)
+        drag_timer = nil
+      end
+    end
+
+    local function start_drag_scroll()
+      if drag_timer then return end
+
+      drag_timer = vim.uv.new_timer()
+      drag_timer:start(0, 12, vim.schedule_wrap(function()
+        local mode = vim.api.nvim_get_mode().mode
+        if not (mode:match("[vV\22sS\19]") or mode == "n") then
+          stop_drag_scroll()
+          return
+        end
+
+        local mouse = vim.fn.getmousepos()
+        local winid = vim.api.nvim_get_current_win()
+        local win_height = vim.api.nvim_win_get_height(winid)
+        local winrow = mouse.winrow
+
+        if winrow <= 1 or (mouse.winid ~= winid and mouse.winid ~= 0) then
+          if winrow <= 1 then
+            vim.cmd("normal! gk")
+          else
+            vim.cmd("normal! gj")
+          end
+        elseif winrow >= win_height then
+          vim.cmd("normal! gj")
+        else
+          stop_drag_scroll()
+        end
+      end))
+    end
+
+    vim.keymap.set({ "n", "v", "x", "s" }, "<LeftDrag>", function()
+      start_drag_scroll()
+      return "<LeftDrag>"
+    end, { expr = true, silent = true, desc = "Auto-scroll on mouse drag" })
+
+    vim.keymap.set({ "n", "v", "x", "s" }, "<LeftRelease>", function()
+      stop_drag_scroll()
+      return "<LeftRelease>"
+    end, { expr = true, silent = true, desc = "Stop auto-scroll on release" })
+
     vim.api.nvim_create_autocmd('FileType', {
       pattern = '*',
       callback = function()
@@ -218,17 +346,14 @@ let
     _G.MyTabLine = function()
       local s = ""
       for i = 1, vim.fn.tabpagenr("$") do
-        -- Highlight the active tab differently from inactive tabs
         if i == vim.fn.tabpagenr() then
           s = s .. "%#TabLineSel#"
         else
           s = s .. "%#TabLine#"
         end
 
-        -- Map the click target to this tab number (for mouse support)
         s = s .. "%" .. i .. "T"
 
-        -- Find the active buffer in this tab
         local buflist = vim.fn.tabpagebuflist(i)
         local winnr = vim.fn.tabpagewinnr(i)
         local bufnr = buflist and buflist[winnr]
@@ -236,12 +361,9 @@ let
 
         local tabname = ""
         if bufnr and vim.bo[bufnr].buftype == "terminal" then
-          -- Fetch the dynamic process title set by your shell/program
           local term_title = vim.b[bufnr].term_title
           if term_title and term_title ~= "" then
-            -- Clean up any paths (e.g., "/bin/zsh" -> "zsh")
             local cmd = term_title:match("([^/]+)$") or term_title
-            -- Strip trailing flags or arguments (e.g., "htop -d 10" -> "htop")
             cmd = cmd:match("^([^%s]+)") or cmd
             tabname = " " .. cmd
           else
@@ -252,30 +374,23 @@ let
         else
           local filename = vim.fn.fnamemodify(bufname, ":t")
           if filename == "default.nix" then
-            -- "my-module"
             tabname = vim.fn.fnamemodify(bufname, ":h:t")
-            -- "my-module/default.nix"
-            -- tabname = vim.fn.fnamemodify(bufname, ":h:t") .. "/" .. filename
           else
             tabname = filename
           end
         end
 
-        -- Add clean padding and the tab index
         s = s .. " " .. i .. ": " .. tabname .. " "
       end
 
-      -- Fill the rest of the bar and reset highlight
       s = s .. "%#TabLineFill#%T"
       return s
     end
 
     -- === HORIZONTAL TRACKPAD SCROLLING IN TERMINALS ===
-    -- Translates horizontal trackpad swipes to Left/Right arrow keys in terminal mode
     vim.keymap.set('t', '<ScrollWheelLeft>', '<Left>', { silent = true, desc = "Scroll left in terminal" })
     vim.keymap.set('t', '<ScrollWheelRight>', '<Right>', { silent = true, desc = "Scroll right in terminal" })
 
-    -- Set the tabline to use our Lua function
     vim.o.tabline = "%!v:lua.MyTabLine()"
 
     vim.api.nvim_create_user_command('Hh', open_nos_terminal, {
@@ -284,7 +399,6 @@ let
 
     vim.keymap.set('n', '!nos', ':Hh<CR>', { desc = 'Open nos terminal', noremap = true, silent = true })
 
-    -- Remember the last active mode of each terminal buffer and restore it when entering
     vim.api.nvim_create_autocmd("BufLeave", {
       pattern = "term://*",
       callback = function()
@@ -293,13 +407,9 @@ let
     })
 
     -- === SILENT MANUAL SAVING ===
-    -- Prevents the file status, line count, and byte count from printing on save.
-    -- Using 'silent' suppresses standard output while still displaying write errors if they occur.
     local silent_commands = {
-      -- w = "silent w",
       wq = "silent wq",
       x = "silent x",
-      -- wa = "silent wa",
       wqa = "silent wqa",
       xa = "silent xa",
     }
@@ -315,43 +425,33 @@ let
       pattern = "*",
       callback = function()
         if vim.bo.buftype == "terminal" then
-          -- Hide UI elements for terminal buffers
           vim.o.laststatus = 0
           vim.o.cmdheight = 0
 
-          -- If new tab (nil) or left in Insert mode (t), restore Insert mode automatically!
           if vim.b.last_mode == nil or vim.b.last_mode == "t" then
             vim.cmd("startinsert")
           end
         else
-          -- Restore UI elements for standard files
-          vim.o.laststatus = 2 -- Use 3 if you prefer Neovim's global statusline
+          vim.o.laststatus = 2
           vim.o.cmdheight = 1
         end
       end,
     })
 
-    -- Make the cursor a vertical line in Terminal-Insert mode
     vim.opt.guicursor:append("t:ver25")
 
     -- Global Tab-Switching Wrapper
-    -- Temporarily mutes ALL animations (scroll, cursor, and position) only during the tab switch,
-    -- preventing any visual delay or sluggish "catching up" when switching buffers.
     _G.InstantTabSwitch = function(cmd)
-      -- Save all active animation lengths
       local old_scroll = vim.g.neovide_scroll_animation_length or 0.3
       local old_cursor = vim.g.neovide_cursor_animation_length or 0.13
       local old_pos = vim.g.neovide_position_animation_length or 0.15
       
-      -- 1. Mute all animations *before* Neovim switches states
       vim.g.neovide_scroll_animation_length = 0
       vim.g.neovide_cursor_animation_length = 0
       vim.g.neovide_position_animation_length = 0
       
-      -- 2. Switch the tab
       vim.cmd(cmd)
       
-      -- 3. Instantly restore your smooth animations on the next event loop tick
       vim.schedule(function()
         vim.g.neovide_scroll_animation_length = old_scroll
         vim.g.neovide_cursor_animation_length = old_cursor
@@ -359,30 +459,16 @@ let
       end)
     end
 
-    -- Map your tab controls to use the InstantTabSwitch wrapper
-    for _, mode in ipairs({ "n", "i", "t" }) do
-      vim.keymap.set(mode, "<C-S-Right>", "<Cmd>lua InstantTabSwitch('tabnext')<CR>", { desc = "Next Tab", silent = true })
-      vim.keymap.set(mode, "<C-S-Left>", "<Cmd>lua InstantTabSwitch('tabprevious')<CR>", { desc = "Previous Tab", silent = true })
-      vim.keymap.set(mode, "<C-S-w>", "<Cmd>lua InstantTabSwitch('tabclose')<CR>", { desc = "Close Tab", silent = true })
+    for _, mode in ipairs({ "n", "i", "t", "v", "x", "s" }) do
+      local prefix = (mode:match("[vxs]") and "<Esc>" or "")
+      vim.keymap.set(mode, "<C-S-Right>", prefix .. "<Cmd>lua InstantTabSwitch('tabnext')<CR>", { desc = "Next Tab", silent = true })
+      vim.keymap.set(mode, "<C-S-Left>", prefix .. "<Cmd>lua InstantTabSwitch('tabprevious')<CR>", { desc = "Previous Tab", silent = true })
+      vim.keymap.set(mode, "<C-S-w>", prefix .. "<Cmd>lua InstantTabSwitch('tabclose')<CR>", { desc = "Close Tab", silent = true })
+      vim.keymap.set(mode, "<C-S-t>", prefix .. "<Cmd>tabnew +term<CR>", { desc = "New Terminal Tab", silent = true })
     end
 
-    -- Define a hidden cursor style (100% transparent)
     vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
 
-    -- Hide cursor during Normal (nt) / Visual (v/V) scrolling in terminals, restore in Insert (t)
-    vim.api.nvim_create_autocmd("ModeChanged", {
-      pattern = "*",
-      callback = function()
-        if vim.bo.buftype == "terminal" then
-          local mode = vim.api.nvim_get_mode().mode
-          if mode == "nt" or mode == "v" or mode == "V" then
-            vim.opt.guicursor:append("n-v:HiddenCursor")
-          else
-            vim.opt.guicursor:remove("n-v:HiddenCursor")
-          end
-        end
-      end,
-    })
     vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
       pattern = "term://*",
       callback = function()
@@ -390,8 +476,6 @@ let
       end
     })
 
-    -- 1. Hard physical stop for Touchpad/Mouse scrolling (prevents bouncy rubber-banding)
-    -- (Checks if prompt is at the bottom, and completely discards any further scroll-down inputs)
     vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
       if vim.bo.buftype == "terminal" then
         local bufnr = vim.api.nvim_get_current_buf()
@@ -405,18 +489,14 @@ let
           local max_topline = last_line - win_height + 1
           if max_topline < 1 then max_topline = 1 end
           
-          -- Return an empty string "" to execute a silent, error-free No-Op
-          -- (This avoids "<Nop>" which contains "N", triggering the "search previous" error)
           if topline >= max_topline then
             return ""
           end
         end
       end
-      -- Pass standard scroll wheel down natively (Neovim translates this automatically)
       return "<ScrollWheelDown>"
     end, { expr = true, silent = true, desc = "Hard stop scroll down" })
 
-    -- 2. Autocommand fallback safety (handles keyboard-based overscrolls like PageDown)
     vim.api.nvim_create_autocmd({ "WinScrolled", "CursorMoved" }, {
       pattern = "term://*",
       callback = function()
@@ -431,7 +511,6 @@ let
           local max_topline = last_line - win_height + 1
           if max_topline < 1 then max_topline = 1 end
           
-          -- Fallback view lock (silent and non-recursive)
           if topline > max_topline then
             vim.cmd("noautocmd call winrestview({'topline': " .. max_topline .. "})")
           end
@@ -439,8 +518,6 @@ let
       end,
     })
 
-    -- === DYNAMIC TABLINE UPDATE FOR TERMINAL TITLES ===
-    -- Forces Neovim to redraw your custom tabline whenever terminal programs change their title (OSC sequences)
     vim.api.nvim_create_autocmd({ "TermRequest", "TermResponse" }, {
       pattern = "*",
       callback = function()
@@ -448,26 +525,18 @@ let
       end,
     })
 
-    -- Auto-snap to terminal prompt when you start typing, pasting, or using shortcuts while scrolled up
     vim.api.nvim_create_autocmd("TermOpen", {
       pattern = "term://*",
       callback = function(args)
         local bufnr = args.buf
 
-        -- Instantly start insert mode and scroll to the bottom ONLY when spawned
         vim.cmd("startinsert")
 
-        -- Absolutely all printable ASCII characters
         local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-=~!@#$%^&*()_+[]{}|;:',./<>?"
-
-        -- Complete Russian alphabet (safe to map completely since Vim commands use ASCII)
         local cyrillic = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
 
-        -- Split cleanly into UTF-8 characters
         local char_list = vim.fn.split(chars .. cyrillic, [[\zs]])
         
-        -- Programmatic transition function for Visual/Select modes (v)
-        -- Prevents Neovim from flushing or discarding keys during mode switches
         local function exit_visual_and_type(char)
           vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
           vim.schedule(function()
@@ -478,14 +547,11 @@ let
           end)
         end
 
-        -- Register typing mappings for both Normal mode (n) and Visual/Select modes (v)
-        -- (This captures absolutely every key, including 'y' and 'Y')
         for _, mode in ipairs({ "n", "v" }) do
           local prefix = (mode == "v" and "<Esc>i" or "i")
           for _, char in ipairs(char_list) do
             vim.keymap.set(mode, char, prefix .. char, { buffer = bufnr, nowait = true, silent = true })
           end
-          -- Map Space, Enter, Backspace, and Arrow keys to also jump back
           vim.keymap.set(mode, "<Space>", prefix .. " ", { buffer = bufnr, nowait = true, silent = true })
           vim.keymap.set(mode, "<CR>", prefix .. "<CR>", { buffer = bufnr, nowait = true, silent = true })
           vim.keymap.set(mode, "<BS>", prefix .. "<BS>", { buffer = bufnr, nowait = true, silent = true })
@@ -494,12 +560,10 @@ let
           vim.keymap.set(mode, "<Left>", prefix .. "<Left>", { buffer = bufnr, nowait = true, silent = true })
           vim.keymap.set(mode, "<Right>", prefix .. "<Right>", { buffer = bufnr, nowait = true, silent = true })
 
-          -- === ADD: Horizontal scroll mappings for Normal (n) and Visual/Select (v) ===
           vim.keymap.set(mode, "<ScrollWheelLeft>", prefix .. "<Left>", { buffer = bufnr, nowait = true, silent = true })
           vim.keymap.set(mode, "<ScrollWheelRight>", prefix .. "<Right>", { buffer = bufnr, nowait = true, silent = true })
         end
 
-        -- 3. Common terminal control shortcuts (safely passing Ctrl+C, Ctrl+D, Ctrl+L, etc.)
         local ctrl_keys = { "a", "b", "c", "d", "e", "f", "g", "h", "k", "l", "p", "r", "u", "z" }
         for _, key in ipairs(ctrl_keys) do
           local keycode = "<C-" .. key .. ">"
@@ -509,16 +573,13 @@ let
           end, { buffer = bufnr, nowait = true, silent = true })
         end
 
-        -- === ADD: Horizontal scroll mappings for Terminal mode (t) ===
         vim.keymap.set("t", "<ScrollWheelLeft>", "<Left>", { buffer = bufnr, silent = true })
         vim.keymap.set("t", "<ScrollWheelRight>", "<Right>", { buffer = bufnr, silent = true })
 
-        -- Native clipboard paste mapping for Terminal mode (t) - prevents printing ^V
         vim.keymap.set("t", "<C-S-v>", function()
           vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
         end, { buffer = bufnr, silent = true })
 
-        -- Paste mappings for Normal (n) and Visual/Select (v) modes that automatically enter insert mode first
         vim.keymap.set("n", "<C-S-v>", function()
           vim.cmd("startinsert")
           vim.schedule(function()
@@ -534,8 +595,6 @@ let
           end)
         end, { buffer = bufnr, silent = true })
 
-        -- === STRIP CTRL & CTRL+SHIFT FROM MOUSE ACTIONS ===
-        -- Prevents accidental Tag Jumps (<C-]>) when holding Ctrl or Ctrl+Shift during selections
         local mouse_events = { 
           "<C-LeftMouse>", "<C-S-LeftMouse>", 
           "<C-LeftDrag>", "<C-S-LeftDrag>", 
@@ -552,13 +611,9 @@ let
       end,
     })
 
-    -- General copy/paste configuration (works in standard Neovim and GUI)
-    -- (Configured with 'x' for Visual-only mode to prevent Select-mode corruption)
     vim.keymap.set({"n", "x"}, "<C-S-c>", "\"+y", { desc = "Copy system clipboard" })
     vim.keymap.set({"n", "x"}, "<C-S-v>", "\"+p", { desc = "Paste system clipboard" })
 
-    -- Dedicated Select-mode copy/paste (e.g., inside snippet placeholders)
-    -- Toggles to Visual mode via <C-g>, performs the action, and exits cleanly
     vim.keymap.set("s", "<C-S-c>", "<C-g>\"+y", { silent = true, desc = "Copy selection in Select mode" })
     vim.keymap.set("s", "<C-S-v>", "<C-g>\"+p", { silent = true, desc = "Paste/Replace in Select mode" })
 
@@ -674,7 +729,6 @@ let
     end, {})
 
     -- === TERMINAL AUTOMATIC SCROLLBACK PRUNING ===
-    -- Periodically prunes terminal history to maintain smooth scrolling without losing history
     vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
       pattern = "term://*",
       callback = function(args)
@@ -682,7 +736,6 @@ let
         if not vim.api.nvim_buf_is_valid(bufnr) then return end
 
         local line_count = vim.api.nvim_buf_line_count(bufnr)
-        -- Trigger pruning when the buffer grows past 3,000 lines
         if line_count > 3000 then
           local win_id = vim.fn.bufwinid(bufnr)
           if win_id == -1 then return end
@@ -692,15 +745,12 @@ let
           local win_height = vim.fn.winheight(win_id)
           local max_topline = line_count - win_height + 1
           
-          -- If you are currently scrolled up reading history, postpone pruning
           if topline and topline < max_topline - 5 then
             return
           end
 
-          -- Temporarily drop the capacity to 1,000 lines to prune the oldest 2,000 lines
           vim.opt_local.scrollback = 1000
           
-          -- Defer restoring the capacity so Neovim has a frame to process the truncation
           vim.defer_fn(function()
             if vim.api.nvim_buf_is_valid(bufnr) then
               vim.opt_local.scrollback = 100000
@@ -710,7 +760,7 @@ let
       end,
     })
 
-    -- === ASYNC AUTO-FORMAT ON AUTO-SAVE (WITH STATE LOCK) ===
+    -- === ASYNC AUTO-FORMAT ON AUTO-SAVE ===
     local is_formatting = false
     vim.api.nvim_create_autocmd("User", {
       pattern = "AutoSaveWritePost",
@@ -725,7 +775,6 @@ let
           lsp_format = "fallback",
           callback = function()
             is_formatting = false
-            -- Write changes to disk silently without triggering standard autocmds
             if vim.bo.modified then
               vim.cmd("silent! noautocmd write")
             end
@@ -787,47 +836,61 @@ let
     -- Compliant Neovim 0.11+ configuration style via vim.lsp.config.
     vim.lsp.config('rust_analyzer', {
       capabilities = capabilities,
-      root_dir = function(bufnr, cb)
-        local fname = vim.api.nvim_buf_get_name(bufnr)
-        if fname == "" then
-          return
-        end
-        local root = vim.fs.root(fname, { 'Cargo.toml', 'rust-project.json' })
-        cb(root) -- Pass nil if we are not inside a Cargo workspace
-      end,
-      before_init = function(params, config)
-        -- 1. Ensure settings['rust-analyzer'] is properly loaded into initializationOptions.
-        -- Overriding before_init replaces the default handler, so we must merge this manually.
-        if config.settings and config.settings['rust-analyzer'] then
-          params.initializationOptions = vim.tbl_deep_extend(
-            "force",
-            params.initializationOptions or {},
-            config.settings['rust-analyzer']
-          )
+      cmd = { "${pkgs.rust-analyzer}/bin/rust-analyzer" },
+      root_dir = function(bufnr_or_fname, cb)
+        local fname = type(bufnr_or_fname) == "number" and vim.api.nvim_buf_get_name(bufnr_or_fname) or bufnr_or_fname
+        if not fname or fname == "" then
+          if cb then cb(nil) end
+          return nil
         end
 
-        -- 2. Configure detached/single-file mode if not in a workspace
-        local fname = vim.api.nvim_buf_get_name(0)
-        if fname ~= "" then
-          local root = vim.fs.root(fname, { 'Cargo.toml', 'rust-project.json' })
-          if not root then
-            -- Force-nullify workspace paths using vim.NIL to prevent fallback to the editor's cwd
-            params.rootPath = vim.NIL
-            params.rootUri = vim.NIL
-            params.workspaceFolders = vim.NIL
-
-            -- Configure the detached files directly in initializationOptions
-            params.initializationOptions = params.initializationOptions or {}
-            params.initializationOptions.detachedFiles = { fname }
-          end
+        local cargo_root = vim.fs.root(fname, { 'Cargo.toml', 'rust-project.json' })
+        if cargo_root then
+          if cb then cb(cargo_root) end
+          return cargo_root
         end
+
+        -- Standalone file fallback: generate an ephemeral rust-project.json with source.include_dirs
+        local hash = vim.fn.sha256(fname):sub(1, 8)
+        local standalone_dir = "/tmp/ra_standalone_" .. hash
+        vim.fn.mkdir(standalone_dir, "p")
+        
+        local project_json = standalone_dir .. "/rust-project.json"
+        local f = io.open(project_json, "w")
+        if f then
+          local content = vim.json.encode({
+            sysroot = "${rust-toolchain}",
+            sysroot_src = "${pkgs.rustPlatform.rustLibSrc}",
+            crates = {
+              {
+                root_module = fname,
+                edition = "2021",
+                deps = {},
+                cfg = { "unix", "debug_assertions" },
+                is_workspace_member = true,
+                source = {
+                  include_dirs = { standalone_dir },
+                  exclude_dirs = {}
+                }
+              }
+            }
+          })
+          f:write(content)
+          f:close()
+        end
+
+        if cb then cb(standalone_dir) end
+        return standalone_dir
       end,
       settings = {
         ["rust-analyzer"] = {
           check = {
             command = "clippy",
             extraArgs = { "--", "-W", "clippy::all", "-W", "clippy::pedantic" }
-          }
+          },
+          files = {
+            watcher = "client",
+          },
         }
       }
     })
@@ -980,34 +1043,9 @@ in
         WantedBy = [ "default.target" ];
       };
     };
-    home.packages = with pkgs; [
+    home.packages = [
+      nvr-remote-editor
       neovide-term
-      neovim-remote
-      stylua
-      delve
-      rustup
-      vscode-extensions.ms-vscode.cpptools
-      hexpatch
-      tinyxxd
-      bash-language-server
-      vscode-langservers-extracted
-      jdt-language-server
-      lua-language-server
-      taplo
-      yaml-language-server
-      shellcheck
-      shfmt
-      asm-lsp
-      tmux
-      tree-sitter
-      ripgrep
-      ruff
-      basedpyright
-      python
-      cmake-lint
-      clang-tools
-      clang
-      cmake-language-server
     ];
     programs.neovim = {
       withPython3 = true;

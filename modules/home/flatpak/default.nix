@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  inputs,
   ...
 }:
 with lib;
@@ -20,16 +19,12 @@ in
     };
   };
 
-  imports = [
-    inputs.nix-flatpak.homeManagerModules.nix-flatpak
-  ];
   config = mkIf cfg.enable {
     xdg.portal = {
       enable = true;
       extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
       config.common.default = "*";
     };
-    home.packages = [ pkgs.flatpak ];
     services.flatpak = {
       enable = true;
       uninstallUnmanaged = true;

@@ -47,10 +47,6 @@ class PrefixManager(Gtk.Window):
         self.btn_winetricks.connect("clicked", self.on_winetricks_clicked)
         bbox.pack_start(self.btn_winetricks, True, True, 0)
 
-        self.btn_protontricks = Gtk.Button(label="Protontricks")
-        self.btn_protontricks.connect("clicked", self.on_protontricks_clicked)
-        bbox.pack_start(self.btn_protontricks, True, True, 0)
-
         self.btn_open = Gtk.Button(label="Открыть папку")
         self.btn_open.connect("clicked", self.on_open_clicked)
         bbox.pack_start(self.btn_open, True, True, 0)
@@ -89,12 +85,9 @@ class PrefixManager(Gtk.Window):
         if path:
             env = os.environ.copy()
             env["WINEPREFIX"] = path
-            subprocess.Popen(["winetricks"], env=env)
-
-    def on_protontricks_clicked(self, widget):
-        name, path = self.get_selected()
-        if path:
-            subprocess.Popen(["protontricks", "--gui"])
+            subprocess.Popen(
+                ["umu-run-wrapper", "winetricks", "--gui"], env=env
+            )
 
     def on_open_clicked(self, widget):
         name, path = self.get_selected()

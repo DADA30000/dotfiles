@@ -3,6 +3,7 @@
   pkgs,
   lib,
   inputs,
+  mkPyApp,
   ...
 }:
 with lib;
@@ -91,40 +92,13 @@ let
 
   cfg = config.umu;
 
-  # Declarative PyGObject application wrapper leveraging Nixpkgs setup hooks
-  mkPyApp =
+  mkUmuApp =
     {
       name,
       src,
       pathDeps ? [ ],
     }:
-    pkgs.stdenv.mkDerivation {
-      pname = name;
-      version = "1.0";
-      inherit src;
-      dontUnpack = true;
-
-      # Automates the generation of GI_TYPELIB_PATH, XDG_DATA_DIRS, and GDK_PIXBUF_MODULE_FILE
-      nativeBuildInputs = [
-        pkgs.wrapGAppsHook3
-        pkgs.gobject-introspection
-      ];
-      buildInputs = [
-        pkgs.gtk3
-        pkgs.gsettings-desktop-schemas
-        pkgs.adwaita-icon-theme
-      ];
-
-      pythonEnv = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
-
-      installPhase = ''
-        mkdir -p $out/bin
-        echo "#!$pythonEnv/bin/python" > $out/bin/${name}
-        cat $src >> $out/bin/${name}
-        chmod +x $out/bin/${name}
-      '';
-
-      # Appends runtime command dependencies onto the wrapped PATH and injects the JSON list of Proton versions
+    (mkPyApp { inherit name src pathDeps; }).overrideAttrs {
       preFixup = ''
         gappsWrapperArgs+=(
           --prefix PATH : "${lib.makeBinPath pathDeps}"
@@ -201,10 +175,8 @@ in
       };
     };
     home.packages = [
-      pkgs.yad
-
       # 1. run-exe
-      (mkPyApp {
+      (mkUmuApp {
         name = "run-exe";
         src = ../../../stuff/modules/home/umu/run_exe.py;
         pathDeps = [
@@ -216,7 +188,7 @@ in
       })
 
       # 2. manage-umu-shortcuts
-      (mkPyApp {
+      (mkUmuApp {
         name = "manage-umu-shortcuts";
         src = ../../../stuff/modules/home/umu/manage_shortcuts.py;
         pathDeps = [
@@ -226,7 +198,7 @@ in
       })
 
       # 3. manage-umu-prefixes
-      (mkPyApp {
+      (mkUmuApp {
         name = "manage-umu-prefixes";
         src = ../../../stuff/modules/home/umu/manage_prefixes.py;
         pathDeps = [

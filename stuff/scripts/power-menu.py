@@ -58,7 +58,15 @@ from gi.repository import Gtk, Gdk
 
 
 def is_nv_blocked():
-    return len(glob.glob("/dev/nvidia*.bak")) > 0
+    for path in glob.glob("/dev/nvidia*"):
+        if os.path.isdir(path):
+            continue
+        try:
+            if (os.stat(path).st_mode & 0o777) == 0:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def get_current_lact_profile():

@@ -64,6 +64,7 @@ in
   };
 
   config = mkIf cfg.nginx.enable {
+    security.acme.acceptTerms = true;
     services.nextcloud = mkIf cfg.nginx.nextcloud.enable {
       enable = true;
       configureRedis = true;
@@ -125,22 +126,6 @@ in
           }
         }
       '';
-    };
-    security.acme = {
-      acceptTerms = true;
-      defaults.email = "vadimhack.ru@gmail.com";
-      certs = mkMerge [
-        (mkIf cfg.nginx.nextcloud.enable {
-          "${config.services.nextcloud.hostName}".email = "vadimhack.ru@gmail.com";
-        })
-        (mkIf cfg.nginx.website.enable {
-          "${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-          "ip.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-        })
-        (mkIf cfg.nginx.cape.enable {
-          "cape.${cfg.nginx.hostName}".email = "vadimhack.ru@gmail.com";
-        })
-      ];
     };
     systemd = {
       services = {
