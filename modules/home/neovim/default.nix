@@ -31,6 +31,110 @@ let
   nvr-remote-editor = pkgs.writeShellScriptBin "nvr-remote-editor" ''
     exec ${pkgs.neovim-remote}/bin/nvr --servername "$NVIM" --remote-tab-wait +"setlocal bufhidden=wipe" "$@"
   '';
+
+  # Clean script using explicit coreutils paths
+  smart-neovim-script = pkgs.writeShellScript "smart-nvim" ''
+    DIR=$(${pkgs.coreutils}/bin/dirname "$0")
+
+    # Direct pass-through for CLI info flags
+    for arg in "$@"; do
+      case "$arg" in
+        --version|--help|--headless|--embed|-v)
+          exec "$DIR/nvim-raw" "$@"
+          ;;
+      esac
+    done
+
+    # Resolve target Neovim RPC server socket
+    TARGET_NVIM=""
+    if [[ -n "$SESATT_SESSION" ]]; then
+      TARGET_NVIM="$(sesatt --get-nvim "$SESATT_SESSION" 2>/dev/null)"
+    fi
+    if [[ -z "$TARGET_NVIM" ]]; then
+      TARGET_NVIM="$NVIM"
+    fi
+
+    # If not running inside a Neovim terminal session, execute real neovim-raw
+    if [[ -z "$TARGET_NVIM" ]]; then
+      exec "$DIR/nvim-raw" "$@"
+    fi
+
+    # 1. Piped Stdin (e.g. `cat file | nvim` or `git diff | nvim`)
+    if [ ! -t 0 ]; then
+      TMPFILE=$(${pkgs.coreutils}/bin/mktemp /tmp/nvim-pipe.XXXXXX)
+      ${pkgs.coreutils}/bin/cat > "$TMPFILE"
+      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send \
+        "<Cmd>tabnew $TMPFILE | setlocal buftype=nofile bufhidden=wipe nomodifiable | file [Pager]<CR>"
+    fi
+
+    # 2. MANPAGER invocation (`nvim +Man!` or `nvim +Man`)
+    if [[ "$1" == "+Man!" || "$1" == "+Man" ]]; then
+      shift
+      ARG="$1"
+      if [[ -n "$ARG" ]]; then
+        if [[ -e "$ARG" ]]; then
+          ABS_PATH=$(${pkgs.coreutils}/bin/readlink -f "$ARG")
+          exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send \
+            "<Cmd>tabnew | silent! Man $ABS_PATH<CR>"
+        else
+          exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send \
+            "<Cmd>tabnew | silent! Man $ARG<CR>"
+        fi
+      else
+        exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send \
+          "<Cmd>tabnew | silent! Man<CR>"
+      fi
+    fi
+
+    # 3. No arguments (`nvim`)
+    if [ $# -eq 0 ]; then
+      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send "<Cmd>tabnew<CR>"
+    fi
+
+    # 4. File arguments (`nvim file1 file2...`)
+    CMD_STR="<Cmd>tabnew"
+    FIRST=1
+    for arg in "$@"; do
+      if [[ "$arg" == -* ]]; then
+        exec "$DIR/nvim-raw" "$@"
+      fi
+      if [[ -e "$arg" ]]; then
+        ABS_PATH=$(${pkgs.coreutils}/bin/readlink -f "$arg")
+      else
+        ABS_PATH="$arg"
+      fi
+
+      if [ $FIRST -eq 1 ]; then
+        CMD_STR="''${CMD_STR} | edit ''${ABS_PATH}"
+        FIRST=0
+      else
+        CMD_STR="''${CMD_STR} | tabedit ''${ABS_PATH}"
+      fi
+    done
+    CMD_STR="''${CMD_STR}<CR>"
+
+    exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send "$CMD_STR"
+  '';
+
+  # Package wrapper that passes lua and meta directly to wrapper.nix
+  smart-neovim-unwrapped =
+    pkgs.symlinkJoin {
+      name = "neovim-unwrapped-${pkgs.neovim-unwrapped.version or "smart"}";
+      paths = [ pkgs.neovim-unwrapped ];
+      postBuild = ''
+        mv $out/bin/nvim $out/bin/nvim-raw
+        cp ${smart-neovim-script} $out/bin/nvim
+        chmod +x $out/bin/nvim
+      '';
+      passthru = (pkgs.neovim-unwrapped.passthru or { }) // {
+        inherit (pkgs.neovim-unwrapped) lua;
+      };
+      meta = pkgs.neovim-unwrapped.meta or { };
+    }
+    // {
+      lua = pkgs.neovim-unwrapped.lua or null;
+    };
+
   python = pkgs.python3.withPackages (
     ps: with ps; [
       debugpy
@@ -380,7 +484,7 @@ let
       vim.cmd('startinsert')
     end
 
-    -- Define a custom, beautiful tablined
+    -- Define a custom, beautiful tabline
     _G.MyTabLine = function()
       local s = ""
       for i = 1, vim.fn.tabpagenr("$") do
@@ -631,8 +735,47 @@ let
           end, { buffer = bufnr, nowait = true, silent = true })
         end
 
-        vim.keymap.set("t", "<ScrollWheelDown>", "<Nop>", { buffer = bufnr, silent = true })
-        vim.keymap.set("t", "<ScrollWheelUp>", "<C-\\><C-n><ScrollWheelUp>", { buffer = bufnr, silent = true })
+        local function is_shell_at_prompt(b)
+          local chan = vim.bo[b].channel
+          if not chan or chan <= 0 then return false end
+          local pid = vim.fn.jobpid(chan)
+          if not pid or pid <= 0 then return false end
+
+          local f = io.open("/proc/" .. pid .. "/stat", "r")
+          if not f then return false end
+          local content = f:read("*a")
+          f:close()
+
+          if not content then return false end
+          local after_comm = content:match("%)(.*)")
+          if not after_comm then return false end
+
+          local fields = {}
+          for field in after_comm:gmatch("%S+") do
+            table.insert(fields, field)
+          end
+
+          local pgrp = tonumber(fields[3])
+          local tpgid = tonumber(fields[6])
+          return (tpgid and pgrp and tpgid == pgrp)
+        end
+
+        vim.keymap.set("t", "<ScrollWheelUp>", function()
+          if is_shell_at_prompt(bufnr) then
+            return "<C-\\><C-n><ScrollWheelUp>"
+          else
+            return "<Up><Up><Up>"
+          end
+        end, { expr = true, buffer = bufnr, silent = true })
+
+        vim.keymap.set("t", "<ScrollWheelDown>", function()
+          if is_shell_at_prompt(bufnr) then
+            return ""
+          else
+            return "<Down><Down><Down>"
+          end
+        end, { expr = true, buffer = bufnr, silent = true })
+
         vim.keymap.set("t", "<ScrollWheelLeft>", "<Left>", { buffer = bufnr, silent = true })
         vim.keymap.set("t", "<ScrollWheelRight>", "<Right>", { buffer = bufnr, silent = true })
 
@@ -1108,6 +1251,7 @@ in
       neovide-term
     ];
     programs.neovim = {
+      package = smart-neovim-unwrapped;
       withPython3 = true;
       withRuby = true;
       withPerl = true;

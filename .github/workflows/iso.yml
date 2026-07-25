@@ -13,53 +13,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Purge runner bloat & mount Btrfs space at /nix (~130GB total)
-      - name: Nothing but Nix (Rampage Mode)
-        uses: wimpysworld/nothing-but-nix@main
-        with:
-          hatchet-protocol: "rampage"
-          witness-carnage: true
-
-      # 2. Remount Btrfs, Install ZRAM Module, Setup 8GB Disk Swap & Sysctls
-      - name: Configure Storage, Swap, and Sysctls
+      # 1. Setup ZRAM and 8GB Disk Swap FIRST (claims disk space before Nix loop allocation)
+      - name: Configure Swap & ZRAM
         run: |
-          # Remount /nix with Btrfs ZSTD Level 3 compression
-          echo "Remounting /nix with compress=zstd:3..."
-          sudo mount -o remount,compress=zstd:3 /nix
-
-          # Install kernel extra modules quietly (without initramfs/grub triggers)
-          echo "Installing linux-modules-extra for kernel $(uname -r)..."
+          # Install kernel extra modules quietly
           sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
             -o Dpkg::Options::="--force-confdef" \
             -o Dpkg::Options::="--force-confold" \
             linux-modules-extra-$(uname -r)
 
-          # Load ZRAM module and configure at 100% total RAM capacity
+          # Load ZRAM module and configure at 100% RAM capacity (~16GB)
           sudo modprobe zram num_devices=1
           TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-          echo "Configuring ZRAM at ${TOTAL_RAM_MB}MB..."
           echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
           echo "${TOTAL_RAM_MB}M" | sudo tee /sys/block/zram0/disksize
           sudo mkswap /dev/zram0
           sudo swapon -p 100 /dev/zram0
 
-          # Enable 8GB NVMe Swapfile on /mnt using dd (prevents swapon 'Invalid argument' error)
+          # Allocate 8GB Swapfile on /mnt BEFORE nothing-but-nix claims the drive
           echo "Setting up 8GB Swapfile on /mnt..."
-          sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192 status=none
+          sudo fallocate -l 8G /mnt/swapfile
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon -p 10 /mnt/swapfile
+
+          swapon --show
+
+      # 2. Purge runner bloat & mount Btrfs space at /nix
+      # (It will now see ~82GB available on /mnt and build its loop file safely)
+      - name: Nothing but Nix (Rampage Mode)
+        uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: "rampage"
+          witness-carnage: true
+
+      # 3. Tweaks & Sysctls
+      - name: Configure Storage & Sysctls
+        run: |
+          # Remount /nix with Btrfs ZSTD Level 3 compression
+          echo "Remounting /nix with compress=zstd:3..."
+          sudo mount -o remount,compress=zstd:3 /nix
 
           # Adjust AppArmor for Nix unprivileged sandboxing
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0 || true
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
-          echo "=== Active Memory & Swap Space ==="
+          echo "=== Final Memory & Storage Setup ==="
           swapon --show
           free -h
+          df -h /nix
 
-      # 3. Install Nix
+      # 4. Install Nix
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -70,17 +75,16 @@ jobs:
             auto-optimise-store = true
             build-dir = /nix/build
 
-      # 4. Build ISO & Symlink File Directly
+      # 5. Build ISO & Symlink File
       - name: Build ISO
         run: |
           nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 32 -j 32
           nix-collect-garbage -d
           nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback
 
-          # Create a direct top-level symlink for clean artifact upload
           ln -sf result/iso/*.iso nixos.iso
 
-      # 5. Upload Direct Non-Zipped ISO Artifact
+      # 6. Upload Direct Non-Zipped ISO Artifact
       - name: Upload ISO to artifacts
         uses: actions/upload-artifact@v7
         with:

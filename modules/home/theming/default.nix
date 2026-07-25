@@ -242,17 +242,6 @@ in
       #  StartupWMClass = "discord";
       #  Type = "Application";
       #};
-      desktopEntries."com.discordapp.DiscordCanary".settings = {
-        Exec = "DiscordCanary --ozone-platform-hint=auto %U";
-        Categories = "Network;InstantMessaging;Chat";
-        GenericName = "All-in-one cross-platform voice and text chat for gamers";
-        Icon = "discord-canary";
-        MimeType = "x-scheme-handler/discord";
-        Keywords = "discord;vencord;electron;chat";
-        Name = "Discord Canary";
-        StartupWMClass = "discord";
-        Type = "Application";
-      };
     };
     dconf.settings = {
       "org/nemo/preferences" = {

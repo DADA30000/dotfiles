@@ -34,20 +34,20 @@ let
   protonVersions = [
     {
       name = "Proton GE (Latest)";
-      path = "${config.xdg.dataHome}/umu/proton/proton-ge-latest";
+      path = "$HOME/.local/share/umu/proton/proton-ge-latest";
     }
     {
       name = "Proton UMU 10";
-      path = "${config.xdg.dataHome}/umu/proton/proton-umu-10";
+      path = "$HOME/.local/share/umu/proton/proton-umu-10";
       default = true;
     }
     {
       name = "Proton UMU 9";
-      path = "${config.xdg.dataHome}/umu/proton/proton-umu-9";
+      path = "$HOME/.local/share/umu/proton/proton-umu-9";
     }
     {
       name = "Proton UMU 8";
-      path = "${config.xdg.dataHome}/umu/proton/proton-umu-8";
+      path = "$HOME/.local/share/umu/proton/proton-umu-8";
     }
   ];
 
@@ -225,12 +225,12 @@ in
           case "$UMU_PROTON_TYPE" in
             ${protonCaseBranches}
             *)
-              export PROTONPATH="${defaultProton.path}"
+              export PROTONPATH="$HOME/.local/share/umu/proton/proton-umu-10"
               ;;
           esac
         fi
 
-        MOUNT_DIR="${config.xdg.dataHome}/umu"
+        MOUNT_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/umu"
         if [[ -x "/run/wrappers/bin/prepare-umu" ]]; then
           /run/wrappers/bin/prepare-umu
           t=10
@@ -383,8 +383,10 @@ in
           exit 0
         fi
 
+        DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+
         while IFS= read -r -d "" lnk; do
-          if grep -Fq "X-UMU-Lnk-Path=$lnk" "${config.xdg.dataHome}/applications"/umu-*.desktop 2>/dev/null; then
+          if grep -Fq "X-UMU-Lnk-Path=$lnk" "$DESKTOP_DIR"/umu-*.desktop 2>/dev/null; then
             continue
           fi
 
@@ -455,8 +457,8 @@ in
       '')
       (pkgs.writeShellScriptBin "cleanup-desktop-with-umu" ''
         PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:$PATH"
-        ICON_DIR="${config.xdg.dataHome}/icons/umu"
-        DESKTOP_DIR="${config.xdg.dataHome}/applications"
+        ICON_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/icons/umu"
+        DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
         CACHE_ICON_DIR="$HOME/.cache/umu/icons"
 
         if [[ -d "$CACHE_ICON_DIR" ]]; then
@@ -489,8 +491,8 @@ in
       '')
       (pkgs.writeShellScriptBin "create-desktop-with-umu" ''
         PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:$PATH"
-        ICON_DIR="${config.xdg.dataHome}/icons/umu"
-        DESKTOP_DIR="${config.xdg.dataHome}/applications"
+        ICON_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/icons/umu"
+        DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
         mkdir -p "$ICON_DIR" "$DESKTOP_DIR"
         actual_exe="$1"
         lnk="$2"

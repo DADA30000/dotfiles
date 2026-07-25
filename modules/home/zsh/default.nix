@@ -363,78 +363,13 @@ in
         initContent =
           let
             zshConfig = /* zsh */ ''
-              _remote_nvim() {
-                local target_server="$1"
-                shift
-                if (( ''${#} == 0 )); then
-                  command nvim --headless --server "$target_server" --remote-send "<Cmd>tabnew<CR>"
-                  return
-                fi
+              alias v="nvim"
+              export EDITOR="nvim"
+              export VISUAL="nvim"
+              export SUDO_EDITOR="nvr-remote-editor"
+              export MANPAGER="nvim +Man!"
+              export PAGER="nvim -R"
 
-                local arg
-                for arg in "$@"; do
-                  if [[ "$arg" == -* ]]; then
-                    command nvim "$@"
-                    return
-                  fi
-                done
-
-                local cmd_str="<Cmd>tabnew"
-                local first=1
-                for arg in "$@"; do
-                  local abs_path="''${arg:A}"
-                  if (( first == 1 )); then
-                    cmd_str="''${cmd_str} | edit ''${abs_path}"
-                    first=0
-                  else
-                    cmd_str="''${cmd_str} | tabedit ''${abs_path}"
-                  fi
-                done
-                cmd_str="''${cmd_str}<CR>"
-                command nvim --headless --server "$target_server" --remote-send "$cmd_str"
-              }
-
-              if [[ -n "$INSIDE_SESATT" ]]; then
-                # === INSIDE A SESATT SESSION ===
-                get_target_nvim() {
-                  if [[ -n "$SESATT_SESSION" ]]; then
-                    local s_nvim
-                    s_nvim="$(sesatt --get-nvim "$SESATT_SESSION" 2>/dev/null)"
-                    if [[ -n "$s_nvim" ]]; then
-                      echo "$s_nvim"
-                      return
-                    fi
-                  fi
-                  echo "$NVIM"
-                }
-
-                nvim() {
-                  local target_nvim="$(get_target_nvim)"
-                  if [[ -n "$target_nvim" ]]; then
-                    _remote_nvim "$target_nvim" "$@"
-                  else
-                    command nvim "$@"
-                  fi
-                }
-                alias v="nvim"
-
-                export SUDO_EDITOR="sesatt --editor"
-                export VISUAL="sesatt --editor"
-                export EDITOR="sesatt --editor"
-
-              elif [[ -n "$NVIM" ]]; then
-                # === STANDARD NEOVIM TERMINAL (OUTSIDE SESATT) ===
-                nvim() {
-                  _remote_nvim "$NVIM" "$@"
-                }
-                alias v="nvim"
-
-                export SUDO_EDITOR="nvr-remote-editor"
-                export VISUAL="nvr-remote-editor"
-                export EDITOR="nvr-remote-editor"
-              fi
-
-              export MANPAGER='nvim +Man!'
               printf '\n%.0s' {1..100}
               setopt correct
 

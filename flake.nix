@@ -307,11 +307,14 @@
         in
         builtins.concatMap listSingleDir paths;
 
+      # Modules for NixOS
       system-modules = listFiles [
         ./modules/system
+        # Modules that do same exact thing in HM and NixOS
         ./modules/universal
       ];
 
+      # Modules for home-manager
       home-modules =
         listFiles [
           ./modules/home

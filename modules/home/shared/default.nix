@@ -14,6 +14,11 @@
     "uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
   };
 
+  home.sessionVariables = {
+    NIXOS_OZONE_WL = "1";
+    ELECTRON_OZONE_PLATFORM_HINT = "auto";
+  };
+
   android.enable = false;
 
   systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;

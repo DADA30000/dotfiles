@@ -1,10 +1,9 @@
 {
   user,
+  config,
   ...
 }:
 {
-
-  networking.hostName = "laptop";
 
   graphics.nvidia.enable = true;
 
@@ -90,47 +89,18 @@
 
   };
 
-  services = {
-    snapper.configs.snapshots = {
-      SUBVOLUME = "/home/${user}/Documents/snapshots";
-      ALLOW_USERS = [ user ];
-      TIMELINE_CLEANUP = true;
-      TIMELINE_CREATE = true;
-      TIMELINE_LIMIT_WEEKLY = 4;
-      TIMELINE_LIMIT_DAILY = 7;
-      TIMELINE_LIMIT_HOURLY = 24;
-    };
-    #beesd.filesystems = {
-    #  root = {
-    #    spec = "/persistent";
-    #    hashTableSizeMB = 512;
-    #    verbosity = "crit";
-    #    extraOptions = [
-    #      "--loadavg-target"
-    #      "4.0"
-    #    ];
-    #  };
+  systemd.tmpfiles.rules = [
+    "v ${config.services.snapper.configs.snapshots.SUBVOLUME}/.snapshots 0750 root root - -"
+  ];
 
-    #  games = {
-    #    spec = "/home/${user}/Games";
-    #    hashTableSizeMB = 512;
-    #    verbosity = "crit";
-    #    extraOptions = [
-    #      "--loadavg-target"
-    #      "4.0"
-    #    ];
-    #  };
-
-    #  games2 = {
-    #    spec = "/home/${user}/Games2";
-    #    hashTableSizeMB = 1024;
-    #    verbosity = "crit";
-    #    extraOptions = [
-    #      "--loadavg-target"
-    #      "3.0"
-    #    ];
-    #  };
-    #};
+  services.snapper.configs.snapshots = {
+    SUBVOLUME = "/home/${user}/Documents/snapshots";
+    ALLOW_USERS = [ user ];
+    TIMELINE_CLEANUP = true;
+    TIMELINE_CREATE = true;
+    TIMELINE_LIMIT_WEEKLY = 4;
+    TIMELINE_LIMIT_DAILY = 7;
+    TIMELINE_LIMIT_HOURLY = 24;
   };
 
 }

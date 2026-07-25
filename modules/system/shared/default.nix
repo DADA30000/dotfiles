@@ -847,13 +847,6 @@
             --add-flags "dmenu -i -p"
         '';
       });
-      waylandCompositors = {
-        hyprland = {
-          prettyName = "Hyprland";
-          comment = "Hyprland compositor managed by UWSM";
-          binPath = "${pkgs.hyprland}/bin/Hyprland"; # https://github.com/hyprwm/Hyprland/pull/12484
-        };
-      };
     };
 
     git = {
@@ -865,13 +858,6 @@
     appimage = {
       enable = true;
       binfmt = true;
-    };
-
-    neovim = {
-      defaultEditor = true;
-      viAlias = true;
-      vimAlias = true;
-      enable = true;
     };
 
   };
