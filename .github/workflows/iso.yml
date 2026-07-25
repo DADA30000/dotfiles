@@ -3,7 +3,6 @@ name: Build ISO
 on:
   schedule:
     - cron: "0 2 * * *"
-
   workflow_dispatch:
 
 jobs:
@@ -11,6 +10,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Purge all runner bloat & mount Btrfs space at /nix (~130GB total)
+      - name: Nothing but Nix (Rampage Mode)
+        uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: "rampage"
+          witness-carnage: true
+
+      # 2. Dynamic ZRAM (100% RAM), 8GB Swap, & AppArmor tweaks
+      - name: Configure Memory, Swap, and Sysctls
+        run: |
+          # Change Btrfs compression to ZSTD Level 3
+          sudo mount -o remount,compress=zstd:3 /nix
+
+          # Detect 100% Total RAM
+          TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+          echo "Detected Total RAM: ${TOTAL_RAM_MB}MB"
+
+          # Enable ZRAM at 100% RAM capacity
+          sudo modprobe zram
+          echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
+          echo "${TOTAL_RAM_MB}M" | sudo tee /sys/block/zram0/disksize
+          sudo mkswap /dev/zram0
+          sudo swapon -p 10 /dev/zram0
+
+          # Enable 8GB Disk Swap on /mnt
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon -p 0 /mnt/swapfile
+
+          # Adjust AppArmor for Nix unprivileged sandboxing
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+          echo "=== System Overview ==="
+          free -h
+          df -h
+
+      # 3. Install Nix (must run AFTER nothing-but-nix)
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -19,32 +60,16 @@ jobs:
             experimental-features = flakes nix-command ca-derivations
             allow-import-from-derivation = true
             auto-optimise-store = true
+            build-dir = /nix/build
 
-      - uses: actions/checkout@v4
-
-      - name: Show disk size
-        run: |
-          df -h
-          lscpu
-          sudo docker system prune -af; sudo docker volume prune -f; sudo docker builder prune --all -f
-          docker system prune -af; docker volume prune -f; docker builder prune --all -f
-          npm cache clean --force
-          sudo npm cache clean --force
-          sudo rm -rf /usr/local
-          sudo rm -rf /usr/lib/jvm /usr/lib/google-cloud-sdk /usr/lib/llvm-* /usr/lib/firefox /usr/lib/gcc
-          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/share/miniconda /usr/share/az_* /usr/share/gradle-*
-          sudo rm -rf /opt
-          sudo apt install nodejs
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          df -h
-
+      # 4. Build ISO
       - name: Build ISO
         run: |
           nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 32 -j 32
           nix-collect-garbage -d
-          nix build .#nixosConfigurations.iso.config.system.build.isoImageCI --fallback
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback
 
+      # 5. Upload ISO artifact
       - name: Upload ISO to artifacts
         uses: actions/upload-artifact@v4
         with:

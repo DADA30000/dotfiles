@@ -283,10 +283,7 @@ in
 {
   config = lib.mkMerge [
     (lib.mkIf wrapped {
-      system.build = {
-        isoImageCI = lib.mkForce (mkIsoImage "1");
-        isoImage = lib.mkForce (mkIsoImage "$NIX_BUILD_CORES");
-      };
+      system.build.isoImage = lib.mkForce (mkIsoImage "$NIX_BUILD_CORES");
       boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart = lib.mkForce (
         pkgs.writeScript "find-nixos-closure" ''
           #!/bin/sh

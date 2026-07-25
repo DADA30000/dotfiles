@@ -251,12 +251,11 @@ in
         cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
 
         if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
-          export WINEDLLOVERRIDES="steamclient64,voices38,dxgi,winhttp,winmm,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64,version=n,b"
-        else
-          export WINEDLLOVERRIDES="voices38,dxgi,winhttp,winmm,version=n,b"
+          export WINEDLLOVERRIDES="steamclient64,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64=n,b;$WINEDLLOVERRIDES"
         fi
 
         unset ALSOFT_DRIVERS
+        export WINEDLLOVERRIDES="voices38,dxgi,winhttp,winmm,version=n,b;$WINEDLLOVERRIDES"
         export UMU_RUNTIME_UPDATE=0
         export PROTON_ENABLE_WAYLAND=''${PROTON_ENABLE_WAYLAND:-1}
         cd "$(dirname "$1")" &> /dev/null || true
@@ -368,40 +367,89 @@ in
           done
         }
 
-        while IFS= read -r -d "" USER_PROFILE; do
-          while IFS= read -r -d "" lnk; do
-            
-            if grep -Fq "X-UMU-Lnk-Path=$lnk" "${config.xdg.dataHome}/applications"/umu-*.desktop 2>/dev/null; then
-              continue
+        SEARCH_DIRS=()
+        if [[ -d "$WINEPREFIX/drive_c/users" ]]; then
+          while IFS= read -r -d "" d; do
+            [[ -d "$d/Desktop" ]] && SEARCH_DIRS+=("$d/Desktop")
+            [[ -d "$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs" ]] && SEARCH_DIRS+=("$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs")
+          done < <(find "$WINEPREFIX/drive_c/users" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+        fi
+
+        if [[ -d "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs" ]]; then
+          SEARCH_DIRS+=("$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs")
+        fi
+
+        if [[ ''${#SEARCH_DIRS[@]} -eq 0 ]]; then
+          exit 0
+        fi
+
+        while IFS= read -r -d "" lnk; do
+          if grep -Fq "X-UMU-Lnk-Path=$lnk" "${config.xdg.dataHome}/applications"/umu-*.desktop 2>/dev/null; then
+            continue
+          fi
+
+          throttle_jobs
+
+          (
+            metadata=$(${pkgs.exiftool}/bin/exiftool -f -p '$LocalBasePath|$CommandLineArguments' "$lnk" 2>/dev/null)
+            IFS='|' read -r win_path args <<< "$metadata"
+
+            win_path=$(echo "$win_path" | tr -d '\r')
+            args=$(echo "$args" | tr -d '\r')
+
+            if [[ "$win_path" == "-" || -z "$win_path" ]]; then
+              rm -f "$lnk"
+              exit 0
             fi
 
-            throttle_jobs
-            
-            (
-              metadata=$(${pkgs.exiftool}/bin/exiftool -f -p '$LocalBasePath|$CommandLineArguments' "$lnk" 2>/dev/null)
-              IFS='|' read -r win_path args <<< "$metadata"
+            if [[ "$args" == "-" ]]; then
+              args=""
+            fi
 
-              win_path=$(echo "$win_path" | tr -d '\r')
-              args=$(echo "$args" | tr -d '\r')
+            norm_p=$(echo "$win_path" | tr '\\' '/')
+            drive=""
+            path_no_drive=""
 
-              if [[ "$win_path" == "-" || -z "$win_path" ]]; then
-                rm -f "$lnk"
-                exit 0
+            if [[ "$norm_p" =~ ^[a-zA-Z]: ]]; then
+              drive=$(echo "$norm_p" | cut -d: -f1 | tr '[:upper:]' '[:lower:]')
+              path_no_drive=$(echo "$norm_p" | sed 's/^[a-zA-Z]://')
+            else
+              path_no_drive="$norm_p"
+            fi
+
+            if [[ -n "$path_no_drive" && "$path_no_drive" != /* ]]; then
+              path_no_drive="/$path_no_drive"
+            fi
+
+            actual_exe=""
+
+            # 1. Check Wine dosdevices symlink (handles Z:, C:, D:, etc.)
+            if [[ -n "$drive" && -d "$WINEPREFIX/dosdevices/$drive:" ]]; then
+              cand=$(realpath -m "$WINEPREFIX/dosdevices/$drive:$path_no_drive" 2>/dev/null)
+              if [[ -f "$cand" ]]; then
+                actual_exe="$cand"
               fi
+            fi
 
-              if [[ "$args" == "-" ]]; then
-                args=""
+            # 2. Check path on Linux filesystem directly (ignoring drive letter)
+            if [[ -z "$actual_exe" && -n "$path_no_drive" && -f "$path_no_drive" ]]; then
+              actual_exe="$path_no_drive"
+            fi
+
+            # 3. Check under drive_c
+            if [[ -z "$actual_exe" && -n "$path_no_drive" ]]; then
+              cand="$WINEPREFIX/drive_c$path_no_drive"
+              if [[ -f "$cand" ]]; then
+                actual_exe="$cand"
               fi
+            fi
 
-              rel_path=$(echo "$win_path" | sed 's/^[A-Z]://; s/\\/\//g')
-              actual_exe="$WINEPREFIX/drive_c$rel_path"
-
+            if [[ -n "$actual_exe" && -f "$actual_exe" ]]; then
               create-desktop-with-umu "$actual_exe" "$lnk" "$args"
-            ) &
-            pids+=("$!")
-
-          done < <(find "$USER_PROFILE/Desktop" "$USER_PROFILE/AppData/Roaming/Microsoft/Windows/Start Menu/Programs" "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs" -type f -name "*.lnk" -print0 2>/dev/null)
-        done < <(find "$WINEPREFIX/drive_c/users" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+            fi
+          ) &
+          pids+=("$!")
+        done < <(find "''${SEARCH_DIRS[@]}" -type f \( -name "*.lnk" -o -name "*.LNK" \) -print0 2>/dev/null)
 
         wait
       '')
@@ -472,6 +520,16 @@ in
             exit 0
           fi
 
+          LOCK_DIR="$DESKTOP_DIR/.lock-$PATH_HASH"
+          if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+            exit 0
+          fi
+          trap 'rm -rf "$LOCK_DIR"' EXIT
+
+          if [[ -f "$DESKTOP_FILE" ]]; then
+            exit 0
+          fi
+
           if [[ -n "$name" ]]; then
             LNK_DISPLAY_NAME="$name"
           elif [[ -n "$lnk" ]]; then
@@ -499,8 +557,33 @@ in
               fi            
 
               if [[ -n "$ICON_SRC_WIN" ]]; then
-                REL_ICON_PATH=$(echo "$ICON_SRC_WIN" | sed 's/^[A-Z]://; s/\\/\//g')
-                ICON_SOURCE="$WINEPREFIX/drive_c$REL_ICON_PATH"
+                norm_icon=$(echo "$ICON_SRC_WIN" | tr '\\' '/')
+                icon_drive=""
+                icon_path_no_drive=""
+                if [[ "$norm_icon" =~ ^[a-zA-Z]: ]]; then
+                  icon_drive=$(echo "$norm_icon" | cut -d: -f1 | tr '[:upper:]' '[:lower:]')
+                  icon_path_no_drive=$(echo "$norm_icon" | sed 's/^[a-zA-Z]://')
+                else
+                  icon_path_no_drive="$norm_icon"
+                fi
+                if [[ -n "$icon_path_no_drive" && "$icon_path_no_drive" != /* ]]; then
+                  icon_path_no_drive="/$icon_path_no_drive"
+                fi
+
+                ICON_SOURCE=""
+                if [[ -n "$icon_drive" && -d "$WINEPREFIX/dosdevices/$icon_drive:" ]]; then
+                  cand=$(realpath -m "$WINEPREFIX/dosdevices/$icon_drive:$icon_path_no_drive" 2>/dev/null)
+                  [[ -f "$cand" ]] && ICON_SOURCE="$cand"
+                fi
+                if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$icon_path_no_drive" ]]; then
+                  ICON_SOURCE="$icon_path_no_drive"
+                fi
+                if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$WINEPREFIX/drive_c$icon_path_no_drive" ]]; then
+                  ICON_SOURCE="$WINEPREFIX/drive_c$icon_path_no_drive"
+                fi
+                if [[ -z "$ICON_SOURCE" ]]; then
+                  ICON_SOURCE="$actual_exe"
+                fi
               else
                 ICON_SOURCE="$actual_exe"
               fi
