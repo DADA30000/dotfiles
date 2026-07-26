@@ -13,17 +13,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure zswap & 8GB Disk Swap
+      - name: Configure Swap & ZRAM
         run: |
-          echo zstd | sudo tee /sys/module/zswap/parameters/compressor
-          echo 50 | sudo tee /sys/module/zswap/parameters/max_pool_percent
-          echo 1 | sudo tee /sys/module/zswap/parameters/enabled
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold" \
+            linux-modules-extra-$(uname -r)
 
-          echo "Setting up 8GB Swapfile on /mnt..."
-          sudo fallocate -l 8G /mnt/swapfile
+          sudo modprobe zram num_devices=1
+          TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+          echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo lz4 | sudo tee /sys/block/zram0/comp_algorithm
+          echo "${TOTAL_RAM_MB}M" | sudo tee /sys/block/zram0/disksize
+          sudo mkswap /dev/zram0
+          sudo swapon -p 100 /dev/zram0
+
+          echo "Setting up 16GB Swapfile on /mnt..."
+          sudo fallocate -l 16G /mnt/swapfile
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
+          sudo swapon -p 10 /mnt/swapfile
 
           swapon --show
 
@@ -57,7 +66,26 @@ jobs:
 
       - name: Build ISO
         run: |
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128
+          (
+            while true; do
+              sleep 60
+              echo "=== [SYS MONITOR] $(date +'%H:%M:%S UTC') ==="
+              echo "--- CPU Usage & Load ---"
+              uptime
+              top -bn1 | grep -E "%Cpu|Cpu\(s\)"
+              echo "--- Memory & Swap ---"
+              free -h
+              swapon --show
+              echo "--- Top 5 CPU Tasks ---"
+              ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu | head -n 6
+              echo "--- Top 5 RAM Tasks ---"
+              ps -eo pid,user,%cpu,%mem,comm --sort=-%mem | head -n 6
+              echo "==========================================="
+            done
+          ) &
+          MONITOR_PID=$!
+          trap "kill $MONITOR_PID 2>/dev/null || true" EXIT
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128 -j 32
           ln -sf result/iso/*.iso nixos.iso
 
       - name: Upload ISO to artifacts

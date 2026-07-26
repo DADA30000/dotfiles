@@ -50,10 +50,6 @@
       url = "github:kevoreilly/CAPEv2";
       flake = false;
     };
-    xrizer = {
-      url = "github:Supreeeme/xrizer";
-      flake = false;
-    };
     sine = {
       url = "github:CosmoCreeper/Sine";
       flake = false;
@@ -72,10 +68,6 @@
     };
     ksu-next = {
       url = "git+https://github.com/pershoot/KernelSU-Next?ref=dev-susfs";
-      flake = false;
-    };
-    monado = {
-      url = "gitlab:xytovl/monado/shared-fences?host=gitlab.freedesktop.org";
       flake = false;
     };
     gigabyte-laptop-wmi = {
@@ -226,13 +218,6 @@
       inputs = {
         nixpkgs.follows = "nixpkgs";
         home-manager.follows = "home-manager";
-      };
-    };
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        hyprland.follows = "hyprland";
       };
     };
     pyproject-build-systems = {

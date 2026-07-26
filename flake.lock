@@ -803,34 +803,6 @@
         "type": "github"
       }
     },
-    "hyprland-plugins": {
-      "inputs": {
-        "hyprland": [
-          "hyprland"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "systems": [
-          "hyprland-plugins",
-          "hyprland",
-          "systems"
-        ]
-      },
-      "locked": {
-        "lastModified": 1783772407,
-        "narHash": "sha256-7J/A/jatgo6jxtnALGbDgmJg1NEwDQmbojltzxtqsxE=",
-        "owner": "hyprwm",
-        "repo": "hyprland-plugins",
-        "rev": "a2c77641bc80b749a9b02ebe6ff8dd6d727baee9",
-        "type": "github"
-      },
-      "original": {
-        "owner": "hyprwm",
-        "repo": "hyprland-plugins",
-        "type": "github"
-      }
-    },
     "hyprland-protocols": {
       "inputs": {
         "nixpkgs": [
@@ -1135,25 +1107,6 @@
         "owner": "numtide",
         "repo": "llm-agents.nix",
         "type": "github"
-      }
-    },
-    "monado": {
-      "flake": false,
-      "locked": {
-        "host": "gitlab.freedesktop.org",
-        "lastModified": 1780504288,
-        "narHash": "sha256-6IIlh123uskh7eE1h9Lipu1n1bOK6e1ue43pZt+/3EY=",
-        "owner": "xytovl",
-        "repo": "monado",
-        "rev": "e947c895136cb7b225a3195b19e04356bf1a4f15",
-        "type": "gitlab"
-      },
-      "original": {
-        "host": "gitlab.freedesktop.org",
-        "owner": "xytovl",
-        "ref": "shared-fences",
-        "repo": "monado",
-        "type": "gitlab"
       }
     },
     "my-internet": {
@@ -1657,14 +1610,12 @@
         "helium": "helium",
         "home-manager": "home-manager",
         "hyprland": "hyprland",
-        "hyprland-plugins": "hyprland-plugins",
         "impermanence": "impermanence",
         "ksu-next": "ksu-next",
         "lanzaboote": "lanzaboote",
         "libcef-transparency-linux": "libcef-transparency-linux",
         "llama-cpp": "llama-cpp",
         "llm-agents": "llm-agents",
-        "monado": "monado",
         "my-internet": "my-internet",
         "nebula-zen": "nebula-zen",
         "nix-alien": "nix-alien",
@@ -1696,7 +1647,6 @@
         "waywallen-aur": "waywallen-aur",
         "waywallen-display": "waywallen-display",
         "wivrn": "wivrn",
-        "xrizer": "xrizer",
         "zapret-flowseal": "zapret-flowseal",
         "zen-browser": "zen-browser"
       }
@@ -2162,22 +2112,6 @@
       "original": {
         "owner": "hyprwm",
         "repo": "xdg-desktop-portal-hyprland",
-        "type": "github"
-      }
-    },
-    "xrizer": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1781228421,
-        "narHash": "sha256-0jwRlOEqjtqpTLUS9AgkcOv9N9HsppGGFNHMC1Qk/40=",
-        "owner": "Supreeeme",
-        "repo": "xrizer",
-        "rev": "31319560c1bd0f1e5c16936a946bb1c7295dbfd9",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Supreeeme",
-        "repo": "xrizer",
         "type": "github"
       }
     },
