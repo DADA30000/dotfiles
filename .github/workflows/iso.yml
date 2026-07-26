@@ -13,46 +13,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Setup ZRAM and 8GB Disk Swap FIRST (claims disk space before Nix loop allocation)
-      - name: Configure Swap & ZRAM
+      # 1. Enable kernel zswap & setup 8GB Swapfile on /mnt FIRST
+      - name: Configure zswap & 8GB Disk Swap
         run: |
-          # Install kernel extra modules quietly
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-            -o Dpkg::Options::="--force-confdef" \
-            -o Dpkg::Options::="--force-confold" \
-            linux-modules-extra-$(uname -r)
-
-          # Load ZRAM module and configure at 100% RAM capacity (~16GB)
-          sudo modprobe zram num_devices=1
-          TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-          echo zstd | sudo tee /sys/block/zram0/comp_algorithm
-          echo "${TOTAL_RAM_MB}M" | sudo tee /sys/block/zram0/disksize
-          sudo mkswap /dev/zram0
-          sudo swapon -p 100 /dev/zram0
+          # Enable zswap with zstd compression directly in sysfs
+          echo zstd | sudo tee /sys/module/zswap/parameters/compressor
+          echo 50 | sudo tee /sys/module/zswap/parameters/max_pool_percent
+          echo 1 | sudo tee /sys/module/zswap/parameters/enabled
 
           # Allocate 8GB Swapfile on /mnt BEFORE nothing-but-nix claims the drive
           echo "Setting up 8GB Swapfile on /mnt..."
           sudo fallocate -l 8G /mnt/swapfile
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
-          sudo swapon -p 10 /mnt/swapfile
+          sudo swapon /mnt/swapfile
 
           swapon --show
 
       # 2. Purge runner bloat & mount Btrfs space at /nix
-      # (It will now see ~82GB available on /mnt and build its loop file safely)
       - name: Nothing but Nix (Rampage Mode)
         uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: "rampage"
           witness-carnage: true
 
-      # 3. Tweaks & Sysctls
+      # 3. Tweaks & Sysctls (Disable Btrfs compression on /nix to save CPU)
       - name: Configure Storage & Sysctls
         run: |
-          # Remount /nix with Btrfs none compression
-          echo "Remounting /nix with compress=none..."
+          # Disable Btrfs compression on /nix
           sudo mount -o remount,compress=none /nix
 
           # Adjust AppArmor for Nix unprivileged sandboxing

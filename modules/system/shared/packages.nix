@@ -1104,6 +1104,23 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.w3m-nographics
+    pkgs.testdisk
+    pkgs.ms-sys
+    pkgs.efivar
+    pkgs.parted
+    pkgs.gptfdisk
+    pkgs.ccrypt
+    pkgs.cryptsetup
+    pkgs.fuse
+    pkgs.fuse3
+    pkgs.sshfs-fuse
+    pkgs.screen
+    pkgs.tcpdump
+    pkgs.sdparm
+    pkgs.hdparm
+    pkgs.pciutils
+    pkgs.unzip
     pkgs.gum
     pkgs.lolcat
     pkgs.openssl

@@ -8,6 +8,8 @@
   ...
 }:
 {
+  disabledModules = [ "profiles/base.nix" ];
+
   imports = [ ./packages.nix ];
 
   qt.enable = true;
@@ -127,6 +129,8 @@
   };
 
   networking = {
+
+    hostId = lib.mkDefault "8425e349";
 
     firewall.enable = false;
 
@@ -383,6 +387,18 @@
       systemd-boot.memtest86.enable = true;
     };
 
+    supportedFilesystems = [
+      "ext2"
+      "ext3"
+      "ext4"
+      "btrfs"
+      "cifs"
+      "f2fs"
+      "ntfs"
+      "vfat"
+      "xfs"
+    ];
+
   };
 
   environment = {
@@ -427,7 +443,6 @@
 
     # Set options for vm that is built using nixos-rebuild build-vm
     vmVariant = {
-      systemd.user.services.mpvpaper.enable = false;
       virtualisation = {
         qemu.options = [
           "-display sdl,gl=on"
@@ -524,6 +539,8 @@
     };
 
     services = {
+
+      avahi-daemon.serviceConfig.ExecStartPre = "${pkgs.coreutils}/bin/rm -f /run/avahi-daemon/pid";
 
       NetworkManager-wait-online.enable = false;
 
