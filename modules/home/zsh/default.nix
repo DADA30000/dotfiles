@@ -363,12 +363,18 @@ in
         initContent =
           let
             zshConfig = /* zsh */ ''
+              if [[ -n "$INSIDE_SESATT" ]]; then
+                export SUDO_EDITOR="sesatt --editor"
+                export VISUAL="sesatt --editor"
+                export EDITOR="sesatt --editor"
+              elif [[ -n "$NVIM" ]]; then
+                export SUDO_EDITOR="nvr-remote-editor"
+                export VISUAL="nvr-remote-editor"
+                export EDITOR="nvr-remote-editor"
+              fi
+
               alias v="nvim"
-              export EDITOR="nvim"
-              export VISUAL="nvim"
-              export SUDO_EDITOR="nvr-remote-editor"
               export MANPAGER="nvim +Man!"
-              export PAGER="nvim -R"
 
               printf '\n%.0s' {1..100}
               setopt correct

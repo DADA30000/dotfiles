@@ -32,7 +32,7 @@ let
     exec ${pkgs.neovim-remote}/bin/nvr --servername "$NVIM" --remote-tab-wait +"setlocal bufhidden=wipe" "$@"
   '';
 
-  # Clean script using explicit coreutils paths
+  # Dispatcher script using explicit coreutils paths
   smart-neovim-script = pkgs.writeShellScript "smart-nvim" ''
     DIR=$(${pkgs.coreutils}/bin/dirname "$0")
 
@@ -116,24 +116,17 @@ let
     exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-send "$CMD_STR"
   '';
 
-  # Package wrapper that passes lua and meta directly to wrapper.nix
-  smart-neovim-unwrapped =
-    pkgs.symlinkJoin {
-      name = "neovim-unwrapped-${pkgs.neovim-unwrapped.version or "smart"}";
-      paths = [ pkgs.neovim-unwrapped ];
-      postBuild = ''
-        mv $out/bin/nvim $out/bin/nvim-raw
-        cp ${smart-neovim-script} $out/bin/nvim
-        chmod +x $out/bin/nvim
-      '';
-      passthru = (pkgs.neovim-unwrapped.passthru or { }) // {
-        inherit (pkgs.neovim-unwrapped) lua;
-      };
-      meta = pkgs.neovim-unwrapped.meta or { };
-    }
-    // {
-      lua = pkgs.neovim-unwrapped.lua or null;
-    };
+  # Patched neovim-unwrapped built natively with C source changes & smart dispatcher script
+  patched-neovim-unwrapped = pkgs.neovim-unwrapped.overrideAttrs (oldAttrs: {
+    patches = (oldAttrs.patches or [ ]) ++ [
+      ../../../stuff/patches/neovim.patch
+    ];
+    postInstall = (oldAttrs.postInstall or "") + ''
+      mv $out/bin/nvim $out/bin/nvim-raw
+      cp ${smart-neovim-script} $out/bin/nvim
+      chmod +x $out/bin/nvim
+    '';
+  });
 
   python = pkgs.python3.withPackages (
     ps: with ps; [
@@ -193,6 +186,13 @@ let
         vim.bo.bufhidden = "wipe"
       end,
     })
+
+    -- === DISABLE FOLDING GLOBALLY ===
+    vim.opt.foldenable = false
+    vim.opt.foldlevel = 99
+
+    -- Disable mode display to prevent command line popups in cmdheight=0
+    vim.opt.showmode = false
 
     -- === AUTO-STOP LSP WHEN ITS LAST BUFFER IS CLOSED ===
     local stopping_clients = {}
@@ -284,6 +284,33 @@ let
         end
       end,
     })
+
+    -- === CLEAN KITTY-STYLE WINDOW TITLE ===
+    vim.opt.title = true
+
+    _G.GetWindowTitle = function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      local bufname = vim.api.nvim_buf_get_name(bufnr)
+
+      if vim.bo[bufnr].buftype == "terminal" then
+        local term_title = vim.b[bufnr].term_title
+        if term_title and term_title ~= "" then
+          local cmd = term_title:match("([^/]+)$") or term_title
+          return cmd:match("^([^%s]+)") or cmd
+        end
+        return "term"
+      elseif bufname == "" then
+        return "[No Name]"
+      else
+        local filename = vim.fn.fnamemodify(bufname, ":t")
+        if filename == "default.nix" then
+          return vim.fn.fnamemodify(bufname, ":h:t") .. "/default.nix"
+        end
+        return filename
+      end
+    end
+
+    vim.o.titlestring = "%{v:lua.GetWindowTitle()}"
 
     -- === BROWSER / KITTY-STYLE MOUSE DRAG AUTO-SCROLL SELECTION ===
     local drag_timer = nil
@@ -452,6 +479,9 @@ let
       map !hh :silent! tabnew +Man! ${kekma.home}<cr>
       map !nn :silent! tabnew +Man! ${kekma.nix}<cr>
       set number
+      set nofoldenable
+      set foldlevel=99
+      set noshowmode
       set signcolumn=yes
       highlight EndOfBuffer ctermbg=none guibg=none
       highlight SignColumn ctermbg=none guibg=none
@@ -644,41 +674,30 @@ let
       end
     })
 
+    -- Helper to feed raw unmapped scroll wheel key events to C engine
+    local function feed_raw_scroll(key)
+      local termcode = vim.api.nvim_replace_termcodes(key, true, false, true)
+      vim.api.nvim_feedkeys(termcode, "n", false)
+    end
+
+    -- === SYNCHRONOUS TERMINAL SCROLLING & BOUNDARY PROTECTION ===
+    -- 1) Normal/Visual mode: Hard stop at bottom line and instantly switch to insert mode via native "i"
     vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
       if vim.bo.buftype == "terminal" then
+        if vim.b.terminal_altscreen then
+          feed_raw_scroll("<ScrollWheelDown>")
+          return ""
+        end
         if vim.fn.line("w$") >= vim.fn.line("$") then
-          local mode = vim.api.nvim_get_mode().mode
-          if not mode:match("[vVsS\22\19]") and mode ~= "t" then
-            vim.schedule(function()
-              set_hidden_cursor(false)
-              vim.cmd("startinsert")
-            end)
-          end
+          -- Return native "i" command to enter Insert mode without triggering Ex command line bar in cmdheight=0
+          return "i"
+        else
+          feed_raw_scroll("<ScrollWheelDown>")
           return ""
         end
       end
       return "<ScrollWheelDown>"
     end, { expr = true, silent = true, desc = "Hard stop scroll down at terminal bottom" })
-
-    vim.api.nvim_create_autocmd({ "WinScrolled" }, {
-      pattern = "*",
-      callback = function()
-        if vim.bo.buftype == "terminal" then
-          local mode = vim.api.nvim_get_mode().mode
-          if (mode == "nt" or mode == "n") and vim.fn.line("w$") >= vim.fn.line("$") then
-            vim.schedule(function()
-              if vim.bo.buftype == "terminal" then
-                local cur_mode = vim.api.nvim_get_mode().mode
-                if cur_mode == "nt" or cur_mode == "n" then
-                  set_hidden_cursor(false)
-                  vim.cmd("startinsert")
-                end
-              end
-            end)
-          end
-        end
-      end,
-    })
 
     vim.api.nvim_create_autocmd({ "TermRequest", "TermResponse" }, {
       pattern = "*",
@@ -693,6 +712,31 @@ let
         local bufnr = args.buf
 
         vim.cmd("startinsert")
+
+        -- 2) Terminal-Insert mode scroll handlers
+        -- Scroll down at prompt: pass through to C in altscreen; swallow at bottom prompt to prevent exiting insert mode
+        vim.keymap.set("t", "<ScrollWheelDown>", function()
+          if vim.b[bufnr].terminal_altscreen then
+            feed_raw_scroll("<ScrollWheelDown>")
+            return ""
+          end
+          if vim.fn.line("w$") >= vim.fn.line("$") then
+            return ""
+          end
+          feed_raw_scroll("<ScrollWheelDown>")
+          return ""
+        end, { buffer = bufnr, expr = true, silent = true })
+
+        -- Scroll up at prompt: pass through to C in altscreen; exit to Normal mode and scroll up if at prompt
+        vim.keymap.set("t", "<ScrollWheelUp>", function()
+          if vim.b[bufnr].terminal_altscreen then
+            feed_raw_scroll("<ScrollWheelUp>")
+            return ""
+          end
+          vim.cmd("stopinsert")
+          feed_raw_scroll("<ScrollWheelUp>")
+          return ""
+        end, { buffer = bufnr, expr = true, silent = true })
 
         local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-=~!@#$%^&*()_+[]{}|;:',./<>?"
         local cyrillic = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
@@ -734,47 +778,6 @@ let
             exit_visual_and_type(vim.api.nvim_replace_termcodes(keycode, true, false, true))
           end, { buffer = bufnr, nowait = true, silent = true })
         end
-
-        local function is_shell_at_prompt(b)
-          local chan = vim.bo[b].channel
-          if not chan or chan <= 0 then return false end
-          local pid = vim.fn.jobpid(chan)
-          if not pid or pid <= 0 then return false end
-
-          local f = io.open("/proc/" .. pid .. "/stat", "r")
-          if not f then return false end
-          local content = f:read("*a")
-          f:close()
-
-          if not content then return false end
-          local after_comm = content:match("%)(.*)")
-          if not after_comm then return false end
-
-          local fields = {}
-          for field in after_comm:gmatch("%S+") do
-            table.insert(fields, field)
-          end
-
-          local pgrp = tonumber(fields[3])
-          local tpgid = tonumber(fields[6])
-          return (tpgid and pgrp and tpgid == pgrp)
-        end
-
-        vim.keymap.set("t", "<ScrollWheelUp>", function()
-          if is_shell_at_prompt(bufnr) then
-            return "<C-\\><C-n><ScrollWheelUp>"
-          else
-            return "<Up><Up><Up>"
-          end
-        end, { expr = true, buffer = bufnr, silent = true })
-
-        vim.keymap.set("t", "<ScrollWheelDown>", function()
-          if is_shell_at_prompt(bufnr) then
-            return ""
-          else
-            return "<Down><Down><Down>"
-          end
-        end, { expr = true, buffer = bufnr, silent = true })
 
         vim.keymap.set("t", "<ScrollWheelLeft>", "<Left>", { buffer = bufnr, silent = true })
         vim.keymap.set("t", "<ScrollWheelRight>", "<Right>", { buffer = bufnr, silent = true })
@@ -1251,7 +1254,7 @@ in
       neovide-term
     ];
     programs.neovim = {
-      package = smart-neovim-unwrapped;
+      package = patched-neovim-unwrapped;
       withPython3 = true;
       withRuby = true;
       withPerl = true;

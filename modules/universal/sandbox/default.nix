@@ -259,6 +259,7 @@ let
               MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
               case "$MY_SCOPE" in
                 *"${appId}"*)
+                  mkdir -p "$SANDBOX_DIR"
                   printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
                   printf '%s\n' "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
                   ;;

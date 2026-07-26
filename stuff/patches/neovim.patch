@@ -1,0 +1,169 @@
+diff --git a/src/nvim/register.c b/src/nvim/register.c
+index fb5fe5d..9bf966a 100644
+--- a/src/nvim/register.c
++++ b/src/nvim/register.c
+@@ -1050,32 +1050,49 @@ void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
+     }
+   }
+ 
+-  for (; lnum <= yankendlnum; lnum++, y_idx++) {
+-    switch (reg->y_type) {
+-    case kMTBlockWise:
+-      block_prep(oap, &bd, lnum, false);
+-      yank_copy_line(reg, &bd, y_idx, oap->excl_tr_ws);
+-      break;
++  for (; lnum <= yankendlnum; lnum++) {
++    bool is_cont = (curbuf->terminal != NULL && lnum > oap->start.lnum && terminal_line_is_continuation(curbuf, lnum));
++    size_t cur_y_idx = (is_cont && y_idx > 0) ? y_idx - 1 : y_idx;
++
++    if (is_cont && y_idx > 0) {
++      // Append text directly to previous register line without inserting \n
++      char *line_text = ml_get(lnum);
++      size_t line_len = (size_t)ml_get_len(lnum);
++      String *prev = &reg->y_array[cur_y_idx];
++      size_t new_size = prev->size + line_len;
++      char *new_data = xmalloc(new_size + 1);
++      memcpy(new_data, prev->data, prev->size);
++      memcpy(new_data + prev->size, line_text, line_len);
++      new_data[new_size] = NUL;
++      xfree(prev->data);
++      *prev = cbuf_as_string(new_data, new_size);
++    } else {
++      switch (reg->y_type) {
++      case kMTBlockWise:
++        block_prep(oap, &bd, lnum, false);
++        yank_copy_line(reg, &bd, cur_y_idx, oap->excl_tr_ws);
++        break;
+ 
+-    case kMTLineWise:
+-      reg->y_array[y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
+-      break;
++      case kMTLineWise:
++        reg->y_array[cur_y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
++        break;
+ 
+-    case kMTCharWise:
+-      charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
+-      // make sure bd.textlen is not longer than the text
+-      int tmp = (int)strlen(bd.textstart);
+-      if (tmp < bd.textlen) {
+-        bd.textlen = tmp;
+-      }
+-      yank_copy_line(reg, &bd, y_idx, false);
+-      break;
++      case kMTCharWise:
++        charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
++        int tmp = (int)strlen(bd.textstart);
++        if (tmp < bd.textlen) {
++          bd.textlen = tmp;
++        }
++        yank_copy_line(reg, &bd, cur_y_idx, false);
++        break;
+ 
+-    // NOTREACHED
+-    case kMTUnknown:
+-      abort();
++      case kMTUnknown:
++        abort();
++      }
++      y_idx++;
+     }
+   }
++  reg->y_size = y_idx;
+ 
+   if (curr != reg) {      // append the new block to the old block
+     size_t j;
+diff --git a/src/nvim/terminal.c b/src/nvim/terminal.c
+index cb5a1ef..d71ff17 100644
+--- a/src/nvim/terminal.c
++++ b/src/nvim/terminal.c
+@@ -140,6 +140,7 @@ static bool refresh_pending = false;
+ 
+ typedef struct {
+   size_t cols;
++  bool continuation;
+   VTermScreenCell cells[];
+ } ScrollbackLine;
+ 
+@@ -1605,6 +1606,15 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
+   switch (prop) {
+   case VTERM_PROP_ALTSCREEN:
+     term->in_altscreen = val->boolean;
++    buf_T *alt_buf = handle_get_buffer(term->buf_handle);
++    if (alt_buf) {
++      Error err = ERROR_INIT;
++      dict_set_var(alt_buf->b_vars,
++                   STATIC_CSTR_AS_STRING("terminal_altscreen"),
++                   BOOLEAN_OBJ(val->boolean),
++                   false, false, NULL, &err);
++      api_clear_error(&err);
++    }
+     break;
+ 
+   case VTERM_PROP_CURSORVISIBLE:
+@@ -1741,6 +1751,10 @@ static int term_sb_push(int cols, const VTermScreenCell *cells, void *data)
+     term->sb_pending++;
+   }
+ 
++  VTermState *state = vterm_obtain_state(term->vt);
++  const VTermLineInfo *info = vterm_state_get_lineinfo(state, 0);
++  sbrow->continuation = info ? info->continuation : false;
++
+   memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
+   if (!term->synchronized_output) {
+     set_put(ptr_t, &invalidated_terminals, term);
+@@ -2259,6 +2273,14 @@ static bool send_mouse_event(Terminal *term, int c)
+   }
+ 
+   if (c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT) {
++    if (term->in_altscreen && !term->forward_mouse) {
++      int key = (c == K_MOUSEUP) ? K_DOWN : (c == K_MOUSEDOWN) ? K_UP : (c == K_MOUSELEFT) ? K_LEFT : K_RIGHT;
++      for (int i = 0; i < 3; i++) {
++        terminal_send_key(term, key);
++      }
++      return false;
++    }
++
+     win_T *save_curwin = curwin;
+     // switch window/buffer to perform the scroll
+     curwin = mouse_win;
+@@ -2710,6 +2732,28 @@ static char *get_config_string(buf_T *buf, char *key)
+   return NULL;
+ }
+ 
++bool terminal_line_is_continuation(buf_T *buf, int linenr)
++{
++  if (!buf || !buf->terminal) {
++    return false;
++  }
++  Terminal *term = buf->terminal;
++  int row = linenr_to_row(term, linenr);
++  if (row < 0) {
++    int idx = -row - 1;
++    if (idx >= 0 && (size_t)idx < term->sb_current) {
++      return term->sb_buffer[idx]->continuation;
++    }
++  } else {
++    VTermState *state = vterm_obtain_state(term->vt);
++    const VTermLineInfo *info = vterm_state_get_lineinfo(state, row);
++    if (info) {
++      return info->continuation;
++    }
++  }
++  return false;
++}
++
+ // }}}
+ 
+ // vim: foldmethod=marker
+diff --git a/src/nvim/terminal.h b/src/nvim/terminal.h
+index cdeb155..75bfbe9 100644
+--- a/src/nvim/terminal.h
++++ b/src/nvim/terminal.h
+@@ -24,4 +24,6 @@ typedef struct {
+   bool force_crlf;
+ } TerminalOptions;
+ 
++bool terminal_line_is_continuation(buf_T *buf, int linenr);
++
+ #include "terminal.h.generated.h"
