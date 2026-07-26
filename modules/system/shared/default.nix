@@ -857,7 +857,7 @@
     uwsm = {
       enable = true;
       package = pkgs.uwsm.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/uwsm_uuctl.patch ];
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/uwsm.patch ];
         postInstall = (prev.postInstall or "") + ''
           chmod -R 777 "$out/bin"
           wrapProgram "$out/bin/uuctl" \

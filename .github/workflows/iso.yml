@@ -13,15 +13,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Enable kernel zswap & setup 8GB Swapfile on /mnt FIRST
       - name: Configure zswap & 8GB Disk Swap
         run: |
-          # Enable zswap with zstd compression directly in sysfs
           echo zstd | sudo tee /sys/module/zswap/parameters/compressor
           echo 50 | sudo tee /sys/module/zswap/parameters/max_pool_percent
           echo 1 | sudo tee /sys/module/zswap/parameters/enabled
 
-          # Allocate 8GB Swapfile on /mnt BEFORE nothing-but-nix claims the drive
           echo "Setting up 8GB Swapfile on /mnt..."
           sudo fallocate -l 8G /mnt/swapfile
           sudo chmod 600 /mnt/swapfile
@@ -30,20 +27,16 @@ jobs:
 
           swapon --show
 
-      # 2. Purge runner bloat & mount Btrfs space at /nix
       - name: Nothing but Nix (Rampage Mode)
         uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: "rampage"
           witness-carnage: true
 
-      # 3. Tweaks & Sysctls (Disable Btrfs compression on /nix to save CPU)
       - name: Configure Storage & Sysctls
         run: |
-          # Disable Btrfs compression on /nix
           sudo mount -o remount,compress=none /nix
 
-          # Adjust AppArmor for Nix unprivileged sandboxing
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
@@ -52,7 +45,6 @@ jobs:
           free -h
           df -h /nix
 
-      # 4. Install Nix
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -63,14 +55,11 @@ jobs:
             auto-optimise-store = true
             build-dir = /nix/build
 
-      # 5. Build ISO & Symlink File
       - name: Build ISO
         run: |
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 32 -j 32
-
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128
           ln -sf result/iso/*.iso nixos.iso
 
-      # 6. Upload Direct Non-Zipped ISO Artifact
       - name: Upload ISO to artifacts
         uses: actions/upload-artifact@v7
         with:

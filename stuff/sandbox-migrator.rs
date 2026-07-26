@@ -42,7 +42,7 @@ fn main() {
     let cgroup_procs = cgroup_procs.expect("Missing --cgroup-procs");
     let go_pipe = go_pipe.expect("Missing --go-pipe");
 
-    let target_marker = format!("# nixpak-sandbox-bootstrap-marker:{}", app_id);
+    let target_env = format!("APP_ID={}", app_id);
     let mut guest_host_pid = None;
 
     if let Ok(entries) = fs::read_dir("/proc") {
@@ -79,19 +79,25 @@ fn main() {
                         continue;
                     }
 
-                    // 3. Verify cmdline argument structure and bootstrap comment
+                    // 3. Verify cmdline argument structure and check process environment for APP_ID
                     let cmdline_path = pid_dir.join("cmdline");
                     if let Ok(cmdline_bytes) = fs::read(&cmdline_path) {
                         let parts: Vec<&[u8]> = cmdline_bytes.split(|&b| b == 0).collect();
-                        if parts.len() >= 3 {
+                        if parts.len() >= 2 {
                             let arg0 = String::from_utf8_lossy(parts[0]);
                             let arg1 = String::from_utf8_lossy(parts[1]);
-                            let arg2 = String::from_utf8_lossy(parts[2]);
 
                             if (arg0.ends_with("/dash") || arg0 == "dash") && arg1 == "-c" {
-                                if arg2.contains(&target_marker) {
-                                    guest_host_pid = Some(name_str.into_owned());
-                                    break;
+                                let environ_path = pid_dir.join("environ");
+                                if let Ok(environ_bytes) = fs::read(&environ_path) {
+                                    let has_app_id = environ_bytes
+                                        .split(|&b| b == 0)
+                                        .any(|var| var == target_env.as_bytes());
+
+                                    if has_app_id {
+                                        guest_host_pid = Some(name_str.into_owned());
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -105,8 +111,8 @@ fn main() {
         Some(pid) => pid,
         None => {
             eprintln!(
-                "Error: Failed to find process with bootstrap marker under scope {}",
-                scope
+                "Error: Failed to find process with APP_ID {} under scope {}",
+                app_id, scope
             );
             process::exit(1);
         }

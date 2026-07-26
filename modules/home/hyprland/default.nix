@@ -506,6 +506,46 @@ in
           };
           bind =
             let
+              kill-cgroup = pkgs.writeShellScript "hypr-kill-cgroup" ''
+                set -euo pipefail
+
+                POS=$(slurp -p)
+                X="''${POS%%,*}"
+                Y="''${POS#*,}"
+
+                ACTIVE_WS=$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]')
+
+                CLIENT_INFO=$(hyprctl clients -j | jq -r --argjson x "$X" --argjson y "$Y" --argjson active_ws "$ACTIVE_WS" '
+                  .[] | select(.workspace.id as $w | $active_ws | contains([$w])) |
+                  select(.at[0] <= $x and $x <= (.at[0] + .size[0]) and
+                         .at[1] <= $y and $y <= (.at[1] + .size[1])) |
+                  {pid: .pid, class: .class}
+                ' | head -n 1)
+
+                PID=$(echo "$CLIENT_INFO" | jq -r '.pid // empty')
+                WM_CLASS=$(echo "$CLIENT_INFO" | jq -r '.class // "Window"')
+
+                if [[ -z "$PID" || "$PID" == "null" || "$PID" == "0" ]]; then
+                  notify-send -u low "Cgroup Killer" "No window found at position"
+                  exit 1
+                fi
+
+                UNIT=$(ps -o unit= -p "$PID" | tr -d ' ')
+                PROTECTED_PATTERN="^(hyprland|wayland-wm.*|dbus.*|init\.scope|user@.*|systemd-.*)$"
+                KILLED=0
+
+                if [[ -n "$UNIT" && "$UNIT" =~ \.(service|scope)$ ]] && ! [[ "$UNIT" =~ $PROTECTED_PATTERN ]]; then
+                  if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
+                    systemctl --user stop "$UNIT"
+                    notify-send -u normal "Cgroup Killer" "Stopped unit: $UNIT ($WM_CLASS)"
+                    KILLED=1
+                  elif systemctl is-active --quiet "$UNIT" 2>/dev/null; then
+                    systemctl stop "$UNIT"
+                    notify-send -u normal "Cgroup Killer" "Stopped system unit: $UNIT ($WM_CLASS)"
+                    KILLED=1
+                  fi
+                fi
+              '';
               save-replay = pkgs.writers.writeDash "save-replay" ''
                 MON_NAME=$(hyprctl activeworkspace -j | ${pkgs.jq}/bin/jq -r '.monitor')
                 pkill -SIGUSR1 -f "gpu-screen-recorder.*-w $MON_NAME.*" && \
@@ -659,6 +699,10 @@ in
               [
                 "${mod} + CTRL + C"
                 "hyprctl kill"
+              ]
+              [
+                "${mod} + ALT + CTRL + C"
+                "${kill-cgroup}"
               ]
               [
                 "${mod} + I"
@@ -1189,7 +1233,7 @@ in
         }
         {
           label = "logout";
-          action = "uwsm stop; loginctl terminate-user \"\"";
+          action = "loginctl terminate-user \"\"";
           text = "Logout";
           keybind = "e";
         }

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::Shutdown;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
@@ -148,19 +148,32 @@ fn get_sesatt_dir() -> PathBuf {
     dir
 }
 
-fn validate_environment() {
-    if Command::new("app2unit").arg("--help").output().is_err() {
-        eprintln!("Error: 'app2unit' binary is not installed or not found in PATH.");
+fn validate_session_name(session: &str) {
+    if session.is_empty()
+        || session.contains('/')
+        || session.contains('\\')
+        || session.contains("..")
+        || session.contains('*')
+        || session.contains('?')
+        || session.contains('[')
+        || session.contains(']')
+        || session.contains(' ')
+    {
+        eprintln!("Error: Invalid session name. Avoid spaces and special characters.");
         std::process::exit(1);
     }
 }
 
+fn get_session_dir(session: &str) -> PathBuf {
+    get_sesatt_dir().join(session)
+}
+
 fn get_sock_path(session: &str) -> PathBuf {
-    get_sesatt_dir().join(format!("{}.sock", session))
+    get_session_dir(session).join("sesatt.sock")
 }
 
 fn get_log_path(session: &str) -> PathBuf {
-    get_sesatt_dir().join(format!("{}.log", session))
+    get_session_dir(session).join("sesatt.log")
 }
 
 fn connect_with_retry(sock_path: &Path, retries: u32, delay: Duration) -> io::Result<UnixStream> {
@@ -201,6 +214,7 @@ fn main() -> io::Result<()> {
     // Internal daemon launcher
     if args.len() >= 4 && args[1] == "--daemon" {
         let session = &args[2];
+        validate_session_name(session);
         let cmd_args = args[3..].to_vec();
         let sock_path = get_sock_path(session);
         let log_path = get_log_path(session);
@@ -217,11 +231,12 @@ fn main() -> io::Result<()> {
     // Query active NVIM socket from sesatt daemon
     if args.len() >= 3 && args[1] == "--get-nvim" {
         let session = &args[2];
+        validate_session_name(session);
         let sock_path = get_sock_path(session);
         if let Ok(mut stream) = UnixStream::connect(&sock_path) {
             let _ = stream.write_all(&[0x03]);
             let mut buf = Vec::new();
-            let _ = stream.read_to_end(&mut buf);
+            let _ = (&mut stream).take(4096).read_to_end(&mut buf);
             if !buf.is_empty() {
                 let nvim_str = String::from_utf8_lossy(&buf);
                 print!("{}", nvim_str);
@@ -242,11 +257,12 @@ fn main() -> io::Result<()> {
 
         let target_nvim = if env::var("INSIDE_SESATT").as_deref() == Ok("1") {
             if let Ok(session) = env::var("SESATT_SESSION") {
+                validate_session_name(&session);
                 let sock_path = get_sock_path(&session);
                 if let Ok(mut stream) = UnixStream::connect(&sock_path) {
                     let _ = stream.write_all(&[0x03]);
                     let mut buf = Vec::new();
-                    let _ = stream.read_to_end(&mut buf);
+                    let _ = (&mut stream).take(4096).read_to_end(&mut buf);
                     if !buf.is_empty() {
                         String::from_utf8_lossy(&buf).to_string()
                     } else {
@@ -284,8 +300,6 @@ fn main() -> io::Result<()> {
         }
     }
 
-    validate_environment();
-
     if args.len() < 2 {
         print_help();
         return Ok(());
@@ -315,26 +329,44 @@ fn main() -> io::Result<()> {
         _ => {}
     }
 
-    let session = &args[1];
+    let mut detach_mode = false;
+    let mut session_idx = 1;
+
+    if args[1] == "-d" || args[1] == "--detach" {
+        detach_mode = true;
+        session_idx = 2;
+        if args.len() <= session_idx {
+            eprintln!("Error: Missing session name after {}.", args[1]);
+            std::process::exit(1);
+        }
+    }
+
+    let session = &args[session_idx];
+    validate_session_name(session);
+
     let sock_path = get_sock_path(session);
     let log_path = get_log_path(session);
 
     if sock_path.exists() {
         if UnixStream::connect(&sock_path).is_ok() {
+            if detach_mode {
+                println!("Session '{}' already exists and is active.", session);
+                return Ok(());
+            }
             return attach_session(&sock_path, &log_path);
         } else {
             let _ = fs::remove_file(&sock_path);
         }
     }
 
-    if log_path.exists() && args.len() == 2 {
+    if log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
         dump_scrollback(&log_path)?;
         println!("\n--- Process finished. Log preserved above. ---");
         return Ok(());
     }
 
-    let cmd_args = if args.len() > 2 {
-        args[2..].to_vec()
+    let cmd_args = if args.len() > session_idx + 1 {
+        args[session_idx + 1..].to_vec()
     } else {
         match env::var("SHELL") {
             Ok(s) if !s.is_empty() => vec![s],
@@ -346,18 +378,25 @@ fn main() -> io::Result<()> {
     };
 
     spawn_daemon(session, &cmd_args)?;
+
+    if detach_mode {
+        println!("Started session '{}' in detached mode.", session);
+        return Ok(());
+    }
+
     attach_session(&sock_path, &log_path)
 }
 
 fn print_help() {
     println!("sesatt - Lightweight native-scroll background session manager\n");
     println!("USAGE:");
-    println!("  sesatt <SESSION_NAME> [COMMAND...]");
+    println!("  sesatt [OPTION] <SESSION_NAME> [COMMAND...]");
     println!("  sesatt [OPTION]\n");
     println!("ARGUMENTS:");
     println!("  <SESSION_NAME>       Name of the session to create or attach to");
     println!("  [COMMAND...]         Command to execute in a new session (defaults to $SHELL)\n");
     println!("OPTIONS:");
+    println!("  -d, --detach         Start session in detached mode (do not attach)");
     println!("  -l, --list           List all background sessions (active and dead)");
     println!("  -c, --clean          Remove log and socket files for all dead sessions");
     println!("  -k, --kill <SESSION> Terminate specified session and its systemd scope");
@@ -375,24 +414,17 @@ fn get_all_sessions() -> Vec<(String, bool)> {
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if path.extension().and_then(|s| s.to_str()) == Some("sock")
-                    || path.extension().and_then(|s| s.to_str()) == Some("log")
-                {
-                    sessions_map.entry(stem.to_string()).or_insert(false);
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    let sock_path = path.join("sesatt.sock");
+                    let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
+                    sessions_map.insert(name.to_string(), is_active);
                 }
             }
         }
     }
 
-    let mut result = Vec::new();
-    for (name, _) in sessions_map {
-        let sock_path = get_sock_path(&name);
-        let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
-        result.push((name, is_active));
-    }
-
-    result
+    sessions_map.into_iter().collect()
 }
 
 fn list_sessions() {
@@ -417,11 +449,8 @@ fn clean_dead_sessions() {
 
     for (name, is_active) in sessions {
         if !is_active {
-            let sock_path = get_sock_path(&name);
-            let log_path = get_log_path(&name);
-
-            let _ = fs::remove_file(&sock_path);
-            let _ = fs::remove_file(&log_path);
+            let session_dir = get_session_dir(&name);
+            let _ = fs::remove_dir_all(&session_dir);
             println!("Cleaned dead session '{}'.", name);
             cleaned_count += 1;
         }
@@ -433,13 +462,13 @@ fn clean_dead_sessions() {
 }
 
 fn kill_session(session: &str) {
-    let sock_path = get_sock_path(session);
-    let log_path = get_log_path(session);
+    validate_session_name(session);
+    let session_dir = get_session_dir(session);
 
-    let files_exist = sock_path.exists() || log_path.exists();
+    let dir_exists = session_dir.exists();
     let scope_active = has_active_scope(session);
 
-    if !files_exist && !scope_active {
+    if !dir_exists && !scope_active {
         eprintln!("Error: Session '{}' does not exist.", session);
         std::process::exit(1);
     }
@@ -452,8 +481,7 @@ fn kill_session(session: &str) {
         .stderr(Stdio::null())
         .status();
 
-    let _ = fs::remove_file(&sock_path);
-    let _ = fs::remove_file(&log_path);
+    let _ = fs::remove_dir_all(&session_dir);
     println!("Session '{}' terminated.", session);
 }
 
@@ -469,11 +497,11 @@ fn send_nvim_pkt(stream: &mut UnixStream) -> io::Result<()> {
     if let Ok(nvim) = env::var("NVIM") {
         if !nvim.is_empty() {
             let bytes = nvim.as_bytes();
-            let len = bytes.len() as u16;
-            let mut pkt = Vec::with_capacity(3 + bytes.len());
+            let len = (bytes.len().min(u16::MAX as usize)) as u16;
+            let mut pkt = Vec::with_capacity(3 + len as usize);
             pkt.push(0x02);
             pkt.extend_from_slice(&len.to_be_bytes());
-            pkt.extend_from_slice(bytes);
+            pkt.extend_from_slice(&bytes[..len as usize]);
             return stream.write_all(&pkt);
         }
     }
@@ -565,31 +593,53 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn get_tail_bytes(path: &Path, max_bytes: u64, max_lines: usize) -> io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let len = file.metadata()?.len();
+    let start = if len > max_bytes { len - max_bytes } else { 0 };
+    file.seek(SeekFrom::Start(start))?;
+
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+
+    if bytes.is_empty() {
+        return Ok(bytes);
+    }
+
+    let mut lines_count = 0;
+    let mut start_idx = 0;
+
+    for (i, &b) in bytes.iter().enumerate().rev() {
+        if b == b'\n' {
+            lines_count += 1;
+            if lines_count == max_lines {
+                start_idx = i + 1;
+                break;
+            }
+        }
+    }
+    Ok(bytes[start_idx..].to_vec())
+}
+
 fn dump_scrollback(log_path: &Path) -> io::Result<()> {
     if log_path.exists() {
-        let bytes = fs::read(log_path)?;
-        if !bytes.is_empty() {
-            let mut lines_count = 0;
-            let mut start_idx = 0;
-
-            for (i, &b) in bytes.iter().enumerate().rev() {
-                if b == b'\n' {
-                    lines_count += 1;
-                    if lines_count == 3000 {
-                        start_idx = i + 1;
-                        break;
-                    }
-                }
+        if let Ok(bytes) = get_tail_bytes(log_path, 256 * 1024, 3000) {
+            if !bytes.is_empty() {
+                io::stdout().write_all(&bytes)?;
+                io::stdout().flush()?;
             }
-
-            io::stdout().write_all(&bytes[start_idx..])?;
-            io::stdout().flush()?;
         }
     }
     Ok(())
 }
 
 fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
+    let session_dir = get_session_dir(session);
+    if let Err(e) = fs::create_dir_all(&session_dir) {
+        eprintln!("Error: Failed to create session directory: {}", e);
+        std::process::exit(1);
+    }
+
     let sock_path = get_sock_path(session);
     let log_path = get_log_path(session);
 
@@ -604,11 +654,26 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
         }
     };
 
-    let mut app = Command::new("app2unit");
-    app.arg("-x");
-    app.arg("-a").arg(format!("sesatt-{}", session));
-    app.arg("--");
-    app.arg(&exe);
+    // Probe if app2unit can connect to systemd bus in this environment
+    let app2unit_works = Command::new("app2unit")
+        .arg("true")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    let mut app = if app2unit_works {
+        let mut cmd = Command::new("app2unit");
+        cmd.arg("-x");
+        cmd.arg("-a").arg(format!("sesatt-{}", session));
+        cmd.arg("--");
+        cmd.arg(&exe);
+        cmd
+    } else {
+        Command::new(&exe)
+    };
+
     app.arg("--daemon");
     app.arg(session);
     for arg in cmd_args {
@@ -616,7 +681,7 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
     }
 
     if let Err(e) = app.spawn() {
-        eprintln!("Error: Failed to spawn daemon via app2unit: {}", e);
+        eprintln!("Error: Failed to spawn daemon process: {}", e);
         std::process::exit(1);
     }
 
@@ -711,22 +776,9 @@ fn run_daemon_server(
                         return;
                     }
 
-                    if let Ok(bytes) = fs::read(&log_path_inner) {
+                    if let Ok(bytes) = get_tail_bytes(&log_path_inner, 256 * 1024, 3000) {
                         if !bytes.is_empty() {
-                            let mut lines_count = 0;
-                            let mut start_idx = 0;
-
-                            for (i, &b) in bytes.iter().enumerate().rev() {
-                                if b == b'\n' {
-                                    lines_count += 1;
-                                    if lines_count == 3000 {
-                                        start_idx = i + 1;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            let _ = s.write_all(&bytes[start_idx..]);
+                            let _ = s.write_all(&bytes);
                             let _ = s.flush();
                         }
                     }
@@ -753,7 +805,6 @@ fn run_daemon_server(
                                     break;
                                 }
 
-                                // Update active NVIM socket to THIS client when input is typed
                                 if !my_nvim.is_empty() {
                                     if let Ok(mut guard) = latest_nvim_inner.lock() {
                                         *guard = my_nvim.clone();

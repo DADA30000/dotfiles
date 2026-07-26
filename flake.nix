@@ -22,13 +22,8 @@
       url = "sourcehut:~whynothugo/way-secure";
       flake = false;
     };
-    # CHANGE THIS LATER AFTER 1-2 WEEKS
     zapret-flowseal = {
-      url = "github:sch-izo/shizapret/reupload";
-      flake = false;
-    };
-    vencord-src = {
-      url = "github:Vendicated/Vencord";
+      url = "github:Flowseal/zapret-discord-youtube";
       flake = false;
     };
     my-internet = {
@@ -60,7 +55,7 @@
       flake = false;
     };
     sine = {
-      url = "github:CosmoCreeper/Sine/v2.3.3";
+      url = "github:CosmoCreeper/Sine";
       flake = false;
     };
     sine-bootloader = {

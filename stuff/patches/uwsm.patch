@@ -1,0 +1,518 @@
+diff --git a/scripts/fumon.sh b/scripts/fumon.sh
+index 0122c14..709fcd7 100755
+--- a/scripts/fumon.sh
++++ b/scripts/fumon.sh
+@@ -12,148 +12,158 @@ N='
+ '
+ 
+ list_contains() {
+-	# check if list contains item separated by separator
+-	CLIST=$1
+-	CITEM=$2
+-	CSEP=${3:- }
+-	case "${CSEP}${CLIST}${CSEP}" in
+-	*"${CSEP}${CITEM}${CSEP}"*) return 0 ;;
+-	*) return 1 ;;
+-	esac
++  # check if list contains item separated by separator
++  CLIST=$1
++  CITEM=$2
++  CSEP=${3:- }
++  case "${CSEP}${CLIST}${CSEP}" in
++  *"${CSEP}${CITEM}${CSEP}"*) return 0 ;;
++  *) return 1 ;;
++  esac
+ }
+ 
+ list_add() {
+-	# append list with item, return new list, separated by separator
+-	ALIST=$1
+-	AITEM=$2
+-	ASEP=${3:- }
+-	if list_contains "$ALIST" "$AITEM" "$ASEP"; then
+-		printf '%s' "$ALIST"
+-	else
+-		printf '%s' "${ALIST}${ALIST:+${ASEP}}${AITEM}"
+-	fi
++  # append list with item, return new list, separated by separator
++  ALIST=$1
++  AITEM=$2
++  ASEP=${3:- }
++  if list_contains "$ALIST" "$AITEM" "$ASEP"; then
++    printf '%s' "$ALIST"
++  else
++    printf '%s' "${ALIST}${ALIST:+${ASEP}}${AITEM}"
++  fi
+ }
+ 
+ list_del() {
+-	# deprive list of item, return new list
+-	DLIST=$1
+-	DITEM=$2
+-	DSEP=${3:- }
+-	if list_contains "$DLIST" "$DITEM" "$DSEP"; then
+-		OIFS=$IFS
+-		IFS=$DSEP
+-		NLIST=''
+-		for citem in $DLIST; do
+-			case "$citem" in
+-			"$DITEM") true ;;
+-			*) NLIST=${NLIST}${NLIST:+$DSEP}${citem} ;;
+-			esac
+-		done
+-		IFS=$OIFS
+-		printf '%s' "$NLIST"
+-	else
+-		printf '%s' "$DLIST"
+-	fi
++  # deprive list of item, return new list
++  DLIST=$1
++  DITEM=$2
++  DSEP=${3:- }
++  if list_contains "$DLIST" "$DITEM" "$DSEP"; then
++    OIFS=$IFS
++    IFS=$DSEP
++    NLIST=''
++    for citem in $DLIST; do
++      case "$citem" in
++      "$DITEM") true ;;
++      *) NLIST=${NLIST}${NLIST:+$DSEP}${citem} ;;
++      esac
++    done
++    IFS=$OIFS
++    printf '%s' "$NLIST"
++  else
++    printf '%s' "$DLIST"
++  fi
+ }
+ 
+ get_id() {
+-	# gets id from list of unit;id items
+-	ILIST=$1
+-	IUNIT=$2
+-	while IFS=';' read -r unit id; do
+-		case "$unit" in
+-		"$IUNIT")
+-			echo "$id"
+-			return 0
+-			;;
+-		esac
+-	done <<- EOF
++  # gets id from list of unit;id items
++  ILIST=$1
++  IUNIT=$2
++  while IFS=';' read -r unit id; do
++    case "$unit" in
++    "$IUNIT")
++      echo "$id"
++      return 0
++      ;;
++    esac
++  done <<-EOF
+ 		$ILIST
+ 	EOF
+-	return 1
++  return 1
+ }
+ 
+ simple_sub() {
+-	# substitutes in $1: $2 with $3 and so on in pairs
+-	# adopted initial version from https://stackoverflow.com/a/75037170
+-	ss_str=$1
+-	shift
+-
+-	ss_out=
+-	while [ "$#" -ge "1" ]; do
+-		ss_right=$ss_str
+-		ss_search=$1
+-		ss_sub=${2-}
+-		ss_out=
+-		case "$#" in
+-		1) shift ;;
+-		*) shift 2 ;;
+-		esac
+-
+-		while [ -n "$ss_right" ]; do
+-			# get ss_left from first $ss_search occurrence
+-			ss_left="${ss_right%%"${ss_search}"*}"
+-			# return if nothing else to replace
+-			if [ "$ss_left" = "$ss_right" ]; then
+-				ss_out=${ss_out}${ss_right}
+-				ss_right=
+-				continue
+-			fi
+-			# APPEND substituted ss_left to ss_out
+-			ss_out="${ss_out}${ss_left}${ss_sub}"
+-			# get ss_right from first $ss_search occurrence
+-			ss_right=${ss_right#*"${ss_search}"}
+-		done
+-		ss_str=$ss_out
+-	done
+-
+-	printf "%s" "$ss_str"
++  # substitutes in $1: $2 with $3 and so on in pairs
++  # adopted initial version from https://stackoverflow.com/a/75037170
++  ss_str=$1
++  shift
++
++  ss_out=
++  while [ "$#" -ge "1" ]; do
++    ss_right=$ss_str
++    ss_search=$1
++    ss_sub=${2-}
++    ss_out=
++    case "$#" in
++    1) shift ;;
++    *) shift 2 ;;
++    esac
++
++    while [ -n "$ss_right" ]; do
++      # get ss_left from first $ss_search occurrence
++      ss_left="${ss_right%%"${ss_search}"*}"
++      # return if nothing else to replace
++      if [ "$ss_left" = "$ss_right" ]; then
++        ss_out=${ss_out}${ss_right}
++        ss_right=
++        continue
++      fi
++      # APPEND substituted ss_left to ss_out
++      ss_out="${ss_out}${ss_left}${ss_sub}"
++      # get ss_right from first $ss_search occurrence
++      ss_right=${ss_right#*"${ss_search}"}
++    done
++    ss_str=$ss_out
++  done
++
++  printf "%s" "$ss_str"
+ }
+ 
+ check_failed_units() {
+-	# checks for failed units, notifies if there are
+-	COUNTER=0
+-	FAILED_UNITS=''
+-	FAILED_UNITS_RAW=$(
+-		systemctl --user show --state=failed --property=Id --value '*'
+-	)
+-
+-	[ -n "$FAILED_UNITS_RAW" ] || return 0
+-
+-	# parse and count failed units
+-	while read -r line; do
+-		[ -n "$line" ] || continue
+-		FAILED_UNITS="${FAILED_UNITS}${FAILED_UNITS:+ }${line}"
+-		COUNTER=$((COUNTER + 1))
+-	done <<- EOF
++  # checks for failed units, notifies if there are
++  FAILED_UNITS_RAW=$(
++    systemctl --user show --state=failed --property=Id --value '*'
++  )
++
++  [ -n "$FAILED_UNITS_RAW" ] || return 0
++
++  # try resetting failed units before notifying
++  systemctl --user reset-failed >/dev/null 2>&1 || true
++
++  FAILED_UNITS_RAW=$(
++    systemctl --user show --state=failed --property=Id --value '*'
++  )
++
++  [ -n "$FAILED_UNITS_RAW" ] || return 0
++
++  COUNTER=0
++  FAILED_UNITS=''
++
++  # parse and count failed units
++  while read -r line; do
++    [ -n "$line" ] || continue
++    FAILED_UNITS="${FAILED_UNITS}${FAILED_UNITS:+ }${line}"
++    COUNTER=$((COUNTER + 1))
++  done <<-EOF
+ 		$FAILED_UNITS_RAW
+ 	EOF
+ 
+-	if [ "$COUNTER" -gt "1" ]; then
+-		HEADER="${COUNTER} Failed units detected"
+-	elif [ "$COUNTER" = "1" ]; then
+-		HEADER="Failed unit detected"
+-	fi
+-
+-	# preserve backslash
+-	# shellcheck disable=SC1003
+-	case "$FAILED_UNITS" in
+-	*'\'*) msg_body=$(simple_sub "$FAILED_UNITS" '\' '\\') ;;
+-	*) msg_body=$FAILED_UNITS ;;
+-	esac
+-	notify-send -a FUMonitor -u critical -i dialog-warning -- "${HEADER}" "${msg_body}"
++  if [ "$COUNTER" -gt "1" ]; then
++    HEADER="${COUNTER} Failed units detected"
++  elif [ "$COUNTER" = "1" ]; then
++    HEADER="Failed unit detected"
++  fi
++
++  # preserve backslash
++  # shellcheck disable=SC1003
++  case "$FAILED_UNITS" in
++  *'\'*) msg_body=$(simple_sub "$FAILED_UNITS" '\' '\\') ;;
++  *) msg_body=$FAILED_UNITS ;;
++  esac
++  notify-send -a FUMonitor -u critical -i dialog-warning -- "${HEADER}" "${msg_body}"
+ }
+ 
+ busctl_trigger() {
+-	# outputs json oneliners on properties changes
+-	busctl --user monitor \
+-		--json short \
+-		--match "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'"
++  # outputs json oneliners on properties changes
++  busctl --user monitor \
++    --json short \
++    --match "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'"
+ }
+ 
+-if ! command -v notify-send > /dev/null; then
+-	echo "Command not found: notify-send" >&2
+-	exit 1
++if ! command -v notify-send >/dev/null; then
++  echo "Command not found: notify-send" >&2
++  exit 1
+ fi
+ 
+ # check for current state
+@@ -161,78 +171,84 @@ check_failed_units
+ 
+ # main loop for catching unit ActiveState changes to failed
+ busctl_trigger | while read -r line; do
+-	# skip if event is not about systemd unit
+-	case "$line" in
+-	*'"path":"/org/freedesktop/systemd1/unit/'*) true ;;
+-	*) continue ;;
+-	esac
+-	# skip if event is not about ActiveState
+-	case "$line" in
+-	*'"ActiveState":{'*) true ;;
+-	*) continue ;;
+-	esac
+-
+-	# extract and unescape unit ID from path property
+-	UNIT=${line##*'"path":"/org/freedesktop/systemd1/unit/'}
+-	UNIT=${UNIT%%'"'*}
+-	case "$UNIT" in
+-	*_40* | *_2e* | *_5f* | *_2d* | *_5c*)
+-		# shellcheck disable=SC1003
+-		UNIT=$(simple_sub "$UNIT" '_40' '@' '_2e' '.' '_5f' '_' '_2d' '-' '_5c' '\')
+-		;;
+-	esac
+-
+-	if list_contains "${FAILED_UNITS}" "$UNIT"; then
+-		case "$line" in
+-		# still in failed state
+-		*'{"ActiveState":{"type":"s","data":"failed"}'* | *'{"ActiveState":{"data":"failed","type":"s"}'*)
+-			continue
+-			;;
+-		# process
+-		*)
+-			# remove from failed list
+-			FAILED_UNITS=$(list_del "$FAILED_UNITS" "$UNIT")
+-			# get notification ID
+-			if NID=$(get_id "$NOTIFICATION_IDS" "$UNIT"); then
+-				ID_ARG=--replace-id=$NID
+-				# remove notification ID entry
+-				NOTIFICATION_IDS=$(list_del "$NOTIFICATION_IDS" "${UNIT};${NID}" "$N")
+-			else
+-				ID_ARG=''
+-			fi
+-			# preserve backslash and notify
+-			# shellcheck disable=SC1003
+-			case "$UNIT" in
+-			*'\'*) msg_body=$(simple_sub "$UNIT" '\' '\\') ;;
+-			*) msg_body=$UNIT ;;
+-			esac
+-			# shellcheck disable=SC2086
+-			notify-send -a FUMonitor $ID_ARG -u normal -i dialog-info -- "Unit recovered" "$msg_body"
+-			;;
+-		esac
+-	else
+-		case "$line" in
+-		# became failed, process
+-		*'{"ActiveState":{"type":"s","data":"failed"}'* | *'{"ActiveState":{"data":"failed","type":"s"}'*)
+-			# add to failed list
+-			FAILED_UNITS=$(list_add "$FAILED_UNITS" "$UNIT")
+-			# notify
+-			NID=$(
+-				# preserve backslash
+-				# shellcheck disable=SC1003,SC2030
+-				case "$UNIT" in
+-				*'\'*) msg_body=$(simple_sub "$UNIT" '\' '\\') ;;
+-				*) msg_body=$UNIT ;;
+-				esac
+-				notify-send -a FUMonitor -p -u critical -i dialog-warning -- "Failed unit detected" "$msg_body"
+-			)
+-			# save notification ID in newline-separated list
+-			NOTIFICATION_IDS=$(list_add "$NOTIFICATION_IDS" "${UNIT};${NID}" "$N")
+-			;;
+-		# ignore
+-		*)
+-			continue
+-			;;
+-		esac
+-	fi
++  # skip if event is not about systemd unit
++  case "$line" in
++  *'"path":"/org/freedesktop/systemd1/unit/'*) true ;;
++  *) continue ;;
++  esac
++  # skip if event is not about ActiveState
++  case "$line" in
++  *'"ActiveState":{'*) true ;;
++  *) continue ;;
++  esac
++
++  # extract and unescape unit ID from path property
++  UNIT=${line##*'"path":"/org/freedesktop/systemd1/unit/'}
++  UNIT=${UNIT%%'"'*}
++  case "$UNIT" in
++  *_40* | *_2e* | *_5f* | *_2d* | *_5c*)
++    # shellcheck disable=SC1003
++    UNIT=$(simple_sub "$UNIT" '_40' '@' '_2e' '.' '_5f' '_' '_2d' '-' '_5c' '\')
++    ;;
++  esac
++
++  if list_contains "${FAILED_UNITS}" "$UNIT"; then
++    case "$line" in
++    # still in failed state
++    *'{"ActiveState":{"type":"s","data":"failed"}'* | *'{"ActiveState":{"data":"failed","type":"s"}'*)
++      continue
++      ;;
++    # process
++    *)
++      # remove from failed list
++      FAILED_UNITS=$(list_del "$FAILED_UNITS" "$UNIT")
++      # get notification ID
++      if NID=$(get_id "$NOTIFICATION_IDS" "$UNIT"); then
++        ID_ARG=--replace-id=$NID
++        # remove notification ID entry
++        NOTIFICATION_IDS=$(list_del "$NOTIFICATION_IDS" "${UNIT};${NID}" "$N")
++      else
++        ID_ARG=''
++      fi
++      # preserve backslash
++      # shellcheck disable=SC1003
++      case "$UNIT" in
++      *'\'*) msg_body=$(simple_sub "$UNIT" '\' '\\') ;;
++      *) msg_body=$UNIT ;;
++      esac
++      # shellcheck disable=SC2086
++      notify-send -a FUMonitor $ID_ARG -u normal -i dialog-info -- "Unit recovered" "$msg_body"
++      ;;
++    esac
++  else
++    case "$line" in
++    # became failed, process
++    *'{"ActiveState":{"type":"s","data":"failed"}'* | *'{"ActiveState":{"data":"failed","type":"s"}'*)
++      # try resetting failed state for this unit first
++      systemctl --user reset-failed "$UNIT" >/dev/null 2>&1 || true
++
++      # check if unit is still in failed state
++      if [ "$(systemctl --user show --property=ActiveState --value "$UNIT" 2>/dev/null)" = "failed" ]; then
++        # add to failed list
++        FAILED_UNITS=$(list_add "$FAILED_UNITS" "$UNIT")
++        # notify
++        NID=$(
++          # preserve backslash
++          # shellcheck disable=SC1003,SC2030
++          case "$UNIT" in
++          *'\'*) msg_body=$(simple_sub "$UNIT" '\' '\\') ;;
++          *) msg_body=$UNIT ;;
++          esac
++          notify-send -a FUMonitor -p -u critical -i dialog-warning -- "Failed unit detected" "$msg_body"
++        )
++        # save notification ID in newline-separated list
++        NOTIFICATION_IDS=$(list_add "$NOTIFICATION_IDS" "${UNIT};${NID}" "$N")
++      fi
++      ;;
++    # ignore
++    *)
++      continue
++      ;;
++    esac
++  fi
+ done
+diff --git a/scripts/uuctl.sh b/scripts/uuctl.sh
+index df7b6ca..e6993a5 100755
+--- a/scripts/uuctl.sh
++++ b/scripts/uuctl.sh
+@@ -47,6 +47,36 @@ showhelp() {
+ 	EOH
+ }
+ 
++get_resource_lines() {
++	while IFS='=' read -r key value; do
++		case "$key" in
++		CPUUsageNSec)
++			if [ "$value" != "[not set]" ]; then
++				sec=$((value / 1000000000))
++				printf 'CPU Time: %02dm %02ds\n' $((sec / 60)) $((sec % 60))
++			fi
++			;;
++		MemoryCurrent)
++			if [ "$value" != "[not set]" ]; then
++				if command -v numfmt > /dev/null; then
++					val=$(numfmt --to=iec "$value")
++				else
++					val="$value bytes"
++				fi
++				printf 'Memory: %s\n' "$val"
++			fi
++			;;
++		TasksCurrent)
++			if [ "$value" != "[not set]" ]; then
++				printf 'Tasks: %s\n' "$value"
++			fi
++			;;
++		esac
++	done <<- EOF
++		$(systemctl --user show --property MemoryCurrent,CPUUsageNSec,TasksCurrent "$UNIT")
++	EOF
++}
++
+ dirempty() {
+ 	# check if dir $1 is empty based purely on glob expansion
+ 	case "$(printf '%s;' "$1"/* "$1"/.*)" in
+@@ -393,10 +423,12 @@ ACTIONS=''
+ DISABLE_ACTIONS=''
+ DISABLE_ACTIONS_SHOW=''
+ ENABLE_ACTIONS=''
+-for ACTION in start reload restart stop kill reset-failed enable disable freeze thaw silence unsilence mask unmask; do
++for ACTION in start reload restart stop kill reset-failed enable disable freeze thaw silence unsilence mask unmask resources; do
+ 	: "${ACTION}+++type:${UNIT_TYPE:-unknown}+as:${ACTIVE_STATE:-unknown}+fs:${FREEZER_STATE:-unknown}+cstart:${CAN_START:-unknown}+creload:${CAN_RELOAD:-unknown}+cstop:${CAN_STOP:-unknown}+cfreeze:${CAN_FREEZE:-unknown}+rmstart:${RM_START:-unknown}+rmstop:${RM_STOP:-unknown}+ufs:${UNIT_FILE_STATE}+silent:${SILENT_STATE}+install:${WANTED_BY}${REQUIRED_BY}${UPHELD_BY}+++"
+ 	case "${ACTION}+++type:${UNIT_TYPE:-unknown}+as:${ACTIVE_STATE:-unknown}+fs:${FREEZER_STATE:-unknown}+cstart:${CAN_START:-unknown}+creload:${CAN_RELOAD:-unknown}+cstop:${CAN_STOP:-unknown}+cfreeze:${CAN_FREEZE:-unknown}+rmstart:${RM_START:-unknown}+rmstop:${RM_STOP:-unknown}+ufs:${UNIT_FILE_STATE}+silent:${SILENT_STATE}+install:${WANTED_BY}${REQUIRED_BY}${UPHELD_BY}+++" in
+ 	## skip various combinations
++  # resources for inactive units
++	resources+*+as:failed+* | resources+*+as:inactive+* | resources+*+as:deactivating+* | resources+*+ufs:masked+*) continue ;;
+ 	# actions unsuited for scopes
+ 	start+*+type:scope+* | restart+*+type:scope+* | reload+*+type:scope+* | enable+*+type:scope+* | disable+*+type:scope+* | silence+*+type:scope+* | unsilence+*+type:scope+*) continue ;;
+ 	# actions unsuited for sockets
+@@ -556,6 +588,23 @@ unsilence)
+ 	) || cancel_exit
+ 	report "$RESTART"
+ 	;;
++resources)
++	# this is the last menu invocation
++	MENU_STAGE='end'
++
++	# Generate the lines
++	RLINES=$(get_resource_lines)
++
++	# Show the menu. We don't save the result variable because
++	# picking an item just closes the view.
++	"$@" "Resources for ${DESCRIPTION#*=}: " <<- EOF
++		$RLINES
++	EOF
++
++	# Clean exit immediately
++	"$DMENU_CLEANUP"
++	exit 0
++	;;
+ esac
+ 
+ # no more menus at this point

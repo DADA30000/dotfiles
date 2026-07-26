@@ -348,7 +348,7 @@ in
           };
           "custom/logout" = {
             format = "<span color='#63c773'>󰍃</span>";
-            on-click = "uwsm stop; loginctl terminate-user \"\"";
+            on-click = "loginctl terminate-user \"\"";
             tooltip = false;
           };
           "custom/lock" = {

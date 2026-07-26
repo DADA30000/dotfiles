@@ -1104,6 +1104,7 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.slurp
     pkgs.w3m-nographics
     pkgs.testdisk
     pkgs.ms-sys

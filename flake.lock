@@ -1690,7 +1690,6 @@
         "steam-app-id-list": "steam-app-id-list",
         "susfs4ksu": "susfs4ksu",
         "uv2nix": "uv2nix",
-        "vencord-src": "vencord-src",
         "way-secure": "way-secure",
         "waybar": "waybar",
         "waywallen": "waywallen",
@@ -1726,16 +1725,15 @@
     "sine": {
       "flake": false,
       "locked": {
-        "lastModified": 1778988058,
-        "narHash": "sha256-fPtE4kfR99pQTmugVRrITOvgUvHCn5qwg+dX4MKaxuE=",
+        "lastModified": 1781661476,
+        "narHash": "sha256-zF0596f7M6dofj1dIGJIfUmvrIyMzGQ/M48ohNxylfo=",
         "owner": "CosmoCreeper",
         "repo": "Sine",
-        "rev": "1d2879b4d2c69d11a84e447be994431376e6576b",
+        "rev": "107efff07fb0d21280076287926bcc8fee498028",
         "type": "github"
       },
       "original": {
         "owner": "CosmoCreeper",
-        "ref": "v2.3.3",
         "repo": "Sine",
         "type": "github"
       }
@@ -2019,22 +2017,6 @@
         "type": "github"
       }
     },
-    "vencord-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1783016002,
-        "narHash": "sha256-X+q8itQWPRjUNTS23KPANg36sbl4M9jtT6SL22+RtMc=",
-        "owner": "Vendicated",
-        "repo": "Vencord",
-        "rev": "94cc541e38905063988094249a40e618f83a12e4",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Vendicated",
-        "repo": "Vencord",
-        "type": "github"
-      }
-    },
     "way-secure": {
       "flake": false,
       "locked": {
@@ -2202,17 +2184,16 @@
     "zapret-flowseal": {
       "flake": false,
       "locked": {
-        "lastModified": 1783190817,
-        "narHash": "sha256-8hNSwkVREf+16npV4mYnaNeyb9MGicxwSN9TZnZ9E1A=",
-        "owner": "sch-izo",
-        "repo": "shizapret",
-        "rev": "d75903b44cb7c8e7eedb998c3dd9ff674d10880a",
+        "lastModified": 1784697388,
+        "narHash": "sha256-Lf7oloMkMziQRzyE/nw16J1/hAxSuRG5ioZb7UbLRUo=",
+        "owner": "Flowseal",
+        "repo": "zapret-discord-youtube",
+        "rev": "9503dc045133000af8075e066f09bb469008e530",
         "type": "github"
       },
       "original": {
-        "owner": "sch-izo",
-        "ref": "reupload",
-        "repo": "shizapret",
+        "owner": "Flowseal",
+        "repo": "zapret-discord-youtube",
         "type": "github"
       }
     },

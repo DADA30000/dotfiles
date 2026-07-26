@@ -367,7 +367,7 @@ in
                 export SUDO_EDITOR="sesatt --editor"
                 export VISUAL="sesatt --editor"
                 export EDITOR="sesatt --editor"
-              elif [[ -n "$NVIM" ]]; then
+              elif [[ -n "$NVIM" && -e "$NVIM" ]]; then
                 export SUDO_EDITOR="nvr-remote-editor"
                 export VISUAL="nvr-remote-editor"
                 export EDITOR="nvr-remote-editor"
@@ -527,6 +527,71 @@ in
                 fi
               }
 
+              _sesatt() {
+                local curr_word="''${words[$CURRENT]}"
+                local prev_word="''${words[$CURRENT-1]}"
+                local ret=1
+
+                # Subcommands that expect a session name
+                if [[ "$prev_word" == "-k" || "$prev_word" == "--kill" ]]; then
+                  local -a sessions
+                  for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
+                    if [[ "$line" == •* ]]; then
+                      sessions+=("''${''${(z)line}[2]}")
+                    fi
+                  done
+                  _describe -t sessions 'active/dead sessions' sessions && ret=0
+                  return ret
+                fi
+
+                # First argument: suggest options and session names
+                if [[ "$CURRENT" -eq 2 ]]; then
+                  local -a sessions opts
+                  for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
+                    if [[ "$line" == •* ]]; then
+                      sessions+=("''${''${(z)line}[2]}")
+                    fi
+                  done
+                  opts=(
+                    '-h:Print help information'
+                    '--help:Print help information'
+                    '-l:List all background sessions'
+                    '--list:List all background sessions'
+                    '-c:Clean dead sessions'
+                    '--clean:Clean dead sessions'
+                    '--prune:Clean dead sessions'
+                    '-k:Terminate specified session'
+                    '--kill:Terminate specified session'
+                    '-d:Start session in detached mode'
+                    '--detach:Start session in detached mode'
+                  )
+                  _describe -t options 'options' opts && ret=0
+                  _describe -t sessions 'active/dead sessions' sessions && ret=0
+                  return ret
+                fi
+
+                # Argument after -d / --detach expects a session
+                if [[ "$CURRENT" -eq 3 && ("$prev_word" == "-d" || "$prev_word" == "--detach") ]]; then
+                  local -a sessions
+                  for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
+                    if [[ "$line" == •* ]]; then
+                      sessions+=("''${''${(z)line}[2]}")
+                    fi
+                  done
+                  _describe -t sessions 'active/dead sessions' sessions && ret=0
+                  return ret
+                fi
+
+                # Executable / path completion for commands passed after session name
+                if [[ "$curr_word" != -* ]]; then
+                  _command_names -e && ret=0
+                  _files && ret=0
+                  return ret
+                fi
+
+                return 1
+              }
+
               _ns-old () { _ns_completer shell }
               _ns-py () { _ns_completer develop python3Packages. }
               _ns () { _ns_completer develop }
@@ -542,6 +607,7 @@ in
               compdef _ns-eval ns-eval
               compdef _ns-build ns-build
               compdef _ns-build-env ns-build-env
+              compdef _sesatt sesatt
             '';
             zshEarly = mkOrder 500 ''
               DISABLE_MAGIC_FUNCTIONS=true

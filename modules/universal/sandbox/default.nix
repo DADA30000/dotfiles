@@ -119,7 +119,6 @@ let
     version = "unstable";
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
     src = pkgs.lib.cleanSource "${inputs.way-secure}";
-    # patches = [ ../../../stuff/patches/way-secure.patch ];
   };
   landlock = pkgs.stdenv.mkDerivation {
     pname = "landlock";
@@ -138,7 +137,6 @@ let
       install -m 0755 landlock $out/bin/landlock
     '';
   };
-  # https://github.com/eycorsican/leaf is promising, ~16 mb usage without optimisations
   sing-box-lite = pkgs.sing-box.overrideAttrs (prev: {
     ldflags = (prev.ldflags or [ ]) ++ [
       "-s"
@@ -201,6 +199,7 @@ let
         nvidia_gpu ? false,
         sandbox_shm ? true,
         sandbox_tmp ? true,
+        start_sesatt ? true,
         main_desktop_file ? "none",
         additional_args ? { },
         additional_inside_commands ? "",
@@ -223,7 +222,7 @@ let
         writeDash = pkgs.writers.writeDash;
         startup_script = writeDash "startup_script" ''
           if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
-            SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/${appId}"
+            SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
             SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
             COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
             if [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null && [ -f "$SANDBOX_DIR/cgroup_path" ]; then
@@ -258,15 +257,22 @@ let
               MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
               MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
               case "$MY_SCOPE" in
-                *"${appId}"*)
+                *"$APP_ID"*)
                   mkdir -p "$SANDBOX_DIR"
                   printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
                   printf '%s\n' "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
                   ;;
                 *)
-                  exec app2unit -a "${appId}" -- "$0" "$@"
+                  exec app2unit -a "$APP_ID" -- "$0" "$@"
                   ;;
               esac
+              EXIT_CODE=0
+              cleanup() {
+                trap "" INT TERM EXIT
+                systemctl --user --no-block stop "$MY_SCOPE" >/dev/null 2>&1 </dev/null &
+                exit $EXIT_CODE
+              }
+              trap cleanup INT TERM EXIT
               mkdir "$MY_CGROUP/helpers"
               echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
               echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
@@ -294,17 +300,13 @@ let
               ''}
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
-                NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/${appId}/way-secure-notify-${appId}"
-                pkill -f "way-secure.*-a ${appId}.*"
-                while pgrep -f "way-secure.*-a ${appId}.*" > /dev/null; do
-                  sleep 0.01
-                done
+                NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-secure-notify-$APP_ID"
 
                 rm -f "$SOCK" "$SOCK.lock" "$NOTIFY_PIPE"
                 mkfifo "$NOTIFY_PIPE"
                 exec 3<> "$NOTIFY_PIPE"
 
-                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "${appId}" -e flatpak -r 4 4> "$NOTIFY_PIPE" &
+                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 4> "$NOTIFY_PIPE" &
                 if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3; then
                     echo "way-secure started"
                 else
@@ -326,6 +328,7 @@ let
               ${lib.optionalString use_landlock "${landlock}/bin/landlock \\"}
               "$SANDBOXED_DASH"/bin/dash -c '
                 ${additional_inside_commands}
+                ${lib.optionalString start_sesatt "sesatt -d \"$APP_ID\""}
                 ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
                 ${lib.optionalString network_singbox ''
                   ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
@@ -335,7 +338,6 @@ let
                 ${lib.optionalString (!network_singbox) ''
                   exec ${pkgs.dash}/bin/dash -c "
                 ''}
-                  # nixpak-sandbox-bootstrap-marker:${appId}
                   exec 7<> \"\$XDG_RUNTIME_DIR/cgroup_pipe\"
                   exec 8<> \"\$XDG_RUNTIME_DIR/go_pipe\"
                   echo \"ready\" >&7
@@ -354,30 +356,30 @@ let
               echo "$PARENT_PID" > "$SANDBOX_DIR/parent_pid"
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
-                  systemctl --user stop "$MY_SCOPE"
-                  exit 1
+                  EXIT_CODE=1
+                  systemctl --user --no-block stop "$MY_SCOPE"
               fi
               if ! GUEST_HOST_PID=$(${sandbox-migrator}/bin/sandbox-migrator \
-                --app-id "${appId}" \
+                --app-id "$APP_ID" \
                 --scope "$MY_SCOPE" \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --go-pipe "$SANDBOXED_RUNTIME_DIR/go_pipe"); then
-                  systemctl --user stop "$MY_SCOPE"
-                  exit 1
+                  EXIT_CODE=1
+                  systemctl --user --no-block stop "$MY_SCOPE"
               fi
               exec 6<&-
               exec 8<&-
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5; then
                   echo "Error: Timeout waiting for sandbox ready signal"
-                  systemctl --user stop "$MY_SCOPE"
-                  exit 1
+                  EXIT_CODE=1
+                  systemctl --user --no-block stop "$MY_SCOPE"
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
               while [ $(wc -l < "$MY_CGROUP/inside/cgroup.procs" || echo 0) -gt 1 ]; do
                 sleep 1
               done
-              systemctl --user stop "$MY_SCOPE"
+              systemctl --user --no-block stop "$MY_SCOPE"
             fi
           else
             exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"
@@ -497,6 +499,9 @@ let
                           "/tmp"
                         ]
                       ])
+                      ++ (lib.optionals start_sesatt [
+                        (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
+                      ])
                       ++ [ (concat sloth.runtimeDir "/doc") ];
 
                       ro = [
@@ -604,8 +609,9 @@ let
                         sed -i "s|${pkg}|$out|g" "$link"
                       else
                         cp "${startup_script}" "$link"
-                        sed -i "2a export SANDBOXED_DASH=\"${sandboxed_app.config.script}\"" "$link"
-                        sed -i "1a export TARGET=\"$target\"" "$link"
+                        sed -i "1a SANDBOXED_DASH=\"${sandboxed_app.config.script}\"" "$link"
+                        sed -i "1a TARGET=\"$target\"" "$link"
+                        sed -i "1a export APP_ID=\"${appId}\"" "$link"
                         chmod +x "$link"
                       fi
                     fi

@@ -118,10 +118,10 @@ let
 
   # Patched neovim-unwrapped built natively with C source changes & smart dispatcher script
   patched-neovim-unwrapped = pkgs.neovim-unwrapped.overrideAttrs (oldAttrs: {
+    doCheck = false;
     patches = (oldAttrs.patches or [ ]) ++ [
       ../../../stuff/patches/neovim.patch
     ];
-    doCheck = false;
     postInstall = (oldAttrs.postInstall or "") + ''
       mv $out/bin/nvim $out/bin/nvim-raw
       cp ${smart-neovim-script} $out/bin/nvim
