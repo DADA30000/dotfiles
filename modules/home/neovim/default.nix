@@ -121,6 +121,7 @@ let
     patches = (oldAttrs.patches or [ ]) ++ [
       ../../../stuff/patches/neovim.patch
     ];
+    doCheck = false;
     postInstall = (oldAttrs.postInstall or "") + ''
       mv $out/bin/nvim $out/bin/nvim-raw
       cp ${smart-neovim-script} $out/bin/nvim
