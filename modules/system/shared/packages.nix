@@ -182,6 +182,7 @@ let
   # ---------------------------------------------------------------------------
   # Only packages in this list retain custom priorities; all others are normalized to 5
   priorityWhitelist = [
+    pkgs.tinyxxd
     pkgs.procps
     pkgs.util-linux
     pkgs.systemd
