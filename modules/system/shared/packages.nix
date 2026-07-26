@@ -182,7 +182,6 @@ let
   # ---------------------------------------------------------------------------
   # Only packages in this list retain custom priorities; all others are normalized to 5
   priorityWhitelist = [
-    pkgs.tinyxxd
     pkgs.procps
     pkgs.util-linux
     pkgs.systemd
@@ -1233,6 +1232,8 @@ let
     pkgs.clang
     pkgs.clang-tools
     pkgs.yad
+    pkgs.rsync
+    pkgs.strace
     pythonPkg
     nixOutputMonitorPkg
     nixAlienPkg
@@ -1299,6 +1300,7 @@ in
   );
 
   environment = {
+    defaultPackages = [ ];
     pathsToLink = extra-paths;
     systemPackages = package-list ++ [ aero-control-center ] ++ allHmPackages;
   };
