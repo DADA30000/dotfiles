@@ -51,10 +51,8 @@ let
     }
   ];
 
-  # Locates the default choice, falling back to the first defined entry if default = true is omitted
   defaultProton = findFirst (v: v.default or false) (builtins.head protonVersions) protonVersions;
 
-  # Generates the case statement choices for umu-run-wrapper using the version name as the key
   protonCaseBranches = concatStringsSep "\n" (
     map (v: ''"${v.name}") export PROTONPATH="${v.path}" ;;'') protonVersions
   );
@@ -209,6 +207,16 @@ in
         ];
       })
 
+      # 4. fix-umu-path
+      (mkUmuApp {
+        name = "fix-umu-path";
+        src = ../../../stuff/modules/home/umu/fix_path.py;
+        pathDeps = [
+          pkgs.libnotify
+          pkgs.xdg-utils
+        ];
+      })
+
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
         if [[ -z "$WINEPREFIX" ]]; then
           prefix_name=''${UMU_PREFIX_NAME:-default}
@@ -260,30 +268,33 @@ in
         export PROTON_ENABLE_WAYLAND=''${PROTON_ENABLE_WAYLAND:-1}
         cd "$(dirname "$1")" &> /dev/null || true
 
-        AMD_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i -E "AMD|Advanced Micro Devices" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
-        NVIDIA_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i "NVIDIA" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
-        INTEL_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i "Intel" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
+        get_pci_id() {
+          ${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i -E "$1" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]'
+        }
 
         case "$UMU_GPU_SELECT" in
           "AMD")
-            if [[ -n "$AMD_PCI_ID" ]]; then
-              export DRI_PRIME="$AMD_PCI_ID!"
-              export MESA_VK_DEVICE_SELECT="$AMD_PCI_ID!"
+            pci_id=$(get_pci_id "AMD|Advanced Micro Devices|ATI")
+            if [[ -n "$pci_id" ]]; then
+              export DRI_PRIME="$pci_id!"
+              export MESA_VK_DEVICE_SELECT="$pci_id!"
             fi
           ;;
           "Intel")
-            if [[ -n "$INTEL_PCI_ID" ]]; then
-              export DRI_PRIME="$INTEL_PCI_ID!"
-              export MESA_VK_DEVICE_SELECT="$INTEL_PCI_ID!"
+            pci_id=$(get_pci_id "Intel")
+            if [[ -n "$pci_id" ]]; then
+              export DRI_PRIME="$pci_id!"
+              export MESA_VK_DEVICE_SELECT="$pci_id!"
             fi
           ;;
           "Nvidia")
             export __NV_PRIME_RENDER_OFFLOAD=1
             export __GLX_VENDOR_LIBRARY_NAME=nvidia
             export __VK_LAYER_NV_optimus=NVIDIA_only
-            if [[ -n "$NVIDIA_PCI_ID" ]]; then
-              export DRI_PRIME="$NVIDIA_PCI_ID!"
-              export MESA_VK_DEVICE_SELECT="$NVIDIA_PCI_ID!"
+            pci_id=$(get_pci_id "NVIDIA")
+            if [[ -n "$pci_id" ]]; then
+              export DRI_PRIME="$pci_id!"
+              export MESA_VK_DEVICE_SELECT="$pci_id!"
             fi
           ;;
         esac
@@ -425,7 +436,6 @@ in
 
             actual_exe=""
 
-            # 1. Check Wine dosdevices symlink (handles Z:, C:, D:, etc.)
             if [[ -n "$drive" && -d "$WINEPREFIX/dosdevices/$drive:" ]]; then
               cand=$(realpath -m "$WINEPREFIX/dosdevices/$drive:$path_no_drive" 2>/dev/null)
               if [[ -f "$cand" ]]; then
@@ -433,12 +443,10 @@ in
               fi
             fi
 
-            # 2. Check path on Linux filesystem directly (ignoring drive letter)
             if [[ -z "$actual_exe" && -n "$path_no_drive" && -f "$path_no_drive" ]]; then
               actual_exe="$path_no_drive"
             fi
 
-            # 3. Check under drive_c
             if [[ -z "$actual_exe" && -n "$path_no_drive" ]]; then
               cand="$WINEPREFIX/drive_c$path_no_drive"
               if [[ -f "$cand" ]]; then
@@ -466,19 +474,54 @@ in
         fi
 
         for d_file in "$DESKTOP_DIR"/umu-*.desktop; do
-          if [[ -f "$d_file" ]]; then
-            exe_path=$(grep '^Exec=' "$d_file" | sed -n 's/^.*umu-run-wrapper "\([^"]*\)".*/\1/p')
-            if [[ -n "$exe_path" && ! -f "$exe_path" ]]; then
-              game_name=$(grep '^Name=' "$d_file" | head -n 1 | cut -d= -f2-)
-              icon_path=$(grep '^Icon=' "$d_file" | head -n 1 | cut -d= -f2)
-              ${pkgs.libnotify}/bin/notify-send -u normal -i "$icon_path" "Cleanup" "Removing shortcut for: $game_name"
-              rm "$d_file"
-              if [[ "$icon_path" == "$ICON_DIR"* && -f "$icon_path" ]]; then
-                rm -f "$icon_path"
+          [[ -f "$d_file" ]] || continue
+
+          actual_exe=$(grep '^X-UMU-Actual-Exe=' "$d_file" | head -n 1 | cut -d= -f2-)
+          if [[ -z "$actual_exe" ]]; then
+            actual_exe=$(grep '^Exec=' "$d_file" | sed -n 's/^.*umu-run-wrapper "\([^"]*\)".*/\1/p')
+          fi
+
+          game_name=$(grep '^Name=' "$d_file" | head -n 1 | cut -d= -f2-)
+          icon_path=$(grep '^Icon=' "$d_file" | head -n 1 | cut -d= -f2)
+
+          if [[ -n "$actual_exe" && ! -f "$actual_exe" ]]; then
+            if [[ "$game_name" != *" (Inactive)"* ]]; then
+              clean_name="$game_name"
+              inactive_name="$game_name (Inactive)"
+              sed -i "s/^Name=.*/Name=$inactive_name/" "$d_file"
+              sed -i "s|^Exec=.*|Exec=fix-umu-path \"$d_file\"|" "$d_file"
+              ${pkgs.libnotify}/bin/notify-send -u normal -i "$icon_path" "Shortcut Inactive" "Executable missing for $clean_name. Double-click shortcut to set new path."
+            fi
+          elif [[ -n "$actual_exe" && -f "$actual_exe" ]]; then
+            if [[ "$game_name" == *" (Inactive)"* ]]; then
+              clean_name="''${game_name% (Inactive)}"
+              sed -i "s/^Name=.*/Name=$clean_name/" "$d_file"
+
+              args=$(grep '^X-UMU-Raw-Args=' "$d_file" | head -n 1 | cut -d= -f2-)
+              prefix=$(grep '^X-UMU-Prefix-Name=' "$d_file" | head -n 1 | cut -d= -f2-)
+              gpu=$(grep '^X-UMU-GPU-Select=' "$d_file" | head -n 1 | cut -d= -f2-)
+              steam=$(grep '^X-UMU-Steam-Integration=' "$d_file" | head -n 1 | cut -d= -f2-)
+              overlay=$(grep '^X-UMU-Steam-Overlay=' "$d_file" | head -n 1 | cut -d= -f2-)
+              proton=$(grep '^X-UMU-Proton-Type=' "$d_file" | head -n 1 | cut -d= -f2-)
+              vpn=$(grep '^X-UMU-VPN=' "$d_file" | head -n 1 | cut -d= -f2-)
+              gameid=$(grep '^X-UMU-Game-ID=' "$d_file" | head -n 1 | cut -d= -f2-)
+
+              ENV_BASE="env GAMEID=$gameid USE_GAMEMODE=1 USE_MANGOHUD=1 PROTON_ENABLE_WAYLAND=1 UMU_PREFIX_NAME=$prefix UMU_PROTON_TYPE=\"$proton\" USE_STEAM_INTEGRATION=$steam USE_STEAM_OVERLAY=$overlay USE_VPN=$vpn UMU_GPU_SELECT=\"$gpu\""
+
+              if [[ "$args" == *"%command%"* ]]; then
+                prefix_args="''${args%%\%command\%*}"
+                suffix_args="''${args#*\%command\%}"
+                EXEC_CMD="$ENV_BASE $prefix_args umu-run-wrapper \"$actual_exe\" $suffix_args"
+              else
+                EXEC_CMD="$ENV_BASE umu-run-wrapper \"$actual_exe\" $args"
               fi
+
+              sed -i "s|^Exec=.*|Exec=$EXEC_CMD|" "$d_file"
+              ${pkgs.libnotify}/bin/notify-send -u normal -i "$icon_path" "Shortcut Reactivated" "Restored executable for $clean_name"
             fi
           fi
         done
+
         for i_file in "$ICON_DIR"/*; do
           [[ -e "$i_file" ]] || continue
           base=$(basename "$i_file" .png)
@@ -618,36 +661,14 @@ in
             fi
           fi
 
-          AMD_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i -E "AMD|Advanced Micro Devices" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
-          NVIDIA_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i "NVIDIA" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
-          INTEL_PCI_ID=$(${pkgs.pciutils}/bin/lspci -nn | grep -E "VGA compatible controller|3D controller|Display controller" | grep -i "Intel" | grep -o -E "\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]" | head -n 1 | tr -d '[]')
-
-          GPU_ENV=""
-          case "$env_gpu_select" in
-            "AMD")
-              if [[ -n "$AMD_PCI_ID" ]]; then
-                GPU_ENV="DRI_PRIME=$AMD_PCI_ID! MESA_VK_DEVICE_SELECT=$AMD_PCI_ID!"
-              fi
-            ;;
-            "Intel")
-              if [[ -n "$INTEL_PCI_ID" ]]; then
-                GPU_ENV="DRI_PRIME=$INTEL_PCI_ID! MESA_VK_DEVICE_SELECT=$INTEL_PCI_ID!"
-              fi
-            ;;
-            "Nvidia")
-              GPU_ENV="__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only"
-              if [[ -n "$NVIDIA_PCI_ID" ]]; then
-                GPU_ENV="$GPU_ENV DRI_PRIME=$NVIDIA_PCI_ID! MESA_VK_DEVICE_SELECT=$NVIDIA_PCI_ID!"
-              fi
-            ;;
-          esac
-
-          EXEC_BASE="env GAMEID=$env_gameid USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn $GPU_ENV umu-run-wrapper \"$actual_exe\""
+          ENV_BASE="env GAMEID=$env_gameid USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn UMU_GPU_SELECT=\"$env_gpu_select\""
 
           if [[ "$args" == *"%command%"* ]]; then
-            EXEC_CMD=$(echo "$args" | sed "s|%command%|$EXEC_BASE|g")
+            prefix_args="''${args%%\%command\%*}"
+            suffix_args="''${args#*\%command\%}"
+            EXEC_CMD="$ENV_BASE $prefix_args umu-run-wrapper \"$actual_exe\" $suffix_args"
           else
-            EXEC_CMD="$EXEC_BASE $args"
+            EXEC_CMD="$ENV_BASE umu-run-wrapper \"$actual_exe\" $args"
           fi
 
           cat <<EOF > "$DESKTOP_FILE"

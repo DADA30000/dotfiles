@@ -11,15 +11,6 @@
 }:
 let
   # ---------------------------------------------------------------------------
-  # Harvest Home Manager Packages From Primary User Only
-  # ---------------------------------------------------------------------------
-  allHmPackages =
-    if config ? home-manager && config.home-manager ? users && config.home-manager.users ? ${user} then
-      config.home-manager.users.${user}.home.packages
-    else
-      [ ];
-
-  # ---------------------------------------------------------------------------
   # Helper & Evaluation Utilities
   # ---------------------------------------------------------------------------
   evalNix =
@@ -63,6 +54,9 @@ let
     in
     if matchResult == null then "" else builtins.head matchResult;
 
+  # ---------------------------------------------------------------------------
+  # Dependency Fetching & CMake Helpers
+  # ---------------------------------------------------------------------------
   fetchDepsFromJSON =
     srcPath:
     let
@@ -85,16 +79,25 @@ let
         name = dep.x-cmake.name;
         value =
           if dep.type or "" == "git" then
-            fetchGit {
-              shallow = true;
-              url = dep.url;
-              rev = dep.commit;
-              lfs = dep.x-cmake.name == "qml_material";
-            }
+            if dep ? hash || dep ? sha256 then
+              pkgs.fetchgit {
+                url = dep.url;
+                rev = dep.commit;
+                fetchLFS = (dep.x-cmake.name or "") == "qml_material";
+                deepClone = false;
+                hash = dep.hash or dep.sha256;
+              }
+            else
+              # Fallback to builtins.fetchGit if hash is not present in deps.json
+              builtins.fetchGit {
+                shallow = true;
+                url = dep.url;
+                rev = dep.commit;
+                lfs = (dep.x-cmake.name or "") == "qml_material";
+              }
           else if dep.type or "" == "archive" || dep.type or "" == "file" then
-            fetchTarball {
-              url = dep.url;
-              sha256 =
+            let
+              sha256Val =
                 if
                   dep.url
                   == "https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/vulkan-sdk-1.4.321.0.tar.gz"
@@ -106,13 +109,30 @@ let
                 then
                   "056abl41zbh4wdh7cf5pg9v3hx5w1n39daavkymg887623qajh8i"
                 else
-                  dep.sha256;
+                  dep.sha256 or dep.hash;
+            in
+            pkgs.fetchzip {
+              url = dep.url;
+              sha256 = sha256Val;
             }
           else
             throw "Unsupported dependency type: ${dep.type or "unknown"}";
       };
     in
     builtins.listToAttrs (map fetchDep filteredDepsList);
+
+  # Helper to dynamically generate -DFETCHCONTENT_SOURCE_DIR_<UPPER_NAME>=<path>
+  # Accepts an optional set of overrides for paths patched in build phases (e.g. /build/rstd)
+  mkFetchContentFlags =
+    deps: overrides:
+    lib.mapAttrsToList (
+      name: drv:
+      let
+        upperName = lib.toUpper name;
+        path = overrides.${name} or overrides.${upperName} or drv;
+      in
+      "-DFETCHCONTENT_SOURCE_DIR_${upperName}=${path}"
+    ) deps;
 
   mkPyApp =
     {
@@ -465,7 +485,7 @@ let
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       inherit src;
       name = "${pname}-${version}-vendor";
-      hash = "sha256-AM+dd/4OJ7iRjM7XpdoQZS/xLSLA7/URff2A+eULXXM=";
+      hash = "sha256-M6LQixcLvub3QpFPrYS5Cc63AYQ7xLJoMvpuhKonbT4=";
     };
 
     nativeBuildInputs = [
@@ -509,17 +529,17 @@ let
       "-DCMAKE_CXX_COMPILER=clang++"
       "-DCMAKE_LINKER_TYPE=LLD"
       "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-      "-DFETCHCONTENT_SOURCE_DIR_RSTD=/build/rstd"
-      "-DFETCHCONTENT_SOURCE_DIR_QEXTRA=/build/qextra"
-      "-DFETCHCONTENT_SOURCE_DIR_QML_MATERIAL=/build/qml_material"
-      "-DFETCHCONTENT_SOURCE_DIR_NCREQUEST=${waywallenDeps.ncrequest}"
-      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${waywallenDeps.wavsen}"
       "-DCMAKE_MODULE_PATH=${pkgs.qt6.qtgrpc}/lib/cmake/Qt6"
       "-DWAYWALLEN_BUILD_MPV_PLUGIN=OFF"
       "-DWAYWALLEN_CARGO_OFFLINE=ON"
       "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
       "-DQML_MATERIAL_BUILD_TYPE=STATIC"
-    ];
+    ]
+    ++ (mkFetchContentFlags waywallenDeps {
+      rstd = "/build/rstd";
+      qextra = "/build/qextra";
+      qml_material = "/build/qml_material";
+    });
 
     qtWrapperArgs = [
       "--prefix QML2_IMPORT_PATH : $out/lib/qt6/qml"
@@ -727,16 +747,11 @@ let
       "-DCMAKE_CXX_COMPILER=clang++"
       "-DCMAKE_LINKER_TYPE=LLD"
       "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-      "-DFETCHCONTENT_SOURCE_DIR_EIGEN=${oweDeps.eigen}"
-      "-DFETCHCONTENT_SOURCE_DIR_SPIRV_REFLECT=${oweDeps.spirv_reflect}"
-      "-DFETCHCONTENT_SOURCE_DIR_GLSLANG=${oweDeps.glslang}"
-      "-DFETCHCONTENT_SOURCE_DIR_ARGPARSE=${oweDeps.argparse}"
-      "-DFETCHCONTENT_SOURCE_DIR_RSTD=/build/rstd"
-      "-DFETCHCONTENT_SOURCE_DIR_WAVSEN=${oweDeps.wavsen}"
-      "-DFETCHCONTENT_SOURCE_DIR_QUICKJS=${oweDeps.quickjs}"
-      "-DFETCHCONTENT_SOURCE_DIR_CEF=${oweDeps.cef}"
       "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-    ];
+    ]
+    ++ (mkFetchContentFlags oweDeps {
+      rstd = "/build/rstd";
+    });
 
     hardeningDisable = [ "fortify" ];
 
@@ -1217,7 +1232,7 @@ let
     pkgs.jdk25
     pkgs.moonlight-qt
     pkgs.osu-lazer-bin
-    pkgs.mindustry
+    # pkgs.mindustry
     pkgs.xonotic
     pkgs.supertux
     pkgs.supertuxkart
@@ -1266,8 +1281,8 @@ let
     prismLauncherSandbox
     discordCanarySandbox
     ayugramDesktopSandbox
-    waywallen
-    open-wallpaper-engine
+    #waywallen
+    #open-wallpaper-engine
     anicli-ru
   ]
   ++ processedResults;
@@ -1320,7 +1335,8 @@ in
   environment = {
     defaultPackages = [ ];
     pathsToLink = extra-paths;
-    systemPackages = package-list ++ [ aero-control-center ] ++ allHmPackages;
+    systemPackages =
+      package-list ++ [ aero-control-center ] ++ config.home-manager.users.${user}.home.packages;
   };
 
   boot.extraModulePackages = [

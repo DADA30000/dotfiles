@@ -444,9 +444,7 @@ in
 
     boot = {
       extraModulePackages = [
-        (config.boot.kernelPackages.amneziawg.overrideAttrs (prev: {
-          patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/amneziawg.patch ];
-        }))
+        config.boot.kernelPackages.amneziawg
       ];
       kernelModules = [ "amneziawg" ];
     };

@@ -38,37 +38,6 @@ default_proton_name = next(
 )
 
 
-def scan_gpus():
-    amd, nvidia, intel = "", "", ""
-    try:
-        res = subprocess.run(["lspci", "-nn"], capture_output=True, text=True)
-        for line in res.stdout.splitlines():
-            if any(
-                x in line
-                for x in [
-                    "VGA compatible controller",
-                    "3D controller",
-                    "Display controller",
-                ]
-            ):
-                match = re.search(r"\[([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\]", line)
-                if match:
-                    pci_id = match.group(1)
-                    l = line.lower()
-                    if "nvidia" in l:
-                        nvidia_id = pci_id
-                    elif any(
-                        x in l
-                        for x in ["amd", "advanced micro devices", "ati"]
-                    ):
-                        amd = pci_id
-                    elif "intel" in l:
-                        intel = pci_id
-    except Exception:
-        pass
-    return amd, nvidia, intel
-
-
 class SteamSearchDialog(Gtk.Dialog):
     def __init__(self, parent):
         super().__init__(
@@ -81,7 +50,6 @@ class SteamSearchDialog(Gtk.Dialog):
         self.set_border_width(10)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
 
-        # WM Floating Hack
         self.set_resizable(False)
         GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
@@ -162,7 +130,6 @@ class SteamSearchDialog(Gtk.Dialog):
         threading.Thread(target=self.load_database, daemon=True).start()
 
         self.fetch_queue = queue.Queue()
-
         for _ in range(32):
             threading.Thread(target=self.fetch_worker, daemon=True).start()
 
@@ -319,7 +286,7 @@ class SteamSearchDialog(Gtk.Dialog):
         req = urllib.request.Request(
             url, headers={"User-Agent": "Mozilla/5.0"}
         )
-        for attempt in range(max_retries):
+        for _ in range(max_retries):
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     return r.read()
@@ -402,32 +369,34 @@ class LauncherWindow(Gtk.Window):
         super().__init__(title="UMU Launcher")
         self.filepath = os.path.abspath(filepath)
         self.set_border_width(15)
-        self.set_default_size(460, -1)
+        self.set_default_size(480, -1)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
 
-        # WM Floating Hack
         self.set_resizable(False)
         GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
-
-        self.amd_id, self.nvidia_id, self.intel_id = scan_gpus()
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.add(vbox)
 
-        title_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        vbox.pack_start(title_hbox, False, False, 0)
-
-        lbl_prefix = Gtk.Label()
-        lbl_prefix.set_markup("<b>Запуск:</b>")
-        title_hbox.pack_start(lbl_prefix, False, False, 0)
-
-        lbl_file = Gtk.Label()
-        lbl_file.set_markup(f"<b>{os.path.basename(self.filepath)}</b>")
-        title_hbox.pack_start(lbl_file, False, False, 0)
-
         grid = Gtk.Grid(column_spacing=15, row_spacing=10)
         vbox.pack_start(grid, False, False, 0)
+
+        lbl_exe = Gtk.Label(label="Файл запуска:")
+        lbl_exe.set_xalign(0.0)
+        lbl_exe.set_yalign(0.5)
+
+        exe_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        self.ent_filepath = Gtk.Entry()
+        self.ent_filepath.set_text(self.filepath)
+        exe_hbox.pack_start(self.ent_filepath, True, True, 0)
+
+        btn_exe_browse = Gtk.Button(label="Обзор...")
+        btn_exe_browse.connect("clicked", self.on_filepath_browse_clicked)
+        exe_hbox.pack_start(btn_exe_browse, False, False, 0)
+
+        grid.attach(lbl_exe, 0, 0, 1, 1)
+        grid.attach(exe_hbox, 1, 0, 1, 1)
 
         lbl_proton = Gtk.Label(label="Версия Proton:")
         lbl_proton.set_xalign(0.0)
@@ -438,8 +407,8 @@ class LauncherWindow(Gtk.Window):
         cur_proton = os.environ.get("UMU_PROTON_TYPE", default_proton_name)
         if not self.cmb_proton.set_active_id(cur_proton):
             self.cmb_proton.set_active(0)
-        grid.attach(lbl_proton, 0, 0, 1, 1)
-        grid.attach(self.cmb_proton, 1, 0, 1, 1)
+        grid.attach(lbl_proton, 0, 1, 1, 1)
+        grid.attach(self.cmb_proton, 1, 1, 1, 1)
 
         lbl_gamemode = Gtk.Label(label="Использовать GameMode:")
         lbl_gamemode.set_xalign(0.0)
@@ -448,8 +417,8 @@ class LauncherWindow(Gtk.Window):
         self.chk_gamemode.set_active(
             os.environ.get("USE_GAMEMODE", "1") != "0"
         )
-        grid.attach(lbl_gamemode, 0, 1, 1, 1)
-        grid.attach(self.chk_gamemode, 1, 1, 1, 1)
+        grid.attach(lbl_gamemode, 0, 2, 1, 1)
+        grid.attach(self.chk_gamemode, 1, 2, 1, 1)
 
         lbl_mangohud = Gtk.Label(label="Использовать MangoHud:")
         lbl_mangohud.set_xalign(0.0)
@@ -458,8 +427,8 @@ class LauncherWindow(Gtk.Window):
         self.chk_mangohud.set_active(
             os.environ.get("USE_MANGOHUD", "1") != "0"
         )
-        grid.attach(lbl_mangohud, 0, 2, 1, 1)
-        grid.attach(self.chk_mangohud, 1, 2, 1, 1)
+        grid.attach(lbl_mangohud, 0, 3, 1, 1)
+        grid.attach(self.chk_mangohud, 1, 3, 1, 1)
 
         lbl_wayland = Gtk.Label(label="Использовать Wayland:")
         lbl_wayland.set_xalign(0.0)
@@ -468,8 +437,8 @@ class LauncherWindow(Gtk.Window):
         self.chk_wayland.set_active(
             os.environ.get("PROTON_ENABLE_WAYLAND", "1") != "0"
         )
-        grid.attach(lbl_wayland, 0, 3, 1, 1)
-        grid.attach(self.chk_wayland, 1, 3, 1, 1)
+        grid.attach(lbl_wayland, 0, 4, 1, 1)
+        grid.attach(self.chk_wayland, 1, 4, 1, 1)
 
         lbl_steam = Gtk.Label(label="Интеграция со Steam:")
         lbl_steam.set_xalign(0.0)
@@ -478,8 +447,8 @@ class LauncherWindow(Gtk.Window):
         self.chk_steam.set_active(
             os.environ.get("USE_STEAM_INTEGRATION", "0") == "1"
         )
-        grid.attach(lbl_steam, 0, 4, 1, 1)
-        grid.attach(self.chk_steam, 1, 4, 1, 1)
+        grid.attach(lbl_steam, 0, 5, 1, 1)
+        grid.attach(self.chk_steam, 1, 5, 1, 1)
 
         lbl_overlay = Gtk.Label(label="Оверлей Steam:")
         lbl_overlay.set_xalign(0.0)
@@ -488,16 +457,16 @@ class LauncherWindow(Gtk.Window):
         self.chk_overlay.set_active(
             os.environ.get("USE_STEAM_OVERLAY", "0") == "1"
         )
-        grid.attach(lbl_overlay, 0, 5, 1, 1)
-        grid.attach(self.chk_overlay, 1, 5, 1, 1)
+        grid.attach(lbl_overlay, 0, 6, 1, 1)
+        grid.attach(self.chk_overlay, 1, 6, 1, 1)
 
         lbl_vpn = Gtk.Label(label="Через VPN:")
         lbl_vpn.set_xalign(0.0)
         lbl_vpn.set_yalign(0.5)
         self.chk_vpn = Gtk.CheckButton()
         self.chk_vpn.set_active(os.environ.get("USE_VPN", "0") == "1")
-        grid.attach(lbl_vpn, 0, 6, 1, 1)
-        grid.attach(self.chk_vpn, 1, 6, 1, 1)
+        grid.attach(lbl_vpn, 0, 7, 1, 1)
+        grid.attach(self.chk_vpn, 1, 7, 1, 1)
 
         self.lock_signals = False
         self.chk_overlay.connect("toggled", self.on_overlay_toggled)
@@ -515,8 +484,8 @@ class LauncherWindow(Gtk.Window):
         lbl_prefix.set_yalign(0.5)
         self.ent_prefix = Gtk.Entry()
         self.ent_prefix.set_text(os.environ.get("UMU_PREFIX_NAME", "default"))
-        grid.attach(lbl_prefix, 0, 7, 1, 1)
-        grid.attach(self.ent_prefix, 1, 7, 1, 1)
+        grid.attach(lbl_prefix, 0, 8, 1, 1)
+        grid.attach(self.ent_prefix, 1, 8, 1, 1)
 
         lbl_gpu = Gtk.Label(label="Видеокарта:")
         lbl_gpu.set_xalign(0.0)
@@ -531,8 +500,37 @@ class LauncherWindow(Gtk.Window):
             self.cmb_gpu.set_active(gpu_opts.index(cur_gpu))
         else:
             self.cmb_gpu.set_active(0)
-        grid.attach(lbl_gpu, 0, 8, 1, 1)
-        grid.attach(self.cmb_gpu, 1, 8, 1, 1)
+        grid.attach(lbl_gpu, 0, 9, 1, 1)
+        grid.attach(self.cmb_gpu, 1, 9, 1, 1)
+
+        orig_args = ""
+        if self.filepath.lower().endswith(".lnk"):
+            try:
+                args_out = (
+                    subprocess.check_output(
+                        [
+                            "exiftool",
+                            "-s3",
+                            "-CommandLineArguments",
+                            self.filepath,
+                        ]
+                    )
+                    .decode()
+                    .strip()
+                )
+                if args_out and args_out != "-":
+                    orig_args = args_out
+            except Exception:
+                pass
+
+        lbl_args = Gtk.Label(label="Аргументы / Env:")
+        lbl_args.set_xalign(0.0)
+        lbl_args.set_yalign(0.5)
+        self.ent_args = Gtk.Entry()
+        self.ent_args.set_text(orig_args)
+        self.ent_args.set_placeholder_text("VAR=1 %command% --dx11")
+        grid.attach(lbl_args, 0, 10, 1, 1)
+        grid.attach(self.ent_args, 1, 10, 1, 1)
 
         lbl_gameid = Gtk.Label(label="Game ID / App ID:")
         lbl_gameid.set_xalign(0.0)
@@ -550,8 +548,8 @@ class LauncherWindow(Gtk.Window):
         self.btn_steam_search.connect("clicked", self.on_steam_search_clicked)
         gameid_hbox.pack_start(self.btn_steam_search, False, False, 0)
 
-        grid.attach(lbl_gameid, 0, 9, 1, 1)
-        grid.attach(gameid_hbox, 1, 9, 1, 1)
+        grid.attach(lbl_gameid, 0, 11, 1, 1)
+        grid.attach(gameid_hbox, 1, 11, 1, 1)
 
         self.desktop_box = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=10
@@ -581,42 +579,13 @@ class LauncherWindow(Gtk.Window):
         c_grid.attach(lbl_name, 0, 0, 1, 1)
         c_grid.attach(self.ent_name, 1, 0, 1, 1)
 
-        orig_args = ""
-        if self.filepath.lower().endswith(".lnk"):
-            try:
-                args_out = (
-                    subprocess.check_output(
-                        [
-                            "exiftool",
-                            "-s3",
-                            "-CommandLineArguments",
-                            self.filepath,
-                        ]
-                    )
-                    .decode()
-                    .strip()
-                )
-                if args_out and args_out != "-":
-                    orig_args = args_out
-            except Exception:
-                pass
-
-        lbl_args = Gtk.Label(label="Аргументы запуска:")
-        lbl_args.set_xalign(0.0)
-        lbl_args.set_yalign(0.5)
-        self.ent_args = Gtk.Entry()
-        self.ent_args.set_text(orig_args)
-        self.ent_args.set_placeholder_text("ENV=1 %command% --arg-here")
-        c_grid.attach(lbl_args, 0, 1, 1, 1)
-        c_grid.attach(self.ent_args, 1, 1, 1, 1)
-
         lbl_icon = Gtk.Label(label="Иконка (файл):")
         lbl_icon.set_xalign(0.0)
         lbl_icon.set_yalign(0.5)
         self.btn_icon = Gtk.FileChooserButton(
             title="Выберите иконку", action=Gtk.FileChooserAction.OPEN
         )
-        c_grid.attach(lbl_icon, 0, 2, 1, 1)
+        c_grid.attach(lbl_icon, 0, 1, 1, 1)
 
         icon_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         icon_hbox.pack_start(self.btn_icon, True, True, 0)
@@ -627,7 +596,7 @@ class LauncherWindow(Gtk.Window):
 
         self.btn_reset = Gtk.Button(label="Сбросить")
         icon_hbox.pack_start(self.btn_reset, False, False, 0)
-        c_grid.attach(icon_hbox, 1, 2, 1, 1)
+        c_grid.attach(icon_hbox, 1, 1, 1, 1)
 
         preview_hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, spacing=10
@@ -692,6 +661,24 @@ class LauncherWindow(Gtk.Window):
         self.show_all()
         self.desktop_box.hide()
         self.creator_bbox.hide()
+
+    def on_filepath_browse_clicked(self, widget):
+        dialog = Gtk.FileChooserDialog(
+            title="Выберите исполняемый файл",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL,
+            Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN,
+            Gtk.ResponseType.OK,
+        )
+        if dialog.run() == Gtk.ResponseType.OK:
+            new_path = dialog.get_filename()
+            self.ent_filepath.set_text(new_path)
+            self.filepath = new_path
+        dialog.destroy()
 
     def on_steam_search_clicked(self, widget):
         dialog = SteamSearchDialog(self)
@@ -768,7 +755,6 @@ class LauncherWindow(Gtk.Window):
         zoom_win.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         zoom_win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
 
-        # WM Floating Hack
         zoom_win.set_resizable(False)
         GLib.timeout_add(150, lambda: zoom_win.set_resizable(True) or False)
 
@@ -903,6 +889,9 @@ class LauncherWindow(Gtk.Window):
         self.launcher_bbox.show_all()
 
     def on_run_clicked(self, widget):
+        target_exe = self.ent_filepath.get_text().strip()
+        raw_args = self.ent_args.get_text().strip()
+
         env = os.environ.copy()
         env["UMU_PROTON_TYPE"] = (
             self.cmb_proton.get_active_id() or default_proton_name
@@ -923,11 +912,26 @@ class LauncherWindow(Gtk.Window):
         env["USE_VPN"] = "1" if self.chk_vpn.get_active() else "0"
         env["GAMEID"] = self.ent_gameid.get_text().strip()
 
-        cmd = f"umu-run-wrapper {shlex.quote(self.filepath)}; scan-umu-for-lnk"
+        if "%command%" in raw_args:
+            parts = raw_args.split("%command%", 1)
+            prefix_args = parts[0].strip()
+            suffix_args = parts[1].strip()
+            cmd_str = f"umu-run-wrapper {shlex.quote(target_exe)}"
+            if prefix_args:
+                cmd_str = f"{prefix_args} {cmd_str}"
+            if suffix_args:
+                cmd_str = f"{cmd_str} {suffix_args}"
+        else:
+            cmd_str = f"umu-run-wrapper {shlex.quote(target_exe)}"
+            if raw_args:
+                cmd_str = f"{cmd_str} {raw_args}"
+
+        cmd = f"{cmd_str}; scan-umu-for-lnk"
         subprocess.Popen(cmd, shell=True, env=env)
         Gtk.main_quit()
 
     def on_save_clicked(self, widget):
+        target_exe = self.ent_filepath.get_text().strip()
         env = os.environ.copy()
         env["UMU_PROTON_TYPE"] = (
             self.cmb_proton.get_active_id() or default_proton_name
@@ -952,15 +956,15 @@ class LauncherWindow(Gtk.Window):
         icon = self.btn_icon.get_filename() or ""
         args = self.ent_args.get_text().strip()
 
-        actual_exe = self.filepath
+        actual_exe = target_exe
         lnk_arg = ""
 
-        if self.filepath.lower().endswith(".lnk"):
-            lnk_arg = self.filepath
+        if target_exe.lower().endswith(".lnk"):
+            lnk_arg = target_exe
             try:
                 win_path = (
                     subprocess.check_output(
-                        ["exiftool", "-s3", "-LocalBasePath", self.filepath]
+                        ["exiftool", "-s3", "-LocalBasePath", target_exe]
                     )
                     .decode()
                     .strip()

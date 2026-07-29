@@ -55,24 +55,17 @@ in
         gpu = true;
         wayland = true;
         x11 = true;
-        network_singbox = true;
+        network_full = true;
         portals_for_files = false;
         additional_args.dbus.policies."org.mpris.MediaPlayer2.spotify" = "own";
-        package = config.programs.spicetify.spicedSpotify.overrideAttrs {
+        package = pkgs.spotify.overrideAttrs {
           fixupPhase = ''
             runHook preFixup
 
             wrapProgramShell $out/share/spotify/spotify \
               ''${gappsWrapperArgs[@]} \
               --prefix LD_LIBRARY_PATH : "$librarypath" \
-              --prefix LD_AUDIT : "${libcef}/patcher_lib.so" \
-              --prefix PATH : "${lib.getBin pkgs.zenity}/bin" \
-              ${
-                if config.programs.spicetify.wayland != false then
-                  "--add-flags '--enable-features=UseOzonePlatform --ozone-platform=wayland --enable-wayland-ime=true' "
-                else
-                  "--add-flags '--disable-features=UseOzonePlatform --ozone-platform=x11 --enable-wayland-ime=false' "
-              }
+              --prefix LD_AUDIT : "${libcef}/patcher_lib.so"
 
             runHook postFixup
           '';

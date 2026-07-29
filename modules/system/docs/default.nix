@@ -107,7 +107,7 @@ let
   };
 
   hm-manpage =
-    (pkgs.runCommand "hm-custom-manpage"
+    pkgs.runCommand "hm-custom-manpage"
       {
         nativeBuildInputs = [ pkgs.nixos-render-docs ];
         inherit revision;
@@ -120,9 +120,7 @@ let
           ${customHmOptionsDocs.optionsJSON}/share/doc/nixos/options.json \
           $out/share/man/man5/home-configuration.nix.5
         rm -rf $out/nix-support
-      ''
-    ).overrideAttrs
-      { __contentAddressed = true; };
+      '';
 
   hm-html =
     (pkgs.callPackage "${inputs.home-manager}/docs/home-manager-manual.nix" {
@@ -140,7 +138,6 @@ let
       };
     }).overrideAttrs
       {
-        __contentAddressed = true;
         fixupPhase = ''
           ${pkgs.coreutils-full}/bin/rm -rf $out/nix-support/hydra-build-products
         '';
@@ -151,21 +148,17 @@ let
   };
 
   nix-man =
-    (pkgs.runCommand "fixup manual"
+    pkgs.runCommand "fixup manual"
       { manual = config.system.build.manual.nixos-configuration-reference-manpage; }
       ''
         mkdir -p $out
         ${pkgs.rsync}/bin/rsync -av $manual/* $out --exclude nix-support
-      ''
-    ).overrideAttrs
-      { __contentAddressed = true; };
+      '';
 
-  nix-html =
-    (pkgs.runCommand "fixup html" { manual = config.system.build.manual.manualHTML; } ''
-      mkdir -p $out
-      ${pkgs.rsync}/bin/rsync -av $manual/* $out --exclude nix-support
-    '').overrideAttrs
-      { __contentAddressed = true; };
+  nix-html = pkgs.runCommand "fixup html" { manual = config.system.build.manual.manualHTML; } ''
+    mkdir -p $out
+    ${pkgs.rsync}/bin/rsync -av $manual/* $out --exclude nix-support
+  '';
 
   darwin-manual = inputs.nix-darwin.packages.${pkgs.stdenv.hostPlatform.system}.manualHTML;
   stable-manual =
@@ -247,15 +240,13 @@ let
     ];
   };
 
-  nos-cache =
-    (pkgs.runCommand "nos-cache" { } ''
-      mkdir -p $out/cache
-      cp --no-preserve=mode "${nos-config}" "$out/config.toml"
-      ${pkgs.gnused}/bin/sed -i "s%cache_dir = \"leave_blank\"%cache_dir = \"$out/cache\"%" "$out/config.toml"
-      ${nos_unwrapped}/bin/nox -c "$out/config.toml"
-      ${pkgs.gnused}/bin/sed -i 's/prewarm_cache = true/prewarm_cache = false/' "$out/config.toml"
-    '').overrideAttrs
-      { __contentAddressed = true; };
+  nos-cache = pkgs.runCommand "nos-cache" { } ''
+    mkdir -p $out/cache
+    cp --no-preserve=mode "${nos-config}" "$out/config.toml"
+    ${pkgs.gnused}/bin/sed -i "s%cache_dir = \"leave_blank\"%cache_dir = \"$out/cache\"%" "$out/config.toml"
+    ${nos_unwrapped}/bin/nox -c "$out/config.toml"
+    ${pkgs.gnused}/bin/sed -i 's/prewarm_cache = true/prewarm_cache = false/' "$out/config.toml"
+  '';
 
   nos = pkgs.writeShellScriptBin "nos" ''
     ${nos_unwrapped}/bin/nox -c "${nos-cache}/config.toml" "$@"

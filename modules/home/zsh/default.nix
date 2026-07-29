@@ -265,13 +265,13 @@ in
               rm -rf $TEMPDIR
               mkdir -p ~/.cache/flake-lock-backups
               echo "Fetching steamrt4 version and hash"
-              STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/VERSION.txt -O -)"
-              STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+              STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-stable.txt -O -)"
+              STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/$STEAMRT4_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
               echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt4.json
               echo "Finished fetching steamrt4"
               echo "Fetching steamrt3 version and hash"
-              STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/VERSION.txt -O -)"
-              STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-beta/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+              STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-stable.txt -O -)"
+              STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/$STEAMRT3_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
               echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
               echo "Finished fetching steamrt3"
               cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
@@ -375,6 +375,10 @@ in
 
               alias v="nvim"
               export MANPAGER="nvim +Man!"
+              export PAGER="nvim"
+              export SYSTEMD_PAGERSECURE=0
+              export SYSTEMD_PAGERFLAGS=""
+              export SYSTEMD_COLORS=1
 
               printf '\n%.0s' {1..100}
               setopt correct

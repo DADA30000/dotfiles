@@ -22,7 +22,7 @@ in
         doCheck = false;
       });
       systemd.enable = true;
-      style = ''
+      style = /* css */ ''
         @define-color accent #2362ba;
 
         * {

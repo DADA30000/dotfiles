@@ -34,7 +34,7 @@ index e6eabf6..0fea186 100644
  $popover-radius: if($window == 'round', $corner-radius + $space-size, 6px);
  $circular-radius: 9999px;
 diff --git a/src/_sass/gtk/_common-3.20.scss b/src/_sass/gtk/_common-3.20.scss
-index 2bd9aa5..dd187f4 100644
+index 5e0f455..976bcf6 100644
 --- a/src/_sass/gtk/_common-3.20.scss
 +++ b/src/_sass/gtk/_common-3.20.scss
 @@ -535,12 +535,18 @@ button {
@@ -43,21 +43,21 @@ index 2bd9aa5..dd187f4 100644
  
 -  &:focus, &:checked:focus {
 +  &:focus {
-     @include button(focus);
-   }
- 
-+  &:focus {
 +    @include button(focus);
-+    background-color: rgba(white, 0.15);
 +  }
 +
++  &:focus {
+     @include button(focus);
++    background-color: rgba(white, 0.15);
+   }
+ 
    &:hover {
      @include button(hover);
 +    background-color: rgba(white, 0.08);
    }
  
    &:active {
-@@ -2952,7 +2958,7 @@ scrollbar {
+@@ -2960,7 +2966,7 @@ scrollbar {
  
      &.dragging,
      &.hovering {
@@ -66,13 +66,6 @@ index 2bd9aa5..dd187f4 100644
      }
    }
  
-@@ -4966,4 +4972,4 @@ popover.emoji-completion {
-   .emoji:hover {
-     background-color: $overlay-hover;
-   }
--}
-\ No newline at end of file
-+}
 diff --git a/src/_sass/gtk/_common-4.0.scss b/src/_sass/gtk/_common-4.0.scss
 index f6de12e..0fc9df9 100644
 --- a/src/_sass/gtk/_common-4.0.scss
@@ -187,7 +180,7 @@ index f538800..5b676e9 100644
  
    &:selected {
 diff --git a/src/_sass/gtk/apps/_gnome-40.0.scss b/src/_sass/gtk/apps/_gnome-40.0.scss
-index a2f27f1..77d5f46 100644
+index 891ba30..45352d3 100644
 --- a/src/_sass/gtk/apps/_gnome-40.0.scss
 +++ b/src/_sass/gtk/apps/_gnome-40.0.scss
 @@ -11,9 +11,18 @@ placesview {
@@ -219,10 +212,3 @@ index a2f27f1..77d5f46 100644
        }
      }
    }
-@@ -1321,4 +1330,4 @@ window.org-gnome-TextEditor {
-       }
-     }
-   }
--}
-\ No newline at end of file
-+}

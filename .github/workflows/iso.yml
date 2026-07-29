@@ -59,7 +59,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
-            experimental-features = flakes nix-command ca-derivations
+            experimental-features = flakes nix-command
             allow-import-from-derivation = true
             auto-optimise-store = true
             build-dir = /nix/build

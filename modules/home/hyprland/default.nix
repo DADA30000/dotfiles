@@ -722,7 +722,7 @@ in
               ]
               [
                 "${mod} + Q"
-                "app2unit -- neovide-term"
+                "app2unit -- xdg-terminal-exec"
               ]
               [
                 "${mod} + Z"

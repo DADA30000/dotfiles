@@ -7,6 +7,26 @@
   mkSandbox,
   ...
 }:
+let
+  fastAuth = {
+    nodelay = true;
+    failDelay = {
+      enable = true;
+      delay = 500000;
+    };
+  };
+
+  authServices = [
+    "sudo"
+    "polkit-1"
+    "login"
+    "sshd"
+    "su"
+    "passwd"
+    "greetd"
+    "hyprlock"
+  ];
+in
 {
   disabledModules = [ "profiles/base.nix" ];
 
@@ -21,25 +41,46 @@
       final: prev:
       let
         customFetchurl =
-          args:
+          rawArgs:
           let
             nixFetch = import <nix/fetchurl.nix>;
-            isSet = builtins.typeOf args == "set";
+
+            # 1. Handle raw string URLs
+            args = if builtins.isString rawArgs then { url = rawArgs; } else rawArgs;
+            isSet = builtins.isAttrs args;
+
+            # 2. Convert modern SRI hash ("sha256-...") to 'sha256'
+            hasSha256Sri =
+              isSet
+              && (args ? hash)
+              && (builtins.isString args.hash)
+              && (builtins.substring 0 7 args.hash == "sha256-");
+            argsWithSha =
+              if isSet && !(args ? sha256) && hasSha256Sri then
+                (removeAttrs args [ "hash" ]) // { sha256 = args.hash; }
+              else
+                args;
+
             supported = builtins.functionArgs nixFetch;
-            hasUnsupported = isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames args);
+
+            # 3. STRICT FALLBACK: If ANY attribute is not natively supported by <nix/fetchurl.nix>
+            # (like pname, meta, passthru), fall back immediately. This prevents breaking complex Nixpkgs/Zsh modules.
+            hasUnsupported =
+              isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames argsWithSha);
             hasUrls = isSet && (args ? urls);
             isMirror = u: builtins.isString u && builtins.substring 0 9 u == "mirror://";
             hasMirror = isSet && (args ? url) && isMirror args.url;
+
             needsFallback = !isSet || hasUnsupported || hasUrls || hasMirror;
           in
           if needsFallback then
-            prev.fetchurl args
+            prev.fetchurl rawArgs
           else
-            (nixFetch args)
+            (nixFetch argsWithSha)
             // {
-              overrideAttrs = f: (prev.fetchurl args).overrideAttrs f;
-              override = f: (prev.fetchurl args).override f;
-              overrideDerivation = f: (prev.fetchurl args).overrideDerivation f;
+              overrideAttrs = f: (prev.fetchurl rawArgs).overrideAttrs f;
+              override = f: (prev.fetchurl rawArgs).override f;
+              overrideDerivation = f: (prev.fetchurl rawArgs).overrideDerivation f;
             };
       in
       {
@@ -310,7 +351,6 @@
       # Enable flakes
       experimental-features = [
         "nix-command"
-        "ca-derivations"
         "flakes"
       ];
     };
@@ -370,6 +410,7 @@
     initrd.systemd.enable = true;
 
     kernel.sysctl = {
+      "vm.swappiness" = 100;
       "net.core.default_qdisc" = "cake";
       "net.ipv4.tcp_congestion_control" = "bbr";
       "kernel.sysrq" = 1;
@@ -712,13 +753,16 @@
     polkit.enable = true;
 
     # Disable usual coredumps (I hate them)
-    pam.loginLimits = [
-      {
-        domain = "*";
-        item = "core";
-        value = "0";
-      }
-    ];
+    pam = {
+      services = lib.genAttrs authServices (_: fastAuth);
+      loginLimits = [
+        {
+          domain = "*";
+          item = "core";
+          value = "0";
+        }
+      ];
+    };
 
   };
 

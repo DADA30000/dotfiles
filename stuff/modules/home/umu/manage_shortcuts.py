@@ -37,37 +37,6 @@ default_proton_name = next(
 )
 
 
-def scan_gpus():
-    amd, nvidia, intel = "", "", ""
-    try:
-        res = subprocess.run(["lspci", "-nn"], capture_output=True, text=True)
-        for line in res.stdout.splitlines():
-            if any(
-                x in line
-                for x in [
-                    "VGA compatible controller",
-                    "3D controller",
-                    "Display controller",
-                ]
-            ):
-                match = re.search(r"\[([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\]", line)
-                if match:
-                    pci_id = match.group(1)
-                    l = line.lower()
-                    if "nvidia" in l:
-                        nvidia_id = pci_id
-                    elif any(
-                        x in l
-                        for x in ["amd", "advanced micro devices", "ati"]
-                    ):
-                        amd = pci_id
-                    elif "intel" in l:
-                        intel = pci_id
-    except Exception:
-        pass
-    return amd, nvidia, intel
-
-
 class SteamSearchDialog(Gtk.Dialog):
     def __init__(self, parent):
         super().__init__(
@@ -80,7 +49,6 @@ class SteamSearchDialog(Gtk.Dialog):
         self.set_border_width(10)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
 
-        # WM Floating Hack
         self.set_resizable(False)
         GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
@@ -161,7 +129,6 @@ class SteamSearchDialog(Gtk.Dialog):
         threading.Thread(target=self.load_database, daemon=True).start()
 
         self.fetch_queue = queue.Queue()
-
         for _ in range(32):
             threading.Thread(target=self.fetch_worker, daemon=True).start()
 
@@ -318,7 +285,7 @@ class SteamSearchDialog(Gtk.Dialog):
         req = urllib.request.Request(
             url, headers={"User-Agent": "Mozilla/5.0"}
         )
-        for attempt in range(max_retries):
+        for _ in range(max_retries):
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     return r.read()
@@ -405,16 +372,13 @@ class EditDialog(Gtk.Dialog):
             destroy_with_parent=True,
         )
         self.set_border_width(15)
-        self.set_default_size(500, -1)
+        self.set_default_size(520, -1)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
 
-        # WM Floating Hack
         self.set_resizable(False)
         GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
         self.desktop_path = desktop_path
-        self.amd_id, self.nvidia_id, self.intel_id = scan_gpus()
-
         self.config = configparser.ConfigParser(
             interpolation=None, strict=False
         )
@@ -491,6 +455,19 @@ class EditDialog(Gtk.Dialog):
         grid = Gtk.Grid(column_spacing=15, row_spacing=10)
         vbox.pack_start(grid, False, False, 0)
 
+        lbl_exe = Gtk.Label(label="Файл (.exe):")
+        lbl_exe.set_alignment(0, 0.5)
+        exe_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        self.exe_entry = Gtk.Entry()
+        self.exe_entry.set_text(self.actual_exe)
+        exe_hbox.pack_start(self.exe_entry, True, True, 0)
+
+        btn_exe_browse = Gtk.Button(label="Обзор...")
+        btn_exe_browse.connect("clicked", self.on_exe_browse_clicked)
+        exe_hbox.pack_start(btn_exe_browse, False, False, 0)
+        grid.attach(lbl_exe, 0, 0, 1, 1)
+        grid.attach(exe_hbox, 1, 0, 1, 1)
+
         lbl_proton = Gtk.Label(label="Версия Proton:")
         lbl_proton.set_alignment(0, 0.5)
         self.cmb_proton = Gtk.ComboBoxText()
@@ -498,50 +475,50 @@ class EditDialog(Gtk.Dialog):
             self.cmb_proton.append(v["name"], v["name"])
         if not self.cmb_proton.set_active_id(self.proton_type):
             self.cmb_proton.set_active(0)
-        grid.attach(lbl_proton, 0, 0, 1, 1)
-        grid.attach(self.cmb_proton, 1, 0, 1, 1)
+        grid.attach(lbl_proton, 0, 1, 1, 1)
+        grid.attach(self.cmb_proton, 1, 1, 1, 1)
 
         lbl_gamemode = Gtk.Label(label="Использовать GameMode:")
         lbl_gamemode.set_alignment(0, 0.5)
         self.chk_gamemode = Gtk.CheckButton()
         self.chk_gamemode.set_active(self.gamemode_enabled)
-        grid.attach(lbl_gamemode, 0, 1, 1, 1)
-        grid.attach(self.chk_gamemode, 1, 1, 1, 1)
+        grid.attach(lbl_gamemode, 0, 2, 1, 1)
+        grid.attach(self.chk_gamemode, 1, 2, 1, 1)
 
         lbl_mangohud = Gtk.Label(label="Использовать MangoHud:")
         lbl_mangohud.set_alignment(0, 0.5)
         self.chk_mangohud = Gtk.CheckButton()
         self.chk_mangohud.set_active(self.mangohud_enabled)
-        grid.attach(lbl_mangohud, 0, 2, 1, 1)
-        grid.attach(self.chk_mangohud, 1, 2, 1, 1)
+        grid.attach(lbl_mangohud, 0, 3, 1, 1)
+        grid.attach(self.chk_mangohud, 1, 3, 1, 1)
 
         lbl_wayland = Gtk.Label(label="Использовать Wayland:")
         lbl_wayland.set_alignment(0, 0.5)
         self.chk_wayland = Gtk.CheckButton()
         self.chk_wayland.set_active(self.wayland_enabled)
-        grid.attach(lbl_wayland, 0, 3, 1, 1)
-        grid.attach(self.chk_wayland, 1, 3, 1, 1)
+        grid.attach(lbl_wayland, 0, 4, 1, 1)
+        grid.attach(self.chk_wayland, 1, 4, 1, 1)
 
         lbl_steam = Gtk.Label(label="Интеграция со Steam:")
         lbl_steam.set_alignment(0, 0.5)
         self.chk_steam = Gtk.CheckButton()
         self.chk_steam.set_active(self.steam_enabled)
-        grid.attach(lbl_steam, 0, 4, 1, 1)
-        grid.attach(self.chk_steam, 1, 4, 1, 1)
+        grid.attach(lbl_steam, 0, 5, 1, 1)
+        grid.attach(self.chk_steam, 1, 5, 1, 1)
 
         lbl_overlay = Gtk.Label(label="Оверлей Steam:")
         lbl_overlay.set_alignment(0, 0.5)
         self.chk_overlay = Gtk.CheckButton()
         self.chk_overlay.set_active(self.overlay_enabled)
-        grid.attach(lbl_overlay, 0, 5, 1, 1)
-        grid.attach(self.chk_overlay, 1, 5, 1, 1)
+        grid.attach(lbl_overlay, 0, 6, 1, 1)
+        grid.attach(self.chk_overlay, 1, 6, 1, 1)
 
         lbl_vpn = Gtk.Label(label="Через VPN:")
         lbl_vpn.set_alignment(0, 0.5)
         self.chk_vpn = Gtk.CheckButton()
         self.chk_vpn.set_active(self.vpn_enabled)
-        grid.attach(lbl_vpn, 0, 6, 1, 1)
-        grid.attach(self.chk_vpn, 1, 6, 1, 1)
+        grid.attach(lbl_vpn, 0, 7, 1, 1)
+        grid.attach(self.chk_vpn, 1, 7, 1, 1)
 
         self.lock_signals = False
         self.chk_overlay.connect("toggled", self.on_overlay_toggled)
@@ -558,30 +535,28 @@ class EditDialog(Gtk.Dialog):
         lbl_prefix.set_alignment(0, 0.5)
         self.prefix_entry = Gtk.Entry()
         self.prefix_entry.set_text(self.prefix_name)
-        grid.attach(lbl_prefix, 0, 7, 1, 1)
-        grid.attach(self.prefix_entry, 1, 7, 1, 1)
+        grid.attach(lbl_prefix, 0, 8, 1, 1)
+        grid.attach(self.prefix_entry, 1, 8, 1, 1)
 
         lbl_gpu = Gtk.Label(label="Видеокарта:")
         lbl_gpu.set_alignment(0, 0.5)
-
-        gpu_cb_list = [self.gpu_select]
-        for opt in ["Автоматически", "AMD", "Nvidia", "Intel"]:
-            if opt != self.gpu_select:
-                gpu_cb_list.append(opt)
-
+        gpu_opts = ["Автоматически", "AMD", "Nvidia", "Intel"]
         self.gpu_combo = Gtk.ComboBoxText()
-        for opt in gpu_cb_list:
+        for opt in gpu_opts:
             self.gpu_combo.append_text(opt)
-        self.gpu_combo.set_active(0)
-        grid.attach(lbl_gpu, 0, 8, 1, 1)
-        grid.attach(self.gpu_combo, 1, 8, 1, 1)
+        if self.gpu_select in gpu_opts:
+            self.gpu_combo.set_active(gpu_opts.index(self.gpu_select))
+        else:
+            self.gpu_combo.set_active(0)
+        grid.attach(lbl_gpu, 0, 9, 1, 1)
+        grid.attach(self.gpu_combo, 1, 9, 1, 1)
 
         lbl_name = Gtk.Label(label="Название:")
         lbl_name.set_alignment(0, 0.5)
         self.name_entry = Gtk.Entry()
         self.name_entry.set_text(self.current_name)
-        grid.attach(lbl_name, 0, 9, 1, 1)
-        grid.attach(self.name_entry, 1, 9, 1, 1)
+        grid.attach(lbl_name, 0, 10, 1, 1)
+        grid.attach(self.name_entry, 1, 10, 1, 1)
 
         lbl_icon = Gtk.Label(label="Иконка (файл):")
         lbl_icon.set_alignment(0, 0.5)
@@ -589,7 +564,7 @@ class EditDialog(Gtk.Dialog):
             title="Выберите иконку", action=Gtk.FileChooserAction.OPEN
         )
         self.icon_chooser.set_filename(self.current_icon)
-        grid.attach(lbl_icon, 0, 10, 1, 1)
+        grid.attach(lbl_icon, 0, 11, 1, 1)
 
         icon_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         icon_hbox.pack_start(self.icon_chooser, True, True, 0)
@@ -601,15 +576,15 @@ class EditDialog(Gtk.Dialog):
         self.btn_reset = Gtk.Button(label="Сбросить")
         self.btn_reset.connect("clicked", self.on_reset_clicked)
         icon_hbox.pack_start(self.btn_reset, False, False, 0)
-        grid.attach(icon_hbox, 1, 10, 1, 1)
+        grid.attach(icon_hbox, 1, 11, 1, 1)
 
         lbl_args = Gtk.Label(label="Аргументы запуска:")
         lbl_args.set_alignment(0, 0.5)
         self.args_entry = Gtk.Entry()
         self.args_entry.set_text(self.raw_args)
-        self.args_entry.set_placeholder_text("ENV=1 %command% --arg-here")
-        grid.attach(lbl_args, 0, 11, 1, 1)
-        grid.attach(self.args_entry, 1, 11, 1, 1)
+        self.args_entry.set_placeholder_text("VAR=1 %command% --dx11")
+        grid.attach(lbl_args, 0, 12, 1, 1)
+        grid.attach(self.args_entry, 1, 12, 1, 1)
 
         lbl_gameid = Gtk.Label(label="Game ID / App ID:")
         lbl_gameid.set_alignment(0, 0.5)
@@ -626,8 +601,8 @@ class EditDialog(Gtk.Dialog):
         self.btn_steam_search.connect("clicked", self.on_steam_search_clicked)
         gameid_hbox.pack_start(self.btn_steam_search, False, False, 0)
 
-        grid.attach(lbl_gameid, 0, 12, 1, 1)
-        grid.attach(gameid_hbox, 1, 12, 1, 1)
+        grid.attach(lbl_gameid, 0, 13, 1, 1)
+        grid.attach(gameid_hbox, 1, 13, 1, 1)
 
         preview_hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, spacing=10
@@ -662,6 +637,22 @@ class EditDialog(Gtk.Dialog):
         self.add_button("Сохранить изменения", Gtk.ResponseType.OK)
 
         self.show_all()
+
+    def on_exe_browse_clicked(self, widget):
+        dialog = Gtk.FileChooserDialog(
+            title="Выберите исполняемый файл (.exe)",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL,
+            Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN,
+            Gtk.ResponseType.OK,
+        )
+        if dialog.run() == Gtk.ResponseType.OK:
+            self.exe_entry.set_text(dialog.get_filename())
+        dialog.destroy()
 
     def on_steam_search_clicked(self, widget):
         dialog = SteamSearchDialog(self)
@@ -729,7 +720,6 @@ class EditDialog(Gtk.Dialog):
         zoom_win.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         zoom_win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
 
-        # WM Floating Hack
         zoom_win.set_resizable(False)
         GLib.timeout_add(150, lambda: zoom_win.set_resizable(True) or False)
 
@@ -794,6 +784,7 @@ class EditDialog(Gtk.Dialog):
         new_gpu = self.gpu_combo.get_active_text()
         new_proton = self.cmb_proton.get_active_id() or default_proton_name
         new_gameid = self.gameid_entry.get_text().strip()
+        new_exe = self.exe_entry.get_text().strip()
 
         env_gamemode = "1" if self.chk_gamemode.get_active() else "0"
         env_mangohud = "1" if self.chk_mangohud.get_active() else "0"
@@ -802,29 +793,38 @@ class EditDialog(Gtk.Dialog):
         env_overlay = "1" if self.chk_overlay.get_active() else "0"
         env_vpn = "1" if self.chk_vpn.get_active() else "0"
 
-        gpu_env = ""
-        if new_gpu == "Nvidia":
-            gpu_env = "__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only"
-            if self.nvidia_id:
-                gpu_env += f" DRI_PRIME={self.nvidia_id}! MESA_VK_DEVICE_SELECT={self.nvidia_id}!"
-        elif new_gpu == "AMD" and self.amd_id:
-            gpu_env = f"DRI_PRIME={self.amd_id}! MESA_VK_DEVICE_SELECT={self.amd_id}!"
-        elif new_gpu == "Intel" and self.intel_id:
-            gpu_env = f"DRI_PRIME={self.intel_id}! MESA_VK_DEVICE_SELECT={self.intel_id}!"
+        if os.path.exists(new_exe) and new_name.endswith(" (Inactive)"):
+            new_name = new_name[:-11].strip()
 
-        exec_base = f'env GAMEID={new_gameid} USE_GAMEMODE={env_gamemode} USE_MANGOHUD={env_mangohud} PROTON_ENABLE_WAYLAND={env_wayland} UMU_PREFIX_NAME={new_prefix} UMU_PROTON_TYPE="{new_proton}" USE_STEAM_INTEGRATION={env_steam} USE_STEAM_OVERLAY={env_overlay} USE_VPN={env_vpn} {gpu_env}'.strip()
-        exec_base += " umu-run-wrapper"
+        env_vars = [
+            f"GAMEID={new_gameid}",
+            f"USE_GAMEMODE={env_gamemode}",
+            f"USE_MANGOHUD={env_mangohud}",
+            f"PROTON_ENABLE_WAYLAND={env_wayland}",
+            f"UMU_PREFIX_NAME={new_prefix}",
+            f'UMU_PROTON_TYPE="{new_proton}"',
+            f"USE_STEAM_INTEGRATION={env_steam}",
+            f"USE_STEAM_OVERLAY={env_overlay}",
+            f"USE_VPN={env_vpn}",
+            f'UMU_GPU_SELECT="{new_gpu}"',
+        ]
+        env_base = "env " + " ".join(env_vars)
 
         if "%command%" in new_args:
-            exec_cmd = new_args.replace(
-                "%command%", f'{exec_base} "{self.actual_exe}"'
-            )
+            parts = new_args.split("%command%", 1)
+            prefix_args = parts[0].strip()
+            suffix_args = parts[1].strip()
+            exec_cmd = f'{env_base} {prefix_args} umu-run-wrapper "{new_exe}" {suffix_args}'.strip()
         else:
-            exec_cmd = f'{exec_base} "{self.actual_exe}" {new_args}'
+            exec_cmd = (
+                f'{env_base} umu-run-wrapper "{new_exe}" {new_args}'.strip()
+            )
 
         self.config["Desktop Entry"]["Name"] = new_name
         self.config["Desktop Entry"]["Icon"] = new_icon
         self.config["Desktop Entry"]["Exec"] = exec_cmd
+        self.config["Desktop Entry"]["Path"] = os.path.dirname(new_exe)
+        self.config["Desktop Entry"]["X-UMU-Actual-Exe"] = new_exe
         self.config["Desktop Entry"]["X-UMU-Raw-Args"] = new_args
         self.config["Desktop Entry"]["X-UMU-Prefix-Name"] = new_prefix
         self.config["Desktop Entry"]["X-UMU-GPU-Select"] = new_gpu
@@ -845,7 +845,6 @@ class ShortcutsManager(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_border_width(10)
 
-        # WM Floating Hack
         self.set_resizable(False)
         GLib.timeout_add(150, lambda: self.set_resizable(True) or False)
 
