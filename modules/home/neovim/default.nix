@@ -182,14 +182,9 @@ let
       if [ ! -t 0 ]; then
         send_stdin_stream_rpc "man" "$@"
       elif [[ -n "$ARG" ]]; then
-        if [[ -e "$ARG" ]]; then
-          ABS_PATH=$(${pkgs.coreutils}/bin/readlink -f "$ARG")
-          exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-            "v:lua._G.OpenManPath('$ABS_PATH')" >/dev/null 2>&1
-        else
-          exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-            "v:lua._G.OpenManPath('$ARG')" >/dev/null 2>&1
-        fi
+        ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$ARG")
+        exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
+          "v:lua._G.OpenManPath('$ABS_PATH')" >/dev/null 2>&1
       else
         exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
           "v:lua._G.OpenManPath(\"\")" >/dev/null 2>&1
@@ -203,7 +198,7 @@ let
 
     # 3. No arguments (`nvim`)
     if [ $# -eq 0 ]; then
-      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab()" >/dev/null 2>&1
+      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD')" >/dev/null 2>&1
     fi
 
     # 4. File arguments (`nvim file1 file2...`)
@@ -213,11 +208,9 @@ let
       if [[ "$arg" == -* ]]; then
         exec "$DIR/nvim-raw" "$@"
       fi
-      if [[ -e "$arg" ]]; then
-        ABS_PATH=$(${pkgs.coreutils}/bin/readlink -f "$arg")
-      else
-        ABS_PATH="$arg"
-      fi
+
+      # realpath -s -m resolves relative paths WITHOUT expanding/dereferencing symlinks
+      ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
 
       CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
       if [ $FIRST -eq 1 ]; then
@@ -304,6 +297,18 @@ let
       end,
     })
 
+    -- Auto-create missing parent directories on save (:w)
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      group = vim.api.nvim_create_augroup("AutoCreateParentDirs", { clear = true }),
+      callback = function(event)
+        if event.match:match("^%w%w+:[\\/][\\/]") then return end
+        local dir = vim.fn.fnamemodify(event.match, ":p:h")
+        if vim.fn.isdirectory(dir) == 0 then
+          vim.fn.mkdir(dir, "p")
+        end
+      end,
+    })
+
     -- === DISABLE FOLDING GLOBALLY ===
     vim.opt.foldenable = false
     vim.opt.foldlevel = 99
@@ -332,8 +337,11 @@ let
     })
 
     -- === MODE-SAFE RPC HELPER FUNCTIONS ===
-    _G.OpenNewTab = function()
+    _G.OpenNewTab = function(dir)
       vim.cmd("tabnew")
+      if dir and dir ~= "" then
+        pcall(vim.cmd, "lcd " .. vim.fn.fnameescape(dir))
+      end
     end
 
     _G.OpenManPath = function(path_or_arg)
@@ -404,35 +412,24 @@ let
         end
       end
 
-      -- Bind Mouse Wheel (Normal + Visual mode)
-      vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function() scroll_down(3) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<ScrollWheelUp>", function() scroll_up(3) end, { buffer = buf, silent = true, nowait = true })
+      -- Bind Mouse Wheel
+      vim.keymap.set("n", "<ScrollWheelDown>", function() scroll_down(3) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<ScrollWheelUp>", function() scroll_up(3) end, { buffer = buf, silent = true, nowait = true })
 
-      -- Bind Page Keys & Ctrl-F / Ctrl-B / Ctrl-D / Ctrl-U (Normal + Visual mode)
-      vim.keymap.set({ "n", "x" }, "<PageDown>", function() scroll_down(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<PageUp>", function() scroll_up(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<C-f>", function() scroll_down(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<C-b>", function() scroll_up(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<C-d>", function() scroll_down(math.floor(vim.api.nvim_win_get_height(win) / 2)) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<C-u>", function() scroll_up(math.floor(vim.api.nvim_win_get_height(win) / 2)) end, { buffer = buf, silent = true, nowait = true })
+      -- Bind Page Keys & Ctrl-F / Ctrl-B / Ctrl-D / Ctrl-U
+      vim.keymap.set("n", "<PageDown>", function() scroll_down(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<PageUp>", function() scroll_up(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<C-f>", function() scroll_down(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<C-b>", function() scroll_up(math.max(1, vim.api.nvim_win_get_height(win) - 2)) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<C-d>", function() scroll_down(math.floor(vim.api.nvim_win_get_height(win) / 2)) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<C-u>", function() scroll_up(math.floor(vim.api.nvim_win_get_height(win) / 2)) end, { buffer = buf, silent = true, nowait = true })
 
-      -- Bind j / k / Down / Up (Normal + Visual mode)
-      vim.keymap.set({ "n", "x" }, "j", function() scroll_down(1) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<Down>", function() scroll_down(1) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "k", function() scroll_up(1) end, { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set({ "n", "x" }, "<Up>", function() scroll_up(1) end, { buffer = buf, silent = true, nowait = true })
+      -- Bind j / k / Down / Up
+      vim.keymap.set("n", "j", function() scroll_down(1) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<Down>", function() scroll_down(1) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "k", function() scroll_up(1) end, { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<Up>", function() scroll_up(1) end, { buffer = buf, silent = true, nowait = true })
     end
-
-    -- Auto-attach clamped scrolling to all manpages
-    vim.api.nvim_create_autocmd("FileType", {
-      pattern = "man",
-      callback = function(ev)
-        local win = vim.fn.bufwinid(ev.buf)
-        if win ~= -1 then
-          setup_pager_scroll(ev.buf, win)
-        end
-      end,
-    })
 
     -- === USER-ISOLATED TMPFS ANSI PAGER & MAN PAGER ===
     _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
@@ -460,103 +457,27 @@ let
       vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
       vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
 
-      setup_pager_scroll(buf, win)
-
-      local function reset_view()
-        if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then return end
-        pcall(vim.cmd, "stopinsert")
-
-        local line_count = vim.api.nvim_buf_line_count(buf)
-        local win_h = vim.api.nvim_win_get_height(win)
-
-        if jump_bottom then
-          local max_top = math.max(1, line_count - win_h + 1)
-          pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
-          pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
-        else
-          pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-          pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
-        end
-      end
-
-      -- Event-driven listener: attaches to buffer updates while streaming
-      local detached = false
-      local detach_autocmd = vim.api.nvim_create_autocmd({ "CursorMoved", "WinScrolled" }, {
-        buffer = buf,
-        once = true,
-        callback = function()
-          detached = true
-        end,
-      })
-
-      vim.api.nvim_buf_attach(buf, false, {
-        on_lines = function()
-          if detached then
-            pcall(vim.api.nvim_del_autocmd, detach_autocmd)
-            return true -- Returning true automatically unattaches the listener
-          end
-          vim.schedule(reset_view)
-        end,
-      })
-
       -- Open C libvterm terminal channel (100% robust VT100 / ANSI rendering)
       local chan = vim.api.nvim_open_term(buf, {})
       vim.api.nvim_chan_send(chan, raw)
 
+      -- Flush libvterm lines synchronously
       vim.cmd("redraw")
-      vim.cmd("stopinsert")
-      reset_view()
-    end
 
-    _G.OpenStandalonePager = function()
-      local buf = vim.api.nvim_get_current_buf()
-      local win = vim.api.nvim_get_current_win()
-
-      vim.bo[buf].bufhidden = "wipe"
-      vim.b[buf].is_pager = true
-      vim.wo[win].wrap = true
-
-      vim.keymap.set("n", "q", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set("n", "Q", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
-      vim.keymap.set("n", "<Esc>", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
-
+      -- Attach clamped scrolling helper (hard stop at bottom line)
       setup_pager_scroll(buf, win)
 
-      local function reset_view()
-        if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then return end
-        pcall(vim.cmd, "stopinsert")
-        pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-        pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
-      end
-
-      local detached = false
-      local detach_autocmd = vim.api.nvim_create_autocmd({ "CursorMoved", "WinScrolled" }, {
-        buffer = buf,
-        once = true,
-        callback = function()
-          detached = true
-        end,
-      })
-
-      vim.api.nvim_buf_attach(buf, false, {
-        on_lines = function()
-          if detached then
-            pcall(vim.api.nvim_del_autocmd, detach_autocmd)
-            return true
-          end
-          vim.schedule(reset_view)
-        end,
-      })
-
-      local content = io.stdin:read("*a") or ""
-      content = content:gsub("\r?\n", "\r\n")
-
-      local chan = vim.api.nvim_open_term(buf, {})
-      vim.api.nvim_chan_send(chan, content)
-
-      vim.cmd("redraw")
       vim.cmd("stopinsert")
-      reset_view()
+      local line_count = vim.api.nvim_buf_line_count(buf)
+      local win_h = vim.api.nvim_win_get_height(win)
+      if jump_bottom then
+        local max_top = math.max(1, line_count - win_h + 1)
+        vim.cmd("normal! " .. max_top .. "zt")
+        pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+      else
+        pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+        vim.cmd("normal! zt")
+      end
     end
 
     _G.OpenManPageFile = function(filepath, jump_bottom)
@@ -602,6 +523,35 @@ let
         pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
         vim.cmd("normal! zt")
       end
+    end
+
+    _G.OpenStandalonePager = function()
+      local buf = vim.api.nvim_get_current_buf()
+      local win = vim.api.nvim_get_current_win()
+
+      vim.bo[buf].bufhidden = "wipe"
+      vim.b[buf].is_pager = true
+      vim.wo[win].wrap = true
+
+      vim.keymap.set("n", "q", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "Q", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
+      vim.keymap.set("n", "<Esc>", "<Cmd>qa!<CR>", { buffer = buf, silent = true, nowait = true })
+
+      setup_pager_scroll(buf, win)
+
+      local content = io.stdin:read("*a") or ""
+      content = content:gsub("\r?\n", "\r\n")
+
+      local chan = vim.api.nvim_open_term(buf, {})
+      vim.api.nvim_chan_send(chan, content)
+
+      vim.cmd("redraw")
+      pcall(vim.fn.chanclose, chan)
+      vim.bo[buf].buftype = "nofile"
+
+      vim.cmd("stopinsert")
+      pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+      vim.cmd("normal! 1zt")
     end
 
     -- === SLIDING TABLINE WITH OVERFLOW FOLLOWING ===
@@ -1097,7 +1047,7 @@ let
       vim.keymap.set(mode, "<C-S-t>", prefix .. "<Cmd>tabnew +term<CR>", { desc = "New Terminal Tab", silent = true })
     end
 
-    -- === HIDDEN CURSOR FOR PAGERS, MANPAGES & TERMINAL SCROLLING ===
+    -- Define a hidden cursor style (100% transparent)
     vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
 
     local function set_hidden_cursor(hide)
@@ -1109,52 +1059,6 @@ let
         vim.o.guicursor = cleaned
       end
     end
-
-    -- Auto hide cursor on entering manpages, pagers, or normal-mode terminals
-    vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "FileType" }, {
-      group = vim.api.nvim_create_augroup("HideCursorInPagers", { clear = true }),
-      pattern = "*",
-      callback = function(ev)
-        local buf = ev.buf
-        if vim.bo[buf].filetype == "man" or vim.b[buf].is_pager then
-          set_hidden_cursor(true)
-        elseif vim.bo[buf].buftype == "terminal" then
-          local mode = vim.api.nvim_get_mode().mode
-          if mode == "t" then
-            set_hidden_cursor(false)
-          else
-            set_hidden_cursor(true)
-          end
-        else
-          set_hidden_cursor(false)
-        end
-      end,
-    })
-
-    -- Dynamically update cursor when switching modes in terminals/pagers
-    vim.api.nvim_create_autocmd("ModeChanged", {
-      group = vim.api.nvim_create_augroup("HideCursorModeChanged", { clear = true }),
-      pattern = "*",
-      callback = function()
-        if vim.bo.filetype == "man" or vim.b.is_pager or vim.bo.buftype == "terminal" then
-          local mode = vim.api.nvim_get_mode().mode
-          if mode == "t" then
-            set_hidden_cursor(false)
-          else
-            set_hidden_cursor(true)
-          end
-        end
-      end,
-    })
-
-    -- Always restore cursor when leaving a buffer or window
-    vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
-      group = vim.api.nvim_create_augroup("RestoreCursorOnLeave", { clear = true }),
-      pattern = "*",
-      callback = function()
-        set_hidden_cursor(false)
-      end,
-    })
 
     -- Hide cursor during Normal (nt) / Visual (v/V) scrolling in terminals, restore in Insert (t)
     vim.api.nvim_create_autocmd("ModeChanged", {
@@ -1250,13 +1154,6 @@ let
 
         local char_list = vim.fn.split(chars .. cyrillic, [[\zs]])
         
-        -- Add navigation keys to auto-switch back to Insert mode when pressed in Normal/Visual mode
-        local nav_keys = {
-          "<Up>", "<Down>", "<Left>", "<Right>",
-          "<PageUp>", "<PageDown>", "<Home>", "<End>",
-          "<Tab>", "<S-Tab>"
-        }
-
         local function exit_visual_and_type(char)
           vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
           vim.schedule(function()
@@ -1271,9 +1168,6 @@ let
           local prefix = (mode == "v" and "<Esc>i" or "i")
           for _, char in ipairs(char_list) do
             vim.keymap.set(mode, char, prefix .. char, { buffer = bufnr, nowait = true, silent = true })
-          end
-          for _, key in ipairs(nav_keys) do
-            vim.keymap.set(mode, key, prefix .. key, { buffer = bufnr, nowait = true, silent = true })
           end
           vim.keymap.set(mode, "<Space>", prefix .. " ", { buffer = bufnr, nowait = true, silent = true })
           vim.keymap.set(mode, "<CR>", prefix .. "<CR>", { buffer = bufnr, nowait = true, silent = true })

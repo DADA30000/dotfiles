@@ -283,31 +283,34 @@ in
 
     groups.${user}.gid = config.users.users.${user}.uid;
 
-    users.${user} = {
-      isNormalUser = true;
-      hashedPassword = user-hash;
-      group = user;
-      uid = 1000;
-      initialPassword = if user-hash == null then "1234" else null;
-      initialHashedPassword = lib.mkForce null;
-      home = "/home/${user}";
-      extraGroups = [
-        "wheel"
-        "uinput"
-        "mlocate"
-        "libvirtd"
-        "i2c"
-        "nginx"
-        "input"
-        "kvm"
-        "ydotool"
-        "vboxusers"
-        "adbusers"
-        "video"
-        "gamemode"
-        "docker"
-        "cvdnetwork"
-      ];
+    users = {
+      root.hashedPassword = "!";
+      ${user} = {
+        isNormalUser = true;
+        hashedPassword = user-hash;
+        group = user;
+        uid = 1000;
+        initialPassword = if user-hash == null then "1234" else null;
+        initialHashedPassword = lib.mkForce null;
+        home = "/home/${user}";
+        extraGroups = [
+          "wheel"
+          "uinput"
+          "mlocate"
+          "libvirtd"
+          "i2c"
+          "nginx"
+          "input"
+          "kvm"
+          "ydotool"
+          "vboxusers"
+          "adbusers"
+          "video"
+          "gamemode"
+          "docker"
+          "cvdnetwork"
+        ];
+      };
     };
   };
 
@@ -625,8 +628,6 @@ in
 
     locate.enable = true;
 
-    openssh.enable = true;
-
     tailscale.enable = true;
 
     zerotierone.enable = true;
@@ -644,6 +645,16 @@ in
       enable = true;
       package = pkgs.openrgb-with-all-plugins;
       motherboard = "amd";
+    };
+
+    openssh = {
+      enable = true;
+      ports = [ 9000 ];
+      settings = {
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        PermitRootLogin = "no";
+      };
     };
 
     greetd = {
@@ -790,6 +801,7 @@ in
     gamemode = {
       enable = true;
       enableRenice = true;
+      settings.general.renice = 15;
     };
 
     nh = {

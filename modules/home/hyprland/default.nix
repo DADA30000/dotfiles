@@ -501,7 +501,7 @@ in
               force_default_wallpaper = 2;
             };
             binds = {
-              scroll_event_delay = 50;
+              scroll_event_delay = 60;
             };
           };
           bind =
