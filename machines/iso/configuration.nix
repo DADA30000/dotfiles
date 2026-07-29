@@ -328,7 +328,7 @@ in
         '';
       };
 
-      boot.kernel.sysctl."vm.swappiness" = 200;
+      boot.kernel.sysctl."vm.swappiness" = lib.mkForce 200;
       services.ollama.enable = lib.mkForce false;
       graphics.amdgpu.pro = lib.mkForce false;
       disks.enable = lib.mkForce false;
