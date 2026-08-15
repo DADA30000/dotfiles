@@ -304,7 +304,6 @@ in
         config.boot.initrd.systemd.services.initrd-find-nixos-closure.serviceConfig.ExecStart
       ];
       home-manager.users.${user} = import ./home.nix;
-      boot.supportedFilesystems.zfs = lib.mkForce false;
       networking.hostName = "iso";
 
       security.polkit.extraConfig = ''
@@ -330,6 +329,7 @@ in
 
       boot.kernel.sysctl."vm.swappiness" = lib.mkForce 200;
       services.ollama.enable = lib.mkForce false;
+      security.sudo.wheelNeedsPassword = false;
       graphics.amdgpu.pro = lib.mkForce false;
       disks.enable = lib.mkForce false;
       my-services.cloudflare-ddns.enable = lib.mkForce false;
