@@ -1,20 +1,22 @@
 #define _GNU_SOURCE
-#include "asm/unistd_64.h" // for __NR_fsconfig, __NR_fsopen, __NR_fsmount
-#include "linux/mount.h"   // for fsconfig_command
-#include <fcntl.h>         // for open, O_CLOEXEC, O_DIRECTORY, O_NOFOLLOW
-#include <linux/loop.h>    // for loop_info64, LOOP_CTL_GET_FREE, LOOP_SET_FD
-#include <pwd.h>           // for passwd, getpwuid
-#include <sched.h>         // for CLONE_NEWUSER, unshare
-#include <signal.h>        // for SIGKILL, kill
-#include <stdint.h>        // for uint64_t
-#include <stdio.h>         // for perror, snprintf, NULL, fprintf, stderr
-#include <stdlib.h>        // for exit, mkdtemp
-#include <sys/ioctl.h>     // for ioctl
-#include <sys/mount.h>     // for MNT_DETACH, umount2, FSOPEN_CLOEXEC, MS_N...
-#include <sys/stat.h>      // for mkdir, stat, fstat
-#include <sys/types.h>     // for uid_t, gid_t, pid_t
-#include <sys/wait.h>      // for waitpid
-#include <unistd.h>        // for close, syscall, setegid, seteuid, rmdir
+#include "asm-generic/errno-base.h" // for EBUSY
+#include "asm/unistd_64.h"          // for __NR_fsconfig, __NR_fsopen, __NR...
+#include "linux/mount.h"            // for fsconfig_command
+#include <errno.h>                  // for errno
+#include <fcntl.h>                  // for open, O_CLOEXEC, O_RDONLY, O_DIR...
+#include <linux/loop.h>             // for loop_config, LOOP_CONFIGURE, LOO...
+#include <pwd.h>                    // for passwd, getpwuid
+#include <sched.h>                  // for CLONE_NEWUSER, unshare
+#include <signal.h>                 // for SIGKILL, kill
+#include <stdint.h>                 // for uint64_t
+#include <stdio.h>                  // for perror, snprintf, NULL, fprintf
+#include <stdlib.h>                 // for exit, mkdtemp
+#include <sys/ioctl.h>              // for ioctl
+#include <sys/mount.h>              // for MNT_DETACH, umount2, FSOPEN_CLOEXEC
+#include <sys/stat.h>               // for mkdir, stat, fstat
+#include <sys/types.h>              // for uid_t, gid_t, pid_t
+#include <sys/wait.h>               // for waitpid
+#include <unistd.h>                 // for close, syscall, setegid, seteuid
 
 struct clone_mount_attr {
   uint64_t attr_set;
@@ -277,7 +279,6 @@ int main(void) {
   // FALLBACK: The kernel rejected direct file-backed mounting.
   // Securely allocate and bind a loopback device.
   if (needs_loop) {
-    // The previous fs_fd context is tainted by the failed source. Discard it.
     close(fs_fd);
 
     int loop_ctl = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
@@ -298,30 +299,27 @@ int main(void) {
     char loop_name[64];
     snprintf(loop_name, sizeof(loop_name), "/dev/loop%d", dev_nr);
 
-    // Open the assigned loop device
-    int loop_fd = open(loop_name, O_RDWR | O_CLOEXEC);
+    // Open loop device with O_RDONLY since CAP_SYS_ADMIN allows LOOP_CONFIGURE
+    int loop_fd = open(loop_name, O_RDONLY | O_CLOEXEC);
     if (loop_fd < 0) {
       perror("Failed to open allocated loop device");
       close(img_fd);
       goto cleanup_upper;
     }
 
-    // Securely bind our read-only image FD to the loop device
-    if (ioctl(loop_fd, LOOP_SET_FD, img_fd) < 0) {
-      perror("Failed to bind image to loop device");
+    // Atomically attach and configure the loop device
+    struct loop_config config = {0};
+    config.fd = img_fd;
+    config.info.lo_flags = LO_FLAGS_AUTOCLEAR | LO_FLAGS_READ_ONLY;
+
+    if (ioctl(loop_fd, LOOP_CONFIGURE, &config) < 0) {
+      perror("ioctl(LOOP_CONFIGURE) failed");
       close(loop_fd);
       close(img_fd);
       goto cleanup_upper;
     }
 
-    // Enforce read-only constraint and AUTOCLEAR so it auto-destroys on umount
-    struct loop_info64 li = {0};
-    li.lo_flags = LO_FLAGS_AUTOCLEAR | LO_FLAGS_READ_ONLY;
-    if (ioctl(loop_fd, LOOP_SET_STATUS64, &li) < 0) {
-      perror("Warning: Failed to set loop flags (AUTOCLEAR/READ_ONLY)");
-    }
-
-    // Setup a fresh mount context using our newly minted loop device
+    // Setup fresh mount context
     fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
     if (fs_fd < 0) {
       perror("fsopen(erofs) fallback failed");
@@ -339,17 +337,20 @@ int main(void) {
       goto cleanup_upper;
     }
 
-    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
-      perror("fsconfig(CMD_CREATE, loop_name) failed");
-      close(loop_fd);
-      close(fs_fd);
-      close(img_fd);
-      goto cleanup_upper;
+    // Retry briefly if udev probing is briefly holding the device
+    int max_retries = 10;
+    while (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) <
+           0) {
+      if (errno != EBUSY || --max_retries == 0) {
+        perror("fsconfig(CMD_CREATE, loop_name) failed");
+        close(loop_fd);
+        close(fs_fd);
+        close(img_fd);
+        goto cleanup_upper;
+      }
+      usleep(20000); // 20ms
     }
 
-    // The kernel mount API now holds a reference to the loop block device.
-    // We can safely close our user-space file descriptors. AUTOCLEAR handles
-    // the rest.
     close(loop_fd);
   }
 

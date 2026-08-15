@@ -74,7 +74,7 @@ in
         /*
         * vim: ft=less
         */
-        @define-color cc-bg rgba(0, 0, 0, 0.01);
+        @define-color cc-bg rgba(0, 0, 0, 0.02);
 
         @define-color noti-border-color transparent;
         @define-color noti-bg rgba(0, 0, 0, 0.01);

@@ -12,6 +12,7 @@
       config.lib.file.mkOutOfStoreSymlink "/etc/xdg/openxr/1/active_runtime.i686.json";
     "bookmarks.html".source = ../../../stuff/bookmarks.html;
     "uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+    "libvirt/qemu.conf".text = "max_core = 0";
   };
 
   home.sessionVariables = {
