@@ -1,22 +1,21 @@
 #define _GNU_SOURCE
-#include "asm-generic/errno-base.h" // for EBUSY
-#include "asm/unistd_64.h"          // for __NR_fsconfig, __NR_fsopen, __NR...
-#include "linux/mount.h"            // for fsconfig_command
-#include <errno.h>                  // for errno
-#include <fcntl.h>                  // for open, O_CLOEXEC, O_RDONLY, O_DIR...
-#include <linux/loop.h>             // for loop_config, LOOP_CONFIGURE, LOO...
-#include <pwd.h>                    // for passwd, getpwuid
-#include <sched.h>                  // for CLONE_NEWUSER, unshare
-#include <signal.h>                 // for SIGKILL, kill
-#include <stdint.h>                 // for uint64_t
-#include <stdio.h>                  // for perror, snprintf, NULL, fprintf
-#include <stdlib.h>                 // for exit, mkdtemp
-#include <sys/ioctl.h>              // for ioctl
-#include <sys/mount.h>              // for MNT_DETACH, umount2, FSOPEN_CLOEXEC
-#include <sys/stat.h>               // for mkdir, stat, fstat
-#include <sys/types.h>              // for uid_t, gid_t, pid_t
-#include <sys/wait.h>               // for waitpid
-#include <unistd.h>                 // for close, syscall, setegid, seteuid
+#include "asm/unistd_64.h" // for __NR_fsconfig, __NR_fsopen, __NR_fsmount
+#include "linux/mount.h"   // for fsconfig_command
+#include <errno.h>         // for errno, EBUSY
+#include <fcntl.h>         // for open, O_CLOEXEC, O_DIRECTORY, O_NOFOLLOW
+#include <linux/loop.h>    // for loop_config, LOOP_CTL_GET_FREE, LOOP_CONFIGURE
+#include <pwd.h>           // for passwd, getpwuid
+#include <sched.h>         // for CLONE_NEWUSER, unshare
+#include <signal.h>        // for SIGKILL, kill
+#include <stdint.h>        // for uint64_t
+#include <stdio.h>         // for perror, snprintf, NULL, fprintf, stderr
+#include <stdlib.h>        // for exit, mkdtemp
+#include <sys/ioctl.h>     // for ioctl
+#include <sys/mount.h>     // for MNT_DETACH, umount2, FSOPEN_CLOEXEC, MS_N...
+#include <sys/stat.h>      // for mkdir, stat, fstat
+#include <sys/types.h>     // for uid_t, gid_t, pid_t
+#include <sys/wait.h>      // for waitpid
+#include <unistd.h> // for close, syscall, setegid, seteuid, rmdir, usleep
 
 struct clone_mount_attr {
   uint64_t attr_set;
@@ -204,7 +203,6 @@ int main(void) {
   }
 
   char mount_opts[128];
-  // Size limit removed. Defaults to 50% RAM. Perfectly safe and unbreakable.
   snprintf(mount_opts, sizeof(mount_opts), "mode=755,uid=%u,gid=%u", uid, gid);
 
   if (mount("tmpfs", upper_tmp, "tmpfs", MS_NODEV | MS_NOSUID, mount_opts) !=
@@ -246,40 +244,46 @@ int main(void) {
     goto cleanup_upper;
   }
 
-  // Open an unconfigured EROFS filesystem context
-  int fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
-  if (fs_fd < 0) {
-    perror("fsopen(erofs) failed");
-    close(img_fd);
-    goto cleanup_upper;
-  }
-
+  int fs_fd = -1;
   int needs_loop = 0;
 
-  // Attempt 1: Direct file-backed mount using SET_FD
-  if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FD, "source", NULL, img_fd) <
-      0) {
-    // Attempt 2: Direct file-backed mount using /proc/self/fd string mapping
-    char fd_path[64];
-    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", img_fd);
-
-    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_STRING, "source", fd_path,
-                0) < 0) {
+  // Open an unconfigured EROFS filesystem context
+  fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
+  if (fs_fd < 0) {
+    needs_loop = 1;
+  } else {
+    // Flag read-only mode explicitly
+    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FLAG, "ro", NULL, 0) < 0) {
       needs_loop = 1;
     }
-  }
+    // Attempt 1: Direct file-backed mount using SET_FD
+    else if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FD, "source", NULL,
+                     img_fd) < 0) {
+      // Attempt 2: Direct file-backed mount using /proc/self/fd string mapping
+      char fd_path[64];
+      snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", img_fd);
 
-  // Attempt to create the superblock. If the backing filesystem (e.g.
-  // OverlayFS) rejects it, it will return ENOTBLK or EINVAL.
-  if (!needs_loop &&
-      syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
-    needs_loop = 1;
+      if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_STRING, "source", fd_path,
+                  0) < 0) {
+        needs_loop = 1;
+      }
+    }
+
+    // Attempt to create superblock directly. Fails with ENOTBLK/EINVAL on
+    // stacked filesystems (e.g. OverlayFS on Live ISO).
+    if (!needs_loop &&
+        syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) < 0) {
+      needs_loop = 1;
+    }
   }
 
   // FALLBACK: The kernel rejected direct file-backed mounting.
   // Securely allocate and bind a loopback device.
   if (needs_loop) {
-    close(fs_fd);
+    if (fs_fd >= 0) {
+      close(fs_fd);
+      fs_fd = -1;
+    }
 
     int loop_ctl = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
     if (loop_ctl < 0) {
@@ -299,7 +303,7 @@ int main(void) {
     char loop_name[64];
     snprintf(loop_name, sizeof(loop_name), "/dev/loop%d", dev_nr);
 
-    // Open loop device with O_RDONLY since CAP_SYS_ADMIN allows LOOP_CONFIGURE
+    // Open loop device descriptor as O_RDONLY
     int loop_fd = open(loop_name, O_RDONLY | O_CLOEXEC);
     if (loop_fd < 0) {
       perror("Failed to open allocated loop device");
@@ -307,7 +311,7 @@ int main(void) {
       goto cleanup_upper;
     }
 
-    // Atomically attach and configure the loop device
+    // Atomically configure loop device with AUTOCLEAR and READ_ONLY
     struct loop_config config = {0};
     config.fd = img_fd;
     config.info.lo_flags = LO_FLAGS_AUTOCLEAR | LO_FLAGS_READ_ONLY;
@@ -319,11 +323,20 @@ int main(void) {
       goto cleanup_upper;
     }
 
-    // Setup fresh mount context
+    // Setup fresh mount context using our newly minted loop device
     fs_fd = syscall(__NR_fsopen, "erofs", FSOPEN_CLOEXEC);
     if (fs_fd < 0) {
       perror("fsopen(erofs) fallback failed");
       close(loop_fd);
+      close(img_fd);
+      goto cleanup_upper;
+    }
+
+    // Flag read-only mode to prevent EACCES when opening read-only loop device
+    if (syscall(__NR_fsconfig, fs_fd, FSCONFIG_SET_FLAG, "ro", NULL, 0) < 0) {
+      perror("fsconfig(SET_FLAG, ro) failed");
+      close(loop_fd);
+      close(fs_fd);
       close(img_fd);
       goto cleanup_upper;
     }
@@ -337,7 +350,7 @@ int main(void) {
       goto cleanup_upper;
     }
 
-    // Retry briefly if udev probing is briefly holding the device
+    // Retry briefly if udev probing holds the device temporarily
     int max_retries = 10;
     while (syscall(__NR_fsconfig, fs_fd, FSCONFIG_CMD_CREATE, NULL, NULL, 0) <
            0) {
@@ -412,9 +425,6 @@ int main(void) {
   umount2(tmp_path, MNT_DETACH);
 
 cleanup_upper:
-  // DETACH TMPFS: Hides the tmpfs from the filesystem namespace.
-  // Overlay holds active references, so the directories still exist in memory.
-  // The kernel will auto-vaporize the tmpfs entirely once the overlay unmounts.
   umount2(upper_tmp, MNT_DETACH);
 cleanup_dirs:
   rmdir(tmp_path);
