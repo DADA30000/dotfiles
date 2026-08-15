@@ -311,7 +311,7 @@ in
 
   nix = {
 
-    package = pkgs.nixVersions.latest;
+    package = pkgs.lixPackageSets.latest.lix;
 
     daemonCPUSchedPolicy = "batch";
 
@@ -880,7 +880,6 @@ in
             audio = true;
             gpu = true;
             wayland = true;
-            nvidia_gpu = true;
             use_landlock = false;
             sandbox_tmp = false;
             sandbox_shm = false;

@@ -141,7 +141,7 @@ EOF
   if [[ $CURRENT_STATE -le 2 ]]; then
     echo "Fetching steamrt4 version and hash..."
     STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-stable.txt -O -)"
-    STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/$STEAMRT4_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+    STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/$STEAMRT4_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash to-sri --type sha256)"
     echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt4.json
     echo "Finished fetching steamrt4"
 
@@ -154,7 +154,7 @@ EOF
   if [[ $CURRENT_STATE -le 3 ]]; then
     echo "Fetching steamrt3 version and hash..."
     STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-stable.txt -O -)"
-    STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/$STEAMRT3_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+    STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/$STEAMRT3_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash to-sri --type sha256)"
     echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
     echo "Finished fetching steamrt3"
 
@@ -177,9 +177,18 @@ EOF
   # ------------------------------------------------------------------------------
   if [[ $CURRENT_STATE -le 5 ]]; then
     echo "Updating Nix flake..."
-    sudo nix flake update --flake "$NIXOS_DIR"
+    TEMP_LOCK="$(mktemp)"
 
-    save_state 6
+    if nix flake update --flake "$NIXOS_DIR" --output-lock-file "$TEMP_LOCK"; then
+      echo "Flake update succeeded. Copying lock file to $NIXOS_DIR..."
+      sudo cp "$TEMP_LOCK" "$NIXOS_DIR/flake.lock"
+      rm -f "$TEMP_LOCK"
+      save_state 6
+    else
+      rm -f "$TEMP_LOCK"
+      echo "Error: 'nix flake update' failed." >&2
+      exit 1
+    fi
   fi
 
   # ------------------------------------------------------------------------------
@@ -188,7 +197,7 @@ EOF
   if [[ $CURRENT_STATE -le 6 ]]; then
     echo "Building and switching NixOS configuration..."
 
-    nh os switch "$NIXOS_DIR" "${FULL_ARGS[@]}" "${NH_ARGS[@]}"
+    nh os switch "$NIXOS_DIR" "${FULL_ARGS[@]}" "${NH_ARGS[@]}" --extra-substituters "https://hyprland.cachix.org"
 
     # Only remove state file on absolute success
     rm -f "$STATE_FILE"

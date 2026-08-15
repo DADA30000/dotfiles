@@ -5,14 +5,13 @@
   pkgs,
   ...
 }:
-with lib;
 let
   cfg = config.zsh;
 in
 {
-  options.zsh.enable = mkEnableOption "zsh shell";
+  options.zsh.enable = lib.mkEnableOption "zsh shell";
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     home = {
       file.".zshenv".enable = false;
       sessionVariables.ZDOTDIR = "${config.programs.zsh.dotDir}";
@@ -261,12 +260,95 @@ in
             "nix-search --index-path \"${index}\" \"$@\""
           }
           }
+          push-uefi-cert() {
+            if [[ $# -lt 2 ]]; then
+              echo "Usage: push-uefi-cert <db|dbx|KEK|PK> <cert_file> [-a|--append]"
+              echo "Example: push-uefi-cert dbx old_dgpu_cert.der --append"
+              return 1
+            fi
+
+            local var="$1"
+            local infile="$2"
+            local append=""
+            
+            if [[ "$3" == "-a" || "$3" == "--append" ]]; then
+              append="-a"
+            fi
+
+            if [[ ! -f "$infile" ]]; then
+              echo "[-] Error: File '$infile' not found."
+              return 1
+            fi
+
+            local esl_file="/tmp/temp_sig_list.esl"
+            local auth_file="/tmp/temp_sig_list.auth"
+            local temp_pem="/tmp/temp_cert.pem"
+            local guid=$(uuidgen)
+
+            if [[ "$infile" == *.esl || "$infile" == *.bin ]]; then
+              cp "$infile" "$esl_file"
+            else
+              if openssl x509 -inform DER -in "$infile" -noout &>/dev/null; then
+                echo "[+] Detected DER binary certificate. Converting to PEM, then ESL..."
+                openssl x509 -inform DER -in "$infile" -out "$temp_pem"
+                cert-to-efi-sig-list -g "$guid" "$temp_pem" "$esl_file"
+                rm -f "$temp_pem"
+              elif openssl x509 -inform PEM -in "$infile" -noout &>/dev/null; then
+                echo "[+] Detected PEM certificate. Converting to ESL..."
+                cert-to-efi-sig-list -g "$guid" "$infile" "$esl_file"
+              else
+                echo "[-] Error: Unsupported certificate format. Must be .esl, .pem, or .der"
+                return 1
+              fi
+            fi
+
+            local key_file=""
+            local cert_file=""
+            if [[ "$var" == "db" || "$var" == "dbx" ]]; then
+              key_file="/var/lib/sbctl/keys/KEK/KEK.key"
+              cert_file="/var/lib/sbctl/keys/KEK/KEK.pem"
+            elif [[ "$var" == "KEK" || "$var" == "PK" ]]; then
+              key_file="/var/lib/sbctl/keys/PK/PK.key"
+              cert_file="/var/lib/sbctl/keys/PK/PK.pem"
+            else
+              echo "[-] Error: Unknown target variable '$var' (expected db, dbx, KEK, or PK)."
+              rm -f "$esl_file"
+              return 1
+            fi
+
+            if [[ ! -f "$key_file" || ! -f "$cert_file" ]]; then
+              echo "[-] Error: Signing key or cert not found (Expected '$key_file' and '$cert_file')."
+              rm -f "$esl_file"
+              return 1
+            fi
+
+            echo "[+] Generating signed .auth update package..."
+            sudo sign-efi-sig-list $append -g "$guid" -k "$key_file" -c "$cert_file" "$var" "$esl_file" "$auth_file"
+
+            local efivars=(/sys/firmware/efi/efivars/''${var}-*(N))
+            if (( ''${#efivars} > 0 )); then
+              sudo chattr -i $efivars 2>/dev/null
+            fi
+
+            echo "[+] Writing pre-signed update to $var..."
+            sudo efi-updatevar $append -f "$auth_file" "$var"
+            sudo rm -f "$esl_file" "$auth_file"
+          }
+
           fix-dbx() {
-            local DEFAULT_DBX_PATH=$(ls /sys/firmware/efi/efivars/dbxDefault-*)
-            DEFAULT_DBX_PATH=$(ls /sys/firmware/efi/efivars/dbxDefault-*)
-            sudo tail -c +5 "$DEFAULT_DBX_PATH" > /tmp/dbxDefault.esl
-            sudo efi-updatevar -e -k /var/lib/sbctl/keys/KEK/KEK.key -f /tmp/dbxDefault.esl dbx
-            sudo rm /tmp/dbxDefault.esl
+            local DEFAULT_DBX_PATH=(/sys/firmware/efi/efivars/dbxDefault-*(N))
+            if (( ''${#DEFAULT_DBX_PATH} == 0 )); then
+              echo "[-] Error: Could not locate dbxDefault variable in efivars."
+              return 1
+            fi
+
+            local tmp_esl="/tmp/dbxDefault.esl"
+            echo "[+] Extracting default dbx signature list..."
+            sudo tail -c +5 "''${DEFAULT_DBX_PATH[1]}" > "$tmp_esl"
+
+            push-uefi-cert dbx "$tmp_esl"
+
+            rm -f "$tmp_esl"
           }
           7z() { 7zz "$@" }
           ns() { ns-dev "$@" }
@@ -320,11 +402,11 @@ in
               printf '\n%.0s' {1..100}
               setopt correct
 
-              # Optimize path completion (especially for giant dirs like /nix/store)
-              zstyle ':completion:*' accept-exact-dirs true
+              # Group formatting
+              zstyle ':completion:*' group-name ""
 
-              # Prefer exact matches first before attempting case-insensitive or fuzzy/substring matches.
-              # Prepending "" ensures precise inputs complete instantly without initiating heavy fuzzy directory scans.
+              # Optimize path completion
+              zstyle ':completion:*' accept-exact-dirs true
               zstyle ':completion:*' matcher-list "" 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
 
               _ns_completer() {
@@ -348,7 +430,6 @@ in
                     local cache_dir="/tmp/nix_completer_cache_dir"
                     local current_flake_source="${config.offline-path}?rev=${config.offline-rev}"
                     
-                    # Cache invalidation if flake source changes
                     if [[ -d "$cache_dir" ]]; then
                       if [[ ! -f "$cache_dir/flake_source" || "$(<"$cache_dir/flake_source")" != "$current_flake_source" ]]; then
                         rm -rf "$cache_dir"
@@ -364,7 +445,6 @@ in
                     local eval_prefix=""
                     local start_attr="pkgs"
                     
-                    # 1-Level On-Demand Path Builder
                     if [[ "$curr_word" == *.* ]]; then
                       cache_key="''${curr_word%.*}"
                       eval_prefix="''${cache_key}."
@@ -376,10 +456,8 @@ in
                     
                     local packages_string=""
                     if [[ -f "$cache_file" ]]; then
-                      # Fast path: Load from localized cache
                       packages_string="$(<"$cache_file")"
                     else
-                      # Safe 1-level deep on-demand evaluation
                       packages_string=$(nix eval --raw --no-use-registries --expr "
                         let
                           pkgs = $NIX_FLAKE_PREAMBLE;
@@ -396,42 +474,61 @@ in
                     local -a packages
                     packages=(''${(f)packages_string})
 
-                    # Match Categorization (using case-insensitive patterns to coordinate with compadd)
-                    local -a exact_matches prefix_matches substring_matches
+                    # Match Categorization (using case-insensitive patterns)
+                    local -a exact_matches prefix_matches fuzzy_matches
 
+                    # 1. Exact matches (e.g. "vent")
                     exact_matches=( ''${(M)packages:#(#i)"$curr_word"} )
                     exact_matches=( "''${(@)exact_matches/#''${attr_prefix}/}" )
+                    exact_matches=( ''${(o)exact_matches} )
 
+                    # 2. Regular / Prefix matches (e.g. "vent" -> "ventoy", "ventoy-full")
                     prefix_matches=( ''${(M)packages:#(#i)"$curr_word"*} )
                     prefix_matches=( "''${(@)prefix_matches/#''${attr_prefix}/}" )
                     prefix_matches=( ''${prefix_matches:|exact_matches} )
+                    prefix_matches=( ''${(o)prefix_matches} )
 
-                    substring_matches=( ''${(M)packages:#(#i)*"$curr_word"*} )
-                    substring_matches=( "''${(@)substring_matches/#''${attr_prefix}/}" )
-                    substring_matches=( ''${substring_matches:|exact_matches} )
-                    substring_matches=( ''${substring_matches:|prefix_matches} )
+                    # 3. Fuzzy / Substring matches (e.g. "vent" -> "inventory", "prevent")
+                    fuzzy_matches=( ''${(M)packages:#(#i)*"$curr_word"*} )
+                    fuzzy_matches=( "''${(@)fuzzy_matches/#''${attr_prefix}/}" )
+                    fuzzy_matches=( ''${fuzzy_matches:|exact_matches} )
+                    fuzzy_matches=( ''${fuzzy_matches:|prefix_matches} )
+                    fuzzy_matches=( ''${(o)fuzzy_matches} )
 
-                    # Check how many exact/prefix matches we have in total
-                    local total_prefixes=$(( ''${#exact_matches[@]} + ''${#prefix_matches[@]} ))
+                    # Calculate the common prefix across all regular matches
+                    local common_pfx=""
+                    if (( ''${#prefix_matches[@]} > 0 )); then
+                      common_pfx="''${prefix_matches[1]}"
+                      local item
+                      for item in "''${prefix_matches[@]:1}"; do
+                        while [[ -n "$common_pfx" && "$item" != "$common_pfx"* ]]; do
+                          common_pfx="''${common_pfx%?}"
+                        done
+                        [[ -z "$common_pfx" ]] && break
+                      done
+                    fi
 
-                    if (( total_prefixes == 1 )); then
-                      # EXACTLY 1 match: Instantly auto-complete it
-                      if (( ''${#exact_matches[@]} == 1 )); then
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a exact_matches
-                      else
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a prefix_matches
-                      fi
-                    elif (( total_prefixes > 1 )); then
-                      # >1 prefix/exact matches: Only show prefix/exact matches so substring matches don't hijack completion
+                    # If exact matches exist OR if typing "vento" expands unambiguously to "ventoy",
+                    # only provide regular matches so Zsh instantly completes it without fuzzy matches interfering.
+                    if (( ''${#exact_matches[@]} > 0 || ''${#common_pfx} > ''${#curr_word} )); then
                       if (( ''${#exact_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J exact -a exact_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' \
+                                -J exact -X '%F{green}-- exact matches --%f' -a exact_matches
                       fi
                       if (( ''${#prefix_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J prefix -a prefix_matches
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' \
+                                -J regular -X '%F{blue}-- regular matches --%f' -a prefix_matches
                       fi
-                    elif (( ''${#substring_matches[@]} > 0 )); then
-                      # 0 prefix matches: Fall back to substring matches
-                      compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
+                    else
+                      # Otherwise (e.g. "vent"), show BOTH regular matches (blue) and fuzzy matches (yellow)
+                      if (( ''${#prefix_matches[@]} > 0 )); then
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' \
+                                -J regular -X '%F{blue}-- regular matches --%f' -a prefix_matches
+                      fi
+                      if (( ''${#fuzzy_matches[@]} > 0 )); then
+                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' \
+                                -J fuzzy -X '%F{yellow}-- fuzzy matches --%f' -a fuzzy_matches
+                      fi
                     fi
                   fi
                 else
@@ -472,7 +569,6 @@ in
                 local prev_word="''${words[$CURRENT-1]}"
                 local ret=1
 
-                # Subcommands that expect a session name
                 if [[ "$prev_word" == "-k" || "$prev_word" == "--kill" ]]; then
                   local -a sessions
                   for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
@@ -484,7 +580,6 @@ in
                   return ret
                 fi
 
-                # First argument: suggest options and session names
                 if [[ "$CURRENT" -eq 2 ]]; then
                   local -a sessions opts
                   for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
@@ -510,7 +605,6 @@ in
                   return ret
                 fi
 
-                # Argument after -d / --detach expects a session
                 if [[ "$CURRENT" -eq 3 && ("$prev_word" == "-d" || "$prev_word" == "--detach") ]]; then
                   local -a sessions
                   for line in ''${(f)"$(sesatt -l 2>/dev/null)"}; do
@@ -522,7 +616,6 @@ in
                   return ret
                 fi
 
-                # Executable / path completion for commands passed after session name
                 if [[ "$curr_word" != -* ]]; then
                   _command_names -e && ret=0
                   _files && ret=0
@@ -549,11 +642,11 @@ in
               compdef _ns-build-env ns-build-env
               compdef _sesatt sesatt
             '';
-            zshEarly = mkOrder 500 ''
+            zshEarly = lib.mkOrder 500 ''
               DISABLE_MAGIC_FUNCTIONS=true
             '';
           in
-          mkMerge [
+          lib.mkMerge [
             zshConfig
             zshEarly
           ];

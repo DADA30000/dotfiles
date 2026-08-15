@@ -987,6 +987,41 @@ let
     '';
   });
 
+  ventoyFullGtkPkg = pkgs.ventoy-full-gtk.overrideAttrs (
+    finalAttrs: prevAttrs: {
+      postInstall = (prevAttrs.postInstall or "") + ''
+        GUI_BIN="$(echo "$out"/share/ventoy/tool/*/Ventoy2Disk.gtk3)"
+
+        cat << EOF > "$out/bin/ventoy-gui"
+        #!${pkgs.bash}/bin/bash
+        set -euo pipefail
+
+        VENTOY_PATH="$out/share/ventoy"
+        GUI_BIN="$GUI_BIN"
+
+        if [ "\''${EUID}" -ne 0 ]; then
+          exec pkexec env \
+            PATH="\$PATH" \
+            HOME="\$HOME" \
+            WAYLAND_DISPLAY="\''${WAYLAND_DISPLAY:-}" \
+            XDG_RUNTIME_DIR="\''${XDG_RUNTIME_DIR:-}" \
+            DISPLAY="\''${DISPLAY:-}" \
+            GTK_THEME="\''${GTK_THEME:-}" \
+            "\$0" "\$@"
+        fi
+
+        cd "\$VENTOY_PATH"
+        exec "\$GUI_BIN" "\$@"
+        EOF
+
+        chmod +x "$out/bin/ventoy-gui"
+
+        wrapProgram "$out/bin/ventoy-gui" \
+          --prefix PATH : "${pkgs.lib.makeBinPath prevAttrs.buildInputs}"
+      '';
+    }
+  );
+
   pythonPkg = pkgs.python3.withPackages (
     ps: with ps; [
       tkinter
@@ -1083,7 +1118,6 @@ let
     wayland = true;
     gpu = true;
     x11 = true;
-    nvidia_gpu = true;
     additional_args =
       { sloth, ... }:
       {
@@ -1149,6 +1183,8 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.sbsigntool
+    pkgs.wl-clip-persist
     pkgs.slurp
     pkgs.w3m-nographics
     pkgs.testdisk
@@ -1166,8 +1202,17 @@ let
     pkgs.sdparm
     pkgs.hdparm
     pkgs.pciutils
+    pkgs.innoextract
+    pkgs.btrfs-progs
+    pkgs.zfs
     pkgs.unzip
+    pkgs.dosfstools
     pkgs.gum
+    pkgs.tpm2-tools
+    pkgs.uefi-firmware-parser
+    pkgs.uefitool
+    pkgs.flashrom
+    pkgs.acpica-tools
     pkgs.lolcat
     pkgs.openssl
     pkgs.gparted
@@ -1200,6 +1245,8 @@ let
     pkgs.flatpak
     pkgs.duperemove
     pkgs.psmisc
+    pkgs.woeusb-ng
+    pkgs.wimlib
     pkgs.lsof
     pkgs.ddrescue
     pkgs.smartmontools
@@ -1214,6 +1261,7 @@ let
     pkgs.xhost
     pkgs.dante
     pkgs.ente-auth
+    pkgs.findutils
     pkgs.patchelf
     pkgs.file
     pkgs.mpv
@@ -1262,7 +1310,7 @@ let
     pkgs.jdk25
     pkgs.moonlight-qt
     pkgs.osu-lazer-bin
-    # pkgs.mindustry
+    pkgs.mindustry
     pkgs.xonotic
     pkgs.supertux
     pkgs.supertuxkart
@@ -1326,6 +1374,7 @@ let
     pkgs.ffmpegthumbnailer
     pkgs.hyprpicker
     pkgs.wttrbar
+    ventoyFullGtkPkg
     translateZapretNixosPkg
     nhPkg
     app2unitPkg
@@ -1352,6 +1401,10 @@ let
   extra-paths = [ "/share/waywallen" ];
 in
 {
+  nixpkgs.config.permittedInsecurePackages = [
+    ventoyFullGtkPkg.name
+  ];
+
   _module.args = {
     inherit evalAndSubstitute mkPyApp;
   };

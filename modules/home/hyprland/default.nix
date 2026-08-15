@@ -169,6 +169,7 @@ in
         ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
       ];
       enable = true;
+      systemd.enable = false;
       configType = "lua";
       extraLuaFiles."00-init" = {
         autoLoad = true;
@@ -654,7 +655,7 @@ in
               ]
               [
                 "${mod} + CTRL + V"
-                "rofi -modi clipboard:cliphist-rofi -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+                "rofi -modi clipboard:cliphist-rofi-img -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
               ]
               [
                 "${mod} + ALT + mouse_down"
@@ -986,7 +987,9 @@ in
                     hl.exec_cmd [[app2unit -s b -- kbuildsycoca6]]
                     hl.exec_cmd [[app2unit -s b -- ${nautilus-listener}/bin/nautilus-listener]]
                     hl.exec_cmd [[app2unit -s b -- wl-paste --watch cliphist store]]
+                    hl.exec_cmd [[app2unit -s b -- wl-clip-persist --clipboard regular]]
                     hl.exec_cmd [[app2unit -s b -- fumon]]
+                    hl.exec_cmd [[app2unit -s b -- xhost +si:localuser:root]]
                   end
                 '')
               ];
@@ -996,7 +999,7 @@ in
     };
     systemd.user.services.polkit_mate = {
       Install = {
-        WantedBy = [ "hyprland-session.target" ];
+        WantedBy = [ "graphical-session.target" ];
       };
       Service = {
         ExecStart = "${pkgs.mate-polkit}/libexec/polkit-mate-authentication-agent-1";

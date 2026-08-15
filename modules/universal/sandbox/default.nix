@@ -196,7 +196,6 @@ let
         x11 ? false,
         use_landlock ? true,
         portals_for_files ? true,
-        nvidia_gpu ? false,
         sandbox_shm ? true,
         sandbox_tmp ? true,
         start_sesatt ? true,
@@ -469,7 +468,8 @@ let
                         [ ]
                         ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
                         ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
-                        ++ (lib.optionals nvidia_gpu [
+                        ++ (lib.optionals gpu [
+                          "/dev/dri"
                           "/dev/nvidia0"
                           "/dev/nvidiactl"
                           "/dev/nvidia-modeset"
@@ -538,6 +538,7 @@ let
                         (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
                       ]
                       ++ (lib.optionals gpu [
+                        "/run/opengl-driver"
                         "/run/opengl-driver-32"
                         "/sys/class/drm"
                         "/sys/devices"

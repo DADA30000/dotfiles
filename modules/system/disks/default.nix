@@ -9,7 +9,10 @@ let
   cfg = config.disks;
   normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
   commonUserPersistence = {
-    files = [ ".cache/rofi-entry-history.txt" ];
+    files = [
+      ".cache/rofi-entry-history.txt"
+      ".cache/cliphist/db"
+    ];
     directories = [
       "Videos"
       "Desktop"
@@ -21,8 +24,8 @@ let
       ".umu"
       ".nixpak"
       ".thunderbird"
-      ".cache/cliphist"
       ".local/state/wireplumber"
+      ".local/share/zsh"
       ".local/share/gnupg"
       ".local/share/direnv"
       ".local/share/keyrings"
