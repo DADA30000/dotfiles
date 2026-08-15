@@ -4,7 +4,6 @@
   inputs,
   mkSandbox,
   listFiles,
-  options,
   config,
   user,
   ...
@@ -89,7 +88,7 @@ let
               }
             else
               # Fallback to builtins.fetchGit if hash is not present in deps.json
-              builtins.fetchGit {
+              fetchGit {
                 shallow = true;
                 url = dep.url;
                 rev = dep.commit;
@@ -243,8 +242,22 @@ let
     '';
   };
 
+  proton-ge-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "proton-ge";
+    version = "10-34";
+    phases = [ "installPhase" ];
+    src = pkgs.fetchurl {
+      url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${finalAttrs.version}/GE-Proton${finalAttrs.version}.tar.gz";
+      hash = "sha256-UcWAtmqDPHOZj+APBxfurFcZdlQECi8u1RiePuaNdz0=";
+    };
+    installPhase = ''
+      mkdir -p "$out"
+      tar -C "$out" --strip-components=1 -xf "$src"
+    '';
+  });
+
   proton-umu-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-umu-10";
+    name = "proton-umu";
     version = "10.0-4";
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
@@ -325,33 +338,35 @@ let
   runtime = pkgs.stdenv.mkDerivation {
     name = "umu-runtime.img";
     version = steamrt4_data.version;
-    buildInputs = [ pkgs.erofs-utils ];
+    nativeBuildInputs = [ pkgs.erofs-utils ];
     phases = [ "installPhase" ];
     installPhase = ''
-      mkdir build
-      cd build
-      ln -s ${steamrt3} steamrt3
-      ln -s ${steamrt4} steamrt4
-      mkdir proton
-      ln -s ${proton-umu-10} proton/proton-umu-10
-      ln -s ${proton-umu-9} proton/proton-umu-9
-      ln -s ${proton-umu-8} proton/proton-umu-8
-      ln -s ${pkgs.proton-ge-bin.steamcompattool} proton/proton-ge-latest
-      tar -chf - --mode='u+w' . | mkfs.erofs \
-      --force-uid=0 \
-      --force-gid=0 \
-      --ignore-mtime \
-      --workers "$NIX_BUILD_CORES" \
-      --zD=1 \
-      --tar=f \
-      -z zstd,19 \
-      -C 65536 \
-      -E 48bit,dedupe,all-fragments,fragdedupe=full,dot-omitted,force-inode-compact \
-      -T 0 \
-      -m 65536:zstd,19 \
-      -x -1 \
-      "$out" \
-      /dev/stdin
+      mkdir -p build/proton
+      cp -a "${steamrt3}" build/steamrt3
+      cp -a "${steamrt4}" build/steamrt4
+      cp -a "${proton-ge-10}" build/proton/proton-ge-10
+      cp -a "${proton-umu-10}" build/proton/proton-umu-10
+      cp -a "${proton-umu-9}" build/proton/proton-umu-9
+      cp -a "${proton-umu-8}" build/proton/proton-umu-8
+      cp -a "${pkgs.proton-ge-bin.steamcompattool}" build/proton/proton-ge-latest
+
+      # Adds write permissions to all files & dirs to satisfy pressure-vessel
+      chmod -R u+w build
+
+      mkfs.erofs \
+        --force-uid=0 \
+        --force-gid=0 \
+        --workers "$NIX_BUILD_CORES" \
+        --ignore-mtime \
+        --zD=1 \
+        -z zstd,19 \
+        -C 65536 \
+        -m 65536:zstd,19 \
+        -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
+        -T 0 \
+        -x -1 \
+        "$out" \
+        build
     '';
   };
 
@@ -896,6 +911,7 @@ let
     "notify_trunc.py"
     "power-menu.py"
     "singbox-control.py"
+    "translate-zapret-nixos.sh"
   ];
 
   handlers = {
@@ -965,6 +981,12 @@ let
   # ---------------------------------------------------------------------------
   # Individual Package Overrides & Apps
   # ---------------------------------------------------------------------------
+  app2unitPkg = pkgs.app2unit.overrideAttrs (oldAttrs: {
+    postPatch = (oldAttrs.postPatch or "") + ''
+      echo "app2unit(1)" > app2unit.1.scd
+    '';
+  });
+
   pythonPkg = pkgs.python3.withPackages (
     ps: with ps; [
       tkinter
@@ -972,6 +994,10 @@ let
       pynvim
     ]
   );
+
+  nhPkg = pkgs.nh.override {
+    nix-output-monitor = nixOutputMonitorPkg;
+  };
 
   nixOutputMonitorPkg = pkgs.nix-output-monitor.overrideAttrs (prev: {
     patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom.patch ];
@@ -995,6 +1021,10 @@ let
       hash = prev.src.hash;
     };
   });
+
+  translateZapretNixosPkg = pkgs.writeShellScriptBin "translate-zapret-nixos" (
+    builtins.readFile ../../../stuff/scripts/translate-zapret-nixos.sh
+  );
 
   powerMenuApp = mkPyApp {
     name = "power-menu";
@@ -1150,6 +1180,7 @@ let
     pkgs.tinyxxd
     pkgs.bash-language-server
     pkgs.vscode-langservers-extracted
+    pkgs.inotify-tools
     pkgs.jdt-language-server
     pkgs.lua-language-server
     pkgs.taplo
@@ -1200,7 +1231,6 @@ let
     pkgs.zenity
     pkgs.procps
     pkgs.util-linux
-    pkgs.systemd
     pkgs.linuxConsoleTools
     pkgs.evtest
     pkgs.bat
@@ -1267,6 +1297,38 @@ let
     pkgs.yad
     pkgs.rsync
     pkgs.strace
+    pkgs.localsearch
+    pkgs.tinysparql
+    pkgs.go
+    pkgs.nix-diff
+    pkgs.migrate-to-uv
+    pkgs.ssdeep
+    pkgs.gtk3
+    pkgs.kdePackages.kservice
+    pkgs.rofi-bluetooth
+    pkgs.tesseract
+    pkgs.imagemagick
+    pkgs.libsForQt5.qtsvg
+    pkgs.kdePackages.qtsvg
+    pkgs.kdePackages.dolphin
+    pkgs.kdePackages.ark
+    pkgs.pulseaudio
+    pkgs.hyprshot
+    pkgs.nautilus
+    pkgs.file-roller
+    pkgs.cliphist
+    pkgs.libnotify
+    pkgs.brightnessctl
+    pkgs.qimgv
+    pkgs.myxer
+    pkgs.ffmpeg-full
+    pkgs.gpu-screen-recorder
+    pkgs.ffmpegthumbnailer
+    pkgs.hyprpicker
+    pkgs.wttrbar
+    translateZapretNixosPkg
+    nhPkg
+    app2unitPkg
     pythonPkg
     nixOutputMonitorPkg
     nixAlienPkg
@@ -1298,6 +1360,14 @@ in
     {
       _module.args = { inherit evalAndSubstitute mkPyApp; };
       home.extraOutputsToInstall = extra-paths;
+      dbus.packages = [
+        pkgs.localsearch
+        pkgs.tinysparql
+      ];
+      systemd.user.packages = [
+        pkgs.localsearch
+        pkgs.tinysparql
+      ];
     }
   ];
 

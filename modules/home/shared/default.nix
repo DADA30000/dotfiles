@@ -17,6 +17,9 @@
   home.sessionVariables = {
     NIXOS_OZONE_WL = "1";
     ELECTRON_OZONE_PLATFORM_HINT = "auto";
+    CUDA_CACHE_PATH = "${config.xdg.dataHome}/nv";
+    GNUPGHOME = "${config.xdg.dataHome}/gnupg";
+    RUSTUP_HOME = "${config.xdg.dataHome}/rustup";
   };
 
   android.enable = false;

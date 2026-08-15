@@ -77,31 +77,50 @@ in
       enableFastFlowLM = true;
       enableLemonade = false;
     };
-    systemd.services.llama-server = lib.mkIf cfg.heavy.enable {
-      description = "ik_llama.cpp local API server";
-      after = [ "network.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      serviceConfig = {
-        ExecStart = ''
-          ${ik_llama-cpp}/bin/llama-server \
-            --model /var/lib/llama-cpp/models/Qwen3.6-35B-A3B-abliterated-Q4_K_M.gguf \
-            --ctx-size 98304 \
-            --batch-size 2048 \
-            --ubatch-size 128 \
-            --ctx-checkpoints 4 \
-            --fit \
-            --fit-margin 384 \
-            --cache-type-k q8_0 \
-            --cache-type-v q8_0 \
-            --flash-attn on \
-            --jinja \
-            --threads 8 \
-            --host 127.0.0.1 \
-            --port 8080
+    systemd.services = {
+      searx-secret-gen = {
+        description = "Generate SearXNG secret key if missing";
+        wantedBy = [ "searx-init.service" ];
+        before = [ "searx-init.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          if [ ! -f /var/lib/searx-secret ]; then
+            mkdir -p /var/lib
+            SECRET=$(${pkgs.coreutils}/bin/head -c 32 /dev/urandom | ${pkgs.coreutils}/bin/base64)
+            echo "SEARX_SECRET_KEY=$SECRET" > /var/lib/searx-secret
+            ${pkgs.coreutils}/bin/chmod 600 /var/lib/searx-secret
+          fi
         '';
-        Restart = "always";
-        User = user;
+      };
+      llama-server = lib.mkIf cfg.heavy.enable {
+        description = "ik_llama.cpp local API server";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        serviceConfig = {
+          ExecStart = ''
+            ${ik_llama-cpp}/bin/llama-server \
+              --model /var/lib/llama-cpp/models/Qwen3.6-35B-A3B-abliterated-Q4_K_M.gguf \
+              --ctx-size 98304 \
+              --batch-size 2048 \
+              --ubatch-size 128 \
+              --ctx-checkpoints 4 \
+              --fit \
+              --fit-margin 384 \
+              --cache-type-k q8_0 \
+              --cache-type-v q8_0 \
+              --flash-attn on \
+              --jinja \
+              --threads 8 \
+              --host 127.0.0.1 \
+              --port 8080
+          '';
+          Restart = "always";
+          User = user;
+        };
       };
     };
     services = {
@@ -117,6 +136,7 @@ in
           server = {
             port = 8000;
             bind_address = "127.0.0.1";
+            secret_key = "@SEARX_SECRET_KEY@";
             limiter = false;
           };
 

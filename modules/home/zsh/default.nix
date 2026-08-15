@@ -13,6 +13,10 @@ in
   options.zsh.enable = mkEnableOption "zsh shell";
 
   config = mkIf cfg.enable {
+    home = {
+      file.".zshenv".enable = false;
+      sessionVariables.ZDOTDIR = "${config.programs.zsh.dotDir}";
+    };
     programs = {
       zoxide = {
         enable = true;
@@ -40,7 +44,7 @@ in
         };
       };
       zsh = {
-        dotDir = "${config.home.homeDirectory}/.zsh";
+        dotDir = "${config.xdg.dataHome}/zsh";
         oh-my-zsh.enable = true;
         oh-my-zsh.plugins = [ "sudo" ];
         syntaxHighlighting.enable = true;
@@ -48,8 +52,8 @@ in
         enable = true;
         shellAliases.ls = "lsd";
         envExtra = /* zsh */ ''
-          touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
-          source "${config.home.homeDirectory}"/.zsh/.zshenv_add
+          #touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
+          #source "${config.home.homeDirectory}"/.zsh/.zshenv_add
           local NIX_FLAKE_PREAMBLE='(
             let 
               flake = builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}"; 
@@ -216,69 +220,6 @@ in
             echo "$OUT_PATH"
           }
 
-          u-full () {
-            echo "Updating locks, switching"
-            setopt LOCAL_OPTIONS
-            (
-              setopt LOCAL_OPTIONS
-              printf "pipefail? [Y/n]: "
-              read -k 1 response
-              echo
-              if [[ "$response" == [nN] ]]; then
-                  unsetopt ERR_EXIT PIPE_FAIL
-                  echo "Pipefail disabled."
-              else
-                  setopt ERR_EXIT PIPE_FAIL
-                  echo "Pipefail enabled."
-              fi
-              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.ssdeep}/lib:${pkgs.graphviz}/lib
-              export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:${pkgs.ssdeep}/lib/pkgconfig:${pkgs.graphviz}/lib/pkgconfig
-              export PATH=$PATH:${pkgs.migrate-to-uv}/bin:${pkgs.uv}/bin
-              export PYTHONPATH=${pkgs.python312}/lib/python3.12/site-packages
-              export UV_PYTHON=${pkgs.python312}/bin/python
-              export UV_NO_MANAGED_PYTHON=true
-              export UV_SYSTEM_PYTHON=true
-              export TEMPDIR=$(${pkgs.coreutils-full}/bin/mktemp -d)
-              export GIT_LFS_SKIP_SMUDGE=1
-              git clone https://github.com/kevoreilly/CAPEv2 --depth 1 $TEMPDIR/cape
-              (
-                cd $TEMPDIR/cape
-                mkdir capev2
-                sed -i '/package-mode/d' pyproject.toml
-                sed -i '/\[tool.poetry\]/d' pyproject.toml
-                echo "print(\"Hello World\")" > capev2/__init__.py
-                echo "
-                [tool.hatch.build.targets.wheel]
-                packages = [
-                  \"dummy\"
-                ]
-                " >> pyproject.toml
-                uv add -r extra/optional_dependencies.txt
-                uv lock
-                mkdir nix_workspace
-                mv pyproject.toml nix_workspace
-                mv uv.lock nix_workspace
-                mv capev2 nix_workspace
-              )
-              sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
-              sudo cp -r $TEMPDIR/cape/nix_workspace /etc/nixos/modules/system/cape
-              rm -rf $TEMPDIR
-              mkdir -p ~/.cache/flake-lock-backups
-              echo "Fetching steamrt4 version and hash"
-              STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-stable.txt -O -)"
-              STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/$STEAMRT4_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
-              echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt4.json
-              echo "Finished fetching steamrt4"
-              echo "Fetching steamrt3 version and hash"
-              STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-stable.txt -O -)"
-              STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/$STEAMRT3_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
-              echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/steamrt3.json
-              echo "Finished fetching steamrt3"
-              cp /etc/nixos/flake.lock ~/.cache/flake-lock-backups/"flake.lock_''${(%):-%D{%Y.%m.%d_%H:%M:%S}"
-              sudo nix flake update --flake /etc/nixos
-              nh os switch /etc/nixos -- --extra-substituters "https://attic.xuyh0120.win/lantian" --option connect-timeout 5
-            )
-          }
           prefetch() {
             local OUT_PATH
             local -a resolved_args
@@ -298,10 +239,10 @@ in
               echo "$OUT_PATH"
             fi
           }
+
           detach-from-nixos() { patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 "$@" }
           umu-run() { umu-run-wrapper "$@" }
-          u() { nh os switch --keep-going /etc/nixos -- --extra-substituters "https://attic.xuyh0120.win/lantian" --option connect-timeout 5 "$@" }
-          nsl-full() { ${
+          nsl() { ${
             inputs.nix-index-database.packages.${pkgs.stdenv.hostPlatform.system}.default
           }/bin/nix-locate "$@" }
           nss() { ${
@@ -328,13 +269,9 @@ in
             sudo rm /tmp/dbxDefault.esl
           }
           7z() { 7zz "$@" }
-          u-test() { nh os test /etc/nixos "$@" }
-          u-boot() { nh os boot /etc/nixos "$@" }
-          u-build() { nh os build /etc/nixos "$@" }
-          u-debug() { nix build /etc/nixos\#nixosConfigurations.nixos.config.system.build.toplevel --no-link --debugger --ignore-try "$@" }
           ns() { ns-dev "$@" }
           ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" "$@" }
-          nsl() { nix-locate "$@" }
+          nsl-bin() { nix-locate "$@" }
           fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' "$@" }
           cps() { rsync -ahr --progress "$@" }
           res() { screen -r "$@" }
@@ -478,24 +415,23 @@ in
                     local total_prefixes=$(( ''${#exact_matches[@]} + ''${#prefix_matches[@]} ))
 
                     if (( total_prefixes == 1 )); then
-                      # EXACTLY 1 match: Give it to Zsh exclusively so it skips the menu and instantly auto-completes.
-                      # m:{[:lower:]}={[:upper:]} preserves your lowercase typed prefixes and avoids case forced capitalization.
+                      # EXACTLY 1 match: Instantly auto-complete it
                       if (( ''${#exact_matches[@]} == 1 )); then
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a exact_matches
                       else
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -a prefix_matches
                       fi
-                    else
-                      # 0 or >1 prefix matches: Still show substring matches!
+                    elif (( total_prefixes > 1 )); then
+                      # >1 prefix/exact matches: Only show prefix/exact matches so substring matches don't hijack completion
                       if (( ''${#exact_matches[@]} > 0 )); then
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J exact -a exact_matches
                       fi
                       if (( ''${#prefix_matches[@]} > 0 )); then
                         compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=*' -J prefix -a prefix_matches
                       fi
-                      if (( ''${#substring_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
-                      fi
+                    elif (( ''${#substring_matches[@]} > 0 )); then
+                      # 0 prefix matches: Fall back to substring matches
+                      compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' -J substring -a substring_matches
                     fi
                   fi
                 else

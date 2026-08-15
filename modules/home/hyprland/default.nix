@@ -149,35 +149,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    home = {
-      sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
-      packages = with pkgs; [
-        gtk3
-        kdePackages.kservice
-        rofi-bluetooth
-        tesseract
-        imagemagick
-        libsForQt5.qtsvg
-        kdePackages.qtsvg
-        kdePackages.dolphin
-        kdePackages.ark
-        app2unit
-        pulseaudio
-        hyprshot
-        nautilus
-        file-roller
-        cliphist
-        libnotify
-        brightnessctl
-        qimgv
-        myxer
-        ffmpeg-full
-        gpu-screen-recorder
-        ffmpegthumbnailer
-        hyprpicker
-        wttrbar
-      ];
-    };
+    home.sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
 
     wayland.windowManager.hyprland = {
       portalPackage = mkMerge [
@@ -424,6 +396,8 @@ in
               repeat_delay = 150;
               repeat_rate = 35;
               follow_mouse = 1;
+              mouse_refocus = true;
+              float_switch_override_focus = 1;
               touchpad = {
                 natural_scroll = true;
                 scroll_factor = 0.5;
@@ -456,9 +430,11 @@ in
               full_cm_proto = true;
             };
             ecosystem = {
+              no_update_news = true;
               enforce_permissions = true;
             };
             cursor = {
+              no_warps = false;
               no_hardware_cursors = false;
               zoom_disable_aa = true;
             };
@@ -738,7 +714,7 @@ in
               ]
               [
                 "${mod} + E"
-                "app2unit -a nautilus -- sh -c 'pkill nautilus-listen; ${nautilus-listener}/bin/nautilus-listener & nautilus -w'"
+                "app2unit -- nautilus -w"
               ]
             ]
             ++ bind [
@@ -1007,10 +983,10 @@ in
                 (lib.generators.mkLuaInline ''
                   function () 
                     ${mkPluginExecEntries plugins}
-                    hl.exec_cmd [[kbuildsycoca6]]
-                    hl.exec_cmd [[${nautilus-listener}/bin/nautilis-listener]]
-                    hl.exec_cmd [[app2unit -- wl-paste --watch cliphist store]]
-                    hl.exec_cmd [[fumon]]
+                    hl.exec_cmd [[app2unit -s b -- kbuildsycoca6]]
+                    hl.exec_cmd [[app2unit -s b -- ${nautilus-listener}/bin/nautilus-listener]]
+                    hl.exec_cmd [[app2unit -s b -- wl-paste --watch cliphist store]]
+                    hl.exec_cmd [[app2unit -s b -- fumon]]
                   end
                 '')
               ];
@@ -1030,10 +1006,7 @@ in
     };
     xdg = {
       configFile."hypr/plugins/split-monitor-workspaces".source = inputs.split-monitor-workspaces;
-      dataFile.nautilus-python = {
-        source = "${nautilus-extensions}/share/nautilus-python";
-        recursive = true;
-      };
+      dataFile.nautilus-python.source = "${nautilus-extensions}/share/nautilus-python";
       portal = {
         enable = true;
         extraPortals = [

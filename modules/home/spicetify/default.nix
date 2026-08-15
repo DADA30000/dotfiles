@@ -37,7 +37,7 @@ let
   hazy = pkgs.runCommand "patch-hazy" { } ''
     cp -r --no-preserve=mode ${hazy_orig} $out
     mv "$out/hazy.js" "$out/theme.js"
-    patch "$out/theme.js" < "${../../../stuff/patches/hazy.patch}"
+    #patch "$out/theme.js" < "${../../../stuff/patches/hazy.patch}"
   '';
   cfg = config.spicetify;
 in
@@ -55,17 +55,17 @@ in
         gpu = true;
         wayland = true;
         x11 = true;
-        network_full = true;
+        network_singbox = true;
         portals_for_files = false;
         additional_args.dbus.policies."org.mpris.MediaPlayer2.spotify" = "own";
-        package = pkgs.spotify.overrideAttrs {
+        package = config.programs.spicetify.spicedSpotify.overrideAttrs {
           fixupPhase = ''
             runHook preFixup
 
             wrapProgramShell $out/share/spotify/spotify \
               ''${gappsWrapperArgs[@]} \
-              --prefix LD_LIBRARY_PATH : "$librarypath" \
-              --prefix LD_AUDIT : "${libcef}/patcher_lib.so"
+              --prefix LD_LIBRARY_PATH : "$librarypath"
+              #--prefix LD_AUDIT : "${libcef}/patcher_lib.so"
 
             runHook postFixup
           '';

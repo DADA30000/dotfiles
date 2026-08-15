@@ -111,7 +111,6 @@ let
             "alkalimakersuite-pa.clients6.google.com"
             "cachix.org"
             "garnix.io"
-            "xuyh0120.win"
             "gemini.google.com"
             "s3.dualstack.us-east-2.amazonaws.com"
             "beatsaver.com"
@@ -132,6 +131,7 @@ let
             "website-files.com"
             "localizeapi.com"
             "steamcmd.net"
+            "tonelib.vip"
           ];
         }
         {
@@ -171,13 +171,14 @@ let
       }
       {
         strict_route = true;
-        stack = "system";
-        interface_name = "tun0";
         auto_route = true;
+        interface_name = "tun0";
         mtu = 1360;
-        tag = "tun-in";
-        address = "172.19.0.1/30";
         type = "tun";
+        address = [
+          "172.19.0.1/30"
+          "fd00::1/126"
+        ];
         route_exclude_address = [
           "${dns}/32"
           "127.0.0.1/32"
@@ -506,7 +507,8 @@ in
       # Hardened. Retains partOf = [ "sing-box.service" ] to ensure unified restarts.
       sing-box-init = {
         description = "Sing-box Initialization and Configuration Generator";
-        wantedBy = [ "graphical.target" ];
+        wantedBy = [ "user@1000.service" ];
+        after = [ "user@1000.service" ];
         before = [ "sing-box.service" ];
         partOf = [ "sing-box.service" ];
 
@@ -696,7 +698,7 @@ in
       # Fully sandboxed sing-box execution layer.
       # sandboxed with PrivateDevices=false to ensure devicetree lookup on /dev/net/tun is fully permitted.
       sing-box = {
-        wantedBy = [ "graphical.target" ];
+        wantedBy = [ "user@1000.service" ];
         bindsTo = [ "sing-box-init.service" ];
         after = [ "sing-box-init.service" ];
         serviceConfig = {
@@ -826,8 +828,7 @@ in
     };
 
     boot.kernel.sysctl = {
-      "net.ipv4.conf.all.rp_filter" = 0;
-      "net.ipv4.conf.default.rp_filter" = 0;
+      "net.ipv6.conf.all.forwarding" = 1;
       "net.ipv4.ping_group_range" = "0 2147483647";
       "net.ipv4.ip_forward" = 1;
     };

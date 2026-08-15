@@ -209,18 +209,16 @@ in
     filesystems.enable = false;
     settings = {
       debug.debugfs = true;
+      etc.kicksecure-gitconfig = false;
       network = {
         random-mac = false;
         tcp-sack = true;
-      };
-      etc = {
-        generic-machine-id = false;
-        kicksecure-gitconfig = false;
       };
       kernel = {
         amd-iommu-force-isolation = false;
         strict-iommu = false;
         binfmt-misc = true;
+        io-uring = true;
         sysrq = "none";
       };
       system = {
@@ -279,21 +277,18 @@ in
 
     defaultUserShell = pkgs.zsh;
 
-    mutableUsers = true;
-
-    groups.${user}.gid = config.users.users.${user}.uid;
+    mutableUsers = false;
 
     users = {
       root.hashedPassword = "!";
       ${user} = {
         isNormalUser = true;
         hashedPassword = user-hash;
-        group = user;
-        uid = 1000;
         initialPassword = if user-hash == null then "1234" else null;
         initialHashedPassword = lib.mkForce null;
         home = "/home/${user}";
         extraGroups = [
+          "networkmanager"
           "wheel"
           "uinput"
           "mlocate"
@@ -318,45 +313,30 @@ in
 
     package = pkgs.nixVersions.latest;
 
-    # package = lib.mkForce (
-    #   inputs.determinate.inputs.nix.packages.${pkgs.stdenv.hostPlatform.system}.default.appendPatches [
-    #     ../../../stuff/detnix.patch
-    #   ]
-    # );
+    daemonCPUSchedPolicy = "batch";
+
+    daemonIOSchedClass = "idle";
+
+    daemonIOSchedPriority = 7;
 
     settings = {
-
-      # eval-cores = 0;
-
-      # lazy-trees = false;
-
-      # Disable IFD to speed up evaluation
-      # allow-import-from-derivation = false;
-
-      # Deduplicates stuff in /nix/store
+      use-xdg-base-directories = true;
       auto-optimise-store = true;
-
-      # Change cache providers (lower priority number = higher priority)
       substituters = [
         "https://cache.nixos.org?priority=1"
       ];
-
       trusted-substituters = [
         "https://hyprland.cachix.org"
-        "https://attic.xuyh0120.win/lantian"
       ];
-
       trusted-public-keys = [
-        "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
         "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
       ];
-
-      # Enable flakes
       experimental-features = [
         "nix-command"
         "flakes"
       ];
     };
+
   };
 
   obs = {
@@ -387,8 +367,6 @@ in
 
     impermanence = true;
 
-    compression = true;
-
   };
 
   home-manager.extraSpecialArgs.kekma = {
@@ -401,13 +379,30 @@ in
 
   boot = {
 
+    zfs.forceImportRoot = false;
+
     tmp.useTmpfs = true;
 
-    kernelPackages = lib.mkDefault pkgs.linuxPackages_latest;
+    kernelPackages =
+      let
+        zfsCompatibleKernelPackages = lib.filterAttrs (
+          name: kernelPackages:
+          (builtins.match "linux_[0-9]+_[0-9]+" name) != null
+          && (builtins.tryEval kernelPackages).success
+          && (!kernelPackages.${config.boot.zfs.package.kernelModuleAttribute}.meta.broken)
+        ) pkgs.linuxKernel.packages;
+      in
+      lib.last (
+        lib.sort (a: b: (lib.versionOlder a.kernel.version b.kernel.version)) (
+          builtins.attrValues zfsCompatibleKernelPackages
+        )
+      );
 
-    kernelParams = lib.mkAfter [
+    kernelParams = [
       "iommu=pt"
       "iommu.passthrough=1"
+      "zfs.spa_slop_shift=8"
+      "zfs.zfs_arc_max=4294967296"
     ];
 
     initrd.systemd.enable = true;
@@ -540,11 +535,45 @@ in
         DefaultCPUAccounting = true;
         DefaultIOAccounting = true;
       };
-      # targets.nixos-fake-graphical-session.enable = false; # Fix early start of graphical-session.target, see https://github.com/NixOS/nixpkgs/pull/297434#issuecomment-2348783988
+      slices = {
+        session-graphical.sliceConfig = {
+          CPUWeight = 500;
+          IOWeight = 500;
+        };
+        session.sliceConfig = {
+          CPUWeight = 500;
+          IOWeight = 500;
+        };
+        app-graphical.sliceConfig = {
+          CPUWeight = 300;
+          IOWeight = 300;
+          MemoryLow = "1500M";
+        };
+        app.sliceConfig = {
+          CPUWeight = 200;
+          IOWeight = 200;
+        };
+        background-graphical.sliceConfig = {
+          CPUWeight = 50;
+          IOWeight = 50;
+        };
+        background.sliceConfig = {
+          CPUWeight = 50;
+          IOWeight = 50;
+        };
+      };
       services = {
         dbus-broker.serviceConfig = {
           Type = "notify";
           ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
+        };
+        "wayland-wm@hyprland" = {
+          overrideStrategy = "asDropin";
+          serviceConfig = {
+            CPUWeight = 1000;
+            IOWeight = 1000;
+            MemoryLow = "500M";
+          };
         };
         cgroup-executioner = {
           description = "Automatically terminate any application scope that hits TasksMax";
@@ -588,9 +617,37 @@ in
 
       NetworkManager-wait-online.enable = false;
 
+      openrgb = {
+        wantedBy = lib.mkForce [ "user@1000.service" ];
+        after = [ "user@1000.service" ];
+      };
+
+      tailscaled = {
+        wantedBy = lib.mkForce [ "user@1000.service" ];
+        after = [ "user@1000.service" ];
+      };
+
+      zerotierone = {
+        wantedBy = lib.mkForce [ "user@1000.service" ];
+        after = [ "user@1000.service" ];
+      };
+
+      cups = {
+        wantedBy = lib.mkForce [ "user@1000.service" ];
+        after = [ "user@1000.service" ];
+      };
+
       greetd = {
         wantedBy = lib.mkForce [ "systemd-user-sessions.service" ];
         after = [ "systemd-user-sessions.service" ];
+        serviceConfig.Type = lib.mkForce "simple";
+      };
+
+      nix-daemon.serviceConfig = {
+        Nice = 19;
+        CPUSchedulingPolicy = "batch";
+        CPUWeight = 1;
+        IOWeight = 1;
       };
 
       quest-adb-reverse = {
@@ -804,17 +861,6 @@ in
       settings.general.renice = 15;
     };
 
-    nh = {
-      enable = true;
-      package = pkgs.nh.override {
-        nix-output-monitor = (
-          pkgs.nix-output-monitor.overrideAttrs (prev: {
-            patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom.patch ];
-          })
-        );
-      };
-    };
-
     steam = {
       enable = true;
       package =
@@ -861,10 +907,20 @@ in
                       (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                     ];
                     rw = lib.mkAfter [
-                      [
-                        "/home/${user}/Games/steam"
-                        (sloth.mkdir "/Games")
-                      ]
+                      (sloth.mkdir (
+                        sloth.concat [
+                          "/mnt/data-nvme/"
+                          (sloth.env "USER")
+                          "/SteamLibrary"
+                        ]
+                      ))
+                      (sloth.mkdir (
+                        sloth.concat [
+                          "/mnt/data-hdd/"
+                          (sloth.env "USER")
+                          "/SteamLibrary"
+                        ]
+                      ))
                       "/tmp"
                       "/sys/class"
                       "/sys/bus"

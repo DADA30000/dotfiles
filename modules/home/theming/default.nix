@@ -8,37 +8,52 @@
 with lib;
 let
   cfg = config.theming;
-  fluent-dark-pre =
-    (pkgs.fluent-gtk-theme.overrideAttrs (prev: {
-      src = inputs.fluent-gtk-theme;
-      patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/fluent.patch ];
-    })).override
-      {
-        tweaks = [
-          "noborder"
-          "round"
-          "blur"
-        ];
-      };
-  fluent-dark = pkgs.runCommand "fluent-dark" { } ''
-    cp -rL "${fluent-dark-pre}/share/themes/Fluent-round-Dark" "$out"
-  '';
-  customMoreWaita = pkgs.morewaita-icon-theme.overrideAttrs (oldAttrs: {
-    # 1. Propagate the Papirus theme to make it a runtime dependency.
-    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [ pkgs.papirus-icon-theme ];
+  fluent-dark = pkgs.stdenvNoCC.mkDerivation {
+    pname = "fluent-dark";
+    version = "2025-04-17";
 
-    # 2. Tell the Qt build hooks not to look for binaries to wrap.
+    src = inputs.fluent-gtk-theme;
+
+    patches = [
+      ../../../stuff/patches/fluent.patch
+    ];
+
+    nativeBuildInputs = [
+      pkgs.jdupes
+      pkgs.sassc
+      pkgs.findutils
+    ];
+
+    postPatch = ''
+      patchShebangs install.sh
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      HOME="$TMPDIR" ./install.sh \
+        --color dark \
+        --tweaks noborder round blur \
+        --icon nixos \
+        --dest "$TMPDIR/themes"
+
+      cp -rL "$TMPDIR/themes/fluent-dark-2025-04-17-round-Dark" "$out"
+
+      runHook postInstall
+    '';
+  };
+  customMoreWaita = pkgs.morewaita-icon-theme.overrideAttrs (oldAttrs: {
+    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
+      pkgs.adwaita-icon-theme
+      pkgs.adwaita-icon-theme-legacy
+      pkgs.papirus-icon-theme
+    ];
+
     dontWrapQtApps = true;
 
     postInstall = (oldAttrs.postInstall or "") + ''
-      theme_file="$out/share/icons/MoreWaita/index.theme"
-      if [ -f "$theme_file" ]; then
-        substituteInPlace "$theme_file" \
-          --replace-fail "Inherits=Adwaita,AdwaitaLegacy,hicolor" "Inherits=Adwaita,Papirus-Dark,hicolor"
-      fi
-
-      ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus $out/share/icons/Papirus
-      ln -sf ${pkgs.papirus-icon-theme}/share/icons/Papirus-Dark $out/share/icons/Papirus-Dark
+      substituteInPlace "$out/share/icons/MoreWaita/index.theme" \
+        --replace-fail "Inherits=Adwaita,AdwaitaLegacy,hicolor" "Inherits=Adwaita,AdwaitaLegacy,Papirus-Dark,hicolor"
     '';
   });
   # https://github.com/Vendicated/Vencord/tree/main/src/plugins
@@ -120,71 +135,23 @@ in
   };
 
   config = mkIf cfg.enable {
-
-    home = {
-      packages = with pkgs; [
-        papirus-icon-theme
-        adwaita-icon-theme
-      ];
-      activation = {
-        gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          if [[ -z "''${DRY_RUN:-}" ]]; then
-            if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
-              mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
-              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
-              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
-              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
-            fi
-          fi
-        '';
-        bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          if [[ -z "''${DRY_RUN:-}" ]]; then
-            if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
-              mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
-              touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
-              BOOKMARKS="
-                file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
-                file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
-                file://${config.xdg.userDirs.pictures} Изображения
-                File://${config.xdg.userDirs.music} Музыка
-                file://${config.xdg.userDirs.documents} Документы
-                file://${config.xdg.userDirs.download} Загрузки
-                file://${config.xdg.userDirs.videos} Видео
-                admin:/// / (корень, от рута)
-                file:/// / (корень)
-              "
-              echo "$BOOKMARKS" | sed 's/^[[:space:]]*//' | sed '/^$/d' > "${config.xdg.configHome}/gtk-3.0/bookmarks"
-            fi
-          fi
-        '';
-      };
-      file = {
-        ".themes/Fluent-Dark" = {
-          recursive = true;
-          source = fluent-dark;
-        };
-        "Templates" = {
-          recursive = true;
-          source = pkgs.runCommand "templates" { } ''
-            mkdir -p $out
-            touch $out/new_file.{py,txt,sh}
-          '';
-        };
-      };
-    };
-    xdg.userDirs = {
-      setSessionVariables = false;
-      createDirectories = true;
-      enable = true;
-      documents = "${config.home.homeDirectory}/Documents";
-      download = "${config.home.homeDirectory}/Downloads";
-      music = "${config.home.homeDirectory}/Music";
-      pictures = "${config.home.homeDirectory}/Pictures";
-      videos = "${config.home.homeDirectory}/Videos";
-      templates = "${config.home.homeDirectory}/Templates";
-    };
+    xresources.properties = lib.mkForce null;
     xdg = {
-      dataFile."color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
+      dataFile = {
+        "color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
+        "themes/Fluent-Dark".source = fluent-dark;
+      };
+      userDirs = {
+        setSessionVariables = false;
+        createDirectories = true;
+        enable = true;
+        documents = "${config.home.homeDirectory}/Documents";
+        download = "${config.home.homeDirectory}/Downloads";
+        music = "${config.home.homeDirectory}/Music";
+        pictures = "${config.home.homeDirectory}/Pictures";
+        videos = "${config.home.homeDirectory}/Videos";
+        templates = "${config.home.homeDirectory}/Templates";
+      };
       configFile = {
         "menus/applications.menu".source = ../../../stuff/plasma-applications.menu;
         "GIMP_fake".source = ../../../stuff/GIMP;
@@ -252,22 +219,58 @@ in
       "org/gnome/nautilus/preferences" = {
         default-folder-viewer = "list-view";
         migrated-gtk-settings = true;
+        recursive-search = "always";
+        show-create-link = true;
+        show-delete-permanently = true;
+        show-directory-item-counts = "always";
+        show-image-thumbnails = "always";
       };
-      "org/gnome/desktop/interface" = {
-        color-scheme = "prefer-dark";
-      };
-      "com/github/stunkymonkey/nautilus-open-any-terminal" = {
-        terminal = "neovide-term";
-      };
+      "org/gtk/gtk4/settings/file-chooser".showhidden = true;
+      "org/gnome/desktop/interface".color-scheme = "prefer-dark";
+      "com/github/stunkymonkey/nautilus-open-any-terminal".terminal = "neovide-term";
     };
-    qt = {
-      enable = true;
-      #platformTheme.name = "qtct";
-    };
+    qt.enable = true;
     home = {
+      preferXdgDirectories = true;
+      file = {
+        ".icons/default/index.theme".enable = false;
+        ".icons/${config.home.pointerCursor.name}".enable = false;
+      };
       sessionVariables = {
         HYPRCURSOR_THEME = "Bibata-Modern";
         HYPRCURSOR_SIZE = cfg.cursor_size;
+      };
+      activation = {
+        gimpTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          if [[ -z "''${DRY_RUN:-}" ]]; then
+            if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
+              mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
+              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
+              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
+              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+            fi
+          fi
+        '';
+        bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          if [[ -z "''${DRY_RUN:-}" ]]; then
+            if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
+              mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
+              touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
+              BOOKMARKS="
+                file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
+                file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
+                file://${config.xdg.userDirs.pictures} Изображения
+                File://${config.xdg.userDirs.music} Музыка
+                file://${config.xdg.userDirs.documents} Документы
+                file://${config.xdg.userDirs.download} Загрузки
+                file://${config.xdg.userDirs.videos} Видео
+                admin:/// / (корень, от рута)
+                file:/// / (корень)
+              "
+              echo "$BOOKMARKS" | sed 's/^[[:space:]]*//' | sed '/^$/d' > "${config.xdg.configHome}/gtk-3.0/bookmarks"
+            fi
+          fi
+        '';
       };
       pointerCursor = {
         enable = true;
@@ -453,14 +456,8 @@ in
     gtk = {
       enable = true;
       gtk2.theme.name = "Fluent-Dark";
-      gtk4 = {
-        extraConfig.gtk-application-prefer-dark-theme = 1;
-        theme.name = "Fluent-Dark";
-      };
-      gtk3 = {
-        extraConfig.gtk-application-prefer-dark-theme = 1;
-        theme.name = "Fluent-Dark";
-      };
+      gtk3.theme.name = "Fluent-Dark";
+      gtk4.theme.name = "Fluent-Dark";
       iconTheme = {
         name = "MoreWaita";
         package = customMoreWaita;

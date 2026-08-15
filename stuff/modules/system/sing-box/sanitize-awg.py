@@ -31,6 +31,10 @@ for line in lines:
         new_lines.append(line)
         continue
 
+    # Strip DNS = *
+    if "DNS" in stripped:
+        continue
+
     if interface_block_found:
         # If we exit the Interface block, ensure Table & FwMark are written
         if stripped.startswith("[") and stripped.endswith("]"):

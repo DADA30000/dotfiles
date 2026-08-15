@@ -5,57 +5,44 @@
 }:
 with lib;
 let
-  root_label = null;
   boot_label = null;
-  swap_label = null;
   cfg = config.disks;
-  impermanence_subvolume_script = ''
-    mkdir /btrfs_tmp
-    mount -L ${if root_label == null then "nixos" else root_label} /btrfs_tmp
-    if [[ -e /btrfs_tmp/root ]]; then
-        mkdir -p /btrfs_tmp/old_roots
-        timestamp=$(date --date="@$(stat -c %Y /btrfs_tmp/root)" "+%Y-%m-%-d_%H:%M:%S")
-        mv /btrfs_tmp/root "/btrfs_tmp/old_roots/$timestamp"
-    fi
-
-    delete_subvolume_recursively() {
-        IFS=$'\n'
-        for i in $(btrfs subvolume list -o "$1" | cut -f 9- -d ' '); do
-            delete_subvolume_recursively "/btrfs_tmp/$i"
-        done
-        btrfs subvolume delete "$1"
-    }
-
-    for i in $(find /btrfs_tmp/old_roots/ -maxdepth 1 -mtime +0); do
-        delete_subvolume_recursively "$i"
-    done
-
-    btrfs subvolume create /btrfs_tmp/root
-    umount /btrfs_tmp
-  '';
+  normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
+  commonUserPersistence = {
+    files = [ ".cache/rofi-entry-history.txt" ];
+    directories = [
+      "Videos"
+      "Desktop"
+      "Pictures"
+      "Projects"
+      "Documents"
+      "Downloads"
+      ".ssh"
+      ".umu"
+      ".nixpak"
+      ".thunderbird"
+      ".cache/cliphist"
+      ".local/state/wireplumber"
+      ".local/share/gnupg"
+      ".local/share/direnv"
+      ".local/share/keyrings"
+      ".local/share/easyeffects"
+      ".local/share/qBittorrent"
+      ".config/git"
+      ".config/zen"
+      ".config/wivrn"
+      ".config/sunshine"
+      ".config/kdeconnect"
+      ".config/easyeffects"
+      ".config/qBittorrent"
+      ".config/nvim/undodir"
+      ".config/net.imput.helium"
+    ];
+  };
 in
 {
   options.disks = {
-    compression = mkEnableOption "system compression";
     impermanence = mkEnableOption "impermanence (remove all files except those that are needed)";
-    swap = {
-      partition.enable = mkEnableOption "swap partition";
-      file = {
-        enable = mkEnableOption "swapfile";
-        path = mkOption {
-          type = types.str;
-          default = "/var/lib/swapfile";
-          example = "/var/lib/swap/swapfile";
-          description = "Path to swapfile";
-        };
-        size = mkOption {
-          type = types.int;
-          default = 8 * 1024;
-          example = 4 * 1024;
-          description = "Size of swapfile in MB";
-        };
-      };
-    };
     enable = mkOption {
       type = types.bool;
       default = true;
@@ -68,27 +55,28 @@ in
 
     hardware.block.scheduler."*" = "bfq";
 
-    environment.persistence."/persistent" = mkMerge [
+    environment.persistence."/persist" = mkMerge [
       (mkIf (!cfg.impermanence) { enable = false; })
       (mkIf cfg.impermanence {
         enable = true;
         hideMounts = true;
+        users = lib.genAttrs normalUsers (_: commonUserPersistence);
         directories = [
-          "/var/log"
-          "/var/lib/bluetooth"
-          "/var/lib/nixos"
-          "/var/lib/systemd"
-          "/etc/NetworkManager/system-connections"
           "/website"
+          "/etc/NetworkManager/system-connections"
           "/etc/nixos"
           "/etc/ssh"
           "/etc/lact"
+          "/etc/waydroid-extra"
+          "/var/log"
+          "/var/db/sudo/lectured"
+          "/var/lib/bluetooth"
+          "/var/lib/nixos"
+          "/var/lib/systemd"
           "/var/lib/libvirt"
           "/var/lib/flatpak"
           "/var/lib/sbctl"
           "/var/lib/waydroid"
-          "/etc/waydroid-extra"
-          "/var/db"
           "/var/lib/zerotier-one"
           "/var/lib/llama-cpp"
           {
@@ -127,29 +115,34 @@ in
         files = [
           "/etc/machine-id"
           "/var/lib/searx-secret"
-        ]
-        ++ (lib.optionals cfg.swap.file.enable [ swap.file.path ]);
+        ];
       })
     ];
 
     boot = mkIf cfg.impermanence {
-      supportedFilesystems.btrfs = true;
+      supportedFilesystems.zfs = true;
       initrd = {
-        supportedFilesystems.btrfs = true;
-        systemd.services.impermanence_subvolume = {
+        supportedFilesystems.zfs = true;
+        systemd.services.zfs-rollback = {
           wantedBy = [
             "initrd.target"
           ];
           after = [
-            "initrd-root-device.target"
+            "zfs-import-nixos.service"
           ];
           before = [
             "sysroot.mount"
           ];
-          unitConfig.DefaultDependencies = "no";
-          description = "Change subvolume for impermanence";
-          serviceConfig.Type = "oneshot";
-          script = impermanence_subvolume_script;
+          path = [ config.boot.zfs.package ];
+          unitConfig.DefaultDependencies = false;
+          description = "Rollback ZFS root and home to blank snapshots";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = [
+              "${config.boot.zfs.package}/bin/zfs rollback -r nixos/root@blank"
+              "${config.boot.zfs.package}/bin/zfs rollback -r nixos/home@blank"
+            ];
+          };
         };
       };
     };
@@ -157,48 +150,35 @@ in
     fileSystems = {
 
       "/" = {
-        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-        fsType = "btrfs";
+        device = "nixos/root";
+        fsType = "zfs";
         neededForBoot = true;
-        options = [
-          "subvol=root"
-          "compress-force=zstd"
-        ];
       };
 
-      "/persistent" = mkIf cfg.impermanence {
-        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
+      "/persist" = mkIf cfg.impermanence {
+        device = "nixos/persist";
+        fsType = "zfs";
         neededForBoot = true;
-        fsType = "btrfs";
-        options = [
-          "subvol=persistent"
-          "compress-force=zstd"
-        ];
       };
 
       "/nix" = {
-        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-        fsType = "btrfs";
+        device = "nixos/nix";
+        fsType = "zfs";
         neededForBoot = true;
-        options = [
-          "subvol=nix"
-          "compress-force=zstd"
-        ];
       };
 
       "/home" = {
-        device = "/dev/disk/by-label/${if root_label == null then "nixos" else root_label}";
-        fsType = "btrfs";
+        device = "nixos/home";
+        fsType = "zfs";
+        neededForBoot = true;
         options = [
-          "subvol=home"
-          "compress-force=zstd"
           "nodev"
           "nosuid"
         ];
       };
 
       "/boot" = {
-        device = "/dev/disk/by-label/${if boot_label == null then "boot" else boot_label}";
+        device = "/dev/disk/by-label/${if boot_label == null then "BOOT" else boot_label}";
         fsType = "vfat";
         options = [
           "noauto"
@@ -207,21 +187,6 @@ in
           "dmask=0077"
         ];
       };
-
     };
-
-    swapDevices =
-      optionals cfg.swap.file.enable [
-        {
-          device = cfg.swap.file.path;
-          size = cfg.swap.file.size;
-        }
-      ]
-      ++ optionals cfg.swap.partition.enable [
-        {
-          options = [ "nofail" ];
-          device = "/dev/disk/by-label/${if swap_label == null then "swap" else swap_label}";
-        }
-      ];
   };
 }

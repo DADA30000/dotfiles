@@ -1,17 +1,32 @@
 diff --git a/lib/NOM/Print.hs b/lib/NOM/Print.hs
-index 5b27103..1942115 100644
+index 992bc9a..3ae30d0 100644
 --- a/lib/NOM/Print.hs
 +++ b/lib/NOM/Print.hs
 @@ -14,7 +14,7 @@ import Data.Time (NominalDiffTime, ZonedTime, defaultTimeLocale, formatTime)
  import Data.Tree (Forest, Tree (Node))
  import GHC.Records (HasField)
- import NOM.Builds (Derivation (..), FailType (..), Host (..), StorePath (..))
--import NOM.NixMessage.JSON (ActivityId (..))
+ import NOM.Builds (Derivation (..), FailType (..), Host (..), HostContext (..), StorePath (..), forgetProto)
+-import NOM.NixMessage.JSON (ActivityId (..), ActivityProgress (..))
 +import NOM.NixMessage.JSON (Activity (CopyPath, FileTransfer, Build), ActivityId (..), ActivityProgress (..))
- import NOM.Print.Table (Entry, blue, bold, cells, dummy, green, grey, header, label, magenta, markup, markups, prependLines, printAlignedSep, red, text, yellow)
+ import NOM.Print.Table (Entry, blue, bold, cells, displayWidth, dummy, green, grey, header, label, magenta, markup, markups, prependLines, printAlignedSep, red, text, yellow)
  import NOM.Print.Tree (showForest)
  import NOM.State (
-@@ -163,7 +163,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+@@ -125,14 +125,6 @@ data Config = MkConfig
+ printSections :: NonEmpty Text -> Text
+ printSections = (toText (setSGRCode [Reset]) <>) . (upperleft <>) . Text.intercalate (toText (setSGRCode [Reset]) <> "\n" <> leftT) . toList
+ 
+--- printInterestingActivities :: Maybe Text -> IntMap InterestingActivity -> (ZonedTime, Double) -> Text
+--- printInterestingActivities message activities (_, now) =
+---   prependLines
+---     ""
+---     (vertical <> " ")
+---     (vertical <> " ")
+---     (horizontal <> markup bold " Build Planning:" :| maybeToList message <> (IntMap.elems activities <&> \activity -> unwords (activity.text : ifTimeDiffRelevant now activity.start id)))
+-
+ printTraces :: Seq Text -> Int -> Text
+ printTraces traces maxHeight =
+   prependLines
+@@ -175,20 +167,19 @@ stateToText config buildState@MkNOMState{..} = printWithSize
        | progressState == JustStarted && config.piping = \nows@(_, now) -> markup bold (time nows <> showCond (now - startTime > 15) (markup grey " nom hasn‘t detected any input. Have you redirected nix-build stderr into nom? (See -h and the README for details.)"))
        | progressState == Finished && config.silent = const ""
        | Just sections' <- nonEmpty sections = \now -> printSections . fmap ($ now) $ sections' <> one (table . time)
@@ -20,7 +35,32 @@ index 5b27103..1942115 100644
        | config.silent = const ""
        | otherwise = markup bold . time
      sections =
-@@ -208,7 +208,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+       fmap snd
+         . filter fst
+         $ [
+-            -- (not (IntMap.null interestingActivities) || isJust evalMessage, printInterestingActivities evalMessage interestingActivities)
+             (not (Seq.null nixErrors), const errorDisplay)
+           , (not (Seq.null nixTraces), const traceDisplay)
+           , (not (Seq.null forestRoots), buildsDisplay . snd)
+           ]
+     maxWindow = case maybeWindow of
+-      Just (Window height width) -> Window (height `div` targetRatio) (width - 2) -- targetRatio is hardcoded to be bigger than zero.
++      Just (Window height width) -> Window (height `div` targetRatio) (width - 2)
+       Nothing -> Window.Window defaultTreeMax (defaultTreeWidth - 2)
+     buildsDisplay now =
+       prependLines
+@@ -198,9 +189,7 @@ stateToText config buildState@MkNOMState{..} = printWithSize
+         (printBuilds buildState hostAbbrevs maxWindow now)
+     errorDisplay = printErrors nixErrors maxWindow.height
+     traceDisplay = printTraces nixTraces maxWindow.height
+-  -- evalMessage = case evaluationState.lastFileName of
+-  --   Strict.Just file_name -> Just ("Evaluated " <> show (evaluationState.count) <> " files, last one was '" <> file_name <> "'")
+-  --   Strict.Nothing -> Nothing
++
+   runTime now = timeDiff now startTime
+   time
+     | progressState == Finished = \(nowClock, now) -> finishMarkup (" at " <> toText (formatTime defaultTimeLocale "%H:%M:%S" nowClock) <> " after " <> runTime now)
+@@ -220,7 +209,7 @@ stateToText config buildState@MkNOMState{..} = printWithSize
    innerTable = fromMaybe (one (text "")) (nonEmpty headers) : showCond showHosts printHosts
    headers =
      (cells 3 <$> optHeader showBuilds "Builds")
@@ -29,7 +69,7 @@ index 5b27103..1942115 100644
        <> (cells 2 <$> optHeader showUploads "Uploads")
        <> optHeader showHosts "Host"
    optHeader cond = showCond cond . one . bold . header :: Text -> [Entry]
-@@ -224,6 +224,7 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+@@ -236,6 +225,7 @@ stateToText config buildState@MkNOMState{..} = printWithSize
          [ yellow $ nonZeroBold down downloadsRunning
          , green $ nonZeroBold down downloadsDone
          , blue $ nonZeroBold todo numPlannedDownloads
@@ -37,49 +77,60 @@ index 5b27103..1942115 100644
          ]
        <> showCond
          showUploads
-@@ -236,11 +237,21 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
-   manyHosts = Set.size buildHosts > 1 || Set.size hosts > 2 -- We only need number labels on hosts if we are using remote builders or more then one transfer peer (normally a substitution cache).
-   hostNums = zip (toList hosts) [0 ..]
+@@ -245,17 +235,27 @@ stateToText config buildState@MkNOMState{..} = printWithSize
+   lastRow time' = partial_last_row `appendr` one (bold (header time'))
+ 
+   showHosts = Set.size hosts > 1
+-  manyHosts = Set.size buildHosts > 1 || Set.size hosts > 2 -- We only need number labels on hosts if we are using remote builders or more then one transfer peer (normally a substitution cache).
++  manyHosts = Set.size buildHosts > 1 || Set.size hosts > 2
+   hostAbbrevs = collisionFreeHandles (setOf (folded % #_Host % _3) hosts)
    showBuilds = totalBuilds > 0
 -  showDownloads = downloadsDone + downloadsRunning + numPlannedDownloads > 0
 +  showDownloads = downloadsDone + downloadsRunning + numPlannedDownloads > 0 || totalExpectedBytes > 0
    showUploads = uploadsDone + uploadsRunning > 0
    numPlannedDownloads = CSet.size plannedDownloads
++  
    buildHosts = one Localhost <> foldMap (foldMap one) [runningBuilds', completedBuilds', failedBuilds']
--  hosts = buildHosts <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
-+  activityHosts = Set.fromList . mapMaybe getHost . IntMap.elems $ activities
+-  hosts =
+-    buildHosts
+-      <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
+-      <> foldMap (foldMap (one . (.host))) [runningUploads, runningDownloads]
++  baseHosts = buildHosts
++    <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
++    <> foldMap (foldMap (one . (.host))) [runningUploads, runningDownloads]
++
++  activityHosts = Set.fromList . mapMaybe getHost . Map.elems $ activities
 +   where
 +    getHost act = case act.activity of
 +      CopyPath _ from _ -> Just from
-+      FileTransfer url -> urlToHost url
++      FileTransfer url -> urlToHost baseHosts url
 +      Build _ from -> Just from
 +      _ -> Nothing
 +
-+  hosts = buildHosts 
-+    <> foldMap (foldMap (one . (.host))) [completedUploads, completedDownloads]
-+    <> activityHosts
++  hosts = baseHosts <> activityHosts
+ 
    numRunningBuilds = CMap.size runningBuilds
    numCompletedBuilds = CMap.size completedBuilds
-   numPlannedBuilds = CSet.size plannedBuilds
-@@ -249,6 +260,31 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+@@ -265,6 +265,33 @@ stateToText config buildState@MkNOMState{..} = printWithSize
    downloadsRunning = CMap.size runningDownloads
    uploadsRunning = CMap.size runningUploads
    uploadsDone = CMap.size completedUploads
++
 +  totalDownloadBytes = (totalDone, totalExpected)
 +   where
 +    isDownload act = case act.activity of
 +      FileTransfer _ -> True
 +      _ -> False
-+    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isDownload $ IntMap.elems activities
++    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isDownload $ Map.elems activities
 +    totalDone = sum (fmap (\(MkActivityProgress d _ _ _) -> d) progresses)
 +    totalExpected = sum (fmap (\(MkActivityProgress d e _ _) -> max d e) progresses)
 +
 +  hostDownloadBytes h = (totalDone, totalExpected)
 +   where
 +    isHostDownload act = case act.activity of
-+      FileTransfer url | urlToHost url == Just h -> True
++      FileTransfer url | (forgetProto <$> urlToHost baseHosts url) == Just h -> True
 +      _ -> False
-+    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isHostDownload $ IntMap.elems activities
++    progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isHostDownload $ Map.elems activities
 +    totalDone = sum (fmap (\(MkActivityProgress d _ _ _) -> d) progresses)
 +    totalExpected = sum (fmap (\(MkActivityProgress d e _ _) -> max d e) progresses)
 +
@@ -90,10 +141,11 @@ index 5b27103..1942115 100644
 +      else if totalDoneBytes > 0
 +        then green $ text (printBytes totalDoneBytes)
 +        else dummy
++
    finishedWithTraces =
      mconcat
        [ markup yellow warning
-@@ -277,6 +313,12 @@ stateToText config buildState@MkNOMV1State{..} = memo printWithSize . fmap Windo
+@@ -296,6 +323,12 @@ stateToText config buildState@MkNOMState{..} = printWithSize
            [ yellow $ nonZeroShowBold down downloadsRunning'
            , green $ nonZeroShowBold down downloads
            , dummy
@@ -106,54 +158,259 @@ index 5b27103..1942115 100644
            ]
          <> showCond
            showUploads
-@@ -588,3 +630,22 @@ printDuration diff
+@@ -312,22 +345,19 @@ stateToText config buildState@MkNOMState{..} = printWithSize
+       doneBuilds = action_count_for_host host completedBuilds
+     action_count_for_host :: (HasField "host" a (Host WithContext)) => Host WithoutContext -> CMap.CacheIdMap b a -> Int
+     action_count_for_host host = CMap.size . CMap.filter (\x -> host == forgetProto x.host)
+-  host_name_widths = maximum1 $ 0 :| (Text.length . toText . forgetProto <$> toList hosts)
+   host_abbrevs_widths = maximum1 $ 0 :| (Text.length <$> toList hostAbbrevs)
+   host_name_cell :: Host WithoutContext -> Text
+   host_name_cell host =
+     showCond
+       manyHosts
+       (Text.justifyLeft (2 + host_abbrevs_widths) ' ' (maybe "" (<> ": ") $ Map.lookup (toText host) hostAbbrevs))
+-      <> Text.justifyRight host_name_widths ' ' (toText host)
++      <> toText host
+       <> case toList prots of
+         [] -> ""
+         ps -> " (" <> Text.intercalate ", " ps <> ")"
+    where
+     prots = setOf (folded % filteredBy (to forgetProto % only host) % #_Host % _1 % _Just) hosts
  
- timeDiffSeconds :: Int -> Text
- timeDiffSeconds = printDuration . fromIntegral
+--- >>> collisionFreeHandles (Set.fromList ["build.example.com", "build2.example.com"])
+--- fromList [(Hostname "build.example.com","ec"),(Hostname "build2.example.com","2ec")]
+ collisionFreeHandles :: Set Text -> Map Text Text
+ collisionFreeHandles hosts = Map.mapWithKey mkHandle improvedMap
+  where
+@@ -383,18 +413,28 @@ printBuilds ::
+   NonEmpty Text
+ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+  where
++  (totalDoneBytes, totalExpectedBytes) =
++    let isDownload act = case act.activity of
++          FileTransfer _ -> True
++          _ -> False
++        progresses = mapMaybe (Strict.toLazy . (.progress)) . filter isDownload $ Map.elems activities
++        totalDone = sum (fmap (\(MkActivityProgress d _ _ _) -> d) progresses)
++        totalExpected = sum (fmap (\(MkActivityProgress d e _ _) -> max d e) progresses)
++     in (totalDone, totalExpected)
 +
-+printBytes :: Int -> Text
+   hostLabel :: Bool -> Host WithContext -> Text
+   hostLabel color host = (if color then markup magenta else id) $ fromMaybe (toText host) (Map.lookup (toText $ forgetProto host) hostAbbrevs)
++  
+   printBuildsWithTime :: Double -> NonEmpty Text
+   printBuildsWithTime now = (graphHeader :|) $ with_progress $ showForest $ fmap (fmap ($ now)) preparedPrintForest
+-  with_progress :: [(Text, Maybe Double)] -> [Text]
++
++  with_progress :: [(Text, Maybe Text)] -> [Text]
+   with_progress rows =
+     rows <&> \(l, r) ->
+-      l
+-        <> stimes (max 0 $ left_width - displayWidth l) " "
+-        <> maybe "" (\p -> printBar (limits.width - left_width - 6) p <> printPercent p) r
+-   where
+-    left_width = max 60 (1 + maximum1 (0 :| (displayWidth . fst <$> filter (isJust . snd) rows)))
++      case r of
++        Nothing -> l
++        Just progText -> l <> " " <> markup green progText
++
+   num_raw_roots = length forestRoots
+   num_roots = length preparedPrintForest
+   graphTitle = markup bold "Dependency Graph"
+@@ -403,9 +443,9 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+     | num_raw_roots <= 1 = graphTitle
+     | num_raw_roots == num_roots = unwords [graphTitle, "with", show num_roots, "roots"]
+     | otherwise = unwords [graphTitle, "showing", show num_roots, "of", show num_raw_roots, "roots"]
+-  preparedPrintForest :: Forest (Double -> (Text, Maybe Double))
++  preparedPrintForest :: Forest (Double -> (Text, Maybe Text))
+   preparedPrintForest = mapRootsTwigsAndLeaves (printTreeNode Root) (printTreeNode Twig) (printTreeNode Leaf) <$> buildForest
+-  printTreeNode :: TreeLocation -> DerivationInfo -> Double -> (Text, Maybe Double)
++  printTreeNode :: TreeLocation -> DerivationInfo -> Double -> (Text, Maybe Text)
+   printTreeNode location drvInfo =
+     let summary = showSummary drvInfo.dependencySummary
+         (planned, display_drv, progress) = printDerivation drvInfo (get' (inputStorePaths drvInfo))
+@@ -446,9 +486,9 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+   goDerivationsToShow ::
+     Seq DerivationId ->
+     State
+-      ( DerivationSet -- seenIds
++      ( DerivationSet
+       , Set
+-          ( Bool -- is allowed to be hidden,
++          ( Bool
+           , SortKey
+           , DerivationId
+           )
+@@ -520,7 +560,7 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+   print_hosts_down color = print_hosts color "from"
+   print_hosts_up color = print_hosts color "to"
+ 
+-  printDerivation :: DerivationInfo -> Map Text StorePathId -> (Bool, Double -> Text, Double -> Maybe Double)
++  printDerivation :: DerivationInfo -> Map Text StorePathId -> (Bool, Double -> Text, Double -> Maybe Text)
+   printDerivation drvInfo _input_store_paths = do
+     let store_paths_in :: StorePathSet -> Bool
+         store_paths_in some_set = not $ Map.null $ Map.filter (`CSet.member` some_set) drvInfo.outputs
+@@ -545,40 +585,28 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+         plannedDownloads = store_paths_in drvInfo.dependencySummary.plannedDownloads
+         downloadedOutputs = store_paths_in_map drvInfo.dependencySummary.completedDownloads
+         uploadedOutputs = store_paths_in_map drvInfo.dependencySummary.completedUploads
+-     in -- This code for printing info about every output proved to be to verbose. Keeping it in case we want something like that later on, maybe as an option.
+-        -- store_path_info_list =
+-        --  ((\(name, infos) now -> markups [bold, yellow] (running <> " " <> name <> " " <> down) <> " " <> markup magenta (disambiguate_transfer_host infos.host) <> clock <> " " <> timeDiff now infos.start) <$> store_paths_in_map drvInfo.dependencySummary.runningDownloads)
+-        --    <> ((\(name, infos) now -> markups [bold, yellow] (running <> " " <> name <> " " <> up) <> " " <> markup magenta (disambiguate_transfer_host infos.host) <> clock <> " " <> timeDiff now infos.start) <$> store_paths_in_map drvInfo.dependencySummary.runningUploads)
+-        --    <> ((\name -> const $ markup blue (todo <> name <> " " <> down)) <$> store_paths_in drvInfo.dependencySummary.plannedDownloads)
+-        --    <> ((\(name, infos) -> const $ markups [bold, green] (done <> " ") <> markup green (name <> " " <> down <> " ") <> markup magenta (disambiguate_transfer_host infos.host) <> markup grey (maybe "" (\end -> clock <> " " <> timeDiff end infos.start) infos.end)) <$> store_paths_in_map drvInfo.dependencySummary.completedDownloads)
+-        --    <> ((\(name, infos) -> const $ markups [bold, green] (done <> " ") <> markup green (name <> " " <> up <> " ") <> markup magenta (disambiguate_transfer_host infos.host) <> markup grey (maybe "" (\end -> clock <> " " <> timeDiff end infos.start) infos.end)) <$> store_paths_in_map drvInfo.dependencySummary.completedUploads)
+-        -- store_path_infos = if null store_path_info_list then const "" else \now -> " (" <> Text.intercalate ", " (($ now) <$> store_path_info_list) <> ")"
+-
++     in
+         case drvInfo.buildStatus of
+           _
+             | not $ null downloadingOutputs
+-            , (prct, prog) <-
+-                printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) downloadingOutputs) ->
++            , Just prog <- printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) downloadingOutputs) ->
+                 ( False
+                 , \now ->
+                     unwords
+                       $ markups [bold, yellow] (down <> " " <> running <> " " <> drvName)
+                       : print_hosts_down True (hosts downloadingOutputs)
+                         <> ifTimeDiffRelevant now (earliest_start downloadingOutputs) id
+-                        <> prog
+-                , const prct
++                , const (Just prog)
+                 )
+             | not $ null uploadingOutputs
+-            , (prct, prog) <-
+-                printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) uploadingOutputs) ->
++            , Just prog <- printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) uploadingOutputs) ->
+                 ( False
+                 , \now ->
+                     unwords
+                       $ markups [bold, yellow] (up <> " " <> running <> " " <> drvName)
+                       : print_hosts_up True (hosts uploadingOutputs)
+                         <> ifTimeDiffRelevant now (earliest_start uploadingOutputs) id
+-                        <> prog
+-                , const prct
++                , const (Just prog)
+                 )
+           Unknown
+             | plannedDownloads -> (True, const $ markup blue (down <> " " <> todo <> " " <> drvName), const Nothing)
+@@ -621,9 +649,20 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+                     <> hostMarkup True buildInfo.host
+                     <> phaseList
+                 after_time = Strict.maybe [] (\x -> ["(" <> average <> " " <> timeDiffSeconds x <> ")"]) buildInfo.estimate
++                progText = case Strict.toLazy buildInfo.activityId >>= \aid -> Map.lookup aid.value nomState.activities >>= \st -> Strict.toLazy st.progress of
++                  Just (MkActivityProgress d e _ _) | e > 0 || d > 0 ->
++                    Just $ if e > d
++                             then printBytes d <> "/" <> printBytes e
++                             else printBytes d
++                  _ -> 
++                     if "-builtin" `Text.isSuffixOf` drvName && (totalExpectedBytes > 0 || totalDoneBytes > 0)
++                       then Just $ if totalExpectedBytes > totalDoneBytes
++                                     then printBytes totalDoneBytes <> "/" <> printBytes totalExpectedBytes
++                                     else printBytes totalDoneBytes
++                       else Nothing
+              in ( False
+                 , \now -> unwords $ before_time <> ifTimeDiffRelevant now buildInfo.start (<> after_time)
+-                , const Nothing
++                , const progText
+                 )
+           Failed buildInfo ->
+             let MkBuildFail endTime failType = buildInfo.end
+@@ -653,38 +692,24 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+             , const Nothing
+             )
+ 
+--- Original implementation of this bar was shamelessly stolen from @ners at https://github.com/ners/rhine-nix/blob/main/app/Main.hs (Apache License)
+-printBar :: Int -> Double -> Text
+-printBar len part = toText bar
+- where
+-  pct :: Double
+-  pct = part * intToDouble len
+-  bar :: String
+-  bar =
+-    [1, 2 .. intToDouble len] <&> \case
+-      ((<= pct + 0 / 2) -> True) -> '■'
+-      ((<= pct + 1 / 2) -> True) -> '◧'
+-      _ -> '□'
+-
+-printPercent :: Double -> Text
+-printPercent = markup bold . fromString . printf "%5.1f%%" . (* 100)
+-
+-printTransferProgress :: [ActivityProgress] -> (Maybe Double, [Text])
++printTransferProgress :: [ActivityProgress] -> Maybe Text
+ printTransferProgress = \case
+-  [] -> (Nothing, [])
++  [] -> Nothing
+   ap ->
+-    ( Just $ intToDouble done' / intToDouble expected
+-    , [printBytes done' <> "/" <> printBytes expected]
+-    )
+-   where
+-    (done', expected) = ap & (fmap (\(MkActivityProgress d e _ _) -> (d, e)) >>> unzip >>> bimap sum sum)
++    let (done', expected) = ap & (fmap (\(MkActivityProgress d e _ _) -> (d, e)) >>> unzip >>> bimap sum sum)
++     in Just $ if expected > done'
++                 then printBytes done' <> "/" <> printBytes expected
++                 else printBytes done'
+ 
+ printBytes :: Int -> Text
+-printBytes bytes = fromString $ printf "%.1f%s" res unit
 +printBytes bytes
 +  | bytes < 1024 = show bytes <> " B"
 +  | bytes < 1024 * 1024 = showDouble (fromIntegral bytes / 1024) <> " KiB"
 +  | bytes < 1024 * 1024 * 1024 = showDouble (fromIntegral bytes / (1024 * 1024)) <> " MiB"
 +  | otherwise = showDouble (fromIntegral bytes / (1024 * 1024 * 1024)) <> " GiB"
-+ where
+  where
+-  (res, unit) = fromMaybe (start, "") $ find ((< 1000) . fst) (zip scaled sizes)
+-  start = intToDouble bytes
+-  scaled = start : ((/ 1024) <$> scaled)
 +  showDouble :: Double -> Text
 +  showDouble val = fromString $ printf "%.1f" val
+ 
+ sizes :: [Text]
+ sizes = "B" : ((<> "iB") <$> ["K", "M", "G", "T", "P"])
+@@ -718,3 +743,15 @@ printDuration diff
+ 
+ timeDiffSeconds :: Int -> Text
+ timeDiffSeconds = printDuration . fromIntegral
 +
-+urlToHost :: Text -> Maybe Host
-+urlToHost url =
-+  let (schema, suffix) = Text.breakOn "://" url
-+  in if Text.null suffix
-+       then Nothing
-+       else
-+         let hostPart = fst $ Text.breakOn "/" (Text.drop 3 suffix)
-+         in if Text.null hostPart then Nothing else Just (Host (schema <> "://" <> hostPart))
++urlToHost :: Set (Host WithContext) -> Text -> Maybe (Host WithContext)
++urlToHost knownHosts url =
++  case find (\h -> toText h `Text.isPrefixOf` url) (sortOn (negate . Text.length . toText) (toList knownHosts)) of
++    Just h -> Just h
++    Nothing ->
++      let (schema, suffix) = Text.breakOn "://" url
++      in if Text.null suffix
++           then Nothing
++           else
++             let hostPart = fst $ Text.breakOn "/" (Text.drop 3 suffix)
++             in if Text.null hostPart then Nothing else Just (Host (Just schema) Nothing hostPart)
 diff --git a/lib/NOM/Update.hs b/lib/NOM/Update.hs
-index 7f4271f..8cf31d4 100644
+index b559429..eaaa8c7 100644
 --- a/lib/NOM/Update.hs
 +++ b/lib/NOM/Update.hs
-@@ -272,6 +272,7 @@ processJsonMessage = \case
-           now <- getNow
-           pathId <- getStorePathId path
-           uploading to pathId now
-+        JSON.FileTransfer _ -> withChange (pure ())
-         JSON.Unknown | Text.isPrefixOf "querying info" startAction.text -> set_interesting
-         JSON.QueryPathInfo{} -> set_interesting
-         _ -> noChange -- tell [Right (encodeUtf8 (markup yellow "unused activity: " <> show startAction.id <> " " <> show startAction.activity))]
+@@ -249,6 +249,7 @@ processJsonMessage = \case
+         now <- getNow
+         pathId <- getStorePathId path
+         uploading to pathId now (Just id')
++      JSON.FileTransfer _ -> withChange (pure ())
+       JSON.Unknown | Text.isPrefixOf "querying info" startAction.text -> set_interesting
+       JSON.QueryPathInfo{} -> set_interesting
+       _ -> noChange -- tell [Right (encodeUtf8 (markup yellow "unused activity: " <> show startAction.id <> " " <> show startAction.activity))]
 diff --git a/lib/NOM/Update/Monad.hs b/lib/NOM/Update/Monad.hs
-index f4b2c22..efc6867 100644
+index bceecf2..91be577 100644
 --- a/lib/NOM/Update/Monad.hs
 +++ b/lib/NOM/Update/Monad.hs
-@@ -12,6 +12,7 @@ import Control.Exception (try)
+@@ -13,6 +13,7 @@ import Control.Concurrent.STM (TChan, retry, tryReadTChan, writeTChan)
+ import Control.Exception (mask, try)
  import Control.Monad.Trans.Writer.CPS (WriterT)
- -- attoparsec
  import Data.Attoparsec.Text (eitherResult, parse)
 +import Data.Text qualified as Text
+ import Data.Set qualified as Set
  import Data.Text.IO qualified as TextIO
  import Data.Time (UTCTime, getCurrentTime)
- import GHC.Clock qualified
-@@ -51,6 +52,7 @@ instance MonadReadDerivation IO where
+@@ -57,6 +58,7 @@ instance MonadReadDerivation IO where
            >=> first (DerivationParseError . toText)
            . eitherResult
            . parse Nix.parseDerivation

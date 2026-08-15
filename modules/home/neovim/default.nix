@@ -18,7 +18,7 @@ let
       size = 12;
     };
   };
-  neovide-term = pkgs.writers.writeDashBin "neovide-term" ''
+  neovide-term = pkgs.writeShellScriptBin "neovide-term" ''
     TITLE=""
     APP_ID=""
     WORKDIR=""
@@ -52,7 +52,15 @@ let
       esac
     done
 
-    CMD="$*"
+    CMD=""
+    for arg in "$@"; do
+      escaped="''${arg//\'/\'\\\'\'}"
+      if [ -z "$CMD" ]; then
+        CMD="'$escaped'"
+      else
+        CMD="$CMD '$escaped'"
+      fi
+    done
 
     # Construct Neovide CLI arguments array safely
     set -- --frame none --mouse-cursor-icon i-beam
@@ -183,8 +191,9 @@ let
         send_stdin_stream_rpc "man" "$@"
       elif [[ -n "$ARG" ]]; then
         ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$ARG")
+        ABS_PATH_ESC="''${ABS_PATH//\'/\'\'}"
         exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-          "v:lua._G.OpenManPath('$ABS_PATH')" >/dev/null 2>&1
+          "v:lua._G.OpenManPath('$ABS_PATH_ESC')" >/dev/null 2>&1
       else
         exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
           "v:lua._G.OpenManPath(\"\")" >/dev/null 2>&1
@@ -198,7 +207,8 @@ let
 
     # 3. No arguments (`nvim`)
     if [ $# -eq 0 ]; then
-      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD')" >/dev/null 2>&1
+      PWD_ESC="''${PWD//\'/\'\'}"
+      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD_ESC')" >/dev/null 2>&1
     fi
 
     # 4. File arguments (`nvim file1 file2...`)
@@ -220,10 +230,12 @@ let
         FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
       fi
     done
-    FILES_JSON="$FILES_JSON]"
+    FILES_JSON="''${FILES_JSON}]"
+
+    FILES_JSON_ESC="''${FILES_JSON//\'/\'\'}"
 
     exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-      "v:lua._G.OpenFiles('$FILES_JSON')" >/dev/null 2>&1
+      "v:lua._G.OpenFiles('$FILES_JSON_ESC')" >/dev/null 2>&1
   '';
 
   # Patched neovim-unwrapped built natively with C source changes & smart dispatcher script
@@ -271,14 +283,12 @@ let
     }:$PATH"
 
     TOOLCHAIN_PATH="${config.xdg.dataHome}/nix-system-toolchain"
+    RUSTUP_PATH="${config.xdg.dataHome}/rustup"
+    mkdir -p "$RUSTUP_PATH/toolchains"
+    ln -s "$TOOLCHAIN_PATH" "$RUSTUP_PATH/toolchains/nix-system"
+    echo 'version = "12"' > "$RUSTUP_PATH/settings.toml"
+    echo 'default_toolchain = "nix-system"' >> "$RUSTUP_PATH/settings.toml"
 
-    if ! rustup toolchain list | grep -q "nix-system"; then
-      rustup toolchain link nix-system "$TOOLCHAIN_PATH"
-    fi
-
-    if ! rustup show active-toolchain >/dev/null 2>&1; then
-      rustup default nix-system
-    fi
   '';
   config_lua = /* lua */ ''
     -- Auto bufhidden=wipe for git and temp edit files so nvr unblocks git/sudoedit immediately on close
@@ -959,10 +969,22 @@ let
       indent = { char = "│" },  
       scope = { enabled = true, show_start = true, show_end = true }, 
     }
-    if vim.g.neovide == true then
+    if vim.g.neovide then
       vim.keymap.set({"n", "x"}, "<C-S-c>", '"+y', {desc = "Copy system clipboard"})
       vim.keymap.set({"n", "x"}, "<C-S-v>", '"+p', {desc = "Paste system clipboard"})
       vim.keymap.set("i", "<C-S-v>", '<C-r><C-o>+', {desc = "Paste system clipboard"})
+      vim.g.neovide_no_vsync = true
+      vim.g.neovide_idle_timer = 0
+      vim.g.neovide_scroll_animation_length = 0.15
+      vim.g.neovide_cursor_animation_length = 0.05
+      vim.g.neovide_cursor_trail_size = 0.2
+      vim.g.neovide_padding_top = 20
+      vim.g.neovide_padding_left = 20
+      vim.g.neovide_padding_right = 20
+      vim.g.neovide_opacity = 0.2
+      vim.g.neovide_floating_shadow = false
+      vim.g.neovide_floating_blur_amount_x = 8.0
+      vim.g.neovide_floating_blur_amount_y = 8.0
     end
 
     local function open_nos_terminal()
@@ -1019,6 +1041,7 @@ let
     })
 
     vim.opt.guicursor:append("t:ver25")
+    vim.opt.selection = "inclusive"
 
     -- Global Tab-Switching Wrapper
     _G.InstantTabSwitch = function(cmd)
@@ -1050,26 +1073,30 @@ let
     -- Define a hidden cursor style (100% transparent)
     vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
 
-    local function set_hidden_cursor(hide)
+    local function set_terminal_cursor_hidden(hide)
       local current = vim.o.guicursor
       local cleaned = current:gsub(",?n%-v:HiddenCursor", "")
+                             :gsub(",?n:HiddenCursor", "")
+                             :gsub(",?v:ver25%-HiddenCursor", "")
+                             :gsub(",?v:HiddenCursor", "")
       if hide then
-        vim.o.guicursor = cleaned .. ",n-v:HiddenCursor"
+        -- n:HiddenCursor hides normal cursor; v:ver25-HiddenCursor hides visual cursor while keeping full highlight on last char
+        vim.o.guicursor = cleaned .. ",n:HiddenCursor,v:ver25-HiddenCursor"
       else
         vim.o.guicursor = cleaned
       end
     end
 
-    -- Hide cursor during Normal (nt) / Visual (v/V) scrolling in terminals, restore in Insert (t)
+    -- Hide cursor during Normal (nt) AND Visual (v/V) scrolling in terminals, restore in Insert (t)
     vim.api.nvim_create_autocmd("ModeChanged", {
       pattern = "*",
       callback = function()
         if vim.bo.buftype == "terminal" then
           local mode = vim.api.nvim_get_mode().mode
-          if mode == "nt" or mode == "v" or mode == "V" then
-            set_hidden_cursor(true)
+          if mode == "nt" or mode == "v" or mode == "V" or mode == "\22" then
+            set_terminal_cursor_hidden(true)
           else
-            set_hidden_cursor(false)
+            set_terminal_cursor_hidden(false)
           end
         end
       end,
@@ -1078,44 +1105,58 @@ let
     vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
       pattern = "term://*",
       callback = function()
-        set_hidden_cursor(false)
+        set_terminal_cursor_hidden(false)
       end
     })
-
-    -- Helper to feed raw unmapped scroll wheel key events to C engine
-    local function feed_raw_scroll(key)
-      local termcode = vim.api.nvim_replace_termcodes(key, true, false, true)
-      vim.api.nvim_feedkeys(termcode, "n", false)
-    end
 
     -- === SYNCHRONOUS TERMINAL SCROLLING & BOUNDARY PROTECTION ===
-    -- 1) Normal/Visual mode: Hard stop at bottom line (only for interactive shell terminals)
-    vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
-      if vim.bo.buftype == "terminal" or vim.b.is_pager then
-        if vim.b.terminal_altscreen then
-          feed_raw_scroll("<ScrollWheelDown>")
-          return ""
-        end
-        if vim.b.is_pager then
-          feed_raw_scroll("<ScrollWheelDown>")
-          return ""
-        end
-        if vim.fn.line("w$") >= vim.fn.line("$") then
-          return "i"
-        else
-          feed_raw_scroll("<ScrollWheelDown>")
-          return ""
-        end
+    local function term_scroll_down()
+      if vim.fn.line("w$") + 3 >= vim.fn.line("$") then
+        return "3\x05i" -- auto-enter insert mode in 1 tick when reaching bottom
+      else
+        return "3\x05"   -- scroll down 3 lines
+      end
+    end
+
+    local function term_visual_scroll_down()
+      local max_bottom = vim.fn.line("$")
+      local current_bottom = vim.fn.line("w$")
+      local can_scroll = max_bottom - current_bottom
+      if can_scroll > 0 then
+        local to_scroll = math.min(3, can_scroll)
+        return to_scroll .. "\x05"
+      else
+        return "" -- hard stop at bottom line, never overscroll
+      end
+    end
+
+    vim.keymap.set("n", "<ScrollWheelDown>", function()
+      if vim.bo.buftype == "terminal" then
+        return term_scroll_down()
       end
       return "<ScrollWheelDown>"
-    end, { expr = true, silent = true, desc = "Hard stop scroll down at terminal bottom" })
+    end, { expr = true, silent = true, desc = "Scroll down in terminal, enter insert at bottom" })
 
-    vim.api.nvim_create_autocmd({ "TermRequest", "TermResponse" }, {
-      pattern = "*",
-      callback = function()
-        vim.cmd("redrawtabline")
-      end,
-    })
+    vim.keymap.set("n", "<ScrollWheelUp>", function()
+      if vim.bo.buftype == "terminal" then
+        return "3\x19" -- 3<C-y>
+      end
+      return "<ScrollWheelUp>"
+    end, { expr = true, silent = true, desc = "Scroll up in terminal" })
+
+    vim.keymap.set("x", "<ScrollWheelDown>", function()
+      if vim.bo.buftype == "terminal" then
+        return term_visual_scroll_down()
+      end
+      return "<ScrollWheelDown>"
+    end, { expr = true, silent = true })
+
+    vim.keymap.set("x", "<ScrollWheelUp>", function()
+      if vim.bo.buftype == "terminal" then
+        return "3\x19"
+      end
+      return "<ScrollWheelUp>"
+    end, { expr = true, silent = true })
 
     vim.api.nvim_create_autocmd("TermOpen", {
       pattern = "term://*",
@@ -1126,27 +1167,31 @@ let
           vim.cmd("startinsert")
         end
 
-        -- 2) Terminal-Insert mode scroll handlers
+        -- 1st scroll up: immediately exit to normal mode, hide cursor, and scroll up 3 lines
+        vim.keymap.set("t", "<ScrollWheelUp>", function()
+          return vim.api.nvim_replace_termcodes("<C-\\><C-n>3<C-y>", true, false, true)
+        end, { buffer = bufnr, expr = true, silent = true })
+
+        -- Scroll down at bottom prompt: hard stop (do nothing)
         vim.keymap.set("t", "<ScrollWheelDown>", function()
-          if vim.b[bufnr].terminal_altscreen then
-            feed_raw_scroll("<ScrollWheelDown>")
-            return ""
-          end
-          if vim.fn.line("w$") >= vim.fn.line("$") then
-            return ""
-          end
-          feed_raw_scroll("<ScrollWheelDown>")
           return ""
         end, { buffer = bufnr, expr = true, silent = true })
 
-        vim.keymap.set("t", "<ScrollWheelUp>", function()
-          if vim.b[bufnr].terminal_altscreen then
-            feed_raw_scroll("<ScrollWheelUp>")
-            return ""
-          end
-          vim.cmd("stopinsert")
-          feed_raw_scroll("<ScrollWheelUp>")
-          return ""
+        -- Buffer-local handlers
+        vim.keymap.set("n", "<ScrollWheelDown>", function()
+          return term_scroll_down()
+        end, { buffer = bufnr, expr = true, silent = true })
+
+        vim.keymap.set("n", "<ScrollWheelUp>", function()
+          return "3\x19"
+        end, { buffer = bufnr, expr = true, silent = true })
+
+        vim.keymap.set("x", "<ScrollWheelDown>", function()
+          return term_visual_scroll_down()
+        end, { buffer = bufnr, expr = true, silent = true })
+
+        vim.keymap.set("x", "<ScrollWheelUp>", function()
+          return "3\x19"
         end, { buffer = bufnr, expr = true, silent = true })
 
         local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-=~!@#$%^&*()_+[]{}|;:',./<>?"
@@ -1444,6 +1489,10 @@ let
     vim.lsp.config('rust_analyzer', {
       capabilities = capabilities,
       cmd = { "${pkgs.rust-analyzer}/bin/rust-analyzer" },
+      cmd_env = {
+        PATH = "${rust-toolchain}/bin:" .. (os.getenv("PATH") or ""),
+        RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}",
+      },
       root_dir = function(bufnr_or_fname, cb)
         local fname = type(bufnr_or_fname) == "number" and vim.api.nvim_buf_get_name(bufnr_or_fname) or bufnr_or_fname
         if not fname or fname == "" then
@@ -1491,12 +1540,16 @@ let
       end,
       settings = {
         ["rust-analyzer"] = {
+          cargo = {
+            sysroot = "${rust-toolchain}",
+            sysrootSrc = "${pkgs.rustPlatform.rustLibSrc}",
+          },
           check = {
             command = "clippy",
             extraArgs = { "--", "-W", "clippy::all", "-W", "clippy::pedantic" }
           },
-          files = {
-            watcher = "client",
+          procMacro = {
+            enable = true,
           },
         }
       }
@@ -1665,6 +1718,7 @@ in
       defaultEditor = true;
       vimAlias = true;
       vimdiffAlias = true;
+      initLua = config_lua + lsp_cmp_cfg;
       extraPython3Packages =
         ps: with ps; [
           pynvim
@@ -1694,21 +1748,6 @@ in
         fidget-nvim
         onedark-nvim
       ];
-      initLua = config_lua + lsp_cmp_cfg;
-      extraConfig = ''
-        if exists("g:neovide")
-          let g:neovide_scroll_animation_length = 0.15
-          let g:neovide_cursor_animation_length = 0.05
-          let g:neovide_cursor_trail_size = 0.2
-          let g:neovide_padding_top = 20
-          let g:neovide_padding_left = 20
-          let g:neovide_padding_right = 20
-          let g:neovide_opacity = 0.2
-          let g:neovide_floating_shadow = v:false
-          let g:neovide_floating_blur_amount_x = 8.0
-          let g:neovide_floating_blur_amount_y = 8.0
-        endif
-      '';
     };
   };
 }

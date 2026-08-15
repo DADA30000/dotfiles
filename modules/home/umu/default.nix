@@ -37,6 +37,10 @@ let
       path = "$HOME/.local/share/umu/proton/proton-ge-latest";
     }
     {
+      name = "Proton GE 10";
+      path = "$HOME/.local/share/umu/proton/proton-ge-10";
+    }
+    {
       name = "Proton UMU 10";
       path = "$HOME/.local/share/umu/proton/proton-umu-10";
       default = true;

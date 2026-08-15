@@ -27,7 +27,7 @@ in
       enable = true;
       package = pkgs.symlinkJoin {
         name = "fastfetch";
-        paths = [ pkgs.fastfetch ];
+        paths = [ (pkgs.fastfetch.override { zfsSupport = true; }) ];
         buildInputs = [ pkgs.makeWrapper ];
         postBuild = ''
           wrapProgram $out/bin/fastfetch \
@@ -82,6 +82,15 @@ in
             type = "disk";
             key = "├─";
             keyColor = "blue";
+            showExternal = true;
+            folders = "/boot:/run/media";
+            format = "{1} {size-used} / {size-total} ({percentage})";
+          }
+          {
+            type = "zpool";
+            key = "├─";
+            keyColor = "blue";
+            format = "{4} / {6} ({8}, {7} frag)";
           }
           {
             type = "memory";

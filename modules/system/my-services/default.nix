@@ -7,6 +7,7 @@
 with lib;
 let
   cfg = config.my-services;
+
   shared-config = {
     forceSSL = true;
     enableACME = true;
@@ -45,6 +46,15 @@ let
       }
     '';
   };
+
+  # Dynamically list only active domains to prevent empty ghost units
+  activeDomains =
+    (lib.optionals cfg.nginx.website.enable [
+      cfg.nginx.hostName
+      "ip.${cfg.nginx.hostName}"
+    ])
+    ++ (lib.optional cfg.nginx.cape.enable "cape.${cfg.nginx.hostName}")
+    ++ (lib.optional cfg.nginx.nextcloud.enable "nc.${cfg.nginx.hostName}");
 in
 {
   options.my-services = {
@@ -65,6 +75,13 @@ in
 
   config = mkIf cfg.nginx.enable {
     security.acme.acceptTerms = true;
+
+    # Ensure stream directories exist so Nginx mount namespace never fails
+    systemd.tmpfiles.rules = [
+      "d /website/stream/hls 0750 nginx nginx -"
+      "d /website/stream/dash 0750 nginx nginx -"
+    ];
+
     services.nextcloud = mkIf cfg.nginx.nextcloud.enable {
       enable = true;
       configureRedis = true;
@@ -73,6 +90,7 @@ in
       hostName = "nc.${cfg.nginx.hostName}";
       package = pkgs.nextcloud29;
     };
+
     services.nginx = {
       enable = true;
       recommendedProxySettings = true;
@@ -127,8 +145,10 @@ in
         }
       '';
     };
+
     systemd = {
       services = {
+        # Cloudflare DDNS runs only when network is online
         cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
           description = "Update Cloudflare DDNS Records";
           after = [ "network-online.target" ];
@@ -138,64 +158,67 @@ in
             ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/credstore/cloudflare-ddns";
           };
         };
-        "acme-order-renew-ip.sanic.space" = {
-          after = lib.mkForce [
-            "graphical.target"
-            "acme-setup.service"
-            "acme-ip.sanic.space.service"
+
+        # 1. Prevent root setup from running at boot
+        acme-setup.wantedBy = lib.mkForce [ ];
+
+        # 2. Nginx autostarts ONLY after user 1000 logs in via greetd
+        nginx = {
+          wantedBy = lib.mkForce [ "user@1000.service" ];
+          wants = [ "network-online.target" ];
+          after = [
+            "user@1000.service"
+            "network-online.target"
           ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "acme-order-renew-sanic.space" = {
-          after = lib.mkForce [
-            "graphical.target"
-            "acme-setup.service"
-            "acme-ip.sanic.space.service"
-          ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "acme-order-renew-cape.sanic.space" = {
-          after = lib.mkForce [
-            "graphical.target"
-            "acme-setup.service"
-            "acme-ip.sanic.space.service"
-          ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "acme-ip.sanic.space" = {
-          after = [ "graphical.target" ];
-          before = lib.mkForce [ ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "acme-cape.sanic.space" = {
-          after = [ "graphical.target" ];
-          before = lib.mkForce [ ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "acme-sanic.space" = {
-          after = [ "graphical.target" ];
-          before = lib.mkForce [ ];
-          wantedBy = lib.mkForce [ "graphical.target" ];
-        };
-        "nginx" = {
-          wantedBy = lib.mkForce [ "graphical.target" ];
           serviceConfig.ReadWritePaths = [ "/website/stream" ];
-          before = lib.mkForce [ ];
-          after = lib.mkForce [ "graphical.target" ];
         };
-        "nginx-config-reload".wantedBy = lib.mkForce [
-          "acme-order-renew-ip.sanic.space.service"
-          "acme-order-renew-sanic.space.service"
-        ];
-      };
-      timers.cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
-        description = "Timer for periodically updating Cloudflare DDNS";
-        wantedBy = [ "timers.target" ];
-        timerConfig = {
-          OnBootSec = "1min";
-          OnUnitActiveSec = "1hour";
-        };
-      };
+      }
+      // lib.listToAttrs (
+        lib.concatMap (domain: [
+          # 3. Local cert verify service (runs when Nginx starts, takes ~40ms),
+          #    and does NOT trigger lego network renewals
+          {
+            name = "acme-${domain}";
+            value = {
+              wantedBy = lib.mkForce [ ];
+              before = lib.mkForce [ ];
+              wants = lib.mkForce [ "acme-setup.service" ];
+            };
+          }
+          # 4. Lego renewal service is completely decoupled from boot and login
+          {
+            name = "acme-order-renew-${domain}";
+            value = {
+              wantedBy = lib.mkForce [ ];
+              after = [ "network-online.target" ];
+            };
+          }
+        ]) activeDomains
+      );
+
+      timers =
+        (mkIf cfg.cloudflare-ddns.enable {
+          cloudflare-ddns = {
+            description = "Timer for periodically updating Cloudflare DDNS";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "5min";
+              OnUnitActiveSec = "1hour";
+            };
+          };
+        })
+        // lib.listToAttrs (
+          map (domain: {
+            # 5. Prevent timers from running catch-up renewals on boot and delay initial tick
+            name = "acme-renew-${domain}";
+            value = {
+              timerConfig = {
+                Persistent = lib.mkForce false;
+                OnBootSec = "1h";
+              };
+            };
+          }) activeDomains
+        );
     };
   };
 }

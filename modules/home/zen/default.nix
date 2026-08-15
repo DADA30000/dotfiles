@@ -7,7 +7,7 @@
 }:
 with lib;
 let
-  initial_adnauseam_settings = toJSON {
+  initial_ublock_settings = toJSON {
     selectedFilterLists = [
       "user-filters"
       "adnauseam-filters"
@@ -29,6 +29,7 @@ let
     clickingAds = true;
     firstInstall = false;
     disableHidingForDNT = false;
+    prefetchingDisabled = false;
     user-filters = "! 5 янв. 2026 г. https://mangalib.org\nmangalib.org##.size-lg.variant-primary.is-glow.is-outline.is-full-width.is-filled.btn\nmangalib.org###\\30 7cecdc2-bda5-46a6-ab11-4b098ffd8489\nmangalib.org##div.mx_b:nth-of-type(2)";
   };
   initial_redirector_settings = toJSON {
@@ -336,16 +337,16 @@ in
             mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app'
             echo '{ "alreadyInstalled": true }' > '${config.xdg.configHome}/zen/default/browser-extension-data/sponsorBlocker@ajay.app/storage.js'
           fi
-          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org/storage.js' ]]; then
-            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org'
-            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org'
-            echo '${initial_adnauseam_settings}' > '${config.xdg.configHome}/zen/default/browser-extension-data/adnauseam@rednoise.org/storage.js'
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/uBlock0@raymondhill.net/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/uBlock0@raymondhill.net'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/uBlock0@raymondhill.net'
+            echo '${initial_ublock_settings}' > '${config.xdg.configHome}/zen/default/browser-extension-data/uBlock0@raymondhill.net/storage.js'
           fi
-          # if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js' ]]; then
-          #   rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
-          #   mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
-          #   cp '${zen-internet-storage}' '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js'
-          # fi
+          if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js' ]]; then
+            rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+            mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}'
+            cp '${zen-internet-storage}' '${config.xdg.configHome}/zen/default/browser-extension-data/{91aa3897-2634-4a8a-9092-279db23a7689}/storage.js'
+          fi
           if [[ ! -f '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com/storage.js' ]]; then
             rm -rf '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'
             mkdir -p '${config.xdg.configHome}/zen/default/browser-extension-data/redirector@einaregilsson.com'
@@ -387,7 +388,7 @@ in
             installation_mode = "allowed";
             default_area = "navbar";
           };
-          "adnauseam@rednoise.org" = {
+          "uBlock0@raymondhill.net" = {
             installation_mode = "allowed";
             default_area = "navbar";
           };
@@ -452,6 +453,7 @@ in
           nebula-workspace-style = 1;
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
+          "browser.aboutConfig.showWarning" = false;
           "gfx.webrender.all" = true;
           "sine.engine.auto-update" = false;
           "browser.toolbars.bookmarks.visibility" = "always";
@@ -471,7 +473,7 @@ in
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [
             pipewire-screenaudio
             youtube-auto-hd-fps
-            adnauseam
+            ublock-origin
             darkreader
             bitwarden
             user-agent-string-switcher
