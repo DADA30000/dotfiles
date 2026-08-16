@@ -1187,6 +1187,8 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.libxkbcommon
+    pkgs.stdenv
     pkgs.gawk
     pkgs.sbsigntool
     pkgs.wl-clip-persist

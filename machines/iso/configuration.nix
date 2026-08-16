@@ -50,7 +50,7 @@ let
       servicesJson = pkgs.writeText "services.json" (builtins.toJSON list);
 
       installScript = pkgs.writeShellScript "install-script" ''
-        neovide-term "zsh -c 'nix-install; exec zsh -i'"
+        neovide-term zsh -c 'nix-install; exec zsh -i'
       '';
 
       servicePrompterApp = mkPyApp {

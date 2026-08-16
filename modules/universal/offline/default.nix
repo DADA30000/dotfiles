@@ -3,6 +3,7 @@
   inputs,
   pkgs,
   options,
+  config,
   ...
 }:
 let
@@ -26,7 +27,9 @@ let
       ) inputsMap;
     in
     lib.flatten results;
+
   allInputsRaw = collectUniqueInputs (removeAttrs inputs [ "self" ]) [ ];
+
   uniqueInputs = lib.attrValues (
     lib.listToAttrs (
       map (item: {
@@ -35,7 +38,9 @@ let
       }) allInputsRaw
     )
   );
+
   groupedByName = lib.groupBy (x: x.name) uniqueInputs;
+
   finalInputsList = lib.flatten (
     lib.mapAttrsToList (
       name: group:
@@ -48,7 +53,9 @@ let
         }) group
     ) groupedByName
   );
+
   inputsFarm = pkgs.linkFarm "flake-inputs" finalInputsList;
+
   nix-path = pkgs.stdenvNoCC.mkDerivation {
     name = "offline-bridge";
     src = ../../../flake.nix;
@@ -76,6 +83,7 @@ let
       echo finished
     '';
   };
+
   offline-python = pkgs.python3.withPackages (
     ps: with ps; [
       iniparse
@@ -91,6 +99,28 @@ let
       u-msgpack-python
     ]
   );
+
+  # Extract system packages safely
+  sysPkgs =
+    if options ? environment.systemPackages then lib.flatten config.environment.systemPackages else [ ];
+
+  systemPkgsFarm = pkgs.linkFarm "system-pkgs-farm" (
+    lib.imap0 (idx: pkg: {
+      name = "${pkg.name or "pkg"}-${toString idx}";
+      path = pkg;
+    }) (lib.filter (p: p != null) sysPkgs)
+  );
+
+  # Extract home packages safely
+  hmPkgs = if options ? home.packages then lib.flatten config.home.packages else [ ];
+
+  homePkgsFarm = pkgs.linkFarm "home-pkgs-farm" (
+    lib.imap0 (idx: pkg: {
+      name = "${pkg.name or "pkg"}-${toString idx}";
+      path = pkg;
+    }) (lib.filter (p: p != null) hmPkgs)
+  );
+
 in
 {
   options = {
@@ -105,8 +135,9 @@ in
       visible = false;
     };
   };
+
   config = {
-    # rev generation can be moved to u-full if needed
+    # rev generation can be moved to u full if needed
     # IFD
     offline-rev = builtins.readFile "${nix-path}/rev";
     offline-path = nix-path;
@@ -115,12 +146,14 @@ in
     environment.etc = {
       inputs.source = inputsFarm;
       offline-python.source = offline-python;
+      pkgsFarm.source = systemPkgsFarm;
     };
   }
   // lib.optionalAttrs (options ? xdg.dataFile) {
     xdg.dataFile = {
       inputs.source = inputsFarm;
       offline-python.source = offline-python;
+      pkgsFarm.source = homePkgsFarm;
     };
   };
 }
