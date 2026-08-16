@@ -23,8 +23,6 @@
     RUSTUP_HOME = "${config.xdg.dataHome}/rustup";
   };
 
-  android.enable = false;
-
   systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
 
   manual.manpages.enable = false;

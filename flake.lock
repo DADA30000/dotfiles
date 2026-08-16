@@ -1006,23 +1006,6 @@
         "type": "github"
       }
     },
-    "ksu-next": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1786646661,
-        "narHash": "sha256-fJdh5MtdqEFd2zspi2zbA5CplMSAc3s2FzYSV4SdWSg=",
-        "ref": "dev-susfs",
-        "rev": "cf4d9d906e1cba5243ae73ed141b68b87217fbdb",
-        "revCount": 3252,
-        "type": "git",
-        "url": "https://github.com/pershoot/KernelSU-Next"
-      },
-      "original": {
-        "ref": "dev-susfs",
-        "type": "git",
-        "url": "https://github.com/pershoot/KernelSU-Next"
-      }
-    },
     "lanzaboote": {
       "inputs": {
         "crane": "crane",
@@ -1606,7 +1589,6 @@
         "home-manager": "home-manager",
         "hyprland": "hyprland",
         "impermanence": "impermanence",
-        "ksu-next": "ksu-next",
         "lanzaboote": "lanzaboote",
         "libcef-transparency-linux": "libcef-transparency-linux",
         "llama-cpp": "llama-cpp",
@@ -1634,7 +1616,6 @@
         "spicetify-nix": "spicetify-nix",
         "split-monitor-workspaces": "split-monitor-workspaces",
         "steam-app-id-list": "steam-app-id-list",
-        "susfs4ksu": "susfs4ksu",
         "uv2nix": "uv2nix",
         "way-secure": "way-secure",
         "waybar": "waybar",
@@ -1755,23 +1736,6 @@
         "owner": "jsnli",
         "repo": "steamappidlist",
         "type": "github"
-      }
-    },
-    "susfs4ksu": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1785461683,
-        "narHash": "sha256-60bMvDw6kZdffhlnUUsvV72Lnd0jfGjvP2TVBWQimHA=",
-        "owner": "simonpunk",
-        "repo": "susfs4ksu",
-        "rev": "f37930f374ef88de990d6abea0c67d0ea28c1edc",
-        "type": "gitlab"
-      },
-      "original": {
-        "owner": "simonpunk",
-        "ref": "gki-android16-6.12",
-        "repo": "susfs4ksu",
-        "type": "gitlab"
       }
     },
     "systems": {
