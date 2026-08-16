@@ -312,7 +312,8 @@ in
           PATH="$PATH:${pkgs.coreutils-full}/bin"
           if [[ ! -d /repo ]]; then
             rm -rf /repo
-            cp -r --no-preserve=mode "${inputs.self}" /repo
+            cp -r "${inputs.self}" /repo
+            chmod -R u+w /repo
             mkdir -p /etc/nixos
             cp -r /repo/{machines,stuff,modules,flake.nix,flake.lock} /etc/nixos
           fi
