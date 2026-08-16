@@ -62,38 +62,6 @@ in
                   allowUnfree = true;
                   android_sdk.accept_license = true;
                 };
-                overlays = [
-                  (
-                    final: prev:
-                    let
-                      customFetchurl =
-                        args:
-                        let
-                          nixFetch = import <nix/fetchurl.nix>;
-                          isSet = builtins.typeOf args == "set";
-                          supported = builtins.functionArgs nixFetch;
-                          hasUnsupported = isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames args);
-                          hasUrls = isSet && (args ? urls);
-                          isMirror = u: builtins.isString u && builtins.substring 0 9 u == "mirror://";
-                          hasMirror = isSet && (args ? url) && isMirror args.url;
-                          needsFallback = !isSet || hasUnsupported || hasUrls || hasMirror;
-                        in
-                        if needsFallback then prev.fetchurl args 
-                        else (nixFetch args) // {
-                          overrideAttrs = f: (prev.fetchurl args).overrideAttrs f;
-                          override = f: (prev.fetchurl args).override f;
-                          overrideDerivation = f: (prev.fetchurl args).overrideDerivation f;
-                        };
-                    in
-                    {
-                      fetchurl =
-                        if builtins.typeOf prev.fetchurl == "set" && prev.fetchurl ? __functor then
-                          prev.fetchurl // { __functor = self: args: customFetchurl args; }
-                        else
-                          customFetchurl;
-                    }
-                  )
-                ];
               };
             in
               nixpkgs // { inherit (flake) inputs; }

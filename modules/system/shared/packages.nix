@@ -981,6 +981,8 @@ let
   # ---------------------------------------------------------------------------
   # Individual Package Overrides & Apps
   # ---------------------------------------------------------------------------
+  json2xPkg = pkgs.callPackage "${inputs.nixpkgs}/pkgs/pkgs-lib/formats/json2x/package.nix" { };
+
   app2unitPkg = pkgs.app2unit.overrideAttrs (oldAttrs: {
     postPatch = (oldAttrs.postPatch or "") + ''
       echo "app2unit(1)" > app2unit.1.scd
@@ -1054,12 +1056,7 @@ let
 
   nixSearchPkg = inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-  heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
-    src = (import <nix/fetchurl.nix>) {
-      url = prev.src.url;
-      hash = prev.src.hash;
-    };
-  });
+  heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   translateZapretNixosPkg = pkgs.writeShellScriptBin "translate-zapret-nixos" (
     builtins.readFile ../../../stuff/scripts/translate-zapret-nixos.sh
@@ -1187,6 +1184,9 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.libcap-text-verifier
+    pkgs.curl
+    pkgs.stdenvNoCC
     pkgs.libxkbcommon
     pkgs.stdenv
     pkgs.gawk
@@ -1230,6 +1230,7 @@ let
     pkgs.vscode-extensions.ms-vscode.cpptools
     pkgs.hexpatch
     pkgs.tinyxxd
+    pkgs.bash
     pkgs.bash-language-server
     pkgs.vscode-langservers-extracted
     pkgs.inotify-tools
@@ -1238,6 +1239,7 @@ let
     pkgs.taplo
     pkgs.yaml-language-server
     pkgs.shellcheck
+    pkgs.shellcheck.out
     pkgs.shfmt
     pkgs.asm-lsp
     pkgs.tmux
@@ -1384,6 +1386,9 @@ let
     pkgs.makeWrapper
     pkgs.makeBinaryWrapper
     pkgs.dieHook
+    pkgs.shellcheck.doc
+    pkgs.python3Packages.xmltodict
+    json2xPkg
     diskoPkg
     ventoyFullGtkPkg
     translateZapretNixosPkg

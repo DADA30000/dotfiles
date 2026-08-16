@@ -36,63 +36,6 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
-  nixpkgs.overlays = [
-    (
-      final: prev:
-      let
-        customFetchurl =
-          rawArgs:
-          let
-            nixFetch = import <nix/fetchurl.nix>;
-
-            # 1. Handle raw string URLs
-            args = if builtins.isString rawArgs then { url = rawArgs; } else rawArgs;
-            isSet = builtins.isAttrs args;
-
-            # 2. Convert modern SRI hash ("sha256-...") to 'sha256'
-            hasSha256Sri =
-              isSet
-              && (args ? hash)
-              && (builtins.isString args.hash)
-              && (builtins.substring 0 7 args.hash == "sha256-");
-            argsWithSha =
-              if isSet && !(args ? sha256) && hasSha256Sri then
-                (removeAttrs args [ "hash" ]) // { sha256 = args.hash; }
-              else
-                args;
-
-            supported = builtins.functionArgs nixFetch;
-
-            # 3. STRICT FALLBACK: If ANY attribute is not natively supported by <nix/fetchurl.nix>
-            # (like pname, meta, passthru), fall back immediately. This prevents breaking complex Nixpkgs/Zsh modules.
-            hasUnsupported =
-              isSet && builtins.any (k: !builtins.hasAttr k supported) (builtins.attrNames argsWithSha);
-            hasUrls = isSet && (args ? urls);
-            isMirror = u: builtins.isString u && builtins.substring 0 9 u == "mirror://";
-            hasMirror = isSet && (args ? url) && isMirror args.url;
-
-            needsFallback = !isSet || hasUnsupported || hasUrls || hasMirror;
-          in
-          if needsFallback then
-            prev.fetchurl rawArgs
-          else
-            (nixFetch argsWithSha)
-            // {
-              overrideAttrs = f: (prev.fetchurl rawArgs).overrideAttrs f;
-              override = f: (prev.fetchurl rawArgs).override f;
-              overrideDerivation = f: (prev.fetchurl rawArgs).overrideDerivation f;
-            };
-      in
-      {
-        fetchurl =
-          if builtins.typeOf prev.fetchurl == "set" && prev.fetchurl ? __functor then
-            prev.fetchurl // { __functor = self: args: customFetchurl args; }
-          else
-            customFetchurl;
-      }
-    )
-  ];
-
   sandboxing.enable = true;
 
   time.timeZone = "Europe/Moscow";
@@ -446,7 +389,11 @@ in
 
   environment = {
 
-    etc."determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+    etc = {
+      texinfo.source = pkgs.texinfo;
+      bashInteractive.source = pkgs.bashInteractive;
+      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+    };
 
     variables = {
       #AQ_DRM_DEVICES = "/dev/dri/card2";

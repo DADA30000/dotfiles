@@ -1,14 +1,36 @@
 #!/usr/bin/env bash
 
-# ВАЖНО: убедитесь что путь верный
 DISKS_FILE="./modules/system/disks/default.nix"
 
 main() {
-  local disk_system="" usertemp="nixos" passtemp="" host="nixos" offline_mode=false
+  local disk_system="" usertemp="nixos" passtemp="" host="nixos"
+  local offline_mode=false disko_mode="online" system_mode="online"
 
   if [[ "$1" == "offline" ]]; then
     offline_mode=true
-    echo -e "\e[32mЗапуск в ОФФЛАЙН режиме\e[0m"
+    clear
+
+    echo -e "\e[34m1. Выберите режим работы Disko (разметка диска):\e[0m"
+    local disko_choice
+    disko_choice=$(gum choose "1. Использовать готовый скрипт Disko из ISO (мгновенно, без сборки)" "2. Собрать Disko из Flake (динамическая оффлайн-эвалюация)")
+    if [[ "$disko_choice" == 1* ]]; then
+      disko_mode="prebuilt"
+    else
+      disko_mode="eval"
+    fi
+
+    clear
+    echo -e "\e[34m2. Выберите режим установки системы (NixOS):\e[0m"
+    local system_choice
+    system_choice=$(gum choose "1. Использовать готовый образ системы из ISO (быстро, без сборки)" "2. Собрать систему из Flake (с учётом локальных правок)")
+    if [[ "$system_choice" == 1* ]]; then
+      system_mode="prebuilt"
+    else
+      system_mode="eval"
+    fi
+
+    clear
+    echo -e "\e[32mВыбранные режимы: Disko -> $disko_mode | Система -> $system_mode\e[0m"
     sleep 1
   fi
 
@@ -27,14 +49,10 @@ main() {
     while true; do
       luks_pass=$(gum input --password --header="Введите пароль для шифрования диска")
       luks_pass2=$(gum input --password --header="Повторите пароль")
-      if [[ "$luks_pass" == "$luks_pass2" ]]; then
-        if [[ -n "$luks_pass" ]]; then
-          break
-        else
-          echo -e "\e[31mПароль не может быть пустым!\e[0m"
-        fi
+      if [[ "$luks_pass" == "$luks_pass2" ]] && [[ -n "$luks_pass" ]]; then
+        break
       else
-        echo -e "\e[31mПароли не совпадают, попробуйте снова.\e[0m"
+        echo -e "\e[31mПароли не совпадают или пустые, попробуйте снова.\e[0m"
       fi
     done
     echo -n "$luks_pass" >/tmp/secret.key
@@ -44,22 +62,23 @@ main() {
   fi
   clear
 
-  # ЭТОТ БЛОК ТЕПЕРЬ РАБОТАЕТ И В ОФФЛАЙНЕ!
-  if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
-    echo "Введите пароль пользователя"
-    passtemp=$(mkpasswd -m sha-512)
-    echo "Введите имя пользователя"
-    read -r usertemp
-    sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./flake.nix
-    sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./flake.nix
-  fi
+  if [[ "$system_mode" != "prebuilt" || "$disko_mode" != "prebuilt" ]]; then
+    if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
+      echo "Введите пароль пользователя"
+      passtemp=$(mkpasswd -m sha-512)
+      echo "Введите имя пользователя"
+      read -r usertemp
+      sed -i 's|user = ".*";|user = "'"${usertemp}"'";|' ./flake.nix
+      sed -i 's|user-hash = ".*";|user-hash = "'"${passtemp}"'";|' ./flake.nix
+    fi
 
-  if gum confirm --default=false "Отредактировать файл конфигурации? (Тут можно включить/выключить шифрование)"; then
-    nvim ./machines/nixos/configuration.nix
-  fi
+    if gum confirm --default=false "Отредактировать файл конфигурации? (Тут можно включить/выключить шифрование)"; then
+      nvim ./machines/nixos/configuration.nix
+    fi
 
-  if gum confirm --default=false "Изменить имя хоста в flake.nix (по умолчанию nixos)?"; then
-    host=$(gum input --header="Имя хоста" --placeholder="nixos" --no-show-help)
+    if gum confirm --default=false "Изменить имя хоста в flake.nix (по умолчанию nixos)?"; then
+      host=$(gum input --header="Имя хоста" --placeholder="nixos" --no-show-help)
+    fi
   fi
 
   echo -e "Вы выбрали установку СИСТЕМЫ на \e[33m$disk_system\e[0m"
@@ -67,35 +86,48 @@ main() {
 
     echo -e "\n\e[34mРазметка и форматирование диска через Disko...\e[0m\n"
 
-    cp "$DISKS_FILE" "${DISKS_FILE}.bak"
-    sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" "$DISKS_FILE"
+    if [[ "$disko_mode" == "prebuilt" ]]; then
+      cp /etc/disko-format-script/bin/disko-destroy-format-mount /tmp/disko-script.sh
+      chmod +x /tmp/disko-script.sh
+      sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" /tmp/disko-script.sh
 
-    if [ "$offline_mode" = true ]; then
-      # Оффлайн: Вычисляем скрипт Disko локально через nix build
+      if ! sudo /tmp/disko-script.sh --yes-wipe-all-disks; then
+        echo -e "\e[31mОшибка выполнения готового скрипта Disko.\e[0m"
+        rm -f /tmp/secret.key /tmp/disko-script.sh
+        exit 1
+      fi
+      rm -f /tmp/disko-script.sh
+
+    elif [[ "$disko_mode" == "eval" ]]; then
+      cp "$DISKS_FILE" "${DISKS_FILE}.bak"
+      sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" "$DISKS_FILE"
+
       if ! nix build ".#nixosConfigurations.${host}.config.system.build.destroyFormatMount" --offline -o /tmp/disko-script; then
-        echo -e "\e[31mОшибка сборки Disko. Восстанавливаю конфигурацию...\e[0m"
+        echo -e "\e[31mОшибка сборки Disko.\e[0m"
         mv "${DISKS_FILE}.bak" "$DISKS_FILE"
         rm -f /tmp/secret.key
         exit 1
       fi
-      # Запускаем скомпилированный скрипт
       if ! sudo /tmp/disko-script/bin/disko-destroy-format-mount --yes-wipe-all-disks; then
-        echo -e "\e[31mОшибка выполнения Disko. Восстанавливаю конфигурацию...\e[0m"
+        echo -e "\e[31mОшибка выполнения Disko.\e[0m"
         mv "${DISKS_FILE}.bak" "$DISKS_FILE"
         rm -f /tmp/secret.key
         exit 1
       fi
-    else
-      # Онлайн: Используем обертку Disko
-      if ! sudo disko --mode destroy,format,mount --flake ".#${host}"; then
-        echo -e "\e[31mОшибка при выполнении Disko. Восстанавливаю конфигурацию...\e[0m"
-        mv "${DISKS_FILE}.bak" "$DISKS_FILE"
-        rm -f /tmp/secret.key
-        exit 1
-      fi
-    fi
+      mv "${DISKS_FILE}.bak" "$DISKS_FILE"
 
-    mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+    else
+      cp "$DISKS_FILE" "${DISKS_FILE}.bak"
+      sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" "$DISKS_FILE"
+
+      if ! sudo disko --mode destroy,format,mount --flake ".#${host}"; then
+        echo -e "\e[31mОшибка при выполнении Disko.\e[0m"
+        mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+        rm -f /tmp/secret.key
+        exit 1
+      fi
+      mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+    fi
 
     clear
     echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
@@ -112,15 +144,17 @@ main() {
     mkdir -p /mnt/persist/etc
     cp -r /mnt/etc/nixos /mnt/persist/etc
 
-    if [ "$offline_mode" = true ]; then
+    if [[ "$system_mode" == "prebuilt" ]]; then
+      INSTALL_CMD="nixos-install -v --system /etc/nixos-toplevel-reference --no-channel-copy"
+
+    elif [[ "$system_mode" == "eval" ]]; then
       echo -e "\e[34mСборка системы (Оффлайн-эвалюация)...\e[0m"
-      # Собираем систему с учётом всех ваших свежих правок во flake.nix без интернета!
       if ! nix build "/mnt/etc/nixos#nixosConfigurations.${host}.config.system.build.toplevel" --offline -o /mnt/toplevel; then
         echo -e "\e[31mОшибка оффлайн-сборки!\e[0m"
         exit 1
       fi
-      # Устанавливаем собранную деривацию
       INSTALL_CMD="nixos-install -v --system /mnt/toplevel --no-channel-copy"
+
     else
       INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host}"
     fi
@@ -152,8 +186,9 @@ finish_install() {
   reboot
 }
 
+trap 'echo -e "\n\e[31mПрервано пользователем\e[0m"; rm -f /tmp/secret.key /tmp/disko-script.sh; [[ -f "${DISKS_FILE}.bak" ]] && mv "${DISKS_FILE}.bak" "$DISKS_FILE"; exit 1' INT
+
 if [[ -f ./check ]]; then
-  trap 'echo -e "\n\e[31mПрервано пользователем\e[0m"; rm -f /tmp/secret.key; [[ -f "${DISKS_FILE}.bak" ]] && mv "${DISKS_FILE}.bak" "$DISKS_FILE"; exit 1' INT
   main "$@"
 else
   echo "change your working directory to dotfiles"

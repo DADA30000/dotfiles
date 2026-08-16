@@ -372,7 +372,7 @@ in
       hardware.enableAllHardware = true;
       hardware.enableRedistributableFirmware = true;
       graphics.nvidia.enable = true;
-      boot.loader.grub.enable = false;
+      boot.loader.systemd-boot.enable = true;
     }
   ];
 }
