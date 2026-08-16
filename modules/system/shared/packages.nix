@@ -1048,6 +1048,10 @@ let
     };
   };
 
+  diskoPkg = inputs.disko.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+    path = inputs.nixpkgs;
+  };
+
   nixSearchPkg = inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
@@ -1183,6 +1187,7 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.gawk
     pkgs.sbsigntool
     pkgs.wl-clip-persist
     pkgs.slurp
@@ -1374,6 +1379,7 @@ let
     pkgs.ffmpegthumbnailer
     pkgs.hyprpicker
     pkgs.wttrbar
+    diskoPkg
     ventoyFullGtkPkg
     translateZapretNixosPkg
     nhPkg

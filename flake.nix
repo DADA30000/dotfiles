@@ -106,6 +106,10 @@
       url = "github:LOSEARDES77/Bibata-Cursor-hyprcursor";
       flake = false;
     };
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     waybar = {
       url = "github:Alexays/Waybar";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -307,6 +311,7 @@
         ];
 
       modules-list = [
+        inputs.disko.nixosModules.default
         inputs.nix-mineral.nixosModules.nix-mineral
         inputs.impermanence.nixosModules.impermanence
         inputs.lanzaboote.nixosModules.lanzaboote

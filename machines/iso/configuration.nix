@@ -14,7 +14,6 @@ let
   disableServices =
     list:
     let
-      # Parse the system/user service items
       parsed = map (
         item:
         let
@@ -30,7 +29,6 @@ let
       systemServicesList = lib.filter (x: x.type == "system") parsed;
       userServicesList = lib.filter (x: x.type == "user") parsed;
 
-      # Create systemd overrides for NixOS system services (NixOS flat syntax)
       systemdServices = lib.listToAttrs (
         map (x: {
           name = x.name;
@@ -40,7 +38,6 @@ let
         }) systemServicesList
       );
 
-      # Create systemd overrides for NixOS-level user services (NixOS flat syntax)
       systemdUserServices = lib.listToAttrs (
         map (x: {
           name = x.name;
@@ -85,7 +82,6 @@ let
         user.services = systemdUserServices // prompterService;
       };
 
-      # Disable user services globally for Home Manager users (Home Manager INI syntax)
       home-manager.sharedModules = [
         {
           systemd.user.services = lib.listToAttrs (
@@ -219,9 +215,10 @@ let
     fi
     setfont cyr-sun16
     clear
+
+    offline_flag=""
     if gum confirm "Провести оффлайн установку?"; then
-      cd /repo
-      exec ./start.sh offline
+      offline_flag="offline"
     else
       echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
       if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
@@ -239,11 +236,16 @@ let
     sleep 1
     url="https://github.com/DADA30000/dotfiles"
     clear
+
     if gum confirm --default=false "Использовать встроенный в ISO репозиторий?"; then
       cd /repo
-      exec ./start.sh
+      exec ./start.sh $offline_flag
     else
-      if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации? (скрипт запускает start.sh из репозитория, репозиторий должен быть публичным)"; then
+      if [ "$offline_flag" = "offline" ]; then
+         echo -e "\e[31mОффлайн установка требует использования встроенного репозитория!\e[0m"
+         sleep 2; exec nix-install
+      fi
+      if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации?"; then
         url=$(gum input --placeholder "Пример: https://github.com/DADA30000/dotfiles")
       fi
       if GIT_ASKPASS=true git ls-remote "$url" > /dev/null 2>&1; then
@@ -269,7 +271,6 @@ let
     fi
   '';
 
-  install-offline = "nixos-install -v --system '${orig.config.system.build.toplevel}' --keep-going --impure";
 in
 {
   config = lib.mkMerge [
@@ -319,13 +320,8 @@ in
       };
 
       boot.kernel.sysctl."vm.swappiness" = lib.mkForce 200;
-      services.ollama.enable = lib.mkForce false;
       security.sudo.wheelNeedsPassword = false;
-      graphics.amdgpu.pro = lib.mkForce false;
       disks.enable = lib.mkForce false;
-      my-services.cloudflare-ddns.enable = lib.mkForce false;
-      my-services.nginx.enable = lib.mkForce false;
-      cape.enable = lib.mkForce false;
       boot.loader.timeout = lib.mkForce 0;
       fonts.fontconfig.enable = true;
 
@@ -337,10 +333,11 @@ in
 
       networking.wireless.enable = false;
 
-      environment.systemPackages = with pkgs; [
-        (writeShellScriptBin "nix-install" nix-install)
-        (writeShellScriptBin "install-offline" install-offline)
+      environment.systemPackages = [
+        (pkgs.writeShellScriptBin "nix-install" nix-install)
       ];
+
+      environment.etc."nixos-toplevel-reference".source = orig.config.system.build.toplevel;
 
       lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
         fsType = "erofs";
@@ -351,7 +348,6 @@ in
       boot.initrd.availableKernelModules = [ "erofs" ];
     })
 
-    # Call disableServices as a top-level module when wrapped is active
     (lib.mkIf wrapped (disableServices [
       "user/replays"
       "user/opentabletdriver"
@@ -374,7 +370,7 @@ in
       nixpkgs.hostPlatform = "x86_64-linux";
       hardware.enableAllHardware = true;
       hardware.enableRedistributableFirmware = true;
-      graphics.nvidia.enable = lib.mkForce true;
+      graphics.nvidia.enable = true;
       boot.loader.grub.enable = false;
     }
   ];

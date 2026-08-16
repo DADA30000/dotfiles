@@ -658,19 +658,19 @@ in
                 "rofi -modi clipboard:cliphist-rofi-img -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
               ]
               [
-                "${mod} + ALT + mouse_down"
+                "${mod} + ALT + mouse_up"
                 "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}') } })\""
               ]
               [
-                "${mod} + ALT + mouse_up"
+                "${mod} + ALT + mouse_down"
                 "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 2) {print $2 - 1} else {print 1}}') } })\""
               ]
               [
-                "${mod} + CTRL + mouse_down"
+                "${mod} + CTRL + mouse_up"
                 "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}') } })\""
               ]
               [
-                "${mod} + CTRL + mouse_up"
+                "${mod} + CTRL + mouse_down"
                 "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 101) {print $2 - 100} else {print 1}}') } })\""
               ]
               [
@@ -852,11 +852,11 @@ in
                 "smw.move_to_workspace 'special:magic'"
               ]
               [
-                "${mod} + mouse_down"
+                "${mod} + mouse_up"
                 "smw.workspace 'e+1'"
               ]
               [
-                "${mod} + mouse_up"
+                "${mod} + mouse_down"
                 "smw.workspace 'e-1'"
               ]
               [
