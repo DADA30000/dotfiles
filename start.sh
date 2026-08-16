@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# ВАЖНО: убедитесь что путь верный
 DISKS_FILE="./modules/system/disks/default.nix"
 
 main() {
@@ -43,6 +44,7 @@ main() {
   fi
   clear
 
+  # ЭТОТ БЛОК ТЕПЕРЬ РАБОТАЕТ И В ОФФЛАЙНЕ!
   if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
     echo "Введите пароль пользователя"
     passtemp=$(mkpasswd -m sha-512)
@@ -68,11 +70,29 @@ main() {
     cp "$DISKS_FILE" "${DISKS_FILE}.bak"
     sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" "$DISKS_FILE"
 
-    if ! sudo disko --mode disko --flake ".#${host}"; then
-      echo -e "\e[31mОшибка при выполнении Disko. Восстанавливаю конфигурацию...\e[0m"
-      mv "${DISKS_FILE}.bak" "$DISKS_FILE"
-      rm -f /tmp/secret.key
-      exit 1
+    if [ "$offline_mode" = true ]; then
+      # Оффлайн: Вычисляем скрипт Disko локально через nix build
+      if ! nix build ".#nixosConfigurations.${host}.config.system.build.destroyFormatMount" --offline -o /tmp/disko-script; then
+        echo -e "\e[31mОшибка сборки Disko. Восстанавливаю конфигурацию...\e[0m"
+        mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+        rm -f /tmp/secret.key
+        exit 1
+      fi
+      # Запускаем скомпилированный скрипт
+      if ! sudo /tmp/disko-script/bin/disko-destroy-format-mount --yes-wipe-all-disks; then
+        echo -e "\e[31mОшибка выполнения Disko. Восстанавливаю конфигурацию...\e[0m"
+        mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+        rm -f /tmp/secret.key
+        exit 1
+      fi
+    else
+      # Онлайн: Используем обертку Disko
+      if ! sudo disko --mode destroy,format,mount --flake ".#${host}"; then
+        echo -e "\e[31mОшибка при выполнении Disko. Восстанавливаю конфигурацию...\e[0m"
+        mv "${DISKS_FILE}.bak" "$DISKS_FILE"
+        rm -f /tmp/secret.key
+        exit 1
+      fi
     fi
 
     mv "${DISKS_FILE}.bak" "$DISKS_FILE"
@@ -92,10 +112,17 @@ main() {
     mkdir -p /mnt/persist/etc
     cp -r /mnt/etc/nixos /mnt/persist/etc
 
-    INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host} --impure"
-
     if [ "$offline_mode" = true ]; then
-      INSTALL_CMD="$INSTALL_CMD --offline"
+      echo -e "\e[34mСборка системы (Оффлайн-эвалюация)...\e[0m"
+      # Собираем систему с учётом всех ваших свежих правок во flake.nix без интернета!
+      if ! nix build "/mnt/etc/nixos#nixosConfigurations.${host}.config.system.build.toplevel" --offline -o /mnt/toplevel; then
+        echo -e "\e[31mОшибка оффлайн-сборки!\e[0m"
+        exit 1
+      fi
+      # Устанавливаем собранную деривацию
+      INSTALL_CMD="nixos-install -v --system /mnt/toplevel --no-channel-copy"
+    else
+      INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host}"
     fi
 
     if eval "$INSTALL_CMD"; then
