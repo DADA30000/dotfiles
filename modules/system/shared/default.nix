@@ -446,15 +446,7 @@ in
 
   environment = {
 
-    etc = {
-      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
-    };
-
-    pathsToLink = [
-      "/share/zsh"
-      "/share/xdg-desktop-portal"
-      "/share/applications"
-    ];
+    etc."determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
 
     variables = {
       #AQ_DRM_DEVICES = "/dev/dri/card2";

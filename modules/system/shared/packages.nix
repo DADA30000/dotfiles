@@ -1409,7 +1409,12 @@ let
   ]
   ++ processedResults;
 
-  extra-paths = [ "/share/waywallen" ];
+  extra-paths = [
+    "/share/waywallen"
+    "/share/zsh"
+    "/share/xdg-desktop-portal"
+    "/share/applications"
+  ];
 in
 {
   nixpkgs.config.permittedInsecurePackages = [
