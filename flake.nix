@@ -62,14 +62,6 @@
       url = "github:JustAdumbPrsn/Zen-Nebula";
       flake = false;
     };
-    susfs4ksu = {
-      url = "gitlab:simonpunk/susfs4ksu/gki-android16-6.12";
-      flake = false;
-    };
-    ksu-next = {
-      url = "git+https://github.com/pershoot/KernelSU-Next?ref=dev-susfs";
-      flake = false;
-    };
     gigabyte-laptop-wmi = {
       url = "github:DADA30000/gigabyte-laptop-wmi/fan-pwm";
       flake = false;
