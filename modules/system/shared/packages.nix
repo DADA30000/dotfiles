@@ -1379,6 +1379,9 @@ let
     pkgs.ffmpegthumbnailer
     pkgs.hyprpicker
     pkgs.wttrbar
+    pkgs.makeWrapper
+    pkgs.makeBinaryWrapper
+    pkgs.dieHook
     diskoPkg
     ventoyFullGtkPkg
     translateZapretNixosPkg

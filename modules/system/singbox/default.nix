@@ -173,7 +173,7 @@ let
         strict_route = true;
         auto_route = true;
         interface_name = "tun0";
-        mtu = 1360;
+        mtu = 1480;
         type = "tun";
         address = [
           "172.19.0.1/30"

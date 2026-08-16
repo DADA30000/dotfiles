@@ -69,7 +69,7 @@ let
           partOf = [ config.home-manager.users.${user}.wayland.systemd.target ];
           unitConfig.ConditionEnvironment = "WAYLAND_DISPLAY";
           serviceConfig = {
-            ExecStart = "${servicePrompterApp}/bin/service-prompter";
+            ExecStart = "${pkgs.bash}/bin/bash -c 'PATH=\"/run/current-system/sw/bin:$PATH\" ${servicePrompterApp}/bin/service-prompter'";
             Restart = "on-failure";
             RestartSec = "10";
           };

@@ -212,12 +212,6 @@ in
     };
 
     boot = lib.mkMerge [
-      {
-        kernelParams = [
-          "zfs.spa_slop_shift=8"
-          "zfs.zfs_arc_max=4294967296"
-        ];
-      }
       (lib.mkIf cfg.encryption {
         initrd.luks.devices.nixos = {
           device = "/dev/disk/by-label/nixos-encrypted";
@@ -226,9 +220,7 @@ in
         };
       })
       (lib.mkIf cfg.impermanence {
-        supportedFilesystems.zfs = true;
         initrd = {
-          supportedFilesystems.zfs = true;
           systemd.services.zfs-rollback = {
             wantedBy = [ "initrd.target" ];
             after = [ "zfs-import-nixos.service" ];

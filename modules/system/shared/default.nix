@@ -405,7 +405,10 @@ in
       "zfs.zfs_arc_max=4294967296"
     ];
 
-    initrd.systemd.enable = true;
+    initrd = {
+      systemd.enable = true;
+      supportedFilesystems.zfs = true;
+    };
 
     kernel.sysctl = {
       "vm.swappiness" = 100;
@@ -436,6 +439,7 @@ in
       "ntfs"
       "vfat"
       "xfs"
+      "zfs"
     ];
 
   };
