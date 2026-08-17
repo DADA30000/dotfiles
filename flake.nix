@@ -98,6 +98,10 @@
       url = "github:LOSEARDES77/Bibata-Cursor-hyprcursor";
       flake = false;
     };
+    rust-helpers = {
+      url = "github:DADA30000/rust-helpers";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";

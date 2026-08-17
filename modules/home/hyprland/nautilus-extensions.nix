@@ -20,6 +20,7 @@ pkgs.stdenv.mkDerivation {
 
     cp $src/new_file_extension.py $out/share/nautilus-python/extensions/
     cp $src/open_as_root_extension.py $out/share/nautilus-python/extensions/
+    ln -s ${pkgs.nautilus-open-any-terminal}/share/nautilus-python/extensions/nautilus_open_any_terminal.py $out/share/nautilus-python/extensions/nautilus_open_any_terminal.py
 
     runHook postInstall
   '';

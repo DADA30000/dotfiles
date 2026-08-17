@@ -342,13 +342,13 @@ let
     phases = [ "installPhase" ];
     installPhase = ''
       mkdir -p build/proton
-      cp -a "${steamrt3}" build/steamrt3
-      cp -a "${steamrt4}" build/steamrt4
-      cp -a "${proton-ge-10}" build/proton/proton-ge-10
-      cp -a "${proton-umu-10}" build/proton/proton-umu-10
-      cp -a "${proton-umu-9}" build/proton/proton-umu-9
-      cp -a "${proton-umu-8}" build/proton/proton-umu-8
-      cp -a "${pkgs.proton-ge-bin.steamcompattool}" build/proton/proton-ge-latest
+      cp -aL "${steamrt3}" build/steamrt3
+      cp -aL "${steamrt4}" build/steamrt4
+      cp -aL "${proton-ge-10}" build/proton/proton-ge-10
+      cp -aL "${proton-umu-10}" build/proton/proton-umu-10
+      cp -aL "${proton-umu-9}" build/proton/proton-umu-9
+      cp -aL "${proton-umu-8}" build/proton/proton-umu-8
+      cp -aL "${pkgs.proton-ge-bin.steamcompattool}" build/proton/proton-ge-latest
 
       # Adds write permissions to all files & dirs to satisfy pressure-vessel
       chmod -R u+w build
@@ -908,9 +908,6 @@ let
   listDirs = listFiles;
   targetDirs = [ ../../../stuff/scripts ];
   excludeList = [
-    "notify_trunc.py"
-    "power-menu.py"
-    "singbox-control.py"
     "translate-zapret-nixos.sh"
   ];
 
@@ -981,6 +978,8 @@ let
   # ---------------------------------------------------------------------------
   # Individual Package Overrides & Apps
   # ---------------------------------------------------------------------------
+  rustHelpersPkg = inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
   json2xPkg = pkgs.callPackage "${inputs.nixpkgs}/pkgs/pkgs-lib/formats/json2x/package.nix" { };
 
   app2unitPkg = pkgs.app2unit.overrideAttrs (oldAttrs: {
@@ -1061,27 +1060,6 @@ let
   translateZapretNixosPkg = pkgs.writeShellScriptBin "translate-zapret-nixos" (
     builtins.readFile ../../../stuff/scripts/translate-zapret-nixos.sh
   );
-
-  powerMenuApp = mkPyApp {
-    name = "power-menu";
-    src = evalAndSubstitute {
-      string = builtins.readFile ../../../stuff/scripts/power-menu.py;
-    };
-  };
-
-  notifyTruncApp = mkPyApp {
-    name = "notify_trunc";
-    src = evalAndSubstitute {
-      string = builtins.readFile ../../../stuff/scripts/notify_trunc.py;
-    };
-  };
-
-  singboxControlApp = mkPyApp {
-    name = "singbox-control";
-    src = evalAndSubstitute {
-      string = builtins.readFile ../../../stuff/scripts/singbox-control.py;
-    };
-  };
 
   qt6ctPkg = pkgs.kdePackages.qt6ct.overrideAttrs (prev: {
     patches = prev.patches or [ ] ++ [ ../../../stuff/patches/qt6ct-shenanigans.patch ];
@@ -1388,6 +1366,7 @@ let
     pkgs.dieHook
     pkgs.shellcheck.doc
     pkgs.python3Packages.xmltodict
+    rustHelpersPkg
     json2xPkg
     diskoPkg
     ventoyFullGtkPkg
@@ -1399,9 +1378,6 @@ let
     nixAlienPkg
     nixSearchPkg
     heliumPkg
-    powerMenuApp
-    notifyTruncApp
-    singboxControlApp
     qt6ctPkg
     aria2Pkg
     rustdeskSandbox
@@ -1503,6 +1479,12 @@ in
   };
 
   security.wrappers = {
+    ryzenadj = {
+      owner = "root";
+      group = "root";
+      source = "${pkgs.ryzenadj}/bin/ryzenadj";
+      setuid = true;
+    };
     prepare-umu = {
       owner = "root";
       group = "root";

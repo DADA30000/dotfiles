@@ -1611,6 +1611,7 @@
         "pmparser": "pmparser",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
+        "rust-helpers": "rust-helpers",
         "sine": "sine",
         "sine-bootloader": "sine-bootloader",
         "spicetify-nix": "spicetify-nix",
@@ -1625,6 +1626,26 @@
         "wivrn": "wivrn",
         "zapret-flowseal": "zapret-flowseal",
         "zen-browser": "zen-browser"
+      }
+    },
+    "rust-helpers": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786956187,
+        "narHash": "sha256-7c5aEHqZB1+WvQ7JsRT18IwHdfzgrYoFm+MX3C+6WCg=",
+        "owner": "DADA30000",
+        "repo": "rust-helpers",
+        "rev": "f961e4a7bce80930615c3c0bfde057b6d8a56015",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DADA30000",
+        "repo": "rust-helpers",
+        "type": "github"
       }
     },
     "rust-overlay": {

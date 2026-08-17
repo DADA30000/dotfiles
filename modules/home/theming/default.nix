@@ -227,7 +227,7 @@ in
       };
       "org/gtk/gtk4/settings/file-chooser".showhidden = true;
       "org/gnome/desktop/interface".color-scheme = "prefer-dark";
-      "com/github/stunkymonkey/nautilus-open-any-terminal".terminal = "neovide-term";
+      "com/github/stunkymonkey/nautilus-open-any-terminal".terminal = "app2unit-term";
     };
     qt.enable = true;
     home = {

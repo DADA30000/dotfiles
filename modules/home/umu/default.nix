@@ -3,7 +3,6 @@
   pkgs,
   lib,
   inputs,
-  mkPyApp,
   ...
 }:
 with lib;
@@ -93,31 +92,6 @@ let
       });
 
   cfg = config.umu;
-
-  mkUmuApp =
-    {
-      name,
-      src,
-      pathDeps ? [ ],
-    }:
-    (mkPyApp { inherit name src pathDeps; }).overrideAttrs {
-      preFixup = ''
-        gappsWrapperArgs+=(
-          --prefix PATH : "${lib.makeBinPath pathDeps}"
-          --set STEAM_APP_ID_LIST_PATH "${inputs.steam-app-id-list}/data/games_appid.json"
-          --set UMU_PROTON_VERSIONS_JSON ${
-            lib.escapeShellArg (
-              builtins.toJSON (
-                map (v: {
-                  inherit (v) name;
-                  default = v.default or false;
-                }) protonVersions
-              )
-            )
-          }
-        )
-      '';
-    };
 in
 {
   options.umu = {
@@ -126,6 +100,15 @@ in
 
   config = mkIf cfg.enable {
     xdg = {
+      dataFile = {
+        "umu-ui/games_appid.json".source = "${inputs.steam-app-id-list}/data/games_appid.json";
+        "umu-ui/proton_versions.json".text = builtins.toJSON (
+          map (v: {
+            inherit (v) name;
+            default = v.default or false;
+          }) protonVersions
+        );
+      };
       mimeApps.defaultApplications = {
         "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
         "application/x-msi" = "run-exe.desktop";
@@ -177,49 +160,14 @@ in
       };
     };
     home.packages = [
-      # 1. run-exe
-      (mkUmuApp {
-        name = "run-exe";
-        src = ../../../stuff/modules/home/umu/run_exe.py;
-        pathDeps = [
-          pkgs.pciutils
-          pkgs.exiftool
-          pkgs.icoutils
-          pkgs.imagemagick
-        ];
-      })
-
-      # 2. manage-umu-shortcuts
-      (mkUmuApp {
-        name = "manage-umu-shortcuts";
-        src = ../../../stuff/modules/home/umu/manage_shortcuts.py;
-        pathDeps = [
-          pkgs.pciutils
-          pkgs.imagemagick
-        ];
-      })
-
-      # 3. manage-umu-prefixes
-      (mkUmuApp {
-        name = "manage-umu-prefixes";
-        src = ../../../stuff/modules/home/umu/manage_prefixes.py;
-        pathDeps = [
-          pkgs.libnotify
-          pkgs.winetricks
-          pkgs.protontricks
-          pkgs.xdg-utils
-        ];
-      })
-
-      # 4. fix-umu-path
-      (mkUmuApp {
-        name = "fix-umu-path";
-        src = ../../../stuff/modules/home/umu/fix_path.py;
-        pathDeps = [
-          pkgs.libnotify
-          pkgs.xdg-utils
-        ];
-      })
+      pkgs.pciutils
+      pkgs.exiftool
+      pkgs.icoutils
+      pkgs.imagemagick
+      pkgs.libnotify
+      pkgs.winetricks
+      pkgs.protontricks
+      pkgs.xdg-utils
 
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
         if [[ -z "$WINEPREFIX" ]]; then
