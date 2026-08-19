@@ -345,7 +345,6 @@ in
       "iommu=pt"
       "iommu.passthrough=1"
       "zfs.spa_slop_shift=8"
-      "zfs.zfs_arc_max=4294967296"
     ];
 
     initrd = {
@@ -362,7 +361,7 @@ in
 
     binfmt.registrations.exe = {
       magicOrExtension = "MZ";
-      interpreter = "/etc/profiles/per-user/${user}/bin/run-exe";
+      interpreter = "/run/current-system/sw/bin/run-exe";
       recognitionType = "magic";
     };
 
@@ -815,7 +814,7 @@ in
               ];
           };
 
-          sandboxed = mkSandbox {
+          sandboxed = mkSandbox rec {
             appId = "com.valvesoftware.Steam";
             network = true;
             audio = true;
@@ -826,6 +825,8 @@ in
             sandbox_shm = false;
             additional_outside_commands = ''
               rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
+              ln -sf "$HOME/.nixpak/${appId}/home/.steam" "$HOME/.steam"
+              ln -sf "$HOME/.nixpak/${appId}/home''${XDG_DATA_HOME#"/home/$USER"}/Steam" "$XDG_DATA_HOME/Steam"
             '';
             additional_inside_commands = ''
               rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d

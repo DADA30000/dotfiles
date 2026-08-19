@@ -118,10 +118,6 @@
       url = "github:WiVRn/WiVRn";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    android-nixpkgs = {
-      url = "github:tadfisher/android-nixpkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nixpak = {
       url = "github:DADA30000/nixpak";
       inputs.nixpkgs.follows = "nixpkgs";

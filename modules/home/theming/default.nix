@@ -253,9 +253,8 @@ in
         '';
         bookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           if [[ -z "''${DRY_RUN:-}" ]]; then
-            if [[ ! -f ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this ]]; then
+            if [[ ! -f ${config.xdg.configHome}/gtk-3.0/bookmarks ]]; then
               mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
-              touch ${config.xdg.configHome}/gtk-3.0/check-do_not_delete_this
               BOOKMARKS="
                 file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
                 file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU

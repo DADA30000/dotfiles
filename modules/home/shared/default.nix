@@ -13,6 +13,10 @@
     "bookmarks.html".source = ../../../stuff/bookmarks.html;
     "uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
     "libvirt/qemu.conf".text = "max_core = 0";
+    "gamemode.ini".text = ''
+      [cpu]
+      pin_cores=no
+    '';
   };
 
   home.sessionVariables = {
@@ -21,6 +25,7 @@
     CUDA_CACHE_PATH = "${config.xdg.dataHome}/nv";
     GNUPGHOME = "${config.xdg.dataHome}/gnupg";
     RUSTUP_HOME = "${config.xdg.dataHome}/rustup";
+    PI_CODING_AGENT_DIR = "${config.xdg.configHome}/pi/agent";
   };
 
   systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;

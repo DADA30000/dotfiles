@@ -125,9 +125,9 @@ in
               printf "%s" "$OUT_SHELL" > "$env_file"
               ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
             else
-              local status=$?
+              local status_prev=$?
               rm -f "$env_file"
-              return $status
+              return $status_prev
             fi
           }
 

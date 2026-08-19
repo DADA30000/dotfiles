@@ -201,6 +201,7 @@ let
   # ---------------------------------------------------------------------------
   # Only packages in this list retain custom priorities; all others are normalized to 5
   priorityWhitelist = [
+    pkgs.clang
     pkgs.procps
     pkgs.util-linux
     pkgs.systemd
@@ -1142,6 +1143,9 @@ let
     package = pkgs.discord-canary.override {
       withOpenASAR = true;
       withVencord = true;
+      openasar = pkgs.openasar.overrideAttrs (prev: {
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/openasar.patch ];
+      });
     };
   };
 
@@ -1162,6 +1166,7 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.gcc
     pkgs.libcap-text-verifier
     pkgs.curl
     pkgs.stdenvNoCC
@@ -1327,8 +1332,6 @@ let
     pkgs.kdePackages.qtdeclarative
     pkgs.kdePackages.kdenlive
     pkgs.kdePackages.kdeconnect-kde
-    pkgs.clang
-    pkgs.clang-tools
     pkgs.yad
     pkgs.rsync
     pkgs.strace
