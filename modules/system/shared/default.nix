@@ -114,7 +114,7 @@ in
 
   networking = {
 
-    hostId = lib.mkDefault "8425e349";
+    hostId = "fe15f593";
 
     firewall.enable = false;
 

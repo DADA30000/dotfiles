@@ -13,6 +13,7 @@
     "bookmarks.html".source = ../../../stuff/bookmarks.html;
     "uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
     "libvirt/qemu.conf".text = "max_core = 0";
+    "containers/registries.conf".text = ''unqualified-search-registries = ["docker.io", "quay.io"]'';
     "gamemode.ini".text = ''
       [cpu]
       pin_cores=no

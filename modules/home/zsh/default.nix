@@ -14,7 +14,10 @@ in
   config = lib.mkIf cfg.enable {
     home = {
       file.".zshenv".enable = false;
-      sessionVariables.ZDOTDIR = "${config.programs.zsh.dotDir}";
+      sessionVariables = {
+        ZDOTDIR = "${config.programs.zsh.dotDir}";
+        ZSH_DISABLE_COMPFIX = "true";
+      };
     };
     programs = {
       zoxide = {

@@ -133,8 +133,6 @@ in
       })
     ];
 
-    networking.hostId = "fe15f593";
-
     services.udev.extraRules = lib.mkIf cfg.autoScanZfs ''
       ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
       ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="zfs_member", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"

@@ -205,6 +205,11 @@ main() {
 finish_install() {
   rm -f /tmp/secret.key
 
+  echo -e "\n\e[34mСброс кэша на диск и размонтирование...\e[0m"
+  sync
+  sudo umount -R /mnt 2>/dev/null || true
+  sudo zpool export -a 2>/dev/null || true
+
   printf "\e[32mУстановка завершена, перезагрузка через 10 секунд... (Ctrl+C для отмены)\e[0m\n"
   for i in {1..9}; do
     sleep 0.25
