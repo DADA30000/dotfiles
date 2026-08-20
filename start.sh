@@ -4,10 +4,9 @@ DISKS_FILE="./modules/system/disks/default.nix"
 
 main() {
   local disk_system="" usertemp="nixos" passtemp="" host="nixos"
-  local offline_mode=false disko_mode="online" system_mode="online"
+  local disko_mode="online" system_mode="online" generate_sb_keys=false
 
   if [[ "$1" == "offline" ]]; then
-    offline_mode=true
     clear
 
     echo -e "\e[34m1. Выберите режим работы Disko (разметка диска):\e[0m"
@@ -62,6 +61,19 @@ main() {
   fi
   clear
 
+  if gum confirm --default=false "Сгенерировать новые ключи Secure Boot (sbctl)?"; then
+    echo -e "\e[34mГенерация ключей Secure Boot...\e[0m"
+    sudo rm -rf /var/lib/sbctl
+    if sudo sbctl create-keys; then
+      generate_sb_keys=true
+      echo -e "\e[32mКлючи успешно сгенерированы!\e[0m"
+    else
+      echo -e "\e[31mОшибка генерации ключей sbctl.\e[0m"
+    fi
+    sleep 1
+  fi
+  clear
+
   if [[ "$system_mode" != "prebuilt" || "$disko_mode" != "prebuilt" ]]; then
     if gum confirm --default=false "Изменить имя пользователя и пароль?"; then
       echo "Введите пароль пользователя"
@@ -102,7 +114,7 @@ main() {
       cp "$DISKS_FILE" "${DISKS_FILE}.bak"
       sed -i "s|/dev/INSTALLER_DISK_REPLACE|$disk_system|g" "$DISKS_FILE"
 
-      if ! nix build ".#nixosConfigurations.${host}.config.system.build.destroyFormatMount" --offline -o /tmp/disko-script; then
+      if ! nix build ".#nixosConfigurations.${host}.config.system.build.destroyFormatMount" --offline --keep-going -o /tmp/disko-script; then
         echo -e "\e[31mОшибка сборки Disko.\e[0m"
         mv "${DISKS_FILE}.bak" "$DISKS_FILE"
         rm -f /tmp/secret.key
@@ -132,7 +144,7 @@ main() {
     clear
     echo "Начинается установка, откиньтесь на спинку кресла и наслаждайтесь видом :)" | lolcat
     sleep 2
-    echo -e "\n\e[34mКопирование файлов и установка системы...\e[0m\n"
+    echo -e "\n\e[34mКопирование файлов и подготовка системы...\e[0m\n"
 
     mkdir -p /mnt/etc/nixos
     nixos-generate-config --no-filesystems --root /mnt
@@ -144,26 +156,49 @@ main() {
     mkdir -p /mnt/persist/etc
     cp -r /mnt/etc/nixos /mnt/persist/etc
 
-    if [[ "$system_mode" == "prebuilt" ]]; then
-      INSTALL_CMD="nixos-install -v --system /etc/nixos-toplevel-reference --no-channel-copy"
-
-    elif [[ "$system_mode" == "eval" ]]; then
-      echo -e "\e[34mСборка системы (Оффлайн-эвалюация)...\e[0m"
-      if ! nix build "/mnt/etc/nixos#nixosConfigurations.${host}.config.system.build.toplevel" --offline -o /mnt/toplevel; then
-        echo -e "\e[31mОшибка оффлайн-сборки!\e[0m"
-        exit 1
+    if [[ "$generate_sb_keys" == true || -d /var/lib/sbctl ]]; then
+      if [[ -n "$(ls -A /var/lib/sbctl 2>/dev/null)" ]]; then
+        echo -e "\e[34mКопирование ключей Secure Boot в /mnt и /persist...\e[0m"
+        mkdir -p /mnt/var/lib/sbctl /mnt/persist/var/lib/sbctl
+        cp -a /var/lib/sbctl/. /mnt/var/lib/sbctl/
+        cp -a /var/lib/sbctl/. /mnt/persist/var/lib/sbctl/
       fi
-      INSTALL_CMD="nixos-install -v --system /mnt/toplevel --no-channel-copy"
-
-    else
-      INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host}"
     fi
 
-    if eval "$INSTALL_CMD"; then
-      finish_install
-    else
-      printf "\e[31mОшибка установки :(\e[0m\n"
-    fi
+    local install_successful=false
+    while [[ "$install_successful" == false ]]; do
+      echo -e "\n\e[34mЗапуск установки системы...\e[0m\n"
+
+      if [[ "$system_mode" == "prebuilt" ]]; then
+        INSTALL_CMD="nixos-install -v --system /etc/nixos-toplevel-reference --no-channel-copy --keep-going"
+
+      elif [[ "$system_mode" == "eval" ]]; then
+        echo -e "\e[34mСборка системы (Оффлайн-эвалюация)...\e[0m"
+        if ! nix build "/mnt/etc/nixos#nixosConfigurations.${host}.config.system.build.toplevel" --offline --keep-going -o /mnt/toplevel; then
+          echo -e "\e[31mОшибка оффлайн-сборки toplevel!\e[0m"
+          INSTALL_CMD="false"
+        else
+          INSTALL_CMD="nixos-install -v --system /mnt/toplevel --no-channel-copy --keep-going"
+        fi
+
+      else
+        INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host} --keep-going"
+      fi
+
+      if [[ "$INSTALL_CMD" != "false" ]] && eval "$INSTALL_CMD"; then
+        install_successful=true
+        finish_install
+      else
+        echo -e "\n\e[31mОшибка установки :(\e[0m"
+        if gum confirm --default=true "Попробовать установить снова?"; then
+          echo -e "\e[33mПовторная попытка...\e[0m"
+        else
+          echo -e "\e[31mУстановка прервана пользователем.\e[0m"
+          rm -f /tmp/secret.key
+          exit 1
+        fi
+      fi
+    done
   fi
 }
 
