@@ -256,13 +256,12 @@ in
             if [[ ! -f ${config.xdg.configHome}/gtk-3.0/bookmarks ]]; then
               mkdir -p $VERBOSE_ARG ${config.xdg.configHome}/gtk-3.0
               BOOKMARKS="
-                file://${config.home.homeDirectory}/bottles/Games/drive_c drive_c
-                file://${config.home.homeDirectory}/.umu/drive_c Диск C: от UMU
                 file://${config.xdg.userDirs.pictures} Изображения
                 File://${config.xdg.userDirs.music} Музыка
                 file://${config.xdg.userDirs.documents} Документы
                 file://${config.xdg.userDirs.download} Загрузки
                 file://${config.xdg.userDirs.videos} Видео
+                file://${config.home.homeDirectory}/.umu .umu
                 admin:/// / (корень, от рута)
                 file:/// / (корень)
               "

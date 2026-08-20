@@ -216,13 +216,6 @@ in
     };
 
     boot = lib.mkMerge [
-      (lib.mkIf cfg.encryption {
-        initrd.luks.devices.nixos = {
-          device = "/dev/disk/by-label/nixos-encrypted";
-          allowDiscards = true;
-          bypassWorkqueues = true;
-        };
-      })
       (lib.mkIf cfg.impermanence {
         initrd = {
           systemd.services.zfs-rollback = {
@@ -283,7 +276,7 @@ in
                       "nixos-encrypted"
                     ];
                     passwordFile = "/tmp/secret.key";
-                    initrdUnlock = false;
+                    initrdUnlock = true;
                     settings = lib.optionalAttrs cfg.ssdOptimizations {
                       allowDiscards = true;
                       bypassWorkqueues = true;
