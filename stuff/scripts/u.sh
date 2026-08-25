@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+GIT_CREDENTIALS="$XDG_CONFIG_HOME/git/credentials"
+if [[ -f "$GIT_CREDENTIALS" ]]; then
+  GH_TOKEN=$(grep -oP 'https://[^:]+:\K[^@]+(?=@github\.com)' "$GIT_CREDENTIALS" | head -1)
+  if [[ -n "$GH_TOKEN" ]]; then
+    if [[ -n "$NIX_CONFIG" ]]; then
+      export NIX_CONFIG="${NIX_CONFIG}
+extra-access-tokens = github.com=$GH_TOKEN"
+    else
+      export NIX_CONFIG="extra-access-tokens = github.com=$GH_TOKEN"
+    fi
+  fi
+fi
+
 STATE_FILE="$HOME/.cache/update-state"
 NIXOS_DIR="/etc/nixos"
 

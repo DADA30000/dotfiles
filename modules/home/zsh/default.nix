@@ -7,6 +7,19 @@
 }:
 let
   cfg = config.zsh;
+  flake-stuff = pkgs.runCommand "flake-stuff" { } ''
+    mkdir $out
+    cp ${../../../flake.nix} $out/flake.nix
+    cp ${../../../flake.lock} $out/flake.lock
+  '';
+  flake-stuff-hash =
+    pkgs.runCommand "get-flake-stuff-nar-hash"
+      {
+        nativeBuildInputs = [ config.nix.package ];
+      }
+      ''
+        echo "export NIX_HASH=$(nix --extra-experimental-features nix-command hash path "${flake-stuff}" --sri | tr -d '\n')" > $out
+      '';
 in
 {
   options.zsh.enable = lib.mkEnableOption "zsh shell";
@@ -56,11 +69,12 @@ in
         envExtra = /* zsh */ ''
           #touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
           #source "${config.home.homeDirectory}"/.zsh/.zshenv_add
-          local NIX_FLAKE_PREAMBLE='(
+          source "${flake-stuff-hash}"
+          local NIX_FLAKE_PREAMBLE="(
             let 
-              flake = builtins.getFlake "git+file://${config.offline-path}?rev=${config.offline-rev}"; 
+              flake = builtins.getFlake \"path:${flake-stuff}?narHash=$NIX_HASH\"; 
               nixpkgs = import flake.inputs.nixpkgs { 
-                system = "${pkgs.stdenv.hostPlatform.system}";
+                system = \"${pkgs.stdenv.hostPlatform.system}\";
                 config = {
                   allowUnfree = true;
                   android_sdk.accept_license = true;
@@ -68,7 +82,7 @@ in
               };
             in
               nixpkgs // { inherit (flake) inputs; }
-          )'
+          )"
           _ns_parse_args() {
             flags=() pkgs=() pkgs_raw=()
             while (( $# > 0 )); do
@@ -399,7 +413,7 @@ in
                 if [[ ! "$curr_word" == -* ]]; then
                   if [[ -n "$curr_word" ]]; then
                     local cache_dir="/tmp/nix_completer_cache_dir"
-                    local current_flake_source="${config.offline-path}?rev=${config.offline-rev}"
+                    local current_flake_source="${flake-stuff}?rev=$NIX_HASH"
                     
                     if [[ -d "$cache_dir" ]]; then
                       if [[ ! -f "$cache_dir/flake_source" || "$(<"$cache_dir/flake_source")" != "$current_flake_source" ]]; then

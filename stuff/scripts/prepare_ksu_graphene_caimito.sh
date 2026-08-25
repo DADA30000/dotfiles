@@ -33,8 +33,6 @@ grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endm
 echo '[+] Done.'
 
 FILE="$GKI_ROOT/drivers/kernelsu/Kbuild"
-TARGET_1="KSU_VERSION_TAG_FALLBACK := v0.0.1"
-TARGET_2="KSU_VERSION_FALLBACK := 1"
 BASE_BRANCH=$(cd "$KSU_DIR" && git rev-parse --abbrev-ref HEAD | sed 's:-.*::' 2>/dev/null)
 BASE_COMMIT=$(cd "$KSU_DIR" && git merge-base HEAD refs/remotes/origin/"$BASE_BRANCH" 2>/dev/null || git merge-base HEAD refs/remotes/origin/main 2>/dev/null || echo HEAD)
 KSU_VERSION=$((30000 + $(cd "$KSU_DIR" && git rev-list --count "$BASE_COMMIT" 2>/dev/null)))

@@ -206,9 +206,16 @@ in
           exit 1
         fi
 
-        mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Steam"
-        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient64.dll"
-        cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$WINEPREFIX/drive_c/Program Files (x86)/Steam/steamclient.dll"
+        STEAM_SOURCE="$XDG_DATA_HOME/Steam"
+        STEAM_DEST="$WINEPREFIX/drive_c/Program Files (x86)/Steam"
+        mkdir -p "$STEAM_DEST"
+        if [[ -f "$STEAM_SOURCE/steamclient64.dll" ]]; then
+          cp --no-preserve=mode "$STEAM_SOURCE/steamclient64.dll" "$STEAM_DEST/steamclient64.dll"
+          cp --no-preserve=mode "$STEAM_SOURCE/steamclient.dll" "$STEAM_DEST/steamclient.dll"
+        else
+          cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$STEAM_DEST/steamclient64.dll"
+          cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$STEAM_DEST/steamclient.dll"
+        fi
 
         if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
           export WINEDLLOVERRIDES="steamclient64,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64=n,b;$WINEDLLOVERRIDES"

@@ -1,6 +1,4 @@
 {
-  pkgs,
-  inputs,
   config,
   lib,
   ...
@@ -15,8 +13,16 @@
     "libvirt/qemu.conf".text = "max_core = 0";
     "containers/registries.conf".text = ''unqualified-search-registries = ["docker.io", "quay.io"]'';
     "gamemode.ini".text = ''
+      [general]
+      renice=0
+      inhibit_screensaver=1
+
       [cpu]
       pin_cores=no
+      park_cores=no
+
+      [gpu]
+      apply_gpu_optimisations=0 
     '';
   };
 
@@ -65,87 +71,17 @@
 
   programs = {
 
-    opencode = {
+    git = {
       enable = true;
-      enableMcpIntegration = true;
-      package = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
       settings = {
-        autoshare = false;
-        autoupdate = true;
-
-        compaction = {
-          auto = true;
-          prune = true;
-          threshold = 0.85;
-        };
-
-        lsp = {
-          cpp = {
-            command = [
-              "${pkgs.clang-tools}/bin/clangd"
-              "--background-index"
-              "--clang-tidy"
-              "--header-insertion=iwyu"
-              "--completion-style=detailed"
-              "-j=4"
-            ];
-            extensions = [
-              ".cpp"
-              ".hpp"
-              ".h"
-              ".cc"
-              ".cxx"
-            ];
-          };
-          c = {
-            command = [
-              "${pkgs.clang-tools}/bin/clangd"
-              "--background-index"
-              "--clang-tidy"
-              "-j=4"
-            ];
-            extensions = [
-              ".c"
-              ".h"
-            ];
-          };
-        };
-
-        provider = {
-          "llama.cpp" = {
-            npm = "@ai-sdk/openai-compatible";
-            name = "Local llama-server";
-            options = {
-              baseURL = "http://127.0.0.1:8080/v1";
-            };
-            models = {
-              qwen-local = {
-                name = "/var/lib/llama-cpp/models/Qwen3.6-35B-A3B-abliterated-Q4_K_M.gguf";
-                limit = {
-                  context = 98304;
-                  output = 16384;
-                };
-              };
-            };
-          };
-        };
-
-        model = "llama.cpp/qwen-local";
-
-        mcp = {
-          searxng = {
-            type = "local";
-            command = [
-              "${pkgs.nodejs}/bin/npx"
-              "-y"
-              "mcp-searxng"
-            ];
-            env = {
-              SEARXNG_URL = "http://127.0.0.1:8000";
-            };
-          };
-        };
+        color.ui = "auto";
+        credential.helper = "store --file=${config.xdg.configHome}/git/credentials";
       };
+      includes = [
+        {
+          path = "${config.xdg.configHome}/git/config-mutable";
+        }
+      ];
     };
 
     mcp = {

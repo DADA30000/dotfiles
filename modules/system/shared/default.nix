@@ -187,10 +187,6 @@ in
       noto-fonts-monochrome-emoji
       liberation_ttf
       nerd-fonts.jetbrains-mono
-      nerd-fonts.caskaydia-cove
-      jetbrains-mono
-      maple-mono.NF-CN
-      unscii
     ];
 
     fontconfig.defaultFonts = {
@@ -263,6 +259,7 @@ in
     daemonIOSchedPriority = 7;
 
     settings = {
+      allow-import-from-derivation = false;
       use-xdg-base-directories = true;
       auto-optimise-store = true;
       substituters = [
@@ -797,8 +794,7 @@ in
 
     gamemode = {
       enable = true;
-      enableRenice = true;
-      settings.general.renice = 15;
+      enableRenice = false;
     };
 
     steam = {
@@ -825,8 +821,11 @@ in
             sandbox_shm = false;
             additional_outside_commands = ''
               rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
+              mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_DATA_HOME/vulkan"
+              SANDBOXED_XDG_DATA_HOME="$HOME/.nixpak/${appId}/home''${XDG_DATA_HOME#"/home/$USER"}"
               ln -sf "$HOME/.nixpak/${appId}/home/.steam" "$HOME/.steam"
-              ln -sf "$HOME/.nixpak/${appId}/home''${XDG_DATA_HOME#"/home/$USER"}/Steam" "$XDG_DATA_HOME/Steam"
+              ln -sf "$SANDBOXED_XDG_DATA_HOME/Steam" "$XDG_DATA_HOME/Steam"
+              ln -sf "$SANDBOXED_XDG_DATA_HOME/vulkan/implicit_layer.d" "$XDG_DATA_HOME/vulkan/implicit_layer.d"
             '';
             additional_inside_commands = ''
               rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d

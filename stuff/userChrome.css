@@ -1,0 +1,967 @@
+/* ==========================================================================
+   FLUENTBIRD - GLASSMORPHISM & PILL EDITION (FULL TRANSPARENCY FIX)
+   ========================================================================== */
+
+@import url("custom.css");
+
+/* ==========================================================================
+   1. GLOBAL TRANSPARENCY VARIABLES
+   ========================================================================== */
+*,
+:root {
+  --lwt-frame: transparent !important;
+  --lwt-accent-color: transparent !important;
+  --toolbar-bgcolor: transparent !important;
+  --toolbar-non-lwt-bgcolor: transparent !important;
+  --folder-pane-background: transparent !important;
+  --thread-pane-background: transparent !important;
+  --message-pane-background: transparent !important;
+  --message-pane-background-color: transparent !important;
+  --sidebar-background-color: transparent !important;
+  --message-header-background: transparent !important;
+  --message-header-background-color: transparent !important;
+  --layout-background-color: transparent !important;
+
+  /* Supernova Surface Variables */
+  --color-surface-1: transparent !important;
+  --color-surface-2: transparent !important;
+  --color-surface-3: transparent !important;
+  --color-surface-4: transparent !important;
+  --color-surface-floating: transparent !important;
+  --color-surface-layer: transparent !important;
+  --color-background-primary: transparent !important;
+  --color-background-secondary: transparent !important;
+  --color-background-tertiary: transparent !important;
+  --in-content-page-background: transparent !important;
+  --in-content-box-background: transparent !important;
+
+  /* Popups & Panels (0.02 for Hyprland Blur) */
+  --panel-background: rgba(0, 0, 0, 0.02) !important;
+  --panel-background-color: rgba(0, 0, 0, 0.02) !important;
+  --panel-subview-body-background: transparent !important;
+  --arrowpanel-background: rgba(0, 0, 0, 0.02) !important;
+  --arrowpanel-color: #ffffff !important;
+  --arrowpanel-border-color: rgba(255, 255, 255, 0.15) !important;
+  --arrowpanel-border-radius: 14px !important;
+  --arrowpanel-box-shadow: none !important;
+  --appmenu-bgcolor: rgba(0, 0, 0, 0.02) !important;
+
+  /* Card highlights */
+  --tree-card-background: transparent !important;
+  --tree-card-background-hover: rgba(255, 255, 255, 0.08) !important;
+  --tree-card-background-selected: rgba(255, 255, 255, 0.15) !important;
+  --tree-card-background-unfocused: rgba(255, 255, 255, 0.1) !important;
+
+  /* Splitters & Lines */
+  --splitter-color: transparent !important;
+  --sidebar-border-color: transparent !important;
+  --panel-separator-color: transparent !important;
+}
+
+/* ==========================================================================
+   2. WINDOW & STRUCTURAL CANVASES
+   ========================================================================== */
+:root,
+html,
+body,
+window,
+#messengerWindow {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+}
+
+#messengerBody {
+  opacity: 1 !important;
+  background-color: transparent !important;
+}
+
+/* Remove all global shadow slot borders and box shadows */
+slot {
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0px !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Zero 1px grey divider lines between panes */
+splitter,
+#folderpane-splitter,
+#threadpane-splitter,
+.calendar-sidebar-splitter,
+.tree-splitter,
+#folderPane,
+#threadPane,
+#messagepanebox,
+#messagePane,
+message-pane,
+#sidebar-box,
+#accountCentral,
+#accountCentralBox,
+#threadPaneHeaderBar,
+.sidebar-panel-container,
+tree-view,
+#folderTree,
+#threadTree {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-inline: none !important;
+  border-inline-start: none !important;
+  border-inline-end: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+#folderpane-splitter,
+#threadpane-splitter {
+  width: 4px !important;
+  min-width: 4px !important;
+  max-width: 4px !important;
+  margin-inline: -2px !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
+/* ==========================================================================
+   3. PANES, READING AREA & ACCOUNT CENTRAL TRANSPARENCY
+   ========================================================================== */
+
+/* Reading Pane, Message Browser & Deck Containers */
+message-pane,
+#messagePane,
+message-pane#messagePane,
+#messagepanebox,
+#messagepaneboxwrapper,
+#messagepane,
+#messageBrowser,
+browser#messageBrowser,
+browser#messagepane,
+browser[name="messagepane"],
+.message-browser,
+#contentDeck,
+#contentDeckContainer,
+#singleMessage,
+#multimessage,
+.message-pane,
+.message-pane-wrapper,
+iframe {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* In-Content Scope for Message Body & about:3pane */
+@-moz-document url-prefix("chrome://messenger/content/messenger.xhtml"),
+url-prefix("chrome://messenger/content/about3Pane.xhtml"),
+url-prefix("chrome://messenger/content/messageWindow.xhtml"),
+url("about:3pane"),
+url("about:message"),
+url-prefix("about:3pane"),
+url-prefix("about:message"),
+url-prefix("about:blank") {
+
+  :root,
+  html,
+  body,
+  #messagepane,
+  .message-pane,
+  message-pane,
+  #messageBrowser,
+  browser,
+  iframe {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Account Central / Account Hub */
+body.account-central,
+#accountCentral,
+#accountCentralContainer,
+#accountCentralBox,
+.account-central-header,
+header.account-central-header,
+.account-central-section,
+.account-central-box,
+.account-central-card,
+.setup-section,
+#setup-section,
+.hub-body,
+.hub-container,
+.account-hub-step,
+.hub-form-grid,
+.option-select-body,
+.section-container,
+.card-section,
+.content-section,
+div[class*="account-central"],
+section[class*="account-central"],
+div[class*="setup"] {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Sidebars, Headers, Trees & Tables */
+aside#accountTreeBox,
+aside,
+#accountTreeBox,
+th,
+th[id*="Col"],
+thead,
+tr:not(.card-layout),
+treecol,
+treecolpicker,
+button.tree-columnpicker-button {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Preferences, Calendar & Chat Toolboxes */
+#pref-category-box,
+richlistitem.category,
+#calendarContent,
+#view-box,
+#viewToggle,
+.calview-toggle-item,
+#calendar-task-tree,
+#calendar-task-details,
+#calendar-task-details-description,
+#today-pane-panel,
+.sidebar-header,
+#agenda,
+#today-minimonth-box,
+calendar-modebox#today-minimonth-box,
+calendar-minimonth,
+calendar-minimonth#calMinimonth,
+calendar-minimonth#today-minimonth,
+calendar-minimonth#miniday-dropdown-minimonth,
+div.minimonth-nav-section,
+div.minimonth-month-box,
+hbox#mini-day-image,
+tree#unifinder-search-results-tree,
+tree#unifinder-todo-tree,
+#chat-view-toolbox,
+#chat-toolbar,
+vbox#listPaneBox,
+richlistbox#nicklist,
+tree#logTree,
+vbox#noConvScreen,
+vbox#noPreviousConvScreen,
+chat-conversation-info#conv-top-info,
+hbox.conv-nicklist-header,
+label.conv-logs-header-label,
+richlistitem#conversationsGroup,
+#event-toolbox,
+#event-tab-toolbar,
+.contentTabToolbox,
+#dummycontenttoolbox,
+#contentTabToolbox0,
+#contentTabToolbox1,
+div#toolbar,
+table#prefs,
+richlistbox#tagList,
+richlistbox#cloudFileView,
+div#telemetry-container,
+form#qrExportIntroForm,
+section.qr-subpanel,
+ol.qr-panel,
+section.qr-panel,
+div.qr-panel,
+div.button-group,
+div.roving-group.button-group {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* General containers */
+#msgHeaderView,
+#messageHeader,
+message-header,
+.message-header-container,
+#headerSenderToolbarContainer,
+.message-header-row,
+.message-header-view-button-container,
+#mail-toolbox,
+#navigation-toolbox,
+#titlebar,
+.titlebar-color,
+#tabmail,
+.toolbar-primary,
+#quick-filter-bar,
+#spacesToolbar,
+.spaces-toolbar,
+#status-bar,
+statusbar,
+statuspanel,
+.statuspanel-inner,
+.statuspanel-label,
+tree-view,
+[is="tree-view-table-body"],
+.tree-view-scrollable-container,
+#displayDeck,
+#placeholderNoMessages,
+#noMessageSelected {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+message-header::part(container),
+message-header::part(header) {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+/* ==========================================================================
+   4. REMOTE CONTENT INFOBAR (SINGLE-LAYER 12PX CARD - NO DOUBLE BORDER)
+   ========================================================================== */
+
+/* 1. Neutralize parent stack and outer custom element host */
+#msgHeaderView,
+#msgNotificationBar,
+.notificationbox-stack,
+notificationbox,
+.message-header-container,
+#messageHeader,
+message-header,
+notification-message,
+.infobar,
+.infobar.animated {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0px !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+  outline: none !important;
+}
+
+/* 2. Notification host variables */
+notification-message {
+  --message-bar-background-color: rgba(0, 0, 0, 0.35) !important;
+  --message-bar-text-color: #ffffff !important;
+  --message-bar-icon-color: #ffffff !important;
+  --message-bar-box-shadow: none !important;
+}
+
+/* 3. The ONLY element with border and background (inside Shadow DOM) */
+notification-message::part(container) {
+  border-radius: 12px !important;
+  background: rgba(0, 0, 0, 0.35) !important;
+  background-color: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+}
+
+notification-message::part(message),
+notification-message::part(icon),
+notification-message::part(actions) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+notification-message *,
+.infobar label,
+.infobar description {
+  color: #ffffff !important;
+}
+
+/* 4. Small circular dropdown button with native arrow icon */
+notification-message button,
+.infobar .notification-button {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  margin: 0 4px !important;
+  border-radius: 50% !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+}
+
+notification-message button:hover,
+.infobar .notification-button:hover {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Hide text label so only the arrow icon remains */
+notification-message button .button-text,
+notification-message button label,
+.infobar .notification-button .button-text {
+  display: none !important;
+}
+
+notification-message button .button-menu-dropmarker,
+notification-message button image {
+  display: inline-block !important;
+  visibility: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  fill: currentColor !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================================
+   5. DIALOGS, MODAL PROMPTS & POPUP WINDOWS (DARK GREY #1e1e24 CARD FIX)
+   ========================================================================== */
+dialog,
+window[type="dialog"],
+window#commonDialog,
+#commonDialogWindow,
+.dialogBox,
+vbox.dialogBox,
+div.dialogBox,
+.subdialog-box,
+.subdialog-container,
+tabmodalprompt .mainContainer,
+dialog#editVCardDialog,
+menu.dialog-menu-container,
+#promptBox {
+  background: #1e1e24 !important;
+  background-color: #1e1e24 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65) !important;
+}
+
+/* Dark Dimmed Overlay Behind Modal Dialogs */
+.dialogOverlay,
+vbox#dialogTemplate.dialogOverlay {
+  background: rgba(0, 0, 0, 0.55) !important;
+  background-color: rgba(0, 0, 0, 0.55) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Buttons inside Dialogs & Prompts */
+dialog button,
+window[type="dialog"] button,
+.dialogBox button,
+tabmodalprompt button {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  padding: 5px 16px !important;
+  margin: 2px 4px !important;
+}
+
+dialog button:hover,
+window[type="dialog"] button:hover,
+.dialogBox button:hover,
+tabmodalprompt button:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  background-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* Primary confirmation button inside dialogs (OK / Разрешить) */
+dialog button[default],
+dialog button.primary,
+dialog button.button-primary,
+window[type="dialog"] button[default],
+.dialogBox button.primary,
+tabmodalprompt button.primary {
+  background: #2563eb !important;
+  background-color: #2563eb !important;
+  border-color: #3b82f6 !important;
+}
+
+dialog button[default]:hover,
+dialog button.primary:hover,
+dialog button.button-primary:hover,
+window[type="dialog"] button[default]:hover,
+.dialogBox button.primary:hover,
+tabmodalprompt button.primary:hover {
+  background: #1d4ed8 !important;
+  background-color: #1d4ed8 !important;
+}
+
+/* Text inputs inside Dialogs */
+dialog input,
+window[type="dialog"] input,
+.dialogBox input {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  padding: 4px 10px !important;
+}
+
+/* ==========================================================================
+   6. BUTTON PILL STYLING (HEADER, CREATE & ACCOUNT CENTRAL)
+   ========================================================================== */
+
+/* Folder Pane "New Message" (Create) Button */
+#folderPaneWriteMessage {
+  border-radius: 999px !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+}
+
+#folderPaneWriteMessage:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Quick Filter & Display Buttons */
+#threadPaneQuickFilterButton,
+#threadPaneDisplayButton,
+.quick-filter-bar button {
+  border-radius: 999px !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+#threadPaneQuickFilterButton:hover,
+#threadPaneDisplayButton:hover,
+.quick-filter-bar button:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Hide separate dropmarkers and separators to prevent duplicate ghost pills */
+#messageHeader .toolbarbutton-menubutton-dropmarker,
+#messageHeader toolbarseparator,
+.message-header-view-button-container toolbarseparator {
+  display: none !important;
+}
+
+.toolbarbutton-menubutton-button {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Message Header & Account Central Action Buttons */
+#messageHeader toolbarbutton,
+.account-central-section button,
+.account-central-card button,
+.setup-section button,
+.option-select-body button,
+button.account-hub-option-button,
+#accountCentral button {
+  border-radius: 999px !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  padding: 4px 12px !important;
+  margin: 2px 3px !important;
+}
+
+#messageHeader toolbarbutton:hover,
+.account-central-section button:hover,
+.account-central-card button:hover,
+.setup-section button:hover,
+.option-select-body button:hover,
+button.account-hub-option-button:hover,
+#accountCentral button:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* ==========================================================================
+   7. STATUSBAR & QUOTA METER (FLUSH STRETCH & CENTERED TEXT)
+   ========================================================================== */
+#quotaPanel,
+#statusbar-progresspanel {
+  background-color: transparent !important;
+  border: none !important;
+  align-items: center !important;
+  margin: 0 8px !important;
+}
+
+#quotaPanel stack {
+  position: relative !important;
+  display: grid !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  height: 20px !important;
+  min-width: 140px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+progress#quotaMeter {
+  grid-area: 1 / 1 !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+progress#quotaMeter::-moz-progress-bar {
+  background: linear-gradient(90deg, #2563eb, #38bdf8) !important;
+  border-radius: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#quotaLabel {
+  grid-area: 1 / 1 !important;
+  justify-self: center !important;
+  align-self: center !important;
+  color: #ffffff !important;
+  font-size: 0.74rem !important;
+  font-weight: 600 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9) !important;
+  text-decoration: none !important;
+  padding: 0 8px !important;
+  z-index: 2 !important;
+  white-space: nowrap !important;
+}
+
+/* ==========================================================================
+   8. THUNDERBIRD BURGER MENU (APPMENU) - KILLS MYSTICAL BANNER BOX
+   ========================================================================== */
+
+/* 1. Neutralize all inner children, scrollboxes, and subview wrappers */
+#appMenu-popup,
+#appMenu-popup *,
+#appMenu-popup::part(arrow),
+#appMenu-popup .panel-arrowside,
+#appMenu-popup slot,
+#appMenu-popup panelmultiview,
+#appMenu-popup #appMenu-multiView,
+#appMenu-popup .panel-viewstack,
+#appMenu-popup panelview,
+#appMenu-popup #appMenu-mainView,
+#appMenu-popup .PanelUI-subView,
+#appMenu-popup .panel-subview-body,
+#appMenu-popup #appMenu-mainViewItems,
+#appMenu-popup vbox,
+#appMenu-popup box,
+#appMenu-popup toolbarbutton,
+#appMenu-popup .subviewbutton,
+#appMenu-popup toolbaritem,
+#appMenu-popup toolbarseparator,
+.menupopup-arrowscrollbox,
+arrowscrollbox.menupopup-arrowscrollbox,
+menupopup slot,
+menupopup scrollbox {
+  outline: none !important;
+  outline-width: 0px !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-width: 0px !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  padding: 0 !important;
+}
+
+/* 2. Hide offscreen sliding container and empty banner items */
+.panel-viewcontainer.offscreen,
+[offscreen],
+#appMenu-popup .panel-banner-item:empty,
+#appMenu-popup vbox#appMenu-addon-banners:empty,
+#appMenu-popup .panel-banner-item[hidden],
+#appMenu-popup .panel-banner-item:not([label]),
+#appMenu-popup vbox#appMenu-addon-banners:not(:has(toolbarbutton[label])) {
+  display: none !important;
+  visibility: hidden !important;
+  border: none !important;
+  background-color: transparent !important;
+}
+
+/* 3. Hide arrow notch and strip base panel */
+panel#appMenu-popup {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+panel#appMenu-popup::part(arrow),
+panel#appMenu-popup .panel-arrowside {
+  display: none !important;
+}
+
+/* 4. Single outer 0.02 surface on AppMenu */
+panel#appMenu-popup::part(content),
+panel#appMenu-popup::part(panel),
+panel#appMenu-popup .panel-arrowcontent,
+panel#appMenu-popup .panel-viewcontainer:not(.offscreen) {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: rgba(0, 0, 0, 0.02) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  padding: 6px !important;
+}
+
+/* 5. Items inside the burger menu */
+#appMenu-popup .subviewbutton,
+#appMenu-popup toolbarbutton,
+#appMenu-popup toolbaritem,
+#appMenu-popup menu,
+#appMenu-popup menuitem {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  border-radius: 6px !important;
+  margin: 1px 4px !important;
+  padding: 6px 10px !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Gap spacing between burger menu icons and text labels */
+#appMenu-popup .toolbarbutton-icon,
+#appMenu-popup .subviewbutton .toolbarbutton-icon,
+#appMenu-popup .subviewbutton image,
+#appMenu-popup .subviewbutton img,
+#appMenu-popup image.toolbarbutton-icon,
+#appMenu-popup .menu-iconic-icon {
+  margin-inline-end: 14px !important;
+  flex-shrink: 0 !important;
+}
+
+#appMenu-popup .subviewbutton:hover,
+#appMenu-popup toolbarbutton:hover,
+#appMenu-popup menuitem:hover,
+#appMenu-popup .subviewbutton[_moz-menuactive="true"],
+#appMenu-popup menuitem[_moz-menuactive="true"],
+menupopup menu:hover,
+menupopup menuitem:hover,
+menupopup menu[_moz-menuactive="true"],
+menupopup menuitem[_moz-menuactive="true"] {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+#appMenu-popup toolbarseparator,
+#appMenu-popup menuseparator,
+menupopup menuseparator {
+  appearance: none !important;
+  border: none !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+  margin: 4px 6px !important;
+}
+
+/* Single outer 0.02 surface on Context Menus & Tooltips */
+menupopup,
+tooltip {
+  appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: rgba(0, 0, 0, 0.02) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 12px !important;
+  padding: 4px 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* ==========================================================================
+   9. PILL-SHAPED SEARCH BAR & INPUTS
+   ========================================================================== */
+
+global-search-bar,
+#searchInput {
+  border-radius: 999px !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  overflow: hidden !important;
+}
+
+global-search-bar form,
+global-search-bar input,
+global-search-bar button,
+global-search-bar::part(input),
+global-search-bar::part(button),
+#search-button {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+textarea {
+  border-radius: 999px !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.search-button-icon {
+  margin-right: 5px !important;
+}
+
+#button-appmenu {
+  display: inline-block !important;
+  min-width: 32px !important;
+}
+
+.kbd-container,
+kbd {
+  display: none !important;
+}
+
+/* ==========================================================================
+   10. TABS & TAB BAR (BREATHING ROOM & FULL TRANSPARENCY)
+   ========================================================================== */
+
+#tabs-toolbar,
+#tabmail-tabs,
+#tabmail-arrowscrollbox,
+.tabmail-tabpanes {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#tabs-toolbar {
+  margin-top: 4px !important;
+  margin-bottom: 6px !important;
+  padding-top: 2px !important;
+  padding-bottom: 4px !important;
+}
+
+.tabmail-tab,
+.tab-background {
+  border-radius: 999px !important;
+  margin: 0px 3px !important;
+}
+
+.tab-background[selected="true"] {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.tab-line {
+  height: 0px !important;
+}
+
+.tab-icon-image {
+  stroke: #fff0 !important;
+}
+
+/* ==========================================================================
+   11. SIDEBAR FOLDERS (PILL)
+   ========================================================================== */
+
+:is(ul, ol)[role="tree"]>li>.container {
+  border-radius: 999px !important;
+  margin: 2px 8px !important;
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+}
+
+:is(ul, ol)[role="tree"]>li:hover>.container {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:is(ul, ol)[role="tree"] li.selected>.container,
+:is(ul, ol)[role="tree"] li.selected.current>.container {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#folderTree li[data-server-type]>.container>.name {
+  font-weight: normal !important;
+}
+
+#folderTree li[data-server-type]:not(:first-of-type)>.container {
+  margin-top: 10px !important;
+}
+
+.unread>.container>.unread-count {
+  display: unset !important;
+  background-color: transparent !important;
+  color: #7cb8fa !important;
+}
+
+/* ==========================================================================
+   12. EMAIL PANELS (ROUNDED RECTANGLES)
+   ========================================================================== */
+
+.card-container,
+.card-layout {
+  border-radius: 20px !important;
+  margin: 2px 4px !important;
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+}
+
+[is="tree-view-table-body"] .card-layout:hover .card-container {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+#threadTree[rows="thread-card"] .card-layout.selected .card-container,
+#threadTree[rows="thread-card"] .card-layout.selected.current .card-container,
+[is="tree-view-table-body"] .card-layout.selected.current .card-container,
+#threadTree[rows="thread-card"]:not(:focus, :focus-within) .card-layout.selected.current .card-container,
+#threadTree[rows="thread-card"]:not(:focus, :focus-within) .card-layout[data-properties~="junk"].selected.current .card-container {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.thread-card-subject-container {
+  color: white !important;
+  width: 85%;
+}
+
+.sender {
+  font-weight: 500 !important;
+  margin-top: 8px !important;
+  color: white !important;
+}
+
+.recipient-avatar {
+  height: 45px !important;
+  width: 45px !important;
+  color: #fff !important;
+  background-color: #69797e !important;
+}
+
+/* Native empty placeholder styling */
+#placeholderNoMessages::before {
+  background-image: url("chrome://messenger/skin/icons/new/mail.svg") !important;
+}

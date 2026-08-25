@@ -895,10 +895,6 @@ in
               match.title = "^(QDiskInfo|MainPicker)$";
             }
             {
-              opacity = "0.99 override 0.99 override";
-              match.class = "^(thunderbird|spotify|org.prismlauncher.PrismLauncher|mpv|org.qbittorrent.qBittorrent|die)$";
-            }
-            {
               float = true;
               match = {
                 class = "steam";

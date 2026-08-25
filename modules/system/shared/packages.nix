@@ -1166,6 +1166,7 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.pi-coding-agent
     pkgs.gcc
     pkgs.libcap-text-verifier
     pkgs.curl

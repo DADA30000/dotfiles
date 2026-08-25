@@ -132,6 +132,7 @@ let
             "localizeapi.com"
             "steamcmd.net"
             "tonelib.vip"
+            "exa.ai"
           ];
         }
         {

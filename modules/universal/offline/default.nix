@@ -56,34 +56,6 @@ let
 
   inputsFarm = pkgs.linkFarm "flake-inputs" finalInputsList;
 
-  nix-path = pkgs.stdenvNoCC.mkDerivation {
-    name = "offline-bridge";
-    src = ../../../flake.nix;
-    nativeBuildInputs = [ pkgs.git ];
-
-    GIT_AUTHOR_NAME = "Nix Builder";
-    GIT_AUTHOR_EMAIL = "nix@example.com";
-    GIT_COMMITTER_NAME = "Nix Builder";
-    GIT_COMMITTER_EMAIL = "nix@example.com";
-    GIT_AUTHOR_DATE = "1970-01-01T00:00:01Z";
-    GIT_COMMITTER_DATE = "1970-01-01T00:00:01Z";
-
-    phases = [ "installPhase" ];
-
-    installPhase = ''
-      mkdir -p "$out"
-      cp "$src" "$out"/flake.nix
-      cp "${../../../flake.lock}" "$out"/flake.lock
-      cd $out
-      echo "rev" > .gitignore
-      git init --initial-branch=main
-      git add .
-      git commit -m "Deterministic bridge"
-      git rev-parse HEAD | tr -d '\n' > "$out/rev"
-      echo finished
-    '';
-  };
-
   offline-python = pkgs.python3.withPackages (
     ps: with ps; [
       iniparse
@@ -134,26 +106,26 @@ in
       internal = true;
       visible = false;
     };
+    offline-narHash = lib.mkOption {
+      type = lib.types.str;
+      internal = true;
+      visible = false;
+    };
   };
 
-  config = {
-    # rev generation can be moved to u full if needed
-    # IFD
-    offline-rev = builtins.readFile "${nix-path}/rev";
-    offline-path = nix-path;
-  }
-  // lib.optionalAttrs (options ? environment.etc) {
-    environment.etc = {
-      inputs.source = inputsFarm;
-      offline-python.source = offline-python;
-      pkgsFarm.source = systemPkgsFarm;
+  config =
+    lib.optionalAttrs (options ? environment.etc) {
+      environment.etc = {
+        inputs.source = inputsFarm;
+        offline-python.source = offline-python;
+        pkgsFarm.source = systemPkgsFarm;
+      };
+    }
+    // lib.optionalAttrs (options ? xdg.dataFile) {
+      xdg.dataFile = {
+        inputs.source = inputsFarm;
+        offline-python.source = offline-python;
+        pkgsFarm.source = homePkgsFarm;
+      };
     };
-  }
-  // lib.optionalAttrs (options ? xdg.dataFile) {
-    xdg.dataFile = {
-      inputs.source = inputsFarm;
-      offline-python.source = offline-python;
-      pkgsFarm.source = homePkgsFarm;
-    };
-  };
 }
