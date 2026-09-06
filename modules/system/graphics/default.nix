@@ -50,6 +50,7 @@ in
         moduleParams.nvidia = {
           NVreg_RegistryDwords = "RmLogonRC=0x1;RmEngineContextSwitchTimeoutUs=0x01FFFFFF";
           NVreg_EnableS0ixPowerManagement = 1;
+          NVreg_DynamicPowerManagementVideoMemoryThreshold = 0;
         };
         powerManagement = {
           enable = true;

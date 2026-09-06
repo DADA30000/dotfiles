@@ -3,13 +3,16 @@
   inputs,
   lib,
   pkgs,
+  kekma,
   ...
 }:
 with lib;
 let
-  package = (pkgs.btop.override { cudaSupport = true; }).overrideAttrs {
-    src = inputs.btop;
-  };
+  package =
+    (pkgs.btop.override { cudaSupport = if kekma.nvidia then true else false; }).overrideAttrs
+      {
+        src = inputs.btop;
+      };
   cfg = config.btop;
 in
 {

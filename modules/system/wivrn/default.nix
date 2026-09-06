@@ -37,13 +37,16 @@ let
     ];
   };
   pkg_wivrn = inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-    cudaSupport = true;
+    cudaSupport = if config.graphics.nvidia.enable then true else false;
     xrizer = xrizer_multilib;
     opencomposite = opencomposite_multilib;
   };
   wivrn_i686 = pkgs.pkgsi686Linux.callPackage (pkg_wivrn.override) {
     clientLibOnly = true;
-    git = (pkgs.pkgsi686Linux.git.override { withManual = false; }).overrideAttrs { doCheck = false; doInstallCheck = false; };
+    git = (pkgs.pkgsi686Linux.git.override { withManual = false; }).overrideAttrs {
+      doCheck = false;
+      doInstallCheck = false;
+    };
     android-tools = pkgs.android-tools.overrideAttrs (old: {
       cmakeFlags = (old.cmakeFlags or [ ]) ++ [ "-DOPENSSL_NO_ASM=ON" ];
     });

@@ -367,6 +367,15 @@ in
         initContent =
           let
             zshConfig = /* zsh */ ''
+              if [[ -z "$TERM" || "$TERM" == "dumb" ]]; then
+                if [[ "$(tty 2>/dev/null)" =~ ^/dev/tty[0-9]+$ ]]; then
+                  export TERM="linux"
+                else
+                  export TERM="xterm-256color"
+                  export COLORTERM="truecolor"
+                fi
+              fi
+
               if [[ -n "$INSIDE_SESATT" ]]; then
                 export SUDO_EDITOR="sesatt --editor"
                 export VISUAL="sesatt --editor"

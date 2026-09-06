@@ -137,11 +137,6 @@ in
     from-unstable = mkEnableOption "Use Hyprland package from UNSTABLE nixpkgs";
     stable = mkEnableOption "Use Hyprland from nixpkgs";
     enable-plugins = mkEnableOption "Hyprland plugins";
-    mpvpaper = mkEnableOption "video wallpapers with mpvpaper";
-    wallpaper = mkEnableOption "image wallpapers with swaybg";
-    wlogout = mkEnableOption "power options menu";
-    hyprlock = mkEnableOption "locking program";
-    rofi = mkEnableOption "rofi (used as applauncher and dmenu)";
     additional-monitors = mkOption {
       default = [ ];
       type = lib.types.listOf lib.types.attrs;
@@ -528,70 +523,43 @@ in
                 pkill -SIGUSR1 -f "gpu-screen-recorder.*-w $MON_NAME.*" && \
                 notify-send 'GPU-Screen-Recorder' "Повтор с $MON_NAME успешно сохранён"
               '';
-              rofi = pkgs.writers.writeDash "rofi" ''
-                pkill rofi || rofi \
-                  -show drun \
-                  -show-icons \
-                  -hover-select \
-                  -me-select-entry ''' \
-                  -me-accept-entry MousePrimary \
-                  -run-command '${pkgs.dash}/bin/dash -c '\'''
-                      for arg do
-                          case "$arg" in
-                              *=*) 
-                                  ;;
-                              *) 
-                                  exec_path="$arg"
-                                  break
-                                  ;;
-                          esac
-                      done
-
-                      n=$(basename "$exec_path" | sed "s/\\\\x2d/-/g" | tr -cd "[:alnum:]. _-")
-                      exec app2unit -a "$n" -- "$@"
-                  '\''' -- {cmd}'
-              '';
-              rofi_cmd = pkgs.writers.writeDash "rofi_cmd" ''
-                pkill rofi || rofi \
-                  -show run \
-                  -hover-select \
-                  -me-select-entry ''' \
-                  -me-accept-entry MousePrimary \
-                  -run-command 'app2unit -- {cmd}'
-              '';
             in
             bind-exec [
               [
                 "code:122"
-                "pactl set-sink-volume @DEFAULT_SINK@ -4096"
+                "noctalia msg volume-down"
               ]
               [
                 "code:123"
-                "pactl set-sink-volume @DEFAULT_SINK@ +4096"
+                "noctalia msg volume-up"
+              ]
+              [
+                "code:121"
+                "noctalia msg volume-mute"
+              ]
+              [
+                "code:232"
+                "noctalia msg brightness-down"
+              ]
+              [
+                "code:233"
+                "noctalia msg brightness-up"
               ]
               [
                 "Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-              ]
-              [
-                "${mod} + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+                "noctalia msg screenshot-region"
               ]
               [
                 "SHIFT + Print"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+                "noctalia msg screenshot-fullscreen"
               ]
               [
                 "${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m region -z"
-              ]
-              [
-                "${mod} + ALT + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m window -z"
+                "noctalia msg screenshot-region"
               ]
               [
                 "${mod} + SHIFT + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -m output -z"
+                "noctalia msg screenshot-fullscreen"
               ]
               [
                 "MENU"
@@ -610,36 +578,28 @@ in
                 "app2unit -- ${read-text} region rus+osd"
               ]
               [
-                "${mod} + MENU"
+                "${mod} + CTRL + MENU"
                 "app2unit -- ${read-text} window rus+osd"
               ]
               [
-                "SHIFT + MENU"
+                "CTRL + SHIFT + MENU"
                 "app2unit -- ${read-text} output rus+osd"
               ]
               [
                 "CTRL + Print"
-                "app2unit -- hyprshot -z -m region -r d | satty -f -"
-              ]
-              [
-                "CTRL + ${mod} + Print"
-                "app2unit -- hyprshot -z -m window -r d | satty -f -"
+                "noctalia msg screenshot-region 'satty -f -'"
               ]
               [
                 "CTRL + SHIFT + Print"
-                "app2unit -- hyprshot -z -m output -r d | satty -f -"
+                "noctalia msg screenshot-fullscreen 'satty -f -'"
               ]
               [
-                "CTRL + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m region -r d | satty -f -"
+                "${mod} + CTRL + O"
+                "noctalia msg screenshot-region 'satty -f -'"
               ]
               [
-                "CTRL + ALT + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m window -r d | satty -f -"
-              ]
-              [
-                "CTRL + SHIFT + ${mod} + O"
-                "app2unit -- env XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m output -r d | satty -f -"
+                "${mod} + CTRL + SHIFT + O"
+                "noctalia msg screenshot-fullscreen 'satty -f -'"
               ]
               [
                 "${mod} + CTRL + Q"
@@ -655,7 +615,7 @@ in
               ]
               [
                 "${mod} + CTRL + V"
-                "rofi -modi clipboard:cliphist-rofi-img -show clipboard -show-icons -hover-select -me-select-entry '' -me-accept-entry MousePrimary"
+                "noctalia msg panel-toggle clipboard"
               ]
               [
                 "${mod} + ALT + mouse_up"
@@ -691,7 +651,7 @@ in
               ]
               [
                 "${mod} + H"
-                "killall -SIGUSR1 .waybar-wrapped"
+                "noctalia msg bar-toggle"
               ]
               [
                 "${mod} + L"
@@ -711,7 +671,7 @@ in
               ]
               [
                 "${mod} + M"
-                "app2unit -- wlogout -b 2 -L 500px -R 500px -c 30px -r 30px"
+                "noctalia msg panel-toggle session"
               ]
               [
                 "${mod} + E"
@@ -861,12 +821,12 @@ in
               ]
               [
                 "${mod} + CTRL + ${mod}_L "
-                "hl.dsp.exec_raw [[${rofi_cmd}]]"
+                "hl.dsp.exec_raw [[noctalia-run]]"
                 { release = true; }
               ]
               [
                 "${mod} + ${mod}_L"
-                "hl.dsp.exec_raw [[${rofi}]]"
+                "hl.dsp.exec_raw [[noctalia msg panel-toggle launcher]]"
                 { release = true; }
               ]
               [
@@ -886,11 +846,6 @@ in
               match.title = "Извлечённый текст";
             }
             {
-              no_max_size = true;
-              pin = true;
-              match.class = "polkit-mate-authentication-agent-1";
-            }
-            {
               opacity = "0.99 override 0.99 override";
               match.title = "^(QDiskInfo|MainPicker)$";
             }
@@ -901,32 +856,15 @@ in
                 title = "negative:Steam";
               };
             }
-            {
-              fullscreen_state = "0 3";
-              match = {
-                class = "firefox";
-                title = "^(.*Discord.* — Mozilla Firefox.*)$";
-              };
-            }
           ];
           permission = [
-            {
-              binary = "${lib.escapeRegex (lib.getExe pkgs.hyprpicker)}";
-              type = "screencopy";
-              mode = "allow";
-            }
             {
               binary = "${lib.escapeRegex (lib.getExe pkgs.wayvr)}";
               type = "screencopy";
               mode = "allow";
             }
             {
-              binary = "${lib.escapeRegex (lib.getExe pkgs.grim)}";
-              type = "screencopy";
-              mode = "allow";
-            }
-            {
-              binary = "${lib.escapeRegex (lib.getExe config.programs.hyprlock.package)}";
+              binary = "${lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped"}";
               type = "screencopy";
               mode = "allow";
             }
@@ -947,30 +885,12 @@ in
               match.namespace = ".*";
             }
             {
-              ignore_alpha = 0.9;
-              no_anim = true;
-              match.namespace = "selection";
-            }
-            {
-              no_anim = true;
-              match.namespace = "hyprpicker";
-            }
-            {
               ignore_alpha = 0;
-              match.namespace = "^(corner0|overview|indicator0|launcher|quicksettings|swaync-control-center|rofi|waybar|swaync-notification-window)$";
+              match.namespace = "^noctalia-.*$";
             }
             {
-              animation = "popin 90%";
-              match.namespace = "^(rofi|logout_dialog)$";
-            }
-            {
-              ignore_alpha = 0.02;
-              animation = "slide left";
-              match.namespace = "swaync-control-center";
-            }
-            {
-              ignore_alpha = 0.02;
-              match.namespace = "swaync-notification-window";
+              no_anim = true;
+              match.namespace = "^noctalia-.*$";
             }
           ];
           on = [
@@ -982,8 +902,6 @@ in
                     ${mkPluginExecEntries plugins}
                     hl.exec_cmd [[app2unit -s b -- kbuildsycoca6]]
                     hl.exec_cmd [[app2unit -s b -- ${nautilus-listener}/bin/nautilus-listener]]
-                    hl.exec_cmd [[app2unit -s b -- wl-paste --watch cliphist store]]
-                    hl.exec_cmd [[app2unit -s b -- wl-clip-persist --clipboard regular]]
                     hl.exec_cmd [[app2unit -s b -- fumon]]
                     hl.exec_cmd [[app2unit -s b -- xhost +si:localuser:root]]
                   end
@@ -992,16 +910,6 @@ in
             }
           ];
         };
-    };
-    systemd.user.services.polkit_mate = {
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
-      };
-      Service = {
-        ExecStart = "${pkgs.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
-        Restart = "always";
-        StartLimitInterval = 0;
-      };
     };
     xdg = {
       configFile."hypr/plugins/split-monitor-workspaces".source = inputs.split-monitor-workspaces;
@@ -1015,6 +923,287 @@ in
       };
     };
     programs = {
+      noctalia = {
+        enable = true;
+        systemd.enable = true;
+        package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
+          patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/noctalia.patch ];
+        });
+        customPalettes.transparent-blue = {
+          id = "transparent-blue";
+          name = "Transparent Blue";
+          dark = {
+            primary = "#2362ba";
+            onPrimary = "#ffffff";
+            secondary = "#7aa2f7";
+            onSecondary = "#0a1120";
+            tertiary = "#4575da";
+            onTertiary = "#ffffff";
+            error = "#ff5e5e";
+            onError = "#ffffff";
+            surface = "#00000033";
+            onSurface = "#dddddd";
+            surfaceVariant = "#00000033";
+            onSurfaceVariant = "#9bb0c9";
+            outline = "#00000000"; # Disabled static non-hover outlines
+            shadow = "#000000";
+            hover = "#2362ba55";
+            onHover = "#ffffff";
+            terminal = {
+              foreground = "#dddddd";
+              background = "#000000";
+              selectionFg = "#ffffff";
+              selectionBg = "#2362ba";
+              cursorText = "#000000";
+              cursor = "#7aa2f7";
+              normal = {
+                black = "#161a22";
+                red = "#d78787";
+                green = "#a6e3a1";
+                yellow = "#fab387";
+                blue = "#2362ba";
+                magenta = "#cca0e4";
+                cyan = "#7aa2f7";
+                white = "#dddddd";
+              };
+              bright = {
+                black = "#525866";
+                red = "#ff5e5e";
+                green = "#a6e3a1";
+                yellow = "#fab387";
+                blue = "#79b4fc";
+                magenta = "#cca0e4";
+                cyan = "#7aa2f7";
+                white = "#ffffff";
+              };
+            };
+          };
+          light = {
+            primary = "#2362ba";
+            onPrimary = "#ffffff";
+            secondary = "#3275a8";
+            onSecondary = "#ffffff";
+            tertiary = "#4575da";
+            onTertiary = "#ffffff";
+            error = "#d78787";
+            onError = "#ffffff";
+            surface = "#00000033";
+            onSurface = "#111827";
+            surfaceVariant = "#00000033";
+            onSurfaceVariant = "#334155";
+            outline = "#00000000";
+            shadow = "#000000";
+            hover = "#2362ba55";
+            onHover = "#ffffff";
+            terminal = {
+              foreground = "#111827";
+              background = "#f5f7fb";
+              selectionFg = "#ffffff";
+              selectionBg = "#2362ba";
+              cursorText = "#ffffff";
+              cursor = "#2362ba";
+              normal = {
+                black = "#1e293b";
+                red = "#c01c28";
+                green = "#26a269";
+                yellow = "#d97706";
+                blue = "#2362ba";
+                magenta = "#8b5cf6";
+                cyan = "#0284c7";
+                white = "#cbd5e1";
+              };
+              bright = {
+                black = "#64748b";
+                red = "#dc2626";
+                green = "#16a34a";
+                yellow = "#f59e0b";
+                blue = "#3b82f6";
+                magenta = "#a855f7";
+                cyan = "#38bdf8";
+                white = "#f8fafc";
+              };
+            };
+          };
+        };
+
+        # Noctalia Settings: Exact merge of your settings.toml + config.toml (filtered non-defaults)
+        settings = {
+          theme = {
+            source = "custom";
+            custom_palette = "transparent-blue";
+          };
+
+          wallpaper.default.path = ../../../stuff/wallpaper.png;
+
+          audio.enable_overdrive = true;
+          control_center.calendar.show_events_card = false;
+          location.auto_locate = true;
+          osd.background_opacity = 0.25;
+          system.monitor.gpu_poll_seconds = 1;
+
+          lockscreen = {
+            blurred_desktop = true;
+            blur_intensity = 0.6;
+          };
+
+          shell = {
+            font_family = "Noto Sans";
+            setup_wizard_enabled = false;
+            card_borders = false;
+            settings_window_translucent = true;
+            popup_shadows = false;
+            launch_apps_custom_command = "app2unit-wrapped $CMD";
+
+            clipboard_history_max_entries = 1000;
+            polkit_agent = true;
+
+            screenshot.directory = "~/Pictures/Screenshots";
+
+            panel = {
+              control_center_placement = "floating";
+              wallpaper_placement = "floating";
+              session_placement = "floating";
+              open_near_click_control_center = true;
+              open_near_click_session = true;
+              open_near_click_launcher = true;
+              transparency_mode = "glass";
+              background_opacity = 0.18;
+              card_opacity = 0.30;
+              borders = false;
+              shadow = false;
+            };
+
+            session.actions = [
+              { action = "lock"; }
+              {
+                action = "logout";
+                command = "app2unit -- hyprlogout";
+              }
+              {
+                action = "suspend";
+                command = "systemctl suspend";
+              }
+              {
+                action = "reboot";
+                command = "app2unit -- hyprshutdown -t 'Перезагрузка...' --post-cmd 'systemctl reboot'";
+              }
+              {
+                action = "shutdown";
+                command = "app2unit -- hyprshutdown -t 'Выключение...' --post-cmd 'systemctl poweroff'";
+                variant = "destructive";
+              }
+            ];
+
+            animation = {
+              scroll_speed = 0.2;
+              scroll_step = 160.0;
+              tab_switch_speed = 1.5;
+              workspace_speed = 1.2;
+            };
+          };
+
+          notification = {
+            position = "top_left";
+            background_opacity = 0.25;
+          };
+
+          bar.default = {
+            position = "top";
+            thickness = 32;
+            margin_edge = 0;
+            margin_ends = 0;
+            padding = 0;
+            capsule_thickness = 1.0;
+            capsule = false;
+            background_opacity = 0.0;
+            shadow = false;
+
+            start = [ "group:left" ];
+            center = [ "group:center" ];
+            end = [ "group:right" ];
+
+            capsule_group = [
+              {
+                id = "left";
+                members = [
+                  "session"
+                  "clock"
+                  "workspaces"
+                  "notifications"
+                  "vpn"
+                  "tray"
+                ];
+                fill = "#00000033";
+                padding = 10.0;
+                radius_top_left = 0.0;
+                radius_top_right = 0.0;
+                radius_bottom_right = 15.0;
+                radius_bottom_left = 0.0;
+              }
+              {
+                id = "center";
+                members = [ "active_window" ];
+                fill = "#00000033";
+                padding = 18.0;
+                radius_top_left = 0.0;
+                radius_top_right = 0.0;
+                radius_bottom_right = 15.0;
+                radius_bottom_left = 15.0;
+              }
+              {
+                id = "right";
+                members = [
+                  "input_volume"
+                  "volume"
+                  "bluetooth"
+                  "network"
+                  "battery"
+                  "cpu"
+                  "control-center"
+                ];
+                fill = "#00000033";
+                padding = 10.0;
+                radius_top_left = 0.0;
+                radius_top_right = 0.0;
+                radius_bottom_right = 0.0;
+                radius_bottom_left = 15.0;
+              }
+            ];
+          };
+
+          widget = {
+            workspaces = {
+              show_labels = false;
+              pill_scale = 0.70;
+              active_pill_size = 2.2;
+              inactive_pill_size = 0.9;
+              persistent_count = 10;
+              capsule_radius = 8.0;
+              focused_color = "#2362ba";
+              occupied_color = "#DDDDDD";
+              empty_color = "#555555";
+            };
+
+            active_window = {
+              icon_size = 18.0;
+              min_length = 0.0;
+              max_length = 300.0;
+            };
+
+            volume.show_label = true;
+            battery.show_label = true;
+            network.show_label = true;
+
+            cpu = {
+              type = "sysmon";
+              stat = "cpu_usage";
+              show_glyph = true;
+              show_value = true;
+              glyph_position = "after";
+            };
+          };
+        };
+      };
       satty = {
         enable = true;
         settings = {
@@ -1075,71 +1264,6 @@ in
           ];
         };
       };
-      hyprlock = mkIf cfg.hyprlock {
-        enable = true;
-        settings = {
-          background = [
-            {
-              monitor = "";
-              color = "rgba(0, 0, 0, 1)";
-            }
-          ];
-
-          input-field = [
-            {
-              monitor = "";
-              size = "12.5%, 5%";
-              outline_thickness = 2;
-              dots_size = 0.2;
-              dots_spacing = 0.15;
-              dots_center = true;
-              outer_color = "rgb(000000)";
-              inner_color = "rgb(000000)";
-              font_color = "rgb(255, 255, 255)";
-              fade_on_empty = true;
-              fail_text = "";
-              placeholder_text = "";
-              hide_input = false;
-              position = "0%, 0%";
-              halign = "center";
-              valign = "center";
-            }
-          ];
-
-          label = [
-            {
-              monitor = "";
-              text = "$TIME";
-              color = "rgb(255, 255, 255)";
-              font_size = 50;
-              font_family = "Noto Sans";
-              position = "0%, 30%";
-              halign = "center";
-              valign = "center";
-            }
-            {
-              monitor = "";
-              text = "Введите пароль от пользователя $USER";
-              color = "rgb(255, 255, 255)";
-              font_size = 25;
-              font_family = "Noto Sans";
-              position = "0%, 15%";
-              halign = "center";
-              valign = "center";
-            }
-            {
-              monitor = "";
-              text = "$ATTEMPTS[]";
-              color = "rgb(255, 255, 255, 0.05)";
-              font_size = 25;
-              font_family = "Noto Sans";
-              position = "-48%, -48%";
-              halign = "center";
-              valign = "center";
-            }
-          ];
-        };
-      };
     };
     services = {
       hypridle = {
@@ -1159,110 +1283,6 @@ in
           ];
         };
       };
-    };
-    systemd.user.services = {
-      swaybg = {
-        Install.WantedBy = [ config.wayland.systemd.target ];
-        Unit = {
-          ConditionEnvironment = "WAYLAND_DISPLAY";
-          Description = "swaybg wallpaper daemon";
-          After = [ config.wayland.systemd.target ];
-          PartOf = [ config.wayland.systemd.target ];
-        };
-        Service = {
-          ExecStart = lib.escapeShellArgs [
-            "${lib.getExe pkgs.swaybg}"
-            "-i"
-            "${../../../stuff/wallpaper.png}"
-            "-m"
-            "fill"
-          ];
-          Restart = "always";
-          RestartSec = "10";
-        };
-      };
-      mpvpaper = mkIf (!cfg.wallpaper && cfg.mpvpaper) {
-        Install.WantedBy = [ "graphical-session.target" ];
-        Service = {
-          ExecStart = "${pkgs.mpvpaper}/bin/mpvpaper -s -o 'no-audio loop input-ipc-server=/tmp/mpvpaper-socket hwdec=auto' '*' ${../../../stuff/wallpaper.mp4}";
-          Restart = "on-failure";
-        };
-      };
-    };
-    programs.rofi = mkIf cfg.rofi {
-      enable = true;
-      font = "JetBrainsMono NF 14";
-      theme = ../../../stuff/theme.rasi;
-    };
-    programs.wlogout = mkIf cfg.wlogout {
-      enable = true;
-      layout = [
-        {
-          label = "lock";
-          action = "hyprlock";
-          text = "Lock";
-          keybind = "l";
-        }
-        {
-          label = "logout";
-          action = "loginctl terminate-user \"\"";
-          text = "Logout";
-          keybind = "e";
-        }
-        {
-          label = "shutdown";
-          action = "systemctl poweroff";
-          text = "Shutdown";
-          keybind = "s";
-        }
-        {
-          label = "reboot";
-          action = "systemctl reboot";
-          text = "Reboot";
-          keybind = "r";
-        }
-      ];
-      style = ''
-        * {
-        	background-image: none;
-        	font-family: "JetBrainsMono Nerd Font";
-        	font-size: 16px;
-        }
-        window {
-        	background-color: rgba(0, 0, 0, 0);
-        }
-        button {
-          color: #FFFFFF;
-          border-style: solid;
-        	border-radius: 15px;
-        	border-width: 3px;
-        	background-color: rgba(0, 0, 0, 0);
-        	background-repeat: no-repeat;
-        	background-position: center;
-        	background-size: 25%;
-        }
-
-        button:focus, button:active, button:hover {
-        	background-color: rgba(0, 0, 0, 0);
-        	color: #4470D2;
-        }
-
-        #lock {
-            background-image: image(url("${../../../stuff/wlogout/lock.png}"));
-        }
-
-        #logout {
-            background-image: image(url("${../../../stuff/wlogout/logout.png}"));
-        }
-
-        #shutdown {
-            background-image: image(url("${../../../stuff/wlogout/shutdown.png}"));
-        }
-
-        #reboot {
-            background-image: image(url("${../../../stuff/wlogout/reboot.png}"));
-        }
-      '';
     };
   };
 }

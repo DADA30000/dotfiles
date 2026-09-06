@@ -932,7 +932,6 @@ let
 
         nativeBuildInputs = [
           pkgs.pkgsStatic.rustc
-          pkgs.pkgsStatic.stdenv.cc
         ];
 
         buildPhase = ''
@@ -945,6 +944,22 @@ let
             -C panic=abort \
             -C strip=symbols \
             -O ${path} -o ${pname}
+        '';
+
+        installPhase = ''
+          mkdir -p $out/bin
+          install -m 0755 ${pname} $out/bin/${pname}
+        '';
+      };
+    c =
+      path:
+      pkgs.pkgsStatic.stdenv.mkDerivation rec {
+        pname = "${stripExtension (baseNameOf path)}";
+        name = pname;
+        dontUnpack = true;
+
+        buildPhase = ''
+          $CC -O2 -Wall ${path} -o ${pname}
         '';
 
         installPhase = ''
@@ -1166,6 +1181,10 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.nix-tree
+    pkgs.n-m3u8dl-re
+    pkgs.yt-dlp
+    pkgs.hyprshutdown
     pkgs.pi-coding-agent
     pkgs.gcc
     pkgs.libcap-text-verifier

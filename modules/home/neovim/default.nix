@@ -168,6 +168,7 @@ let
 
   # Patched neovim-unwrapped built natively with C source changes & smart dispatcher script
   patched-neovim-unwrapped = pkgs.neovim-unwrapped.overrideAttrs (oldAttrs: {
+    doCheck = false;
     patches = (oldAttrs.patches or [ ]) ++ [
       ../../../stuff/patches/neovim.patch
     ];

@@ -136,6 +136,28 @@ in
 
   config = mkIf cfg.enable {
     xresources.properties = lib.mkForce null;
+    programs.hyprtoolkit = {
+      enable = true;
+      settings = {
+        background = "0x00000000";
+        base = "0x30000000";
+        alternate_base = "0x00000000";
+        text = "0xFFFFFFFF";
+        bright_text = "0xFFFFFFFF";
+        accent = "0x00000000";
+        accent_secondary = "0x00000000";
+        font_family = "Noto Sans";
+        font_family_monospace = "JetBrainsMono Nerd Font";
+        font_size = 11;
+        small_font_size = 10;
+        h1_size = 18;
+        h2_size = 15;
+        h3_size = 13;
+        rounding_large = 14;
+        rounding_small = 8;
+        icon_theme = "Papirus-Dark";
+      };
+    };
     xdg = {
       dataFile = {
         "color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;

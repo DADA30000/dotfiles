@@ -57,15 +57,11 @@
 
   cava.enable = true;
 
-  swaync.enable = true;
-
   kitty.enable = true;
 
   zsh.enable = true;
 
   file-associations.enable = true;
-
-  waybar.enable = true;
 
   btop.enable = true;
 
@@ -107,24 +103,6 @@
 
   };
 
-  mpd = {
-
-    enable = false;
-
-    ncmpcpp = false;
-
-  };
-
-  flatpak = {
-
-    enable = false;
-
-    packages = [
-      "io.github.Soundux"
-    ];
-
-  };
-
   hyprland = {
 
     enable = true;
@@ -134,16 +112,6 @@
     stable = true;
 
     enable-plugins = true;
-
-    mpvpaper = false;
-
-    wallpaper = true;
-
-    wlogout = true;
-
-    hyprlock = true;
-
-    rofi = true;
 
   };
 

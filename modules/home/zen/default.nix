@@ -454,6 +454,7 @@ in
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
           "browser.aboutConfig.showWarning" = false;
+          "browser.tabs.fadeOutUnloadedTabs" = true;
           "gfx.webrender.all" = true;
           "sine.engine.auto-update" = false;
           "browser.toolbars.bookmarks.visibility" = "always";

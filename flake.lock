@@ -316,22 +316,6 @@
         "url": "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz"
       }
     },
-    "flake-compat_7": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1767039857,
-        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
-        "owner": "edolstra",
-        "repo": "flake-compat",
-        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
-        "type": "github"
-      },
-      "original": {
-        "owner": "edolstra",
-        "repo": "flake-compat",
-        "type": "github"
-      }
-    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
@@ -1321,6 +1305,26 @@
         "type": "github"
       }
     },
+    "noctalia": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788659825,
+        "narHash": "sha256-daBPX2MPsVb0fD/wTX68K6lWU4uqWwNrmqhcBTCGTwc=",
+        "owner": "noctalia-dev",
+        "repo": "noctalia",
+        "rev": "224da6dd4360c5d2400fea967736c8195396ebb9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "noctalia-dev",
+        "repo": "noctalia",
+        "type": "github"
+      }
+    },
     "nos": {
       "flake": false,
       "locked": {
@@ -1543,6 +1547,7 @@
         "nixpak": "nixpak",
         "nixpkgs": "nixpkgs",
         "nixpkgs-xr": "nixpkgs-xr",
+        "noctalia": "noctalia",
         "nos": "nos",
         "open-wallpaper-engine": "open-wallpaper-engine",
         "pipewire-screenaudio": "pipewire-screenaudio",
@@ -1557,7 +1562,6 @@
         "steam-app-id-list": "steam-app-id-list",
         "uv2nix": "uv2nix",
         "way-secure": "way-secure",
-        "waybar": "waybar",
         "waywallen": "waywallen",
         "waywallen-aur": "waywallen-aur",
         "waywallen-display": "waywallen-display",
@@ -1884,27 +1888,6 @@
         "owner": "~whynothugo",
         "repo": "way-secure",
         "type": "sourcehut"
-      }
-    },
-    "waybar": {
-      "inputs": {
-        "flake-compat": "flake-compat_7",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1787226111,
-        "narHash": "sha256-1JFW1v/v539cS0M3KwCf3NAo9ulNawyaOTxDe1naPe4=",
-        "owner": "Alexays",
-        "repo": "Waybar",
-        "rev": "d561b9d6a11d34f459aab3986507d6907ff319c7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Alexays",
-        "repo": "Waybar",
-        "type": "github"
       }
     },
     "waywallen": {

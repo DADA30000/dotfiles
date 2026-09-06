@@ -8,10 +8,7 @@ let
   cfg = config.disks;
   normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
   commonUserPersistence = {
-    files = [
-      ".cache/rofi-entry-history.txt"
-      ".cache/cliphist/db"
-    ];
+    files = [ ];
     directories = [
       "Videos"
       "Desktop"
@@ -23,6 +20,7 @@ let
       ".umu"
       ".nixpak"
       ".thunderbird"
+      ".local/state/noctalia"
       ".local/state/wireplumber"
       ".local/share/zsh"
       ".local/share/icons"
@@ -129,6 +127,7 @@ in
           }
         ];
         files = [
+          "/etc/ly/save.txt"
           "/etc/machine-id"
           "/var/lib/searx-secret"
         ];

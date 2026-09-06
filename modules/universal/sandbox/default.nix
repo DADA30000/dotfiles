@@ -63,9 +63,8 @@ let
     version = "1.0";
     dontUnpack = true;
 
-    nativeBuildInputs = with pkgs.pkgsStatic; [
-      rustc
-      stdenv.cc
+    nativeBuildInputs = [
+      pkgs.pkgsStatic.rustc
     ];
 
     buildPhase = ''
@@ -91,9 +90,8 @@ let
     version = "1.0";
     dontUnpack = true;
 
-    nativeBuildInputs = with pkgs.pkgsStatic; [
-      rustc
-      stdenv.cc
+    nativeBuildInputs = [
+      pkgs.pkgsStatic.rustc
     ];
 
     buildPhase = ''
@@ -224,7 +222,10 @@ let
             SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
             SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
             COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
-            if [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null && [ -f "$SANDBOX_DIR/cgroup_path" ]; then
+            PARENT_PID="$(cat "$SANDBOX_DIR/parent_pid" 2>/dev/null)"
+
+            # Check if parent supervisor is alive, command pipe is writable, and cgroup exists
+            if [ -n "$PARENT_PID" ] && kill -0 "$PARENT_PID" 2>/dev/null && [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null && [ -f "$SANDBOX_DIR/cgroup_path" ]; then
               CMD_LINE=""
               SQ=$(printf '\047')
               for arg in "$TARGET" "$@"; do
@@ -248,11 +249,12 @@ let
               PAYLOAD="eval \"\$(printf '%s' '$B64_CMD' | ${pkgs.coreutils}/bin/base64 -d)\""
               printf "%s\n" "$PAYLOAD" >> "$COMMAND_PIPE"
             else
+              # Stale or dead sandbox: destroy old scope and wipe state
               if [ -f "$SANDBOX_DIR/scope" ]; then
-                systemctl --user stop "$(cat "$SANDBOX_DIR/scope")"
-                rm "$SANDBOX_DIR/cgroup_path"
-                rm "$SANDBOX_DIR/scope"
+                systemctl --user stop "$(cat "$SANDBOX_DIR/scope")" 2>/dev/null || true
               fi
+              rm -f "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/parent_pid" "$COMMAND_PIPE"
+
               MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
               MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
               case "$MY_SCOPE" in
@@ -260,6 +262,7 @@ let
                   mkdir -p "$SANDBOX_DIR"
                   printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
                   printf '%s\n' "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
+                  printf '%s\n' "$$" > "$SANDBOX_DIR/parent_pid"
                   ;;
                 *)
                   exec app2unit -a "$APP_ID" -- "$0" "$@"
@@ -268,6 +271,7 @@ let
               EXIT_CODE=0
               cleanup() {
                 trap "" INT TERM EXIT
+                rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope"
                 systemctl --user --no-block stop "$MY_SCOPE" >/dev/null 2>&1 </dev/null &
                 exit $EXIT_CODE
               }
@@ -351,8 +355,6 @@ let
                   done
                 " -- "$@"
               ' -- "$TARGET" "$@" &
-              PARENT_PID=$!
-              echo "$PARENT_PID" > "$SANDBOX_DIR/parent_pid"
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
                   EXIT_CODE=1
@@ -375,9 +377,8 @@ let
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
-              while [ $(wc -l < "$MY_CGROUP/inside/cgroup.procs" || echo 0) -gt 1 ]; do
-                sleep 1
-              done
+              cgroup-watcher "$MY_CGROUP/inside/cgroup.procs" "$GUEST_HOST_PID"
+              rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope"
               systemctl --user --no-block stop "$MY_SCOPE"
             fi
           else
@@ -453,6 +454,8 @@ let
                       "CAP_NET_ADMIN"
                       "--cap-add"
                       "CAP_SETFCAP"
+                      "--cap-add"
+                      "CAP_NET_RAW"
                     ];
 
                     sockets = {
@@ -536,6 +539,8 @@ let
                         (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
                         (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
+                        (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
+                        (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
                       ]
                       ++ (lib.optionals gpu [
                         "/run/opengl-driver"

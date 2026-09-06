@@ -315,6 +315,8 @@ in
 
     home = config.docs.man-cache-home;
 
+    nvidia = config.graphics.nvidia.enable;
+
   };
 
   boot = {
@@ -452,6 +454,11 @@ in
 
   systemd = {
 
+    tmpfiles.rules = [
+      "d /var/lib/AccountsService/users 0755 root root -"
+      "f /var/lib/AccountsService/users/l0lk3k 0644 root root - [User]\\nSession=\\nIcon=${pkgs.nixos-icons}/share/icons/hicolor/512x512/apps/nix-snowflake.png\\nSystemAccount=false\\n"
+    ];
+
     oomd = {
       enable = true;
       enableUserSlices = true;
@@ -519,38 +526,13 @@ in
           serviceConfig = {
             Restart = "always";
             RestartSec = "2s";
-            ExecStart = "${pkgs.writeShellScript "cgroup-executioner" ''
-              CGROUP_ROOT="/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service"
-              echo "Cgroup Executioner active (Pure Builtins). Polling root: $CGROUP_ROOT"
-              while true; do
-                  for event_file in "$CGROUP_ROOT"/*/*.scope/pids.events "$CGROUP_ROOT"/*/*/*.scope/pids.events; do
-                      [[ -f "$event_file" ]] || continue
-                      while IFS= read -r line; do
-                          if [[ "$line" == max\ [1-9]* ]]; then
-                              scope_dir="''${event_file%/pids.events}"
-                              scope_name="''${scope_dir##*/}"
-                              if [[ -f "$scope_dir/pids.current" ]]; then
-                                  IFS= read -r current_tasks < "$scope_dir/pids.current"
-                                  if [[ "$current_tasks" -gt 0 && "$scope_name" == *.scope ]]; then
-                                      echo "CRITICAL: $scope_name breached TasksMax! Enforcing full teardown."
-                                      ${pkgs.systemd}/bin/systemctl --user stop "$scope_name"
-                                  fi
-                              fi
-                              break
-                          fi
-                      done < "$event_file"
-                  done
-                  sleep 0.5
-              done
-            ''}";
+            ExecStart = "/run/current-system/sw/bin/cgroup-executioner";
           };
         };
       };
     };
 
     services = {
-
-      avahi-daemon.serviceConfig.ExecStartPre = "${pkgs.coreutils}/bin/rm -f /run/avahi-daemon/pid";
 
       NetworkManager-wait-online.enable = false;
 
@@ -614,9 +596,13 @@ in
 
     lact.enable = true;
 
+    upower.enable = true;
+
     logind.settings.Login.HandlePowerKey = "suspend";
 
     blueman.enable = true;
+
+    accounts-daemon.enable = true;
 
     gvfs.enable = true;
 
@@ -675,6 +661,9 @@ in
       enable = true;
       capSysAdmin = true;
       openFirewall = true;
+      package = (
+        pkgs.sunshine.override { cudaSupport = if config.graphics.nvidia.enable then true else false; }
+      );
     };
 
     udev.extraRules = ''
