@@ -29,7 +29,7 @@ let
     clickingAds = true;
     firstInstall = false;
     disableHidingForDNT = false;
-    prefetchingDisabled = false;
+    prefetchingDisabled = true;
     user-filters = "! 5 янв. 2026 г. https://mangalib.org\nmangalib.org##.size-lg.variant-primary.is-glow.is-outline.is-full-width.is-filled.btn\nmangalib.org###\\30 7cecdc2-bda5-46a6-ab11-4b098ffd8489\nmangalib.org##div.mx_b:nth-of-type(2)";
   };
   initial_redirector_settings = toJSON {

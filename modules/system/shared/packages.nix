@@ -1305,7 +1305,6 @@ let
     pkgs.vmpk
     pkgs.socat
     pkgs.wl-clipboard
-    pkgs.networkmanager_dmenu
     pkgs.neovide
     pkgs._7zz-rar
     pkgs.crudini
@@ -1363,7 +1362,6 @@ let
     pkgs.ssdeep
     pkgs.gtk3
     pkgs.kdePackages.kservice
-    pkgs.rofi-bluetooth
     pkgs.tesseract
     pkgs.imagemagick
     pkgs.libsForQt5.qtsvg
