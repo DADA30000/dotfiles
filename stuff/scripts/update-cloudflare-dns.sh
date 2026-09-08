@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -euo pipefail
 
 # Enable nullglob to safely handle directories with no .conf files

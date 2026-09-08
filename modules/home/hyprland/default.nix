@@ -655,7 +655,7 @@ in
               ]
               [
                 "${mod} + L"
-                "hyprlock"
+                "noctalia msg session lock"
               ]
               [
                 "${mod} + Q"

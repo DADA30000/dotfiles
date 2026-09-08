@@ -175,9 +175,9 @@ in
         templates = "${config.home.homeDirectory}/Templates";
       };
       configFile = {
+        "Vencord/settings/settings.json".source = vencord_settings;
         "menus/applications.menu".source = ../../../stuff/plasma-applications.menu;
-        "GIMP_fake".source = ../../../stuff/GIMP;
-        "networkmanager-dmenu".source = ../../../stuff/networkmanager-dmenu;
+        "GIMP_fake".source = "${inputs.photogimp}/.config/GIMP";
         "Kvantum".source = ../../../stuff/Kvantum;
         "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
           mkdir -p $out
@@ -202,7 +202,6 @@ in
         "theme.conf" = ../../../stuff/qimgv/theme.conf;
       })
       // (mkSourcePrefix "vesktop" {
-        themes = ./themes;
         "settings/settings.json" = vencord_settings;
         "settings.json" = vesktop_settings;
       })
@@ -210,27 +209,12 @@ in
         assets = "${fluent-dark}/gtk-4.0/assets";
         "gtk-dark.css" = "${fluent-dark}/gtk-4.0/gtk-dark.css";
         "gtk.css" = "${fluent-dark}/gtk-4.0/gtk-dark.css";
-      })
+      });
       # // (mkSourcePrefix "gtk-3.0" {
       #   assets = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/assets";
       #   "gtk-dark.css" = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/gtk-dark.css";
       #   "gtk.css" = "${fluent-dark}/share/themes/Fluent-round/gtk-3.0/gtk-dark.css";
       # })
-      // (mkSourcePrefix "Vencord" {
-        themes = ./themes;
-        "settings/settings.json" = vencord_settings;
-      });
-      #desktopEntries.discord.settings = {
-      #  Exec = "discord --ozone-platform-hint=auto %U";
-      #  Categories = "Network;InstantMessaging;Chat";
-      #  GenericName = "All-in-one cross-platform voice and text chat for gamers";
-      #  Icon = "discord";
-      #  MimeType = "x-scheme-handler/discord";
-      #  Keywords = "discord;vencord;electron;chat";
-      #  Name = "Discord";
-      #  StartupWMClass = "discord";
-      #  Type = "Application";
-      #};
     };
     dconf.settings = {
       "org/nemo/preferences" = {
@@ -267,9 +251,8 @@ in
           if [[ -z "''${DRY_RUN:-}" ]]; then
             if [[ ! -f ${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this ]]; then 
               mkdir -p $VERBOSE_ARG "${config.xdg.configHome}/GIMP"
-              cp -r $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
-              find ${config.xdg.configHome}/GIMP -type f -exec chmod 644 {} \;
-              find ${config.xdg.configHome}/GIMP -type d -exec chmod 755 {} \;
+              cp -r --no-preserve=mode $VERBOSE_ARG "${config.xdg.configHome}/GIMP_fake/3.0" "${config.xdg.configHome}/GIMP/3.0"
+              touch "${config.xdg.configHome}/GIMP/3.0/check-do_not_delete_this"
             fi
           fi
         '';

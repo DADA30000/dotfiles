@@ -35,6 +35,7 @@ let
       ".config/pi"
       ".config/git"
       ".config/zen"
+      ".config/flm"
       ".config/wivrn"
       ".config/gtk-3.0"
       ".config/sunshine"

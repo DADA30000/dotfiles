@@ -428,6 +428,50 @@ index 91c12f073..8a7a548a8 100644
    inline constexpr Range<float> kCornerRadiusScaleRange{0.0F, 2.0F, 0.05F};
    inline constexpr Range<std::int64_t> kControlCenterWidthRange{600, 1200, 10};
    inline constexpr Range<std::int64_t> kScreenCornersSizeRange{1, 100, 1};
+diff --git a/src/launcher/dmenu_ipc.cpp b/src/launcher/dmenu_ipc.cpp
+index c135fc918..5b13b9dcd 100644
+--- a/src/launcher/dmenu_ipc.cpp
++++ b/src/launcher/dmenu_ipc.cpp
+@@ -205,7 +205,7 @@ void DmenuIpcService::finalizeSession(Session& session) {
+     return;
+   }
+   // Only one dmenu session can drive the launcher at a time; don't disrupt an open one.
+-  if (m_panelManager->isOpenPanel("launcher")) {
++  if (m_panelManager->isOpenPanel("launcher") && !m_panelManager->isClosing()) {
+     kLog.debug("rejecting session {}: launcher already open", session.token);
+     discardSession(session.connFd);
+     return;
+@@ -249,8 +249,9 @@ void DmenuIpcService::finalizeSession(Session& session) {
+       [this, connFd](std::optional<std::string> selection) { completeSession(connFd, std::move(selection)); }
+   );
+   m_launcherPanel->addProvider(std::move(provider));
+-  m_launcherPanel->setScopedProvider(providerId, prompt);
+   m_panelManager->openPanel("launcher", PanelOpenRequest{});
++  m_launcherPanel->setScopedProvider(providerId, prompt);
++  m_launcherPanel->onOpen({});
+ }
+ 
+ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> selection) {
+@@ -260,6 +261,8 @@ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> sel
+     return;
+   }
+ 
++  const std::string sessionProviderId = (*it)->providerId;
++
+   if (selection.has_value()) {
+     (*it)->response = *selection;
+     (*it)->response += '\n';
+@@ -272,8 +275,8 @@ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> sel
+ 
+   // The provider is being iterated by LauncherPanel during activate()/reset(); mutate
+   // the panel after this event completes.
+-  DeferredCall::callLater([this]() {
+-    if (m_launcherPanel != nullptr) {
++  DeferredCall::callLater([this, sessionProviderId]() {
++    if (m_launcherPanel != nullptr && m_launcherPanel->scopedProviderId() == sessionProviderId) {
+       m_launcherPanel->clearProvidersWithIdPrefix("dmenu.stdin.");
+       m_launcherPanel->setScopedProvider({});
+     }
 diff --git a/src/render/animation/animation.h b/src/render/animation/animation.h
 index 5512c5ad0..394795fbc 100644
 --- a/src/render/animation/animation.h
@@ -1001,7 +1045,7 @@ index 188c83bf9..94cae3b85 100644
  }
  
 diff --git a/src/shell/bar/widgets/workspaces_widget.cpp b/src/shell/bar/widgets/workspaces_widget.cpp
-index bef0f941c..2797a122f 100644
+index bef0f941c..4979f0994 100644
 --- a/src/shell/bar/widgets/workspaces_widget.cpp
 +++ b/src/shell/bar/widgets/workspaces_widget.cpp
 @@ -76,7 +76,8 @@ WorkspacesWidget::WorkspacesWidget(
@@ -1071,6 +1115,24 @@ index bef0f941c..2797a122f 100644
    );
  
    // Reserve final bounds before the first animated frame to avoid one-frame overflow.
+@@ -1116,6 +1145,17 @@ void WorkspacesWidget::applyItemLayout(Item& it) {
+       it.indicator->setPosition(dotX, dotY);
+       it.indicator->setFrameSize(dotSize, dotSize);
+       it.indicator->setRadius(dotSize * 0.5F);
++    } else if (!m_showLabels) {
++      const float basePillSize = std::round(kWorkspacePillDefaultHeight * m_contentScale * m_pillScale);
++      const float pillH = std::min(itemH, std::round(basePillSize * m_inactivePillSize));
++      const float pillW = std::max(pillH, it.currentWidth);
++      const float dotX = m_isVertical ? 0.0F : std::round((itemW - pillW) * 0.5F);
++      const float dotY = m_isVertical ? std::round((itemH - pillW) * 0.5F) : std::round((itemH - pillH) * 0.5F);
++      const float drawW = m_isVertical ? pillH : pillW;
++      const float drawH = m_isVertical ? pillW : pillH;
++      it.indicator->setPosition(dotX, dotY);
++      it.indicator->setFrameSize(drawW, drawH);
++      it.indicator->setRadius(pillH * 0.5F);
+     } else {
+       it.indicator->setPosition(0.0F, 0.0F);
+       it.indicator->setFrameSize(itemW, itemH);
 diff --git a/src/shell/bar/widgets/workspaces_widget.h b/src/shell/bar/widgets/workspaces_widget.h
 index 36827eee9..d5c44ccf4 100644
 --- a/src/shell/bar/widgets/workspaces_widget.h
@@ -2600,18 +2662,31 @@ index 9f950594c..0f41c6334 100644
      if (widget.type == "sticker" || widget.type == "label") {
        const auto opacityIt = widget.settings.find("opacity");
 diff --git a/src/shell/launcher/launcher_panel.cpp b/src/shell/launcher/launcher_panel.cpp
-index b7b55ee58..aedcceb0c 100644
+index b7b55ee58..ae2ba6458 100644
 --- a/src/shell/launcher/launcher_panel.cpp
 +++ b/src/shell/launcher/launcher_panel.cpp
-@@ -1015,7 +1015,7 @@ void LauncherPanel::finishActivation(LauncherProvider& provider, const std::stri
+@@ -1015,7 +1015,8 @@ void LauncherPanel::finishActivation(LauncherProvider& provider, const std::stri
    if (shouldTrackUsage() && provider.trackUsage()) {
      m_usageTracker.record(provider.id(), resultId);
    }
 -  PanelManager::instance().closePanel(false);
-+  PanelManager::instance().closePanel(true);
++  const bool isDmenuStdin = provider.id().starts_with("dmenu.stdin.");
++  PanelManager::instance().closePanel(!isDmenuStdin);
    if (copied && provider.supportsAutoPaste() && m_onCopiedActivation) {
      m_onCopiedActivation();
    }
+diff --git a/src/shell/launcher/launcher_panel.h b/src/shell/launcher/launcher_panel.h
+index 13640bce9..e32215621 100644
+--- a/src/shell/launcher/launcher_panel.h
++++ b/src/shell/launcher/launcher_panel.h
+@@ -40,6 +40,7 @@ public:
+   // onInputChanged queries only that provider and skips prefix routing/overview.
+   // Cleared on close.
+   void setScopedProvider(std::string_view providerId, std::string_view placeholder = {});
++  [[nodiscard]] std::string_view scopedProviderId() const noexcept { return m_scopedProviderId; }
+ 
+   void create() override;
+   void onOpen(std::string_view context) override;
 diff --git a/src/shell/lockscreen/lock_surface.cpp b/src/shell/lockscreen/lock_surface.cpp
 index 9b98e95a8..a9e315e4a 100644
 --- a/src/shell/lockscreen/lock_surface.cpp
@@ -2759,6 +2834,18 @@ index 72c65b879..da0ca2d08 100644
        );
      }
  
+diff --git a/src/shell/panel/panel_manager.h b/src/shell/panel/panel_manager.h
+index b9b5c26c8..baaf1a757 100644
+--- a/src/shell/panel/panel_manager.h
++++ b/src/shell/panel/panel_manager.h
+@@ -108,6 +108,7 @@ public:
+ 
+   [[nodiscard]] bool isOpen() const noexcept;
+   [[nodiscard]] bool isOpenPanel(std::string_view panelId) const noexcept;
++  [[nodiscard]] bool isClosing() const noexcept { return m_closing; }
+   [[nodiscard]] bool isPanelTransitionActive() const noexcept;
+   [[nodiscard]] bool isAttachedOpen() const noexcept;
+   // Output the active panel is on; null when none is open.
 diff --git a/src/shell/panel/panel_surface_style.h b/src/shell/panel/panel_surface_style.h
 index 91f267ea4..55c7af838 100644
 --- a/src/shell/panel/panel_surface_style.h

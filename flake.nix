@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
+    photogimp = {
+      url = "github:Diolinux/Photogimp";
+      flake = false;
+    };
     anicli-ru = {
       url = "github:vypivshiy/ani-cli-ru";
       flake = false;

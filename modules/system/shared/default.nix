@@ -541,15 +541,15 @@ in
         after = [ "user@1000.service" ];
       };
 
-      tailscaled = {
-        wantedBy = lib.mkForce [ "user@1000.service" ];
-        after = [ "user@1000.service" ];
-      };
+      # tailscaled = {
+      #   wantedBy = lib.mkForce [ "user@1000.service" ];
+      #   after = [ "user@1000.service" ];
+      # };
 
-      zerotierone = {
-        wantedBy = lib.mkForce [ "user@1000.service" ];
-        after = [ "user@1000.service" ];
-      };
+      # zerotierone = {
+      #   wantedBy = lib.mkForce [ "user@1000.service" ];
+      #   after = [ "user@1000.service" ];
+      # };
 
       cups = {
         wantedBy = lib.mkForce [ "user@1000.service" ];
@@ -608,9 +608,9 @@ in
 
     locate.enable = true;
 
-    tailscale.enable = true;
+    tailscale.enable = false;
 
-    zerotierone.enable = true;
+    zerotierone.enable = false;
 
     systembus-notify.enable = true;
 

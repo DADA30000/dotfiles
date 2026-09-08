@@ -1387,6 +1387,22 @@
         "type": "github"
       }
     },
+    "photogimp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788593621,
+        "narHash": "sha256-opZHG/+4nJIb3k7Nzws5Mc/A3uNsU4HWV24w8pru8Qk=",
+        "owner": "Diolinux",
+        "repo": "Photogimp",
+        "rev": "b3c639de87120e98b7d224ee4c9e116464cf0292",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Diolinux",
+        "repo": "Photogimp",
+        "type": "github"
+      }
+    },
     "pipewire-screenaudio": {
       "inputs": {
         "nixpkgs": [
@@ -1550,6 +1566,7 @@
         "noctalia": "noctalia",
         "nos": "nos",
         "open-wallpaper-engine": "open-wallpaper-engine",
+        "photogimp": "photogimp",
         "pipewire-screenaudio": "pipewire-screenaudio",
         "pmparser": "pmparser",
         "pyproject-build-systems": "pyproject-build-systems",
@@ -1577,11 +1594,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787120223,
-        "narHash": "sha256-E5+xGIDd71MLZshyA39r+fXDvR9qwzKCjTiKKX9yOnU=",
+        "lastModified": 1788731526,
+        "narHash": "sha256-UMi0kR7yj+UvI9+mHp4VAUhvvCJnLEY431ry2n2WWD4=",
         "owner": "DADA30000",
         "repo": "rust-helpers",
-        "rev": "91321940d7132995f270b703f49d34ccd91fb399",
+        "rev": "30d6b250b3c541c90af8a5b5b9495e5ef7b65d0d",
         "type": "github"
       },
       "original": {
