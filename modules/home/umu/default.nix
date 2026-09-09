@@ -91,6 +91,228 @@ let
         ];
       });
 
+  umu-rebase-pfx = pkgs.writeScriptBin "umu-rebase-pfx" ''
+    #!${pkgs.python3}/bin/python3
+    import os
+    import sys
+    import re
+    import argparse
+
+    def parse_reg(path):
+        sections = {}
+        current_sec = None
+        header = []
+        if not path or not os.path.exists(path):
+            return header, sections
+
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        i = 0
+        n = len(lines)
+        while i < n:
+            line = lines[i]
+            stripped = line.strip()
+            if stripped.startswith("[") and "]" in stripped:
+                sec_name = stripped[:stripped.find("]")+1]
+                current_sec = sec_name
+                sections[current_sec] = {
+                    "raw_header": line.rstrip("\r\n"),
+                    "values": {}
+                }
+                i += 1
+            elif current_sec is not None:
+                if not stripped or stripped.startswith("#time=") or stripped.startswith(";"):
+                    i += 1
+                    continue
+                full_val_lines = [line.rstrip("\r\n")]
+                while full_val_lines[-1].endswith("\\") and i + 1 < n:
+                    i += 1
+                    full_val_lines.append(lines[i].rstrip("\r\n"))
+
+                first_line = full_val_lines[0]
+                eq = first_line.find("=")
+                if eq != -1:
+                    k = first_line[:eq].strip()
+                    sections[current_sec]["values"][k] = full_val_lines
+                i += 1
+            else:
+                header.append(line.rstrip("\r\n"))
+                i += 1
+
+        return header, sections
+
+    def rebase_reg(old_base_p, new_base_p, upper_p):
+        _, old_base = parse_reg(old_base_p)
+        new_header, new_base = parse_reg(new_base_p)
+        _, upper = parse_reg(upper_p)
+
+        added_sections = {}
+        modified_keys = {}
+
+        for sec, data in upper.items():
+            if sec not in old_base:
+                added_sections[sec] = data
+            else:
+                old_vals = old_base[sec]["values"]
+                for k, val_lines in data["values"].items():
+                    if k not in old_vals or old_vals[k] != val_lines:
+                        modified_keys.setdefault(sec, {})[k] = val_lines
+
+        for sec, keys in modified_keys.items():
+            if sec in new_base:
+                new_base[sec]["values"].update(keys)
+            else:
+                added_sections[sec] = {"raw_header": sec, "values": keys}
+
+        new_base.update(added_sections)
+
+        with open(upper_p, "w", encoding="utf-8") as f:
+            f.write("\n".join(new_header) + "\n")
+            for sec, data in new_base.items():
+                f.write("\n" + data["raw_header"] + "\n")
+                for val_lines in data["values"].values():
+                    f.write("\n".join(val_lines) + "\n")
+
+    def parse_ini(path):
+        sections = {}
+        current_sec = "DEFAULT"
+        sections[current_sec] = {"raw_header": "", "lines": []}
+        if not path or not os.path.exists(path):
+            return sections
+
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    current_sec = stripped
+                    sections[current_sec] = {"raw_header": line.rstrip("\r\n"), "lines": []}
+                else:
+                    sections[current_sec]["lines"].append(line.rstrip("\r\n"))
+        return sections
+
+    def rebase_ini(old_base_p, new_base_p, upper_p):
+        old_base = parse_ini(old_base_p)
+        new_base = parse_ini(new_base_p)
+        upper = parse_ini(upper_p)
+
+        for sec, data in upper.items():
+            if sec not in new_base:
+                new_base[sec] = data
+            else:
+                old_sec_lines = set(l.strip() for l in old_base.get(sec, {}).get("lines", []))
+                new_sec_lines = set(l.strip() for l in new_base[sec]["lines"])
+
+                for line in data["lines"]:
+                    s_line = line.strip()
+                    if not s_line or s_line.startswith(";"):
+                        continue
+                    if s_line not in old_sec_lines and s_line not in new_sec_lines:
+                        new_base[sec]["lines"].append(line)
+
+        with open(upper_p, "w", encoding="utf-8") as f:
+            for sec, data in new_base.items():
+                if data["raw_header"]:
+                    f.write(data["raw_header"] + "\n")
+                for l in data["lines"]:
+                    f.write(l + "\n")
+
+    def main():
+        parser = argparse.ArgumentParser(description="Rebase Wine prefix upper layer against new Proton default prefix")
+        parser.add_argument("--old-base", default="", help="Path to old Proton base prefix")
+        parser.add_argument("--new-base", required=True, help="Path to new Proton base prefix")
+        parser.add_argument("--upper", required=True, help="Path to upper directory")
+        parser.add_argument("--home", default=os.environ.get("HOME", ""), help="User home directory")
+        args = parser.parse_args()
+
+        upper_dir = os.path.abspath(args.upper)
+        new_base_dir = os.path.abspath(args.new_base)
+        old_base_dir = os.path.abspath(args.old_base) if args.old_base else ""
+        home_dir = args.home
+
+        if not os.path.exists(upper_dir):
+            return
+
+        # 1. 3-way merge on config files found in new_base
+        for root, dirs, files in os.walk(new_base_dir):
+            for f in files:
+                full_new = os.path.join(root, f)
+                rel = os.path.relpath(full_new, new_base_dir)
+                full_upper = os.path.join(upper_dir, rel)
+
+                if not os.path.exists(full_upper) or os.path.islink(full_upper):
+                    continue
+
+                full_old = os.path.join(old_base_dir, rel) if old_base_dir else ""
+                ext = os.path.splitext(f)[1].lower()
+
+                if ext == ".reg":
+                    rebase_reg(full_old, full_new, full_upper)
+                elif ext in (".ini", ".cfg", ".conf"):
+                    rebase_ini(full_old, full_new, full_upper)
+
+        # 2. Remove duplicate/obsolete Proton runtime binaries from upper/drive_c/windows
+        # so they resolve cleanly from lowerdir (new_base) without shadowing or bloat
+        upper_win = os.path.join(upper_dir, "drive_c", "windows")
+        if os.path.exists(upper_win):
+            for root, dirs, files in os.walk(upper_win):
+                for f in files:
+                    full_upper = os.path.join(root, f)
+                    rel = os.path.relpath(full_upper, upper_dir)
+                    full_old = os.path.join(old_base_dir, rel) if old_base_dir else ""
+                    full_new = os.path.join(new_base_dir, rel)
+                    if (full_old and os.path.exists(full_old)) or os.path.exists(full_new):
+                        try:
+                            os.remove(full_upper)
+                        except OSError:
+                            pass
+            for root, dirs, files in os.walk(upper_win, topdown=False):
+                if not os.listdir(root):
+                    try:
+                        os.rmdir(root)
+                    except OSError:
+                        pass
+
+        # 3. Synchronize config_info with host paths
+        new_config_info = os.path.join(new_base_dir, "config_info")
+        if os.path.exists(new_config_info):
+            with open(new_config_info, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if home_dir:
+                content = content.replace("@UMU_USER_HOME@", home_dir)
+                content = re.sub(r"/build/[^/]+_home", home_dir, content)
+            lines = content.split("\n")
+            if len(lines) >= 9:
+                lines[8] = "1.0"
+            content = "\n".join(lines)
+            with open(os.path.join(upper_dir, "config_info"), "w", encoding="utf-8") as f:
+                f.write(content)
+
+        # 4. Set .update-timestamp to 1 matching EROFS normalized timestamps
+        with open(os.path.join(upper_dir, ".update-timestamp"), "w") as f:
+            f.write("1")
+
+        # 5. Set version
+        new_ver_file = os.path.join(new_base_dir, "version")
+        if os.path.exists(new_ver_file):
+            with open(new_ver_file, "r") as f:
+                ver = f.read().strip()
+            with open(os.path.join(upper_dir, "version"), "w") as f:
+                f.write(ver + "\n")
+
+        # 6. Remove transient Proton state files
+        for meta in ("tracked_files", "pfx.lock"):
+            p = os.path.join(upper_dir, meta)
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+    if __name__ == "__main__":
+        main()
+  '';
+
   cfg = config.umu;
 in
 {
@@ -168,19 +390,41 @@ in
       pkgs.winetricks
       pkgs.protontricks
       pkgs.xdg-utils
+      umu-rebase-pfx
 
       (pkgs.writeShellScriptBin "umu-run-wrapper" ''
-        if [[ -z "$WINEPREFIX" ]]; then
-          prefix_name=''${UMU_PREFIX_NAME:-default}
-          export WINEPREFIX=$HOME/.umu/$prefix_name
-        fi
-        if [[ ! -f "$WINEPREFIX/check-do_not_delete_this" ]]; then
-          mkdir -p "$WINEPREFIX/drive_c/windows/syswow64"
-          cp --no-preserve=mode "${openal}/bin/OpenAL32.dll" "$WINEPREFIX/drive_c/windows/syswow64/OpenAL32.dll"
-          touch "$WINEPREFIX/check-do_not_delete_this"
-        fi
-        ${pkgs.libnotify}/bin/notify-send "Starting UMU"
+        set -e
 
+        # 1. Resolve Prefix Storage Directory
+        prefix_name="''${UMU_PREFIX_NAME:-default}"
+        PREFIX_DIR="$HOME/.umu/$prefix_name"
+
+        # 2. Check if Prefix is already running (GUI Dialog via rust-helpers)
+        if command -v manage-running-prefix >/dev/null 2>&1; then
+          if ! manage-running-prefix "$prefix_name"; then
+            echo "Launch canceled by user."
+            exit 0
+          fi
+        fi
+
+        # 3. Guard against legacy / polluted prefix folders (only upper and .work allowed)
+        if [[ -d "$PREFIX_DIR" ]]; then
+          unexpected_items=$(find "$PREFIX_DIR" -mindepth 1 -maxdepth 1 ! -name "upper" ! -name ".work" ! -name ".*" 2>/dev/null)
+          if [[ -n "$unexpected_items" ]]; then
+            ${pkgs.libnotify}/bin/notify-send -u critical "UMU Prefix Error" "Directory '$PREFIX_DIR' contains non-overlay files! Overlay prefix must only contain 'upper' and '.work'."
+            echo "ERROR: Prefix '$PREFIX_DIR' is not a valid overlay prefix directory!" >&2
+            echo "Found non-overlay files:" >&2
+            echo "$unexpected_items" >&2
+            echo "Please migrate or remove legacy prefix contents." >&2
+            exit 1
+          fi
+        else
+          mkdir -p "$PREFIX_DIR/upper" "$PREFIX_DIR/.work"
+        fi
+
+        ${pkgs.libnotify}/bin/notify-send "Starting UMU" "Launching $prefix_name"
+
+        # 4. Resolve Proton version
         if [[ -z "$(printenv PROTONPATH)" ]]; then
           case "$UMU_PROTON_TYPE" in
             ${protonCaseBranches}
@@ -190,6 +434,7 @@ in
           esac
         fi
 
+        # 5. Ensure runtime EROFS is mounted
         MOUNT_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/umu"
         if [[ -x "/run/wrappers/bin/prepare-umu" ]]; then
           /run/wrappers/bin/prepare-umu
@@ -206,17 +451,61 @@ in
           exit 1
         fi
 
-        STEAM_SOURCE="$XDG_DATA_HOME/Steam"
-        STEAM_DEST="$WINEPREFIX/drive_c/Program Files (x86)/Steam"
-        mkdir -p "$STEAM_DEST"
-        if [[ -f "$STEAM_SOURCE/steamclient64.dll" ]]; then
-          cp --no-preserve=mode "$STEAM_SOURCE/steamclient64.dll" "$STEAM_DEST/steamclient64.dll"
-          cp --no-preserve=mode "$STEAM_SOURCE/steamclient.dll" "$STEAM_DEST/steamclient.dll"
-        else
-          cp --no-preserve=mode "$PROTONPATH/files/lib/wine/x86_64-windows/lsteamclient.dll" "$STEAM_DEST/steamclient64.dll"
-          cp --no-preserve=mode "$PROTONPATH/files/lib/wine/i386-windows/lsteamclient.dll" "$STEAM_DEST/steamclient.dll"
+        # 6. Resolve Base Prefix (lowerdir from umu-runtime)
+        PROTON_NAME=$(basename "$PROTONPATH")
+        BASE_PFX="$MOUNT_DIR/base_prefixes/$PROTON_NAME"
+        if [[ ! -d "$BASE_PFX" ]]; then
+          # Fallback if base_prefixes is not in runtime
+          BASE_PFX="$PROTONPATH/files/share/default_pfx"
+          [[ -d "$BASE_PFX" ]] || BASE_PFX="$PROTONPATH/dist/share/default_pfx"
         fi
 
+        # 7. Migrate/Rebase Upper Layer if Proton Version Changed
+        CURRENT_PROTON_VER=$(cat "$PROTONPATH/version" 2>/dev/null || echo "unknown")
+        LAST_PROTON_VER=$(cat "$PREFIX_DIR/upper/.last_proton" 2>/dev/null || echo "")
+        LAST_PROTON_PATH=$(cat "$PREFIX_DIR/upper/.last_proton_path" 2>/dev/null || echo "")
+
+        if [[ -n "$LAST_PROTON_VER" && "$LAST_PROTON_VER" != "$CURRENT_PROTON_VER" ]]; then
+          echo "Proton version change detected ($LAST_PROTON_VER -> $CURRENT_PROTON_VER). Running delta rebase..."
+          OLD_PROTON_NAME=$(basename "$LAST_PROTON_PATH")
+          OLD_BASE="$MOUNT_DIR/base_prefixes/$OLD_PROTON_NAME"
+          [[ -d "$OLD_BASE" ]] || OLD_BASE="$LAST_PROTON_PATH/files/share/default_pfx"
+          [[ -d "$OLD_BASE" ]] || OLD_BASE="$LAST_PROTON_PATH/dist/share/default_pfx"
+
+          ${umu-rebase-pfx}/bin/umu-rebase-pfx \
+            --old-base "$OLD_BASE" \
+            --new-base "$BASE_PFX" \
+            --upper "$PREFIX_DIR/upper" \
+            --home "$HOME"
+        elif [[ ! -f "$PREFIX_DIR/upper/config_info" || ! -f "$PREFIX_DIR/upper/.update-timestamp" ]]; then
+          ${umu-rebase-pfx}/bin/umu-rebase-pfx \
+            --new-base "$BASE_PFX" \
+            --upper "$PREFIX_DIR/upper" \
+            --home "$HOME"
+        fi
+
+        echo "$CURRENT_PROTON_VER" > "$PREFIX_DIR/upper/.last_proton"
+        echo "$PROTONPATH" > "$PREFIX_DIR/upper/.last_proton_path"
+
+        # 8. Clean and recreate empty .work directory
+        unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
+        mkdir -p "$PREFIX_DIR/.work"
+
+        # 9. Setup runtime merged mountpoint in RAM
+        ORIG_UID=$(id -u)
+        ORIG_GID=$(id -g)
+        RUNTIME_ROOT="''${XDG_RUNTIME_DIR:-/run/user/$ORIG_UID}"
+        MERGED_PFX="$RUNTIME_ROOT/umu-pfx/$prefix_name"
+        mkdir -p "$MERGED_PFX"
+
+        cleanup_overlay() {
+          unshare -r umount -l "$MERGED_PFX" 2>/dev/null || umount -l "$MERGED_PFX" 2>/dev/null || true
+          rmdir "$MERGED_PFX" 2>/dev/null || true
+          unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
+        }
+        trap cleanup_overlay EXIT INT TERM
+
+        # 10. Hardware and GPU settings
         if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
           export WINEDLLOVERRIDES="steamclient64,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64=n,b;$WINEDLLOVERRIDES"
         fi
@@ -274,6 +563,22 @@ in
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.libGL}/lib:${pkgs.pkgsi686Linux.libGL}/lib"
         fi
 
+        # 11. Run via in-kernel OverlayFS + app2unit systemd scope
+        run_overlay_app() {
+          unshare -r -m env \
+            BASE_PFX="$BASE_PFX" \
+            UPPER_DIR="$PREFIX_DIR/upper" \
+            WORK_DIR="$PREFIX_DIR/.work" \
+            MERGED_PFX="$MERGED_PFX" \
+            ORIG_UID="$ORIG_UID" \
+            ORIG_GID="$ORIG_GID" \
+            UNIT_NAME="umu-pfx-$prefix_name.scope" \
+            sh -c '
+              mount -t overlay overlay -o "lowerdir=$BASE_PFX,upperdir=$UPPER_DIR,workdir=$WORK_DIR" "$MERGED_PFX" || exit 1
+              exec unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" env WINEPREFIX="$MERGED_PFX" app2unit -u "$UNIT_NAME" -- "$@"
+            ' _ "$@"
+        }
+
         if [[ "$USE_VPN" == "1" ]]; then
            export SOCKET_DIR=$(mktemp -d /tmp/umu-vpn-XXXXXX)
            export SOCKET_PATH="$SOCKET_DIR/steam_pass"
@@ -291,20 +596,16 @@ in
 
            vpnify sh -c '
              rust-bridge -r listen --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" -d
-             
              export LD_PRELOAD="$_VPN_LD_PRELOAD"
              export LD_LIBRARY_PATH="$_VPN_LD_LIBRARY_PATH"
-             
              "$0" "$@"
-             
              pkill -15 -f "rust-bridge.*listen.*$SOCKET_PATH" 2>/dev/null || true
-           ' "''${CMD[@]}"
-
+           ' run_overlay_app "''${CMD[@]}"
         else
-          "''${CMD[@]}"
+          run_overlay_app "''${CMD[@]}"
         fi
 
-        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited (if you didn't close the app, app might've crashed)"
+        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited ($prefix_name)"
       '')
       (pkgs.writeShellScriptBin "scan-umu-for-lnk" ''
         if [[ -z "$WINEPREFIX" ]]; then
@@ -337,17 +638,21 @@ in
           done
         }
 
+        # Resolve search dirs (works both when prefix is merged and offline in upper/)
         SEARCH_DIRS=()
-        if [[ -d "$WINEPREFIX/drive_c/users" ]]; then
+        users_dir="$WINEPREFIX/drive_c/users"
+        [[ ! -d "$users_dir" && -d "$WINEPREFIX/upper/drive_c/users" ]] && users_dir="$WINEPREFIX/upper/drive_c/users"
+
+        if [[ -d "$users_dir" ]]; then
           while IFS= read -r -d "" d; do
             [[ -d "$d/Desktop" ]] && SEARCH_DIRS+=("$d/Desktop")
             [[ -d "$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs" ]] && SEARCH_DIRS+=("$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs")
-          done < <(find "$WINEPREFIX/drive_c/users" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+          done < <(find "$users_dir" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
         fi
 
-        if [[ -d "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs" ]]; then
-          SEARCH_DIRS+=("$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs")
-        fi
+        pdata_dir="$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs"
+        [[ ! -d "$pdata_dir" && -d "$WINEPREFIX/upper/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs" ]] && pdata_dir="$WINEPREFIX/upper/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs"
+        [[ -d "$pdata_dir" ]] && SEARCH_DIRS+=("$pdata_dir")
 
         if [[ ''${#SEARCH_DIRS[@]} -eq 0 ]]; then
           exit 0
@@ -407,10 +712,12 @@ in
             fi
 
             if [[ -z "$actual_exe" && -n "$path_no_drive" ]]; then
-              cand="$WINEPREFIX/drive_c$path_no_drive"
-              if [[ -f "$cand" ]]; then
-                actual_exe="$cand"
-              fi
+              for check_cand in "$WINEPREFIX/upper/drive_c$path_no_drive" "$WINEPREFIX/drive_c$path_no_drive"; do
+                if [[ -f "$check_cand" ]]; then
+                  actual_exe="$check_cand"
+                  break
+                fi
+              done
             fi
 
             if [[ -n "$actual_exe" && -f "$actual_exe" ]]; then
@@ -509,7 +816,7 @@ in
         env_vpn=''${USE_VPN:-0}
         env_gameid=''${GAMEID:-""}
 
-        export WINEPREFIX=$HOME/.umu/$env_prefix_name
+        PREFIX_DIR=$HOME/.umu/$env_prefix_name
 
         if [[ -f "$actual_exe" ]]; then
           PATH_HASH=$(echo "$actual_exe$args" | md5sum | cut -c1-8)
@@ -571,16 +878,15 @@ in
                 fi
 
                 ICON_SOURCE=""
-                if [[ -n "$icon_drive" && -d "$WINEPREFIX/dosdevices/$icon_drive:" ]]; then
-                  cand=$(realpath -m "$WINEPREFIX/dosdevices/$icon_drive:$icon_path_no_drive" 2>/dev/null)
-                  [[ -f "$cand" ]] && ICON_SOURCE="$cand"
-                fi
-                if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$icon_path_no_drive" ]]; then
-                  ICON_SOURCE="$icon_path_no_drive"
-                fi
-                if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$WINEPREFIX/drive_c$icon_path_no_drive" ]]; then
-                  ICON_SOURCE="$WINEPREFIX/drive_c$icon_path_no_drive"
-                fi
+                for pfx_root in "$PREFIX_DIR/upper" "$PREFIX_DIR"; do
+                  if [[ -n "$icon_drive" && -d "$pfx_root/dosdevices/$icon_drive:" ]]; then
+                    cand=$(realpath -m "$pfx_root/dosdevices/$icon_drive:$icon_path_no_drive" 2>/dev/null)
+                    [[ -f "$cand" ]] && ICON_SOURCE="$cand" && break
+                  fi
+                  if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$pfx_root/drive_c$icon_path_no_drive" ]]; then
+                    ICON_SOURCE="$pfx_root/drive_c$icon_path_no_drive" && break
+                  fi
+                done
                 if [[ -z "$ICON_SOURCE" ]]; then
                   ICON_SOURCE="$actual_exe"
                 fi

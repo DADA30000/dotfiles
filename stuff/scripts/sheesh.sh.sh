@@ -24,7 +24,10 @@ pkexec unshare -m --propagation slave -- bash -c '
 
   mkdir -p "$MOUNT_POINT"
   chown "$1:$2" "$MOUNT_POINT"
-  bindfs --force-user=$1 --force-group=$2 /etc/nixos "$MOUNT_POINT"
+  bindfs --force-user=$1 --force-group=$2 \
+         --create-for-user=root --create-for-group=root \
+         --chown-ignore --chgrp-ignore --chmod-ignore \
+         /etc/nixos "$MOUNT_POINT"
 
   runuser -u "$3" -- \
     env \

@@ -336,12 +336,212 @@ let
     '';
   };
 
+  openal =
+    (pkgs.pkgsCross.mingw32.openal.override {
+      alsaSupport = false;
+      pulseSupport = false;
+      dbusSupport = false;
+    }).overrideAttrs
+      (old: {
+        buildInputs = [ ];
+        nativeBuildInputs = old.nativeBuildInputs ++ [
+          pkgs.cmake
+          pkgs.ninja
+        ];
+        meta = old.meta // {
+          platforms = [ "i686-windows" ];
+        };
+        preConfigure = (old.preConfigure or "") + ''
+          export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++"
+        '';
+        cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+          "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+          "-DALSOFT_REQUIRE_WINMM=ON"
+          "-DALSOFT_REQUIRE_DSOUND=ON"
+          "-DALSOFT_BACKEND_ALSA=OFF"
+          "-DALSOFT_BACKEND_OSS=OFF"
+          "-DALSOFT_BACKEND_PULSEAUDIO=OFF"
+          "-DALSOFT_BACKEND_JACK=OFF"
+          "-DALSOFT_EXAMPLES=OFF"
+          "-DALSOFT_UTILS=OFF"
+        ];
+      });
+
+  patch-proton = pkgs.writers.writePython3 "patch-proton" { doCheck = false; } ''
+    import os
+    import sys
+
+    for path in sys.argv[1:]:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            s = f.read()
+
+        if "import filecmp" not in s:
+            s = s.replace("#!/usr/bin/env python3\n", "#!/usr/bin/env python3\nimport filecmp\n", 1)
+
+        old_check = "        if file_exists(dst, follow_symlinks=False):\n            os.remove(dst)"
+        new_check = (
+            "        if file_exists(dst, follow_symlinks=False):\n"
+            "            if os.path.isfile(dst) and os.path.isfile(src):\n"
+            "                try:\n"
+            "                    if os.path.samefile(src, dst) or (os.path.getsize(src) == os.path.getsize(dst) and filecmp.cmp(src, dst, shallow=False)):\n"
+            "                        return\n"
+            "                except OSError:\n"
+            "                    pass\n"
+            "            os.remove(dst)"
+        )
+        if old_check not in s:
+            raise RuntimeError(f"Could not find old_check in {path}")
+        s = s.replace(old_check, new_check, 1)
+
+        old_file_check = "        if file_exists(dst, follow_symlinks=False):\n            os.remove(dst)\n        copyfile(src, dst)"
+        new_file_check = (
+            "        if file_exists(dst, follow_symlinks=False):\n"
+            "            if os.path.isfile(dst) and os.path.isfile(src):\n"
+            "                try:\n"
+            "                    if os.path.samefile(src, dst) or (os.path.getsize(src) == os.path.getsize(dst) and filecmp.cmp(src, dst, shallow=False)):\n"
+            "                        return\n"
+            "                except OSError:\n"
+            "                    pass\n"
+            "            os.remove(dst)\n"
+            "        copyfile(src, dst)"
+        )
+        if old_file_check not in s:
+            raise RuntimeError(f"Could not find old_file_check in {path}")
+        s = s.replace(old_file_check, new_file_check, 1)
+
+        os.chmod(path, 0o755)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(s)
+        print("Successfully patched proton script:", path)
+  '';
   runtime = pkgs.stdenv.mkDerivation {
     name = "umu-runtime.img";
     version = steamrt4_data.version;
-    nativeBuildInputs = [ pkgs.erofs-utils ];
+    nativeBuildInputs = [
+      pkgs.erofs-utils
+      pkgs.bubblewrap
+      pkgs.util-linux
+      pkgs.umu-launcher
+    ];
     phases = [ "installPhase" ];
     installPhase = ''
+      # =========================================================================
+      # STAGE 1: Generate clean base prefixes using wineboot inside bwrap
+      # =========================================================================
+      cat << "EOF" > run-wineboot-stage.sh
+      #!/bin/sh
+      set -e
+
+      TMP_HOME="$TMPDIR/stage1_home"
+      mkdir -p "$TMP_HOME/.local/share/umu/steamrt3"
+      mkdir -p "$TMP_HOME/.local/share/umu/steamrt4"
+      mkdir -p "$TMP_HOME/.local/share/umu/proton"
+
+      echo "Setting up temporary runtimes for wineboot..."
+      cp -rL --no-preserve=ownership "${steamrt3}/." "$TMP_HOME/.local/share/umu/steamrt3/"
+      cp -rL --no-preserve=ownership "${steamrt4}/." "$TMP_HOME/.local/share/umu/steamrt4/"
+
+      cp -rL --no-preserve=ownership "${proton-ge-10}/." "$TMP_HOME/.local/share/umu/proton/proton-ge-10/"
+      cp -rL --no-preserve=ownership "${proton-umu-10}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-10/"
+      cp -rL --no-preserve=ownership "${proton-umu-9}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-9/"
+      cp -rL --no-preserve=ownership "${proton-umu-8}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-8/"
+      cp -rL --no-preserve=ownership "${pkgs.proton-ge-bin.steamcompattool}/." "$TMP_HOME/.local/share/umu/proton/proton-ge-latest/"
+
+      chmod -R u+w "$TMP_HOME/.local/share/umu"
+
+      # Patch proton scripts inside stage 1
+      ${patch-proton} "$TMP_HOME"/.local/share/umu/proton/*/proton
+
+      export HOME="$TMP_HOME"
+      export XDG_DATA_HOME="$TMP_HOME/.local/share"
+      export UMU_RUNTIME_UPDATE=0
+      BASE_PFX_OUT="$TMPDIR/base_prefixes"
+      mkdir -p "$BASE_PFX_OUT"
+
+      run_wineboot_for_proton() {
+        local name="$1"
+        local pfx_path="$BASE_PFX_OUT/$name"
+        local proton_path="$TMP_HOME/.local/share/umu/proton/$name"
+        local wine_lib="$proton_path/files/lib/wine"
+        [ -d "$wine_lib" ] || wine_lib="$proton_path/dist/lib64/wine"
+        local wine_lib32="$proton_path/files/lib/wine"
+        [ -d "$wine_lib32" ] || wine_lib32="$proton_path/dist/lib/wine"
+
+        echo "Generating base prefix via wineboot for: $name"
+        mkdir -p "$pfx_path"
+        WINEPREFIX="$pfx_path" PROTONPATH="$proton_path" umu-run wineboot -u
+
+        # Inject OpenAL32.dll into syswow64
+        mkdir -p "$pfx_path/drive_c/windows/syswow64"
+        cp --no-preserve=mode "${openal}/bin/OpenAL32.dll" "$pfx_path/drive_c/windows/syswow64/OpenAL32.dll"
+
+        # Inject Steam client stubs
+        local steam_dest="$pfx_path/drive_c/Program Files (x86)/Steam"
+        mkdir -p "$steam_dest"
+        if [ -f "$wine_lib/x86_64-windows/lsteamclient.dll" ]; then
+          cp --no-preserve=mode "$wine_lib/x86_64-windows/lsteamclient.dll" "$steam_dest/steamclient64.dll"
+        fi
+        if [ -f "$wine_lib32/i386-windows/lsteamclient.dll" ]; then
+          cp --no-preserve=mode "$wine_lib32/i386-windows/lsteamclient.dll" "$steam_dest/steamclient.dll"
+        fi
+
+        # Resolve all file symlinks into actual regular files
+        echo "Resolving file symlinks in base prefix for: $name"
+        find "$pfx_path" -type l | while read -r symlink; do
+          target=$(readlink -f "$symlink" 2>/dev/null || true)
+          if [ -n "$target" ] && [ -f "$target" ]; then
+            rm -f "$symlink"
+            cp "$target" "$symlink"
+          fi
+        done
+
+        # Remove sandbox-specific paths
+        rm -f "$pfx_path/dosdevices/x:"
+        rm -f "$pfx_path/drive_c/users/nixbld"
+
+        # Normalize config_info and .update-timestamp in base prefix
+        if [ -f "$pfx_path/config_info" ]; then
+          sed -i "s|$TMP_HOME|@UMU_USER_HOME@|g" "$pfx_path/config_info"
+          sed -i 's|^[0-9]\+\.[0-9]\+$|1.0|' "$pfx_path/config_info"
+        fi
+        echo -n "1" > "$pfx_path/.update-timestamp"
+
+        touch "$pfx_path/creation_sync_guard"
+        touch "$pfx_path/check-do_not_delete_this"
+        ln -sfn . "$pfx_path/pfx"
+      }
+
+      run_wineboot_for_proton "proton-umu-8"
+      run_wineboot_for_proton "proton-umu-9"
+      run_wineboot_for_proton "proton-umu-10"
+      run_wineboot_for_proton "proton-ge-10"
+      run_wineboot_for_proton "proton-ge-latest"
+
+      echo "Base prefixes generated successfully. Cleaning temporary runtimes..."
+      rm -rf "$TMP_HOME"
+      EOF
+
+      chmod +x run-wineboot-stage.sh
+
+      # Run stage 1 inside bwrap to provide /sys, /proc, /dev and FHS root
+      bwrap \
+        --tmpfs / \
+        --dir /sys \
+        --ro-bind /nix /nix \
+        --ro-bind /bin /bin \
+        --ro-bind /etc /etc \
+        --dev /dev \
+        --proc /proc \
+        --bind /tmp /tmp \
+        --bind /build /build \
+        ./run-wineboot-stage.sh
+
+      rm -f run-wineboot-stage.sh
+
+      # =========================================================================
+      # STAGE 2: Assemble clean EROFS filesystem with runtime & base prefixes
+      # =========================================================================
+      echo "Assembling final runtime image..."
       mkdir -p build/proton
       cp -aL "${steamrt3}" build/steamrt3
       cp -aL "${steamrt4}" build/steamrt4
@@ -351,9 +551,29 @@ let
       cp -aL "${proton-umu-8}" build/proton/proton-umu-8
       cp -aL "${pkgs.proton-ge-bin.steamcompattool}" build/proton/proton-ge-latest
 
-      # Adds write permissions to all files & dirs to satisfy pressure-vessel
+      # Ensure permissions for patching and pressure-vessel
       chmod -R u+w build
 
+      # Patch proton scripts in final image
+      ${patch-proton} build/proton/*/proton
+
+      # Copy generated clean base prefixes into image
+      mv "$TMPDIR/base_prefixes" build/base_prefixes
+
+      # Resolve any remaining file symlinks in build/ to actual file copies
+      echo "Resolving all file symlinks in build image..."
+      find build -type l | while read -r symlink; do
+        target=$(readlink -f "$symlink" 2>/dev/null || true)
+        if [ -n "$target" ] && [ -f "$target" ]; then
+          rm -f "$symlink"
+          cp "$target" "$symlink"
+        fi
+      done
+
+      # Ensure permissions for pressure-vessel
+      chmod -R u+w build
+
+      # Create immutable EROFS with inode deduplication
       mkfs.erofs \
         --force-uid=0 \
         --force-gid=0 \
