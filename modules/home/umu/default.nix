@@ -428,10 +428,6 @@ in
         DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
         CACHE_ICON_DIR="$HOME/.cache/umu/icons"
 
-        if [[ -d "$CACHE_ICON_DIR" ]]; then
-          rm -rf "$CACHE_ICON_DIR"/* 2>/dev/null || true
-        fi
-
         for d_file in "$DESKTOP_DIR"/umu-*.desktop; do
           [[ -f "$d_file" ]] || continue
 
@@ -484,8 +480,8 @@ in
         for i_file in "$ICON_DIR"/*; do
           [[ -e "$i_file" ]] || continue
           base=$(basename "$i_file" .png)
-          
-          if [[ ! -f "$DESKTOP_DIR/$base.desktop" && ! -f "$DESKTOP_DIR/$base-umu.desktop" ]]; then
+
+          if ! grep -rqF "$i_file" "$DESKTOP_DIR" && [[ ! -f "$DESKTOP_DIR/$base.desktop" && ! -f "$DESKTOP_DIR/$base-umu.desktop" ]]; then
             ${pkgs.libnotify}/bin/notify-send -u normal -i "$i_file" "Cleanup" "Removing stale icon $(basename "$i_file")"
             rm "$i_file"
           fi
@@ -543,7 +539,7 @@ in
           fi
 
           if [[ -n "$custom_icon" && "$custom_icon" != "wine" ]]; then
-            if [[ "$custom_icon" == *"/umu/icons/"* || "$custom_icon" == *"/cache/umu/"* ]]; then
+            if [[ "$custom_icon" == *"/cache/umu/"* ]]; then
               cp "$custom_icon" "$ICON_DIR/$ICON_FILE" 2>/dev/null
               ICON_SPEC="$ICON_DIR/$ICON_FILE"
             else

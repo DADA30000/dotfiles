@@ -1595,11 +1595,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1788731526,
-        "narHash": "sha256-UMi0kR7yj+UvI9+mHp4VAUhvvCJnLEY431ry2n2WWD4=",
+        "lastModified": 1788954676,
+        "narHash": "sha256-ZDtjPxWy77F7S0QiUV1/8UmbXeQIJ7Sfu+K9wcFEmCM=",
         "owner": "DADA30000",
         "repo": "rust-helpers",
-        "rev": "30d6b250b3c541c90af8a5b5b9495e5ef7b65d0d",
+        "rev": "c2f27e132c049603b244c39132b537ebad538358",
         "type": "github"
       },
       "original": {
