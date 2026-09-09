@@ -50,14 +50,6 @@ let
     '';
   };
 
-  # Dynamically list only active domains to prevent empty ghost units
-  activeDomains =
-    (lib.optionals cfg.nginx.website.enable [
-      cfg.nginx.hostName
-      "ip.${cfg.nginx.hostName}"
-    ])
-    ++ (lib.optional cfg.nginx.cape.enable "cape.${cfg.nginx.hostName}")
-    ++ (lib.optional cfg.nginx.nextcloud.enable "nc.${cfg.nginx.hostName}");
 in
 {
   options.my-services = {
@@ -151,76 +143,26 @@ in
 
     systemd = {
       services = {
-        # Cloudflare DDNS runs only when network is online
+        nginx.serviceConfig.ReadWritePaths = [ "/website/stream" ];
         cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
           description = "Update Cloudflare DDNS Records";
-          after = [ "network-online.target" ];
-          wants = [ "network-online.target" ];
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/credstore/cloudflare-ddns";
           };
         };
+      };
 
-        # 1. Prevent root setup from running at boot
-        acme-setup.wantedBy = lib.mkForce [ ];
-
-        nginx = {
-          wantedBy = lib.mkForce [ "graphical.target" ];
-          wants = [ "network-online.target" ];
-          after = [
-            "graphical.target"
-            "network-online.target"
-          ];
-          serviceConfig.ReadWritePaths = [ "/website/stream" ];
-        };
-      }
-      // lib.listToAttrs (
-        lib.concatMap (domain: [
-          # 3. Local cert verify service (runs when Nginx starts, takes ~40ms),
-          #    and does NOT trigger lego network renewals
-          {
-            name = "acme-${domain}";
-            value = {
-              wantedBy = lib.mkForce [ ];
-              before = lib.mkForce [ ];
-              wants = lib.mkForce [ "acme-setup.service" ];
-            };
-          }
-          # 4. Lego renewal service is completely decoupled from boot and login
-          {
-            name = "acme-order-renew-${domain}";
-            value = {
-              wantedBy = lib.mkForce [ ];
-              after = [ "network-online.target" ];
-            };
-          }
-        ]) activeDomains
-      );
-
-      timers =
-        (mkIf cfg.cloudflare-ddns.enable {
-          cloudflare-ddns = {
-            description = "Timer for periodically updating Cloudflare DDNS";
-            wantedBy = [ "timers.target" ];
-            timerConfig = {
-              OnBootSec = "5min";
-              OnUnitActiveSec = "1hour";
-            };
+      timers = mkIf cfg.cloudflare-ddns.enable {
+        cloudflare-ddns = {
+          description = "Timer for periodically updating Cloudflare DDNS";
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "5min";
+            OnUnitActiveSec = "1hour";
           };
-        })
-        // lib.listToAttrs (
-          map (domain: {
-            # 5. Prevent timers from running catch-up renewals on boot and delay initial tick
-            name = "acme-renew-${domain}";
-            value = {
-              timerConfig = {
-                Persistent = lib.mkForce false;
-                OnBootSec = "1h";
-              };
-            };
-          }) activeDomains
-        );
+        };
+      };
     };
   };
 }
