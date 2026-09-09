@@ -93,11 +93,11 @@ dependencies = [
     "deepdiff>=9.1.0",
     "pyasyncore>=1.0.5",
     "graphviz>=0.8.4",
-    "mmh3>=5.2.1",
+    "mmh3>=5.3.0",
     "networkx[default,extra]>=2.1",
     "pyclamd>=0.4.0",
     "pydot>=1.2.4",
-    "regex>=2026.7.19",
+    "regex>=2026.9.3",
     "scp>=0.16.1",
     "urlextract==1.5.0",
     "pdfminer==20191125",
@@ -115,6 +115,15 @@ maco = ["maco"]
 gcp = ["google-cloud-storage", "google-cloud-pubsub"]
 yara = ["plyara"]
 mcp = ["fastmcp", "httpx"]
+azure = [
+    "azure-identity",
+    "msrest",
+    "msrestazure",
+    "azure-mgmt-compute",
+    "azure-mgmt-network",
+    "azure-mgmt-storage",
+    "azure-storage-blob",
+]
 dist = [
     "fastapi",
 ]

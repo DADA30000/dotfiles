@@ -1148,7 +1148,7 @@ let
       {
         bubblewrap = {
           sharePid = true;
-          bind.ro = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
+          bind.rw = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
         };
       };
     additional_outside_commands = ''
@@ -1181,6 +1181,9 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.dash
+    pkgs.furmark
+    pkgs.xrdb
     pkgs.nix-tree
     pkgs.n-m3u8dl-re
     pkgs.yt-dlp
@@ -1321,7 +1324,7 @@ let
     pkgs.jdk25
     pkgs.moonlight-qt
     pkgs.osu-lazer-bin
-    pkgs.mindustry
+    #pkgs.mindustry
     pkgs.xonotic
     pkgs.supertux
     pkgs.supertuxkart
@@ -1362,7 +1365,6 @@ let
     pkgs.ssdeep
     pkgs.gtk3
     pkgs.kdePackages.kservice
-    pkgs.tesseract
     pkgs.imagemagick
     pkgs.libsForQt5.qtsvg
     pkgs.kdePackages.qtsvg

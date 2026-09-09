@@ -474,8 +474,9 @@ in
 
       sing-box-init = {
         description = "Sing-box Initialization and Configuration Generator";
-        wantedBy = [ "user@1000.service" ];
-        after = [ "user@1000.service" ];
+        wantedBy = [ "multi-user.target" ];
+        after = [ "multi-user.target" ];
+        wants = [ "sing-box.service" ];
         before = [ "sing-box.service" ];
         partOf = [ "sing-box.service" ];
         path = with pkgs; [
@@ -499,7 +500,6 @@ in
       };
 
       sing-box = {
-        wantedBy = [ "user@1000.service" ];
         bindsTo = [ "sing-box-init.service" ];
         after = [ "sing-box-init.service" ];
         serviceConfig = {

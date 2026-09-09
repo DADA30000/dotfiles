@@ -536,26 +536,6 @@ in
 
       NetworkManager-wait-online.enable = false;
 
-      openrgb = {
-        wantedBy = lib.mkForce [ "user@1000.service" ];
-        after = [ "user@1000.service" ];
-      };
-
-      # tailscaled = {
-      #   wantedBy = lib.mkForce [ "user@1000.service" ];
-      #   after = [ "user@1000.service" ];
-      # };
-
-      # zerotierone = {
-      #   wantedBy = lib.mkForce [ "user@1000.service" ];
-      #   after = [ "user@1000.service" ];
-      # };
-
-      cups = {
-        wantedBy = lib.mkForce [ "user@1000.service" ];
-        after = [ "user@1000.service" ];
-      };
-
       greetd = {
         wantedBy = lib.mkForce [ "systemd-user-sessions.service" ];
         after = [ "systemd-user-sessions.service" ];
@@ -616,10 +596,10 @@ in
 
     gnome.gnome-keyring.enable = true;
 
-    journald.extraConfig = ''
-      SystemMaxUse=1G
-      RuntimeMaxUse=1G
-    '';
+    journald.settings.Journal = {
+      SystemMaxUse = "1G";
+      RuntimeMaxUse = "1G";
+    };
 
     hardware.openrgb = {
       enable = true;

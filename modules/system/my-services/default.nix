@@ -36,6 +36,9 @@ let
            add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
         }
       }
+      location /index/.theme/ {
+        alias /website/index-theme/;
+      }
       location /index/ {
         alias /website/index/;
         sub_filter_once off;
@@ -162,12 +165,11 @@ in
         # 1. Prevent root setup from running at boot
         acme-setup.wantedBy = lib.mkForce [ ];
 
-        # 2. Nginx autostarts ONLY after user 1000 logs in via greetd
         nginx = {
-          wantedBy = lib.mkForce [ "user@1000.service" ];
+          wantedBy = lib.mkForce [ "graphical.target" ];
           wants = [ "network-online.target" ];
           after = [
-            "user@1000.service"
+            "graphical.target"
             "network-online.target"
           ];
           serviceConfig.ReadWritePaths = [ "/website/stream" ];

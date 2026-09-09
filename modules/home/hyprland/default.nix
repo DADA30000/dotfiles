@@ -102,34 +102,6 @@ let
         cp hypr-plugin-loader $out/bin/
       '';
     };
-  read-text = pkgs.writeShellScript "read-text-hyprland" ''
-    # Arguments:
-    # $1 = Hyprshot Mode (e.g., "region", "window", "output")
-    # $2 = Languages (e.g., "eng+rus", "jpn+osd")
-
-    # 1. Take the shot
-    img="/tmp/ocr_snap.png"
-    rm -f $img
-    XDG_PICTURES_DIR=${config.xdg.userDirs.pictures} hyprshot -z -m "$1" -o /tmp -f ocr_snap.png
-
-    if [[ ! -s "$img" ]]; then
-      exit 0
-    fi
-
-    # 2. Universal Pre-processing (Solves the "Small Text" issue)
-    magick "$img" -resize 400% -colorspace gray -sharpen 0x1 "$img"
-
-    # 3. OCR and Display
-    # We use a specific title so Hyprland rules can catch it
-    tesseract "$img" stdout -l "$2" --psm 1 | \
-    zenity --text-info \
-           --title="Извлечённый текст" \
-           --editable \
-           --width=800 --height=500
-
-    # 4. Cleanup
-    rm "$img"
-  '';
 in
 {
   options.hyprland = {
@@ -562,30 +534,6 @@ in
                 "noctalia msg screenshot-fullscreen"
               ]
               [
-                "MENU"
-                "app2unit -- ${read-text} region eng+osd"
-              ]
-              [
-                "${mod} + MENU"
-                "app2unit -- ${read-text} window eng+osd"
-              ]
-              [
-                "SHIFT + MENU"
-                "app2unit -- ${read-text} output eng+osd"
-              ]
-              [
-                "CTRL + MENU"
-                "app2unit -- ${read-text} region rus+osd"
-              ]
-              [
-                "${mod} + CTRL + MENU"
-                "app2unit -- ${read-text} window rus+osd"
-              ]
-              [
-                "CTRL + SHIFT + MENU"
-                "app2unit -- ${read-text} output rus+osd"
-              ]
-              [
                 "CTRL + Print"
                 "noctalia msg screenshot-region 'satty -f -'"
               ]
@@ -904,6 +852,7 @@ in
                     hl.exec_cmd [[app2unit -s b -- ${nautilus-listener}/bin/nautilus-listener]]
                     hl.exec_cmd [[app2unit -s b -- fumon]]
                     hl.exec_cmd [[app2unit -s b -- xhost +si:localuser:root]]
+                    hl.exec_cmd [[app2unit -s b -- dash -c 'echo "Xft.dpi: 96" | xrdb -merge']]
                   end
                 '')
               ];
