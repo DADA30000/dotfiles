@@ -105,48 +105,7 @@ full)
 
   save_state() { echo "$1" >"$STATE_FILE"; }
 
-  # ------------------------------------------------------------------------------
-  # STEP 1: CAPEv2 setup
-  # ------------------------------------------------------------------------------
-  if [[ $CURRENT_STATE -le 1 ]]; then
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:%{{{pkgs.ssdeep}}}/lib:%{{{pkgs.graphviz}}}/lib
-    export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:%{{{pkgs.ssdeep}}}/lib/pkgconfig:%{{{pkgs.graphviz}}}/lib/pkgconfig
-    export PATH=$PATH:%{{{pkgs.migrate-to-uv}}}/bin:%{{{pkgs.uv}}}/bin
-    export PYTHONPATH=%{{{pkgs.python312}}}/lib/python3.12/site-packages
-    export UV_PYTHON=%{{{pkgs.python312}}}/bin/python
-    export UV_NO_MANAGED_PYTHON=true
-    export UV_SYSTEM_PYTHON=true
-    export TEMPDIR=$(%{{{pkgs.coreutils-full}}}/bin/mktemp -d)
-    export GIT_LFS_SKIP_SMUDGE=1
-
-    echo "Updating CAPEv2..."
-    git clone https://github.com/kevoreilly/CAPEv2 --depth 1 "$TEMPDIR/cape"
-    (
-      cd "$TEMPDIR/cape" || exit 1
-      mkdir -p capev2
-      sed -i '/package-mode/d' pyproject.toml
-      sed -i '/\[tool.poetry\]/d' pyproject.toml
-      echo 'print("Hello World")' >capev2/__init__.py
-      cat <<'EOF' >>pyproject.toml
-
-[tool.hatch.build.targets.wheel]
-packages = [
-  "dummy"
-]
-EOF
-      uv add -r extra/optional_dependencies.txt
-      uv lock
-      mkdir -p nix_workspace
-      mv pyproject.toml nix_workspace
-      mv uv.lock nix_workspace
-      mv capev2 nix_workspace
-    )
-    sudo rm -rf /etc/nixos/modules/system/cape/nix_workspace
-    sudo cp -r "$TEMPDIR/cape/nix_workspace" /etc/nixos/modules/system/cape
-    rm -rf "$TEMPDIR"
-
-    save_state 2
-  fi
+  save_state 2
 
   # ------------------------------------------------------------------------------
   # STEP 2: Fetch SteamRT4
