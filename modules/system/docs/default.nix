@@ -8,7 +8,6 @@
   home-modules,
   ...
 }:
-with lib;
 let
   cfg = config.docs;
   standardBuildOptionsDocs =
@@ -17,11 +16,11 @@ let
       poisonModule =
         { options, ... }:
         {
-          config = listToAttrs (
+          config = lib.listToAttrs (
             map (n: {
               name = n;
               value = abort "documentation depends on config";
-            }) (filter (n: n != "_module") (attrNames options))
+            }) (lib.filter (n: n != "_module") (lib.attrNames options))
           );
         };
       evaled = lib.evalModules {
@@ -73,7 +72,7 @@ let
         }; # osConfig might cause trouble !ATTENTION
       };
       prefixesToStrip = map (p: "${toString p}/") [ inputs.self ];
-      stripAnyPrefixes = flip (foldr removePrefix) prefixesToStrip;
+      stripAnyPrefixes = lib.flip (lib.foldr lib.removePrefix) prefixesToStrip;
     in
     pkgs.buildPackages.nixosOptionsDoc (
       {
@@ -155,26 +154,6 @@ let
         ${pkgs.rsync}/bin/rsync -av $manual/* $out --exclude nix-support
       '';
 
-  nix-html = pkgs.runCommand "fixup html" { manual = config.system.build.manual.manualHTML; } ''
-    mkdir -p $out
-    ${pkgs.rsync}/bin/rsync -av $manual/* $out --exclude nix-support
-  '';
-
-  darwin-manual = inputs.nix-darwin.packages.${pkgs.stdenv.hostPlatform.system}.manualHTML;
-  stable-manual =
-    (inputs.nixpkgs-stable.lib.nixosSystem {
-      modules = [ { nixpkgs.hostPlatform = lib.mkDefault pkgs.stdenv.hostPlatform.system; } ];
-    }).config.system.build.manual.manualHTML;
-
-  nos_unwrapped =
-    (pkgs.callPackage "${inputs.nos}/default.nix" {
-      inherit pkgs;
-      gitignoreSrc = {
-        gitignoreSource = (x: x);
-      };
-    }).overrideAttrs
-      { patches = [ ../../../stuff/nos.patch ]; };
-
   man-cache =
     pkgs.runCommand "generate-man-cache"
       {
@@ -189,126 +168,58 @@ let
 
   man-nix = pkgs.writeShellScriptBin "man-nix" "nvim -c 'silent! e +Man! ${man-cache}/configuration.nix.cache' ";
   man-home = pkgs.writeShellScriptBin "man-home" "nvim -c 'silent! e +Man! ${man-cache}/home-configuration.nix.cache' ";
-
-  nos-config = (pkgs.formats.toml { }).generate "nos-config" {
-    use_cache = true;
-    prewarm_cache = true;
-    auto_refresh_cache = false;
-    cache_dir = "leave_blank";
-    cache_duration = "1week";
-    enable_logging = true;
-    log_level = "error";
-    log_file = "/tmp/nos/nos.log";
-    sources = [
-      {
-        name = "NixOS Unstable";
-        url = "file://${nix-html}/share/doc/nixos/options.html";
-        version_url = "file://${nix-html}/share/doc/nixos/index.html";
-      }
-      {
-        name = "Home Manager";
-        url = "file://${hm-html}/share/doc/home-manager/options.xhtml";
-        version_url = "file://${hm-html}/share/doc/home-manager/index.xhtml";
-      }
-      {
-        name = "Home Manager NixOS";
-        url = "file://${hm-html}/share/doc/home-manager/nixos-options.xhtml";
-        version_url = "file://${hm-html}/share/doc/home-manager/index.xhtml";
-      }
-      {
-        name = "Home Manager Nix-Darwin";
-        url = "file://${hm-html}/share/doc/home-manager/nix-darwin-options.xhtml";
-        version_url = "file://${hm-html}/share/doc/home-manager/index.xhtml";
-      }
-      {
-        name = "Nix Built-ins";
-        url = "file://${pkgs.nix.doc}/share/doc/nix/manual/language/builtins.html";
-      }
-    ]
-    ++ lib.optionals cfg.nos.darwin [
-      {
-        name = "Nix-Darwin";
-        url = "file://${darwin-manual}/share/doc/darwin/index.html";
-      }
-    ]
-    ++ lib.optionals cfg.nos.stable [
-      {
-        name = "NixOS";
-        url = "file://${stable-manual}/share/doc/nixos/options.html";
-        version_url = "file://${stable-manual}/share/doc/nixos/index.html";
-      }
-    ];
-  };
-
-  nos-cache = pkgs.runCommand "nos-cache" { } ''
-    mkdir -p $out/cache
-    cp --no-preserve=mode "${nos-config}" "$out/config.toml"
-    ${pkgs.gnused}/bin/sed -i "s%cache_dir = \"leave_blank\"%cache_dir = \"$out/cache\"%" "$out/config.toml"
-    ${nos_unwrapped}/bin/nox -c "$out/config.toml"
-    ${pkgs.gnused}/bin/sed -i 's/prewarm_cache = true/prewarm_cache = false/' "$out/config.toml"
-  '';
-
-  nos = pkgs.writeShellScriptBin "nos" ''
-    ${nos_unwrapped}/bin/nox -c "${nos-cache}/config.toml" "$@"
-  '';
 in
 {
   options.docs = {
-    man-cache-home = mkOption {
-      type = types.str;
+    man-cache-home = lib.mkOption {
+      type = lib.types.str;
       visible = false;
     };
-    man-cache-nix = mkOption {
-      type = types.str;
+    man-cache-nix = lib.mkOption {
+      type = lib.types.str;
       visible = false;
     };
-    hm-html = mkOption {
-      type = types.str;
+    hm-html = lib.mkOption {
+      type = lib.types.str;
       visible = false;
     };
-    hm-man = mkOption {
-      type = types.str;
+    hm-man = lib.mkOption {
+      type = lib.types.str;
       visible = false;
     };
-    enable = mkEnableOption "docs generation (manpage, html)";
-    nos = {
-      enable = mkEnableOption "nix-option-search";
-      darwin = mkEnableOption "Render docs for nix-darwin? (Increases eval time)";
-      stable = mkEnableOption "Render docs for stable nixpkgs? (Increases eval time)";
-    };
+    enable = lib.mkEnableOption "docs generation (manpage, html)";
   };
 
-  config = mkIf cfg.enable (mkMerge [
-    {
-      documentation.nixos = {
-        enable = true;
-        includeAllModules = true;
-        extraModules = map (x: builtins.toPath x) system-modules;
-        options.warningsAreErrors = false;
-        extraModuleSources = [ inputs.self ];
-      };
-      home-manager.users.${user}.manual.manpages.enable = false;
-      environment.systemPackages = [
-        hm-manpage
-        hm-html-opener
-        hm-html
-      ];
-      docs.hm-html = "${hm-html}";
-      docs.hm-man = "${hm-manpage}";
-    }
-    {
-      docs = {
-        man-cache-home = "${man-cache}/home-configuration.nix.cache";
-        man-cache-nix = "${man-cache}/configuration.nix.cache";
-      };
-      environment.systemPackages =
-        optionals cfg.enable [
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        documentation.nixos = {
+          enable = true;
+          includeAllModules = true;
+          extraModules = map (x: builtins.toPath x) system-modules;
+          options.warningsAreErrors = false;
+          extraModuleSources = [ inputs.self ];
+        };
+        home-manager.users.${user}.manual.manpages.enable = false;
+        environment.systemPackages = [
+          hm-manpage
+          hm-html-opener
+          hm-html
+        ];
+        docs.hm-html = "${hm-html}";
+        docs.hm-man = "${hm-manpage}";
+      }
+      {
+        docs = {
+          man-cache-home = "${man-cache}/home-configuration.nix.cache";
+          man-cache-nix = "${man-cache}/configuration.nix.cache";
+        };
+        environment.systemPackages = lib.mkIf cfg.enable [
           man-nix
           man-home
-          # Below are for offline eval
           pkgs.nixos-render-docs
-        ]
-        ++ optionals (cfg.enable && cfg.nos.enable) [ nos ];
-    }
-  ]);
+        ];
+      }
+    ]
+  );
 }

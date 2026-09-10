@@ -394,173 +394,178 @@ let
                 let
                   concat = sloth.concat';
                   mkdir-concat = one: two: sloth.mkdir (sloth.concat' one two);
-                in
-                {
-                  imports = [ additional_args ];
+                  actual_config = {
+                    app.package = pkgs.dash;
+                    app.binPath = "bin/dash";
 
-                  app.package = pkgs.dash;
-                  app.binPath = "bin/dash";
+                    dbus.policies = {
+                      # Alternative tray
+                      "org.ayatana.indicator.application" = "talk";
+                      # Prevents system from sleeping or locking automatically
+                      "org.freedesktop.ScreenSaver" = "talk";
+                      # Window Manager Idle Monitor (Used to update your 'Online' status)
+                      "org.gnome.Mutter.IdleMonitor" = "talk";
+                      # Music control
+                      "org.mpris.MediaPlayer2.Player" = "talk";
+                      # Notifications
+                      "org.freedesktop.Notifications" = "talk";
+                      # xdg-desktop-portal
+                      "org.freedesktop.portal.Desktop" = "talk";
+                      # show icon in tray
+                      "org.kde.StatusNotifierWatcher" = "talk";
+                      # add actions to tray icon
+                      "com.canonical.AppMenu.Registrar" = "talk";
+                      # Get and store individual secrets
+                      "org.freedesktop.portal.Secret" = "talk";
+                      # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
+                      "org.freedesktop.portal.Documents" = "talk";
+                      # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
+                      "org.freedesktop.FileManager1" = "talk";
+                    };
 
-                  dbus.policies = {
-                    # Alternative tray
-                    "org.ayatana.indicator.application" = "talk";
-                    # Prevents system from sleeping or locking automatically
-                    "org.freedesktop.ScreenSaver" = "talk";
-                    # Window Manager Idle Monitor (Used to update your 'Online' status)
-                    "org.gnome.Mutter.IdleMonitor" = "talk";
-                    # Music control
-                    "org.mpris.MediaPlayer2.Player" = "talk";
-                    # Notifications
-                    "org.freedesktop.Notifications" = "talk";
-                    # xdg-desktop-portal
-                    "org.freedesktop.portal.Desktop" = "talk";
-                    # show icon in tray
-                    "org.kde.StatusNotifierWatcher" = "talk";
-                    # add actions to tray icon
-                    "com.canonical.AppMenu.Registrar" = "talk";
-                    # Get and store individual secrets
-                    "org.freedesktop.portal.Secret" = "talk";
-                    # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
-                    "org.freedesktop.portal.Documents" = "talk";
-                    # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
-                    "org.freedesktop.FileManager1" = "talk";
-                  };
+                    gpu.enable = gpu;
 
-                  gpu.enable = gpu;
+                    flatpak.appId = appId;
 
-                  flatpak.appId = appId;
+                    pasta = {
+                      enable = network || network_singbox;
+                      mode = "isolate";
+                    };
 
-                  pasta = {
-                    enable = network || network_singbox;
-                    mode = "isolate";
-                  };
+                    bubblewrap = {
 
-                  bubblewrap = {
+                      network = network || network_singbox || network_full;
 
-                    network = network || network_singbox || network_full;
+                      env =
+                        { }
+                        // lib.optionalAttrs wayland {
+                          WAYLAND_DISPLAY = "wayland-secure";
+                        };
 
-                    env =
-                      { }
-                      // lib.optionalAttrs wayland {
-                        WAYLAND_DISPLAY = "wayland-secure";
+                      extraArgs = lib.mkIf network_singbox [
+                        "--gid"
+                        "0"
+                        "--uid"
+                        "0"
+                        "--cap-add"
+                        "CAP_NET_ADMIN"
+                        "--cap-add"
+                        "CAP_SETFCAP"
+                        "--cap-add"
+                        "CAP_NET_RAW"
+                      ];
+
+                      sockets = {
+                        pulse = audio;
+                        pipewire = audio;
+                        wayland = false;
+                        x11 = false;
                       };
 
-                    extraArgs = lib.mkIf network_singbox [
-                      "--gid"
-                      "0"
-                      "--uid"
-                      "0"
-                      "--cap-add"
-                      "CAP_NET_ADMIN"
-                      "--cap-add"
-                      "CAP_SETFCAP"
-                      "--cap-add"
-                      "CAP_NET_RAW"
-                    ];
+                      bind = {
 
-                    sockets = {
-                      pulse = audio;
-                      pipewire = audio;
-                      wayland = false;
-                      x11 = false;
-                    };
+                        dev =
+                          [ ]
+                          ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
+                          ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
+                          ++ (lib.optionals gpu [
+                            "/dev/dri"
+                            "/dev/nvidia0"
+                            "/dev/nvidiactl"
+                            "/dev/nvidia-modeset"
+                            "/dev/nvidia-uvm"
+                            "/dev/nvidia-uvm-tools"
+                          ]);
 
-                    bind = {
+                        rw = [
+                          [
+                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/runtime")
+                            sloth.runtimeDir
+                          ]
+                          [
+                            (mkdir-concat sloth.homeDir "/.nixpak/${appId}/home")
+                            sloth.homeDir
+                          ]
+                        ]
+                        ++ (lib.optionals sandbox_shm [
+                          [
+                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
+                            "/dev/shm"
+                          ]
+                        ])
+                        ++ (lib.optionals sandbox_tmp [
+                          [
+                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
+                            "/tmp"
+                          ]
+                        ])
+                        ++ (lib.optionals start_sesatt [
+                          (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
+                        ])
+                        ++ [ (concat sloth.runtimeDir "/doc") ];
 
-                      dev =
-                        [ ]
-                        ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
-                        ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
+                        ro = [
+                          "/etc/xdg"
+                          "/run/current-system"
+                          "/etc/fonts"
+                          "/usr/share/fonts"
+                          "/etc/localtime"
+                          "/etc/profiles"
+                          "/etc/static"
+                          "/nix/profile"
+                          "/nix/var/nix/profiles"
+                          "/etc/ssl/certs"
+                          "/etc/static/ssl/certs"
+                          "/etc/pki"
+                          "/etc/hosts"
+                          "/etc/nsswitch.conf"
+                          "/etc/machine-id"
+                          "/etc/os-release"
+                          "/etc/mime.types"
+                          "/etc/passwd"
+                          "/etc/group"
+                          "/sys/class/hwmon"
+                          (concat sloth.homeDir "/.nix-profile")
+                          (concat sloth.homeDir "/.local/state/nix/profile")
+                          (concat sloth.homeDir "/.icons")
+                          (concat sloth.homeDir "/.themes")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.dirs")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.conf")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-4.0")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-3.0")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
+                          (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
+                          (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
+                        ]
                         ++ (lib.optionals gpu [
-                          "/dev/dri"
-                          "/dev/nvidia0"
-                          "/dev/nvidiactl"
-                          "/dev/nvidia-modeset"
-                          "/dev/nvidia-uvm"
-                          "/dev/nvidia-uvm-tools"
+                          "/run/opengl-driver"
+                          "/run/opengl-driver-32"
+                          "/sys/class/drm"
+                          "/sys/devices"
+                          "/sys/bus/pci"
+                        ])
+                        ++ (lib.optionals x11_shared [ "/tmp/.X11-unix" ])
+                        ++ (lib.optionals portals_for_files [ (concat (sloth.env "XDG_CONFIG_HOME") "/mimeapps.list") ])
+                        ++ (lib.optionals wayland_full [
+                          (sloth.concat [
+                            (sloth.env "XDG_RUNTIME_DIR")
+                            "/"
+                            (sloth.env "WAYLAND_DISPLAY")
+                          ])
                         ]);
 
-                      rw = [
-                        [
-                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/runtime")
-                          sloth.runtimeDir
-                        ]
-                        [
-                          (mkdir-concat sloth.homeDir "/.nixpak/${appId}/home")
-                          sloth.homeDir
-                        ]
-                      ]
-                      ++ (lib.optionals sandbox_shm [
-                        [
-                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
-                          "/dev/shm"
-                        ]
-                      ])
-                      ++ (lib.optionals sandbox_tmp [
-                        [
-                          (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
-                          "/tmp"
-                        ]
-                      ])
-                      ++ (lib.optionals start_sesatt [
-                        (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
-                      ])
-                      ++ [ (concat sloth.runtimeDir "/doc") ];
-
-                      ro = [
-                        "/etc/xdg"
-                        "/run/current-system"
-                        "/etc/fonts"
-                        "/usr/share/fonts"
-                        "/etc/localtime"
-                        "/etc/profiles"
-                        "/etc/static"
-                        "/nix/profile"
-                        "/nix/var/nix/profiles"
-                        "/etc/ssl/certs"
-                        "/etc/static/ssl/certs"
-                        "/etc/pki"
-                        "/etc/hosts"
-                        "/etc/nsswitch.conf"
-                        "/etc/machine-id"
-                        "/etc/os-release"
-                        "/etc/mime.types"
-                        "/etc/passwd"
-                        "/etc/group"
-                        "/sys/class/hwmon"
-                        (concat sloth.homeDir "/.nix-profile")
-                        (concat sloth.homeDir "/.local/state/nix/profile")
-                        (concat sloth.homeDir "/.icons")
-                        (concat sloth.homeDir "/.themes")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.dirs")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.conf")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-4.0")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-3.0")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
-                        (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
-                        (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
-                        (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
-                      ]
-                      ++ (lib.optionals gpu [
-                        "/run/opengl-driver"
-                        "/run/opengl-driver-32"
-                        "/sys/class/drm"
-                        "/sys/devices"
-                        "/sys/bus/pci"
-                      ])
-                      ++ (lib.optionals x11_shared [ "/tmp/.X11-unix" ])
-                      ++ (lib.optionals portals_for_files [ (concat (sloth.env "XDG_CONFIG_HOME") "/mimeapps.list") ])
-                      ++ (lib.optionals wayland_full [
-                        (sloth.concat [
-                          (sloth.env "XDG_RUNTIME_DIR")
-                          "/"
-                          (sloth.env "WAYLAND_DISPLAY")
-                        ])
-                      ]);
-
+                      };
                     };
                   };
+
+                in
+                {
+                  imports = [
+                    additional_args
+                    actual_config
+                  ];
                 };
             };
             wrapped =

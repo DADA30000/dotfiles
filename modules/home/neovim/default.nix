@@ -18,7 +18,6 @@
   ),
   ...
 }:
-with lib;
 let
   cfg = config.neovim;
   neovide-config = (pkgs.formats.toml { }).generate "neovide-config" {
@@ -249,10 +248,10 @@ let
 in
 {
   options.neovim = {
-    enable = mkEnableOption "neovim, console based text editor";
+    enable = lib.mkEnableOption "neovim, console based text editor";
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     xdg = {
       configFile = {
         "neovide/config.toml".source = neovide-config;
@@ -322,34 +321,34 @@ in
       vimAlias = true;
       vimdiffAlias = true;
       initLua = nixPreamble + "\n" + loadedLua;
-      extraPython3Packages =
-        ps: with ps; [
-          pynvim
-        ];
-      plugins = with pkgs.vimPlugins; [
-        conform-nvim
-        auto-save-nvim
-        netrw-nvim
-        nvim-dap
-        nvim-dap-ui
-        nvim-dap-virtual-text
-        nvim-nio
-        nvim-dap-go
-        nvim-dap-python
-        indent-blankline-nvim
-        nvim-web-devicons
-        nvim-treesitter.withAllGrammars
-        cord-nvim
-        nvim-lspconfig
-        nvim-cmp
-        cmp-nvim-lsp
-        cmp-buffer
-        cmp-path
-        luasnip
-        cmp_luasnip
-        friendly-snippets
-        fidget-nvim
-        onedark-nvim
+      extraPython3Packages = ps: [
+        ps.pynvim
+      ];
+      plugins = [
+        pkgs.vimPlugins.vim-suda
+        pkgs.vimPlugins.conform-nvim
+        pkgs.vimPlugins.auto-save-nvim
+        pkgs.vimPlugins.netrw-nvim
+        pkgs.vimPlugins.nvim-dap
+        pkgs.vimPlugins.nvim-dap-ui
+        pkgs.vimPlugins.nvim-dap-virtual-text
+        pkgs.vimPlugins.nvim-nio
+        pkgs.vimPlugins.nvim-dap-go
+        pkgs.vimPlugins.nvim-dap-python
+        pkgs.vimPlugins.indent-blankline-nvim
+        pkgs.vimPlugins.nvim-web-devicons
+        pkgs.vimPlugins.nvim-treesitter.withAllGrammars
+        pkgs.vimPlugins.cord-nvim
+        pkgs.vimPlugins.nvim-lspconfig
+        pkgs.vimPlugins.nvim-cmp
+        pkgs.vimPlugins.cmp-nvim-lsp
+        pkgs.vimPlugins.cmp-buffer
+        pkgs.vimPlugins.cmp-path
+        pkgs.vimPlugins.luasnip
+        pkgs.vimPlugins.cmp_luasnip
+        pkgs.vimPlugins.friendly-snippets
+        pkgs.vimPlugins.fidget-nvim
+        pkgs.vimPlugins.onedark-nvim
       ];
     };
   };

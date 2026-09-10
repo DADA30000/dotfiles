@@ -46,24 +46,15 @@ in
 
   wivrn.enable = true;
 
-  nix.gc.automatic = false;
-
   sing-box.enable = true;
 
   plymouth.enable = true;
 
   replays.enable = true;
 
-  startup-sound.enable = false;
-
   zramSwap = {
     enable = true;
     memoryPercent = 100;
-  };
-
-  cape = {
-    enable = false;
-    users = [ user ];
   };
 
   console = {
@@ -100,17 +91,7 @@ in
   # Enable custom man page generation and nix-option-search
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
   # Darwin and stable cause additional eval time, around 10-15 seconds
-  docs = {
-
-    enable = true;
-
-    nos = {
-      enable = false;
-      darwin = false;
-      stable = false;
-    };
-
-  };
+  docs.enable = true;
 
   networking = {
 
@@ -118,31 +99,25 @@ in
 
     firewall.enable = false;
 
+    wireless.iwd.settings.General.AddressRandomization = "network";
+
     networkmanager = {
       enable = true;
-      wifi.backend = "iwd";
-      plugins = with pkgs; [
-        networkmanager-fortisslvpn
-        networkmanager-iodine
-        networkmanager-l2tp
-        networkmanager-openconnect
-        networkmanager-openvpn
-        networkmanager-sstp
-        networkmanager-strongswan
-        networkmanager-vpnc
+      wifi = {
+        backend = "iwd";
+        macAddress = "stable-ssid";
+      };
+      plugins = [
+        pkgs.networkmanager-fortisslvpn
+        pkgs.networkmanager-iodine
+        pkgs.networkmanager-l2tp
+        pkgs.networkmanager-openconnect
+        pkgs.networkmanager-openvpn
+        pkgs.networkmanager-sstp
+        pkgs.networkmanager-strongswan
+        pkgs.networkmanager-vpnc
       ];
     };
-
-  };
-
-  flatpak = {
-
-    # Enable system flatpak (currently breaks xdg portals)
-    enable = false;
-
-    packages = [
-      "io.github.Soundux"
-    ];
 
   };
 
@@ -180,13 +155,13 @@ in
       decompressFonts = true;
     };
 
-    packages = with pkgs; [
-      vista-fonts
-      corefonts
-      noto-fonts
-      noto-fonts-monochrome-emoji
-      liberation_ttf
-      nerd-fonts.jetbrains-mono
+    packages = [
+      pkgs.vista-fonts
+      pkgs.corefonts
+      pkgs.noto-fonts
+      pkgs.noto-fonts-monochrome-emoji
+      pkgs.liberation_ttf
+      pkgs.nerd-fonts.jetbrains-mono
     ];
 
     fontconfig.defaultFonts = {
@@ -227,22 +202,9 @@ in
         initialHashedPassword = lib.mkForce null;
         home = "/home/${user}";
         extraGroups = [
-          "networkmanager"
           "wheel"
-          "uinput"
-          "mlocate"
-          "libvirtd"
-          "i2c"
-          "nginx"
-          "input"
           "kvm"
-          "ydotool"
-          "vboxusers"
           "adbusers"
-          "video"
-          "gamemode"
-          "docker"
-          "cvdnetwork"
         ];
       };
     };
@@ -262,6 +224,9 @@ in
       allow-import-from-derivation = false;
       use-xdg-base-directories = true;
       auto-optimise-store = true;
+      max-connect-timeout = 1;
+      download-attempts = 1;
+      initial-connect-timeout = 1;
       substituters = [
         "https://cache.nixos.org?priority=1"
       ];
@@ -347,8 +312,11 @@ in
     ];
 
     initrd = {
-      systemd.enable = true;
       supportedFilesystems.zfs = true;
+      systemd = {
+        enable = true;
+        services.systemd-bsod.wantedBy = [ "initrd.target" ];
+      };
     };
 
     kernel.sysctl = {
@@ -385,39 +353,28 @@ in
 
   };
 
-  environment = {
-
-    etc = {
-      texinfo.source = pkgs.texinfo;
-      bashInteractive.source = pkgs.bashInteractive;
-      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
-    };
-
-    variables = {
-      #AQ_DRM_DEVICES = "/dev/dri/card2";
-      #AQ_NO_MODESET_PROBE = "1";
-      #__GLX_VENDOR_LIBRARY_NAME = "mesa";
-      #__EGL_VENDOR_LIBRARY_FILENAMES = "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json";
-      GDK_PIXBUF_MODULE_FILE = "${pkgs.librsvg}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache";
-      MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=Delete,toggle_fps_limit=Shift_R+backslash,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
-      ALSOFT_DRIVERS = "pulse";
-      APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
-      QT_QPA_PLATFORMTHEME = "qt5ct";
-      QT_QPA_TRANSPARENT_BACKGROUND = "1";
-      GTK_THEME = "Fluent-Dark";
-      ENVFS_RESOLVE_ALWAYS = "1";
-      MOZ_ENABLE_WAYLAND = "1";
-      TERMINAL = "neovide-term";
-      EGL_PLATFORM = "wayland";
-      MOZ_DISABLE_RDD_SANDBOX = "1";
-      NIXPKGS_ALLOW_UNFREE = "1";
-    };
-
+  environment.etc = {
+    texinfo.source = pkgs.texinfo;
+    bashInteractive.source = pkgs.bashInteractive;
+    "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
   };
 
   virtualisation = {
 
     spiceUSBRedirection.enable = true;
+
+    podman = {
+      enable = true;
+      dockerCompat = true;
+    };
+
+    libvirtd = {
+      enable = true;
+      qemu = {
+        swtpm.enable = true;
+        verbatimConfig = "max_core = 0";
+      };
+    };
 
     # Set options for vm that is built using nixos-rebuild build-vm
     vmVariant = {
@@ -435,24 +392,11 @@ in
       };
     };
 
-    libvirtd = {
-      enable = true;
-      qemu = {
-        swtpm.enable = true;
-        verbatimConfig = "max_core = 0";
-      };
-    };
-
-    # docker.enable = true;
-
-    podman = {
-      enable = true;
-      #  dockerCompat = true;
-    };
-
   };
 
   systemd = {
+
+    additionalUpstreamSystemUnits = [ "systemd-bsod.service" ];
 
     tmpfiles.rules = [
       "d /var/lib/AccountsService/users 0755 root root -"
@@ -534,6 +478,8 @@ in
 
     services = {
 
+      systemd-bsod.wantedBy = [ "sysinit.target" ];
+
       NetworkManager-wait-online.enable = false;
 
       greetd = {
@@ -560,12 +506,6 @@ in
         };
       };
 
-      systemd-bsod = {
-        enable = true;
-        wantedBy = [ "sysinit.target" ];
-        serviceConfig.ExecStart = "${pkgs.systemd}/lib/systemd/systemd-bsod --continuous";
-      };
-
     };
 
   };
@@ -585,12 +525,6 @@ in
     accounts-daemon.enable = true;
 
     gvfs.enable = true;
-
-    locate.enable = true;
-
-    tailscale.enable = false;
-
-    zerotierone.enable = false;
 
     systembus-notify.enable = true;
 
@@ -653,10 +587,10 @@ in
 
     printing = {
       enable = true;
-      drivers = with pkgs; [
-        cups-filters
-        cups-browsed
-        hplipWithPlugin
+      drivers = [
+        pkgs.cups-filters
+        pkgs.cups-browsed
+        pkgs.hplipWithPlugin
       ];
     };
 
@@ -724,7 +658,10 @@ in
 
     rtkit.enable = true;
 
-    polkit.enable = true;
+    polkit = {
+      enable = true;
+      enablePkexecWrapper = true;
+    };
 
     # Disable usual coredumps (I hate them)
     pam = {
@@ -747,10 +684,6 @@ in
       ServerAliveCountMax 3
     '';
 
-    screen.enable = true;
-
-    firejail.enable = true;
-
     zsh.enable = true;
 
     nix-ld.enable = true;
@@ -761,22 +694,12 @@ in
 
     dconf.enable = true;
 
-    gamemode = {
-      enable = true;
-      enableRenice = false;
-    };
-
     steam = {
       enable = true;
       package =
         let
           overriddenSteam = pkgs.steam.override {
             privateTmp = false;
-            extraEnv.RADV_TEX_ANISO = 16;
-            extraLibraries =
-              p: with p; [
-                atk
-              ];
           };
 
           sandboxed = mkSandbox rec {
@@ -850,28 +773,28 @@ in
           run = overriddenSteam.run;
         };
       protontricks.enable = true;
-      extraPackages = with pkgs; [
-        libgdiplus
-        fontconfig
-        attr
-        libXcursor
-        libXinerama
-        libXScrnSaver
-        libXi
-        nss
-        nspr
-        atk
-        at-spi2-atk
-        libdrm
-        libGL
-        libXcomposite
-        libXdamage
-        libXrandr
-        libXext
-        libXfixes
-        mesa
-        libva
-        pipewire
+      extraPackages = [
+        pkgs.libgdiplus
+        pkgs.fontconfig
+        pkgs.attr
+        pkgs.libXcursor
+        pkgs.libXinerama
+        pkgs.libXScrnSaver
+        pkgs.libXi
+        pkgs.nss
+        pkgs.nspr
+        pkgs.atk
+        pkgs.at-spi2-atk
+        pkgs.libdrm
+        pkgs.libGL
+        pkgs.libXcomposite
+        pkgs.libXdamage
+        pkgs.libXrandr
+        pkgs.libXext
+        pkgs.libXfixes
+        pkgs.mesa
+        pkgs.libva
+        pkgs.pipewire
       ];
     };
 

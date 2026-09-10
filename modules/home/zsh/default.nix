@@ -199,7 +199,7 @@ in
           ns-eval () {
             _ns_parse_args "$@"
             local OUT_PATH
-            OUT_PATH="$(nix eval "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(nom --json))"
+            OUT_PATH="$(nix eval --offline "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(nom --json))"
             printf "$OUT_PATH" | wl-copy
             echo "$OUT_PATH"
           }
@@ -452,7 +452,7 @@ in
                     if [[ -f "$cache_file" ]]; then
                       packages_string="$(<"$cache_file")"
                     else
-                      packages_string=$(nix eval --raw --no-use-registries --expr "
+                      packages_string=$(nix eval --offline --raw --no-use-registries --expr "
                         let
                           pkgs = $NIX_FLAKE_PREAMBLE;
                           startAttr = builtins.tryEval ''${start_attr};

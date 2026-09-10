@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 {
@@ -14,15 +15,11 @@
     "containers/registries.conf".text = ''unqualified-search-registries = ["docker.io", "quay.io"]'';
     "gamemode.ini".text = ''
       [general]
-      renice=0
       inhibit_screensaver=1
 
       [cpu]
       pin_cores=no
       park_cores=no
-
-      [gpu]
-      apply_gpu_optimisations=0 
     '';
   };
 
@@ -33,9 +30,25 @@
     GNUPGHOME = "${config.xdg.dataHome}/gnupg";
     RUSTUP_HOME = "${config.xdg.dataHome}/rustup";
     PI_CODING_AGENT_DIR = "${config.xdg.configHome}/pi/agent";
+    GDK_PIXBUF_MODULE_FILE = "${pkgs.librsvg}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache";
+    MANGOHUD_CONFIG = "fps_limit_method=early,fps_limit=0+165+144+120+90+60,no_display,toggle_hud=Delete,toggle_fps_limit=Shift_R+backslash,ram,vram,cpu_temp,gpu_temp,cpu_stats,gpu_stats,frame_timing,fps_metrics=avg+0.001+0.01+0.97";
+    ALSOFT_DRIVERS = "pulse";
+    APP2UNIT_SLICES = "a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice";
+    QT_QPA_PLATFORMTHEME = "qt5ct";
+    QT_QPA_TRANSPARENT_BACKGROUND = "1";
+    GTK_THEME = "Fluent-Dark";
+    ENVFS_RESOLVE_ALWAYS = "1";
+    MOZ_ENABLE_WAYLAND = "1";
+    TERMINAL = "neovide-term";
+    EGL_PLATFORM = "wayland";
+    MOZ_DISABLE_RDD_SANDBOX = "1";
+    NIXPKGS_ALLOW_UNFREE = "1";
   };
 
-  systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
+  systemd.user = {
+    services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
+    packages = [ pkgs.gamemode ];
+  };
 
   manual.manpages.enable = false;
 

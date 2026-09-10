@@ -132,6 +132,8 @@ let
             "steamcmd.net"
             "tonelib.vip"
             "exa.ai"
+            "rutracker.org"
+            "cache.nixos.org"
           ];
         }
         {
@@ -608,8 +610,6 @@ in
       group = "root";
       source = "${vpnifyBin}/bin/vpnify";
     };
-
-    programs.firejail.enable = true;
 
     services = {
       resolved.enable = false;

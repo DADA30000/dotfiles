@@ -44,6 +44,9 @@ let
       ".config/qBittorrent"
       ".config/nvim/undodir"
       ".config/net.imput.helium"
+      ".cache/nvidia"
+      ".cache/mesa_shader_cache"
+      ".cache/radv_builtin_shaders"
     ];
   };
 in

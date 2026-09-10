@@ -18,8 +18,8 @@ NIXOS_DIR="/etc/nixos"
 
 # Default arguments passed to all `nh` and `nix build` commands
 # Note: nh takes Nix options after `--`
-NH_ARGS=(-- --option connect-timeout 5)
-NIX_ARGS=(--option connect-timeout 5)
+NH_ARGS=()
+NIX_ARGS=()
 
 show_help() {
   cat <<EOF
