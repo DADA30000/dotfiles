@@ -46,6 +46,7 @@ let
       ".config/net.imput.helium"
       ".cache/nvidia"
       ".cache/mesa_shader_cache"
+      ".cache/flake-lock-backups"
       ".cache/radv_builtin_shaders"
     ];
   };
@@ -97,6 +98,10 @@ in
           "/var/lib/waydroid"
           "/var/lib/zerotier-one"
           "/var/lib/llama-cpp"
+          {
+            directory = "/var/lib/iwd";
+            mode = "u=rwx,g=,o=";
+          }
           {
             directory = "/var/lib/private";
             mode = "u=rwx,g=,o=";

@@ -120,7 +120,7 @@ in
             fi
           }
 
-          # Internal replacement for nix develop
+          # Internal replacement for nix develop (evaluates .drv first, then realizes with nom)
           _nix-develop() {
             local has_help=0
             for arg in "$@"; do
@@ -135,10 +135,41 @@ in
               return 0
             fi
 
+            local -a eval_args=()
+            local -a build_flags=()
+            while (( $# > 0 )); do
+              case "$1" in
+                --expr|-E|--file|-f)
+                  eval_args+=("$1" "$2")
+                  shift 2
+                  ;;
+                *)
+                  eval_args+=("$1")
+                  build_flags+=("$1")
+                  shift 1
+                  ;;
+              esac
+            done
+
+            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
+            EVAL_START=$(date +%s%N)
+
+            local DRV
+            DRV="$(nix path-info --derivation "''${eval_args[@]}")" || return $?
+
+            EVAL_END=$(date +%s%N)
+            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
+            if (( EVAL_MS < 1000 )); then
+              EVAL_TIME="''${EVAL_MS}ms"
+            else
+              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+            fi
+            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivation:\e[0m $DRV" >&2
+
             local env_file
             env_file=$(mktemp /tmp/nix-shell-env.XXXXXX)
             export PREV_SHELL="$SHELL"
-            if OUT_SHELL="$(nix print-dev-env --log-format internal-json -v "$@" 2> >(nom --json))"; then
+            if OUT_SHELL="$(nix print-dev-env --log-format internal-json -v "''${build_flags[@]}" "$DRV" 2> >(nom --json))"; then
               printf "%s" "$OUT_SHELL" > "$env_file"
               ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
             else
@@ -185,13 +216,43 @@ in
 
           ns-old () { 
             _ns_parse_args "$@"
-            nix shell "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]"
+            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
+            EVAL_START=$(date +%s%N)
+
+            local -a drvs
+            drvs=(''${(f)"$(nix path-info "''${flags[@]}" --derivation --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]")"}) || return $?
+
+            EVAL_END=$(date +%s%N)
+            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
+            if (( EVAL_MS < 1000 )); then
+              EVAL_TIME="''${EVAL_MS}ms"
+            else
+              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+            fi
+            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivations:\e[0m ''${drvs[*]}" >&2
+
+            nix shell "''${flags[@]}" "''${drvs[@]/%/^*}"
           }
 
           ns-build () {
             _ns_parse_args "$@" 
+            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
+            EVAL_START=$(date +%s%N)
+
+            local -a drvs
+            drvs=(''${(f)"$(nix path-info "''${flags[@]}" --derivation --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]")"}) || return $?
+
+            EVAL_END=$(date +%s%N)
+            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
+            if (( EVAL_MS < 1000 )); then
+              EVAL_TIME="''${EVAL_MS}ms"
+            else
+              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+            fi
+            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivations:\e[0m ''${drvs[*]}" >&2
+
             local OUT_PATH
-            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]" 2> >(nom --json))"
+            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths "''${drvs[@]/%/^*}" 2> >(nom --json))"
             printf "$OUT_PATH" | wl-copy
             echo "$OUT_PATH"
           }

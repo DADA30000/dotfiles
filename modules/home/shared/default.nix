@@ -9,7 +9,6 @@
   xdg.configFile = {
     "openxr/1/active_runtime.i686.json".source =
       config.lib.file.mkOutOfStoreSymlink "/etc/xdg/openxr/1/active_runtime.i686.json";
-    "bookmarks.html".source = ../../../stuff/bookmarks.html;
     "uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
     "libvirt/qemu.conf".text = "max_core = 0";
     "containers/registries.conf".text = ''unqualified-search-registries = ["docker.io", "quay.io"]'';
@@ -62,7 +61,7 @@
 
   spicetify.enable = true;
 
-  home.file.".config/mpv".source = ../../../stuff/mpv;
+  mpv.enable = true;
 
   neovim.enable = true;
 

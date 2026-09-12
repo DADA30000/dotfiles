@@ -52,6 +52,8 @@ in
 
   replays.enable = true;
 
+  umu.enable = true;
+
   zramSwap = {
     enable = true;
     memoryPercent = 100;
@@ -88,9 +90,8 @@ in
 
   };
 
-  # Enable custom man page generation and nix-option-search
+  # Enable custom man page generation
   # Can result in additional 10-20 build time if some default/example in option references local relative path, use defaultText if needed, and use strings in example
-  # Darwin and stable cause additional eval time, around 10-15 seconds
   docs.enable = true;
 
   networking = {
@@ -276,9 +277,9 @@ in
 
   home-manager.extraSpecialArgs.kekma = {
 
-    nix = config.docs.man-cache-nix;
+    nix = if config.docs.enable then config.docs.man-cache-nix else "configuration.nix";
 
-    home = config.docs.man-cache-home;
+    home = if config.docs.enable then config.docs.man-cache-home else "home-configuration.nix";
 
     nvidia = config.graphics.nvidia.enable;
 

@@ -127,6 +127,13 @@ in
 {
   options.theming = {
     enable = mkEnableOption "theming stuff like cursor theme, icon theme and etc";
+    wallpaper = mkOption {
+      description = "Wallpaper path";
+      type = lib.types.path;
+      defaultText = "../../../stuff/modules/home/theming/wallpaper.png";
+      default = ../../../stuff/modules/home/theming/wallpaper.png;
+      example = "../../../stuff/modules/home/theming/wallpaper.jpg";
+    };
     cursor_size = mkOption {
       description = "XCURSOR size";
       type = lib.types.int;
@@ -160,7 +167,7 @@ in
     };
     xdg = {
       dataFile = {
-        "color-schemes/Transparent.colors".source = ../../../stuff/Transparent.colors;
+        "color-schemes/Transparent.colors".source = ../../../stuff/modules/home/theming/Transparent.colors;
         "themes/Fluent-Dark".source = fluent-dark;
       };
       userDirs = {
@@ -176,30 +183,34 @@ in
       };
       configFile = {
         "Vencord/settings/settings.json".source = vencord_settings;
-        "menus/applications.menu".source = ../../../stuff/plasma-applications.menu;
+        "menus/applications.menu".source = ../../../stuff/modules/home/theming/plasma-applications.menu;
         "GIMP_fake".source = "${inputs.photogimp}/.config/GIMP";
-        "Kvantum".source = ../../../stuff/Kvantum;
-        "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/qt5ct; } ''
-          mkdir -p $out
-          cp -r $conf/* $out
-          chmod u+w $out/qt5ct.conf
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
-        '';
-        "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/qt6ct; } ''
-          mkdir -p $out
-          cp -r $conf/* $out
-          chmod u+w $out/qt6ct.conf
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
-          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
-        '';
+        "Kvantum".source = ../../../stuff/modules/home/theming/Kvantum;
+        "qt5ct".source =
+          pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/modules/home/theming/qt5ct; }
+            ''
+              mkdir -p $out
+              cp -r $conf/* $out
+              chmod u+w $out/qt5ct.conf
+              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
+            '';
+        "qt6ct".source =
+          pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/modules/home/theming/qt6ct; }
+            ''
+              mkdir -p $out
+              cp -r $conf/* $out
+              chmod u+w $out/qt6ct.conf
+              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
+            '';
       }
       // (mkSourcePrefix "easyeffects/db" {
-        "graphrc" = ../../../stuff/graphrc;
+        "graphrc" = ../../../stuff/modules/home/theming/graphrc;
       })
       // (mkSourcePrefix "qimgv" {
-        "qimgv.conf" = ../../../stuff/qimgv/qimgv.conf;
-        "theme.conf" = ../../../stuff/qimgv/theme.conf;
+        "qimgv.conf" = ../../../stuff/modules/home/theming/qimgv/qimgv.conf;
+        "theme.conf" = ../../../stuff/modules/home/theming/qimgv/theme.conf;
       })
       // (mkSourcePrefix "vesktop" {
         "settings/settings.json" = vencord_settings;

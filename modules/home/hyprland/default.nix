@@ -975,14 +975,19 @@ in
           };
         };
 
-        # Noctalia Settings: Exact merge of your settings.toml + config.toml (filtered non-defaults)
         settings = {
+          storage = {
+            key_source = "file";
+            # Yes it's intended to be public, I assume my cliphist is unencrypted.
+            key_file = "${pkgs.writeText "noctalia-storage.key" "c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e\n"}";
+          };
+
           theme = {
             source = "custom";
             custom_palette = "transparent-blue";
           };
 
-          wallpaper.default.path = ../../../stuff/wallpaper.png;
+          wallpaper.default.path = config.theming.wallpaper;
 
           audio.enable_overdrive = true;
           control_center.calendar.show_events_card = false;

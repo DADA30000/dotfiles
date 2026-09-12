@@ -36,7 +36,7 @@ let
         auto_route = true;
         strict_route = true;
         stack = "system";
-        mtu = 1360;
+        mtu = 1480;
         route_exclude_address = [
           "127.0.0.1/32"
           "192.168.0.0/16"
@@ -58,82 +58,12 @@ let
       }
     ];
   };
-  rust-bridge = pkgs.pkgsStatic.stdenv.mkDerivation {
-    pname = "rust-bridge";
-    version = "1.0";
-    dontUnpack = true;
-
-    nativeBuildInputs = [
-      pkgs.pkgsStatic.rustc
-    ];
-
-    buildPhase = ''
-      rustc --target x86_64-unknown-linux-musl \
-        -C target-feature=+crt-static \
-        -C linker=$CC \
-        -C opt-level=s \
-        -C lto=fat \
-        -C codegen-units=1 \
-        -C panic=abort \
-        -C strip=symbols \
-        -O ${../../../stuff/bridge.rs} -o rust-bridge
-    '';
-
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 rust-bridge $out/bin/rust-bridge
-    '';
-  };
-
-  sandbox-migrator = pkgs.pkgsStatic.stdenv.mkDerivation {
-    pname = "sandbox-migrator";
-    version = "1.0";
-    dontUnpack = true;
-
-    nativeBuildInputs = [
-      pkgs.pkgsStatic.rustc
-    ];
-
-    buildPhase = ''
-      rustc --target x86_64-unknown-linux-musl \
-        -C target-feature=+crt-static \
-        -C linker=$CC \
-        -C opt-level=s \
-        -C lto=fat \
-        -C codegen-units=1 \
-        -C panic=abort \
-        -C strip=symbols \
-        -O ${../../../stuff/sandbox-migrator.rs} -o sandbox-migrator
-    '';
-
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 sandbox-migrator $out/bin/sandbox-migrator
-    '';
-  };
 
   way-secure = pkgs.rustPlatform.buildRustPackage {
     pname = "way-secure";
     version = "unstable";
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
     src = pkgs.lib.cleanSource "${inputs.way-secure}";
-  };
-  landlock = pkgs.stdenv.mkDerivation {
-    pname = "landlock";
-    version = "1.0";
-
-    src = ../../../stuff/landlock.c;
-
-    dontUnpack = true;
-
-    buildPhase = ''
-      gcc -O2 -Wall $src -o landlock
-    '';
-
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 landlock $out/bin/landlock
-    '';
   };
   sing-box-lite = pkgs.sing-box.overrideAttrs (prev: {
     ldflags = (prev.ldflags or [ ]) ++ [
@@ -299,7 +229,7 @@ let
               mkdir "$MY_CGROUP/inside"
               ${additional_outside_commands}
               ${lib.optionalString network_singbox ''
-                ${rust-bridge}/bin/rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
+                rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
               ''}
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
@@ -328,15 +258,15 @@ let
                 export ORIG_UID="$(id -u)"
                 export ORIG_GID="$(id -g)"
               ''}
-              ${lib.optionalString use_landlock "${landlock}/bin/landlock \\"}
+              ${lib.optionalString use_landlock "landlock \\"}
               "$SANDBOXED_DASH"/bin/dash -c '
                 ${additional_inside_commands}
                 ${lib.optionalString start_sesatt "sesatt -d \"$APP_ID\""}
                 ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
                 ${lib.optionalString network_singbox ''
                   ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
-                  ${rust-bridge}/bin/rust-bridge -r listen -s "$XDG_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 -d
-                  exec ${landlock}/bin/landlock ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${pkgs.dash}/bin/dash -c "
+                  rust-bridge -r listen -s "$XDG_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 -d
+                  exec landlock ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${pkgs.dash}/bin/dash -c "
                 ''}
                 ${lib.optionalString (!network_singbox) ''
                   exec ${pkgs.dash}/bin/dash -c "
@@ -360,7 +290,7 @@ let
                   EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
               fi
-              if ! GUEST_HOST_PID=$(${sandbox-migrator}/bin/sandbox-migrator \
+              if ! GUEST_HOST_PID=$(sandbox-migrator \
                 --app-id "$APP_ID" \
                 --scope "$MY_SCOPE" \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
@@ -701,13 +631,11 @@ in
   }
   // lib.optionalAttrs (options ? home.file) {
     home = {
-      packages = [ rust-bridge ];
       file.".not-a-sandbox".text = "not a sandbox";
     };
   }
   // lib.optionalAttrs (options ? environment.etc) {
     environment = {
-      systemPackages = [ rust-bridge ];
       etc.".not-a-sandbox".text = "not a sandbox";
     };
   };

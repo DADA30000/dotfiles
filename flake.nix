@@ -292,6 +292,8 @@
         ./modules/system
         # Modules that do same exact thing in HM and NixOS
         ./modules/universal
+        # Modules that require both HM and NixOS
+        ./modules/both
       ];
 
       # Modules for home-manager
@@ -299,6 +301,7 @@
         listFiles [
           ./modules/home
           ./modules/universal
+          ./modules/both
         ]
         ++ [
           inputs.nix-flatpak.homeManagerModules.nix-flatpak

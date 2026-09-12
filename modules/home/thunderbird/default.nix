@@ -17,7 +17,7 @@ in
       enable = true;
       profiles.kek = {
         isDefault = true;
-        userChrome = builtins.readFile ../../../stuff/userChrome.css;
+        userChrome = builtins.readFile ../../../stuff/modules/home/thunderbird/userChrome.css;
         settings = {
           # UI / Custom Styling
           "toolkit.legacyUserProfileCustomizations.stylesheets" = true; # Required for userChrome.css / userContent.css

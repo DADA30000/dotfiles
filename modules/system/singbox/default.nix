@@ -133,6 +133,7 @@ let
             "tonelib.vip"
             "exa.ai"
             "rutracker.org"
+            "rutracker.cc"
             "cache.nixos.org"
           ];
         }
@@ -236,7 +237,7 @@ let
     pname = "vpnify";
     version = "1.0";
     dontUnpack = true;
-    buildPhase = "gcc -O2 -Wall ${../../../stuff/vpnify.c} -o vpnify";
+    buildPhase = "gcc -O2 -Wall ${../../../stuff/modules/system/sing-box/vpnify.c} -o vpnify";
     installPhase = ''
       mkdir -p $out/bin
       install -m 0755 vpnify $out/bin/vpnify

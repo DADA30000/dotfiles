@@ -146,7 +146,7 @@ let
       }
       ''
         mkdir -p $out
-        cp --no-preserve=mode -r ${../../../stuff/vpn-toggler}/* .
+        cp --no-preserve=mode -r ${../../../stuff/modules/home/zen/vpn-toggler}/* .
         echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#EF4444"/></svg>' > icon-direct.svg
         echo '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" fill="#22C55E"/></svg>' > icon-proxy.svg
         zip -r $out/${vpn-toggler-extId}.xpi *
@@ -309,6 +309,7 @@ in
 
   config = mkIf cfg.enable {
     xdg.configFile = {
+      "bookmarks.html".source = ../../../stuff/modules/home/zen/bookmarks.html;
       ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
       "zen/default/zen-keyboard-shortcuts.json".source = shortcuts;
       "zen/default/xulstore.json".source = xulstore_json;
