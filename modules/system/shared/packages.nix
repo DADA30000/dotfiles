@@ -1348,7 +1348,7 @@ in
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.kmod}/bin/modprobe aorus_laptop";
+      ExecStart = "-${pkgs.kmod}/bin/modprobe aorus_laptop";
       RemainAfterExit = true;
     };
   };
