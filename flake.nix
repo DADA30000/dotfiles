@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nix-flatpak.url = "github:gmodena/nix-flatpak/latest";
     photogimp = {
       url = "github:Diolinux/Photogimp";
       flake = false;
@@ -34,10 +33,6 @@
       url = "github:sameerasw/my-internet";
       flake = false;
     };
-    nos = {
-      url = "github:madsbv/nix-options-search";
-      flake = false;
-    };
     hazy = {
       url = "github:Astromations/Hazy";
       flake = false;
@@ -48,10 +43,6 @@
     };
     libcef-transparency-linux = {
       url = "github:fixpointer/libcef-transparency-linux";
-      flake = false;
-    };
-    cape = {
-      url = "github:kevoreilly/CAPEv2";
       flake = false;
     };
     sine = {
@@ -150,10 +141,6 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    llm-agents = {
-      url = "github:numtide/llm-agents.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nixpkgs-xr = {
       url = "github:nix-community/nixpkgs-xr";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -168,10 +155,6 @@
     };
     pipewire-screenaudio = {
       url = "github:IceDBorn/pipewire-screenaudio";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-darwin = {
-      url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-search = {
@@ -300,8 +283,6 @@
         ./modules/system
         # Modules that do same exact thing in HM and NixOS
         ./modules/universal
-        # Modules that require both HM and NixOS
-        ./modules/both
       ];
 
       # Modules for home-manager
@@ -309,10 +290,8 @@
         listFiles [
           ./modules/home
           ./modules/universal
-          ./modules/both
         ]
         ++ [
-          inputs.nix-flatpak.homeManagerModules.nix-flatpak
           inputs.nix-index-database.homeModules.nix-index
           inputs.zen-browser.homeModules.twilight
         ];

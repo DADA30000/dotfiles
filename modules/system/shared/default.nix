@@ -29,8 +29,6 @@ in
 {
   disabledModules = [ "profiles/base.nix" ];
 
-  imports = [ ./packages.nix ];
-
   qt.enable = true;
 
   nixpkgs.config.allowUnfree = true;
@@ -453,6 +451,17 @@ in
         };
       };
       services = {
+        load-aorus-laptop = {
+          description = "Load Gigabyte Aorus Laptop driver asynchronously";
+          after = [ "basic.target" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "-${pkgs.kmod}/bin/modprobe aorus_laptop";
+            RemainAfterExit = true;
+          };
+        };
+
         dbus-broker.serviceConfig = {
           Type = "notify";
           ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
@@ -551,12 +560,6 @@ in
     journald.settings.Journal = {
       SystemMaxUse = "1G";
       RuntimeMaxUse = "1G";
-    };
-
-    hardware.openrgb = {
-      enable = true;
-      package = pkgs.openrgb-with-all-plugins;
-      motherboard = "amd";
     };
 
     openssh = {
@@ -718,8 +721,6 @@ in
     zsh.enable = true;
 
     nix-ld.enable = true;
-
-    ydotool.enable = true;
 
     seahorse.enable = true;
 

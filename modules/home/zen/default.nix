@@ -454,6 +454,7 @@ in
           nebula-workspace-style = 1;
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
+          "network.dns.preferIPv6" = true;
           "browser.aboutConfig.showWarning" = false;
           "browser.tabs.fadeOutUnloadedTabs" = true;
           "gfx.webrender.all" = true;

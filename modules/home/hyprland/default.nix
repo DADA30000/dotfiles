@@ -5,7 +5,6 @@
   lib,
   ...
 }:
-with lib;
 let
   cfg = config.hyprland;
   nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix { };
@@ -18,17 +17,7 @@ let
     type = "plugin";
     mode = "allow";
   };
-  plugins =
-    lib.optionals (cfg.enable-plugins && cfg.stable && !cfg.from-unstable) [
-      #pkgs.hyprlandPlugins.hyprtrails
-    ]
-    ++ lib.optionals (cfg.enable-plugins && !cfg.stable && !cfg.from-unstable) [
-      #inputs.split-monitor-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.split-monitor-workspaces
-      #inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprtrails
-    ]
-    ++ lib.optionals (cfg.enable-plugins && !cfg.stable && cfg.from-unstable) [
-      #inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprlandPlugins.hyprtrails
-    ];
+  plugins = [ ];
   plugin-loader =
     pkg:
     pkgs.stdenv.mkDerivation {
@@ -105,36 +94,17 @@ let
 in
 {
   options.hyprland = {
-    enable = mkEnableOption "my Hyprland configuration";
-    from-unstable = mkEnableOption "Use Hyprland package from UNSTABLE nixpkgs";
-    stable = mkEnableOption "Use Hyprland from nixpkgs";
-    enable-plugins = mkEnableOption "Hyprland plugins";
-    additional-monitors = mkOption {
+    enable = lib.mkEnableOption "my Hyprland configuration";
+    enable-plugins = lib.mkEnableOption "Hyprland plugins";
+    additional-monitors = lib.mkOption {
       default = [ ];
       type = lib.types.listOf lib.types.attrs;
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     home.sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
-
     wayland.windowManager.hyprland = {
-      portalPackage = mkMerge [
-        (mkIf (
-          !cfg.stable && !cfg.from-unstable
-        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
-        (mkIf (
-          cfg.from-unstable && !cfg.stable
-        ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland)
-      ];
-      package = mkMerge [
-        (mkIf (
-          !cfg.stable && !cfg.from-unstable
-        ) inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.default)
-        (mkIf (
-          cfg.from-unstable && !cfg.stable
-        ) inputs.unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system}.hyprland)
-      ];
       enable = true;
       systemd.enable = false;
       configType = "lua";
@@ -334,30 +304,6 @@ in
           ];
           config = {
             xwayland.force_zero_scaling = true;
-            plugin = mkIf cfg.enable-plugins {
-              #hyprexpo = {
-              #  columns = 3;
-              #  gap_size = 5;
-              #  bg_col = "rgb(111111)";
-              #  workspace_method = "first 1";
-              #  enable_gesture = true;
-              #  gesture_distance = 300;
-              #  gesture_positive = true;
-              #};
-              #dynamic-cursors = {
-              #  enabled = false;
-              #  mode = "tilt";
-              #  shake.enabled = false;
-              #  stretch.function = "negative_quadratic";
-              #};
-              #hyprtrails = {
-              #  color = "rgba(bbddffff)";
-              #  bezier_step = 0.001;
-              #  history_points = 6;
-              #  points_per_step = 4;
-              #  histoty_step = 1;
-              #};
-            };
             input = {
               kb_layout = "us,ru";
               kb_options = "grp:alt_shift_toggle";
@@ -389,14 +335,10 @@ in
               gaps_in = 5;
               gaps_out = 5;
               border_size = 0;
-              #"col.active_border" = "rgb(4575da) rgb(6804b5)";
-              #"col.inactive_border" = "rgb(595959)";
               layout = "dwindle";
               allow_tearing = false;
             };
-            debug = {
-              full_cm_proto = true;
-            };
+            debug.full_cm_proto = true;
             ecosystem = {
               no_update_news = true;
               enforce_permissions = true;
@@ -428,9 +370,7 @@ in
               enable_stdout_logs = false;
               disable_logs = true;
             };
-            dwindle = {
-              preserve_split = true;
-            };
+            dwindle.preserve_split = true;
             misc = {
               vrr = 0;
               enable_anr_dialog = false;
@@ -444,9 +384,7 @@ in
               swallow_exception_regex = "^(ncspot)$";
               force_default_wallpaper = 2;
             };
-            binds = {
-              scroll_event_delay = 60;
-            };
+            binds.scroll_event_delay = 60;
           };
           bind =
             let
@@ -522,6 +460,10 @@ in
                 "noctalia msg screenshot-region"
               ]
               [
+                "CTRL + Print"
+                "noctalia msg screenshot-annotate"
+              ]
+              [
                 "SHIFT + Print"
                 "noctalia msg screenshot-fullscreen"
               ]
@@ -530,24 +472,12 @@ in
                 "noctalia msg screenshot-region"
               ]
               [
+                "${mod} + CTRL + O"
+                "noctalia msg screenshot-annotatate"
+              ]
+              [
                 "${mod} + SHIFT + O"
                 "noctalia msg screenshot-fullscreen"
-              ]
-              [
-                "CTRL + Print"
-                "noctalia msg screenshot-region 'satty -f -'"
-              ]
-              [
-                "CTRL + SHIFT + Print"
-                "noctalia msg screenshot-fullscreen 'satty -f -'"
-              ]
-              [
-                "${mod} + CTRL + O"
-                "noctalia msg screenshot-region 'satty -f -'"
-              ]
-              [
-                "${mod} + CTRL + SHIFT + O"
-                "noctalia msg screenshot-fullscreen 'satty -f -'"
               ]
               [
                 "${mod} + CTRL + Q"
@@ -976,6 +906,14 @@ in
         };
 
         settings = {
+
+          idle.behavior.screen-off = {
+            enabled = true;
+            action = "screen_off";
+            timeout = 300;
+            locked_timeout = 10;
+          };
+
           storage = {
             key_source = "file";
             # Yes it's intended to be public, I assume my cliphist is unencrypted.
@@ -1162,83 +1100,6 @@ in
             };
           };
         };
-      };
-      satty = {
-        enable = true;
-        settings = {
-          general = {
-            fullscreen = false;
-            resize.mode = "smart";
-            floating-hack = true;
-            auto-copy = false;
-            early-exit = [ "all" ];
-            corner-roundness = 12;
-            initial-tool = "brush";
-            copy-command = "wl-copy --type image/png";
-            annotation-size-factor = 2;
-            output-filename = "${config.xdg.userDirs.pictures}/satty-%Y-%m-%d_%H:%M:%S.png";
-            save-after-copy = true;
-            default-hide-toolbars = false;
-            focus-toggles-toolbars = false;
-            default-fill-shapes = false;
-            primary-highlighter = "block";
-            disable-notifications = false;
-            actions-on-enter = [ "save-to-clipboard" ];
-            actions-on-escape = [ "exit" ];
-            action-on-enter = "save-to-clipboard";
-            right-click-copy = false;
-            no-window-decoration = true;
-            brush-smooth-history-size = 0;
-            pan-step-size = 50.0;
-            zoom-factor = 1.1;
-            text-move-length = 50.0;
-            input-scale = 1.0;
-            title = "Satty";
-            app-id = "org.satty.satty";
-          };
-          keybinds = {
-            pointer = "p";
-            crop = "c";
-            brush = "b";
-            line = "i";
-            arrow = "z";
-            rectangle = "r";
-            ellipse = "e";
-            text = "t";
-            marker = "m";
-            blur = "u";
-            highlight = "g";
-          };
-          font = {
-            family = "JetBrainsMono NF";
-            style = "Regular";
-            fallback = [ "Noto Sans CJK SC" ];
-          };
-          color-palette.palette = [
-            "#f0932bff"
-            "#eb4d4bff"
-            "#6ab04cff"
-            "#22a6b3ff"
-            "#130f40FF"
-          ];
-        };
-      };
-    };
-    services.hypridle = {
-      enable = true;
-      settings = {
-        listener = [
-          {
-            timeout = 300;
-            on-timeout = ''hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
-            on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
-          }
-          {
-            timeout = 10;
-            on-timeout = ''pidof hyprlock && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
-            on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
-          }
-        ];
       };
     };
   };

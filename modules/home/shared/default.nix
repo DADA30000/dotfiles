@@ -77,31 +77,17 @@
 
   btop.enable = true;
 
-  programs = {
-
-    git = {
-      enable = true;
-      settings = {
-        color.ui = "auto";
-        credential.helper = "store --file=${config.xdg.configHome}/git/credentials";
-      };
-      includes = [
-        {
-          path = "${config.xdg.configHome}/git/config-mutable";
-        }
-      ];
+  programs.git = {
+    enable = true;
+    settings = {
+      color.ui = "auto";
+      credential.helper = "store --file=${config.xdg.configHome}/git/credentials";
     };
-
-    mcp = {
-      enable = true;
-      servers.context7 = {
-        url = "https://mcp.context7.com/mcp";
-        headers = {
-          CONTEXT7_API_KEY = "{env:CONTEXT7_API_KEY}";
-        };
-      };
-    };
-
+    includes = [
+      {
+        path = "${config.xdg.configHome}/git/config-mutable";
+      }
+    ];
   };
 
   services = {
@@ -118,10 +104,6 @@
   hyprland = {
 
     enable = true;
-
-    from-unstable = false;
-
-    stable = true;
 
     enable-plugins = true;
 

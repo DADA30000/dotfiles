@@ -10,6 +10,7 @@ with lib;
 let
   cfg = config.sing-box;
   dns = "94.140.14.14";
+  dns-ipv6 = "2a10:50c0::ad1:ff";
   zapret-qnum = "210";
   zapret-mark = 707;
   MTU = 1480;
@@ -185,6 +186,7 @@ let
         ];
         route_exclude_address = [
           "${dns}/32"
+          "${dns-ipv6}/128"
           "127.0.0.1/32"
           "192.168.0.0/16"
           "::1/128"
@@ -427,6 +429,170 @@ let
     done
     ${cleanup_script}
   '';
+
+  sing-box-watcher-src = pkgs.writeText "sing-box-watcher.c" ''
+    #define _GNU_SOURCE
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    #include <unistd.h>
+    #include <dirent.h>
+    #include <fcntl.h>
+    #include <signal.h>
+    #include <poll.h>
+    #include <sys/socket.h>
+    #include <linux/rtnetlink.h>
+    #include <sys/wait.h>
+
+    static volatile sig_atomic_t g_running = 1;
+
+    static void handle_signal(int sig) {
+        (void)sig;
+        g_running = 0;
+    }
+
+    static void run_systemctl(const char *action) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            execl("${pkgs.systemd}/bin/systemctl", "systemctl", action, "sing-box-init.service", NULL);
+            _exit(1);
+        } else if (pid > 0) {
+            int status;
+            waitpid(pid, &status, 0);
+        }
+    }
+
+    static int has_physical_carrier(void) {
+        DIR *dir = opendir("/sys/class/net");
+        if (!dir) return 0;
+
+        struct dirent *de;
+        int connected = 0;
+
+        while ((de = readdir(dir)) != NULL) {
+            if (de->d_name[0] == '.') continue;
+
+            char path[512];
+            snprintf(path, sizeof(path), "/sys/class/net/%s/device", de->d_name);
+            if (access(path, F_OK) != 0) {
+                // Ignore virtual network devices (tun0, lo, veth, etc.)
+                continue;
+            }
+
+            // Check carrier
+            snprintf(path, sizeof(path), "/sys/class/net/%s/carrier", de->d_name);
+            int fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd >= 0) {
+                char ch = 0;
+                if (read(fd, &ch, 1) == 1 && ch == '1') {
+                    connected = 1;
+                    close(fd);
+                    break;
+                }
+                close(fd);
+            }
+
+            // Check operstate fallback
+            snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", de->d_name);
+            fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd >= 0) {
+                char buf[8];
+                ssize_t n = read(fd, buf, sizeof(buf) - 1);
+                if (n >= 2 && strncmp(buf, "up", 2) == 0) {
+                    connected = 1;
+                    close(fd);
+                    break;
+                }
+                close(fd);
+            }
+        }
+
+        closedir(dir);
+        return connected;
+    }
+
+    int main(void) {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = handle_signal;
+        sigaction(SIGTERM, &sa, NULL);
+        sigaction(SIGINT, &sa, NULL);
+
+        int nl_fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
+        if (nl_fd < 0) {
+            perror("socket(AF_NETLINK)");
+            return 1;
+        }
+
+        struct sockaddr_nl sa_nl;
+        memset(&sa_nl, 0, sizeof(sa_nl));
+        sa_nl.nl_family = AF_NETLINK;
+        sa_nl.nl_groups = RTMGRP_LINK;
+
+        if (bind(nl_fd, (struct sockaddr *)&sa_nl, sizeof(sa_nl)) < 0) {
+            perror("bind(AF_NETLINK)");
+            close(nl_fd);
+            return 1;
+        }
+
+        int last_state = -1;
+
+        while (g_running) {
+            int connected = has_physical_carrier();
+
+            if (connected != last_state) {
+                last_state = connected;
+                if (connected) {
+                    fprintf(stderr, "[sing-box-watcher] Physical link UP. Starting sing-box-init...\n");
+                    run_systemctl("start");
+                } else {
+                    fprintf(stderr, "[sing-box-watcher] Physical link DOWN. Stopping sing-box-init...\n");
+                    run_systemctl("stop");
+                }
+            }
+
+            struct pollfd pfd;
+            memset(&pfd, 0, sizeof(pfd));
+            pfd.fd = nl_fd;
+            pfd.events = POLLIN;
+
+            int ret = poll(&pfd, 1, -1);
+            if (ret > 0 && (pfd.revents & POLLIN)) {
+                char buf[4096];
+                while (recv(nl_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {}
+
+                // Debounce 1.5s to absorb link flapping / DHCP negotiation
+                int remaining_ms = 1500;
+                while (g_running && remaining_ms > 0) {
+                    struct pollfd pfd_db = { .fd = nl_fd, .events = POLLIN, .revents = 0 };
+                    int db_ret = poll(&pfd_db, 1, (remaining_ms > 200) ? 200 : remaining_ms);
+                    if (db_ret > 0 && (pfd_db.revents & POLLIN)) {
+                        while (recv(nl_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {}
+                    }
+                    remaining_ms -= 200;
+                }
+            }
+        }
+
+        fprintf(stderr, "[sing-box-watcher] Exiting, stopping sing-box-init...\n");
+        run_systemctl("stop");
+        close(nl_fd);
+        return 0;
+    }
+  '';
+
+  sing-box-watcher = pkgs.stdenv.mkDerivation {
+    pname = "sing-box-watcher";
+    version = "1.0";
+    dontUnpack = true;
+    src = sing-box-watcher-src;
+    buildPhase = "$CC -O2 -Wall $src -o sing-box-watcher";
+    installPhase = ''
+      mkdir -p $out/bin
+      install -m 0755 sing-box-watcher $out/bin/sing-box-watcher
+    '';
+  };
+
 in
 {
   options.sing-box = {
@@ -476,13 +642,27 @@ in
         };
       };
 
+      sing-box = {
+        description = "Sing-box Connection Supervisor and Physical Link Watcher";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-pre.target" ];
+        path = with pkgs; [
+          systemd
+        ];
+        serviceConfig = {
+          Type = "simple";
+          Restart = "always";
+          RestartSec = "3s";
+          ExecStart = "${sing-box-watcher}/bin/sing-box-watcher";
+          ExecStopPost = "${pkgs.systemd}/bin/systemctl stop sing-box-init.service";
+        };
+      };
+
       sing-box-init = {
         description = "Sing-box Initialization and Configuration Generator";
-        wantedBy = [ "multi-user.target" ];
-        after = [ "multi-user.target" ];
-        wants = [ "sing-box.service" ];
-        before = [ "sing-box.service" ];
-        partOf = [ "sing-box.service" ];
+        wants = [ "sing-box-core.service" ];
+        before = [ "sing-box-core.service" ];
+        partOf = [ "sing-box-core.service" ];
         path = with pkgs; [
           iproute2
           nftables
@@ -503,7 +683,8 @@ in
         };
       };
 
-      sing-box = {
+      sing-box-core = {
+        description = "Sing-box Core Daemon";
         bindsTo = [ "sing-box-init.service" ];
         after = [ "sing-box-init.service" ];
         serviceConfig = {
@@ -557,10 +738,10 @@ in
       };
 
       zapret = {
-        bindsTo = [ "sing-box.service" ];
-        partOf = [ "sing-box.service" ];
-        after = [ "sing-box.service" ];
-        wantedBy = [ "sing-box.service" ];
+        bindsTo = [ "sing-box-core.service" ];
+        partOf = [ "sing-box-core.service" ];
+        after = [ "sing-box-core.service" ];
+        wantedBy = [ "sing-box-core.service" ];
         serviceConfig = {
           DynamicUser = true;
           RuntimeDirectory = "nfqws";
@@ -621,7 +802,10 @@ in
         settings = {
           bind-dynamic = true;
           except-interface = "waydroid0";
-          server = [ dns ];
+          server = [
+            dns
+            dns-ipv6
+          ];
           neg-ttl = 1;
           cache-size = 10000;
         };
@@ -630,7 +814,10 @@ in
 
     networking = {
       firewall.enable = false;
-      nameservers = [ "127.0.0.1" ];
+      nameservers = [
+        "127.0.0.1"
+        "::1"
+      ];
       networkmanager.dns = "none";
     };
   };

@@ -44,7 +44,6 @@ let
       ".config/qBittorrent"
       ".config/nvim/undodir"
       ".config/net.imput.helium"
-      ".config/linux-soundboard"
       ".cache/nvidia"
       ".cache/mesa_shader_cache"
       ".cache/flake-lock-backups"

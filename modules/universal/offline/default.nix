@@ -95,24 +95,6 @@ let
 
 in
 {
-  options = {
-    offline-path = lib.mkOption {
-      type = lib.types.package;
-      internal = true;
-      visible = false;
-    };
-    offline-rev = lib.mkOption {
-      type = lib.types.str;
-      internal = true;
-      visible = false;
-    };
-    offline-narHash = lib.mkOption {
-      type = lib.types.str;
-      internal = true;
-      visible = false;
-    };
-  };
-
   config =
     lib.optionalAttrs (options ? environment.etc) {
       environment.etc = {

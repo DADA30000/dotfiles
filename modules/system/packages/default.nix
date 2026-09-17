@@ -760,7 +760,7 @@ let
   # Dynamic Script Handler Processing
   # ---------------------------------------------------------------------------
   listDirs = listFiles;
-  targetDirs = [ ../../../stuff/scripts ];
+  targetDirs = [ ../../../stuff/system/packages ];
   excludeList = [
     "translate-zapret-nixos.sh"
   ];
@@ -1058,7 +1058,7 @@ let
   heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   translateZapretNixosPkg = pkgs.writeShellScriptBin "translate-zapret-nixos" (
-    builtins.readFile ../../../stuff/scripts/translate-zapret-nixos.sh
+    builtins.readFile ../../../stuff/system/packages/translate-zapret-nixos.sh
   );
 
   qt6ctPkg = pkgs.kdePackages.qt6ct.overrideAttrs (prev: {
@@ -1180,6 +1180,7 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.openrgb-with-all-plugins
     pkgs.stress-ng
     pkgs.dash
     pkgs.furmark
@@ -1367,10 +1368,8 @@ let
     pkgs.kdePackages.dolphin
     pkgs.kdePackages.ark
     pkgs.pulseaudio
-    pkgs.hyprshot
     pkgs.nautilus
     pkgs.file-roller
-    pkgs.cliphist
     pkgs.libnotify
     pkgs.brightnessctl
     pkgs.qimgv
@@ -1487,16 +1486,5 @@ in
   services.udev.packages = [
     aero-control-center
   ];
-
-  systemd.services.load-aorus-laptop = {
-    description = "Load Gigabyte Aorus Laptop driver asynchronously";
-    after = [ "basic.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "-${pkgs.kmod}/bin/modprobe aorus_laptop";
-      RemainAfterExit = true;
-    };
-  };
 
 }
