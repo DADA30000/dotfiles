@@ -1,0 +1,28 @@
+diff --git a/src/app.rs b/src/app.rs
+index 9721679..e22a3af 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -34,7 +34,9 @@ impl AppState {
+             .open_clients()?
+             .into_iter()
+             .filter(|c| {
+-                c.pid().as_raw().cast_unsigned() != std::process::id() && c.pid().as_raw() > 0
++                c.pid().as_raw().cast_unsigned() != std::process::id()
++                    && c.pid().as_raw() > 0
++                    && !is_noctalia(*c.pid())
+             })
+             .collect();
+ 
+@@ -54,3 +56,12 @@ fn is_proc_alive(pid: Pid) -> bool {
+         Err(_) => false,
+     }
+ }
++
++fn is_noctalia(pid: Pid) -> bool {
++    std::fs::read_link(format!("/proc/{pid}/exe")).is_ok_and(|exe| {
++        matches!(
++            exe.file_name().and_then(std::ffi::OsStr::to_str),
++            Some("noctalia" | ".noctalia-wrapped")
++        )
++    })
++}

@@ -130,9 +130,9 @@ in
     wallpaper = mkOption {
       description = "Wallpaper path";
       type = lib.types.path;
-      defaultText = "../../../stuff/modules/home/theming/wallpaper.png";
-      default = ../../../stuff/modules/home/theming/wallpaper.png;
-      example = "../../../stuff/modules/home/theming/wallpaper.jpg";
+      defaultText = "../../../stuff/home/theming/wallpaper.png";
+      default = ../../../stuff/home/theming/wallpaper.png;
+      example = "../../../stuff/home/theming/wallpaper.jpg";
     };
     cursor_size = mkOption {
       description = "XCURSOR size";
@@ -167,7 +167,7 @@ in
     };
     xdg = {
       dataFile = {
-        "color-schemes/Transparent.colors".source = ../../../stuff/modules/home/theming/Transparent.colors;
+        "color-schemes/Transparent.colors".source = ../../../stuff/home/theming/Transparent.colors;
         "themes/Fluent-Dark".source = fluent-dark;
       };
       userDirs = {
@@ -183,11 +183,11 @@ in
       };
       configFile = {
         "Vencord/settings/settings.json".source = vencord_settings;
-        "menus/applications.menu".source = ../../../stuff/modules/home/theming/plasma-applications.menu;
+        "menus/applications.menu".source = ../../../stuff/home/theming/plasma-applications.menu;
         "GIMP_fake".source = "${inputs.photogimp}/.config/GIMP";
-        "Kvantum".source = ../../../stuff/modules/home/theming/Kvantum;
+        "Kvantum".source = ../../../stuff/home/theming/Kvantum;
         "qt5ct".source =
-          pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/modules/home/theming/qt5ct; }
+          pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/home/theming/qt5ct; }
             ''
               mkdir -p $out
               cp -r $conf/* $out
@@ -196,7 +196,7 @@ in
               ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
             '';
         "qt6ct".source =
-          pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/modules/home/theming/qt6ct; }
+          pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/home/theming/qt6ct; }
             ''
               mkdir -p $out
               cp -r $conf/* $out
@@ -206,11 +206,11 @@ in
             '';
       }
       // (mkSourcePrefix "easyeffects/db" {
-        "graphrc" = ../../../stuff/modules/home/theming/graphrc;
+        "graphrc" = ../../../stuff/home/theming/graphrc;
       })
       // (mkSourcePrefix "qimgv" {
-        "qimgv.conf" = ../../../stuff/modules/home/theming/qimgv/qimgv.conf;
-        "theme.conf" = ../../../stuff/modules/home/theming/qimgv/theme.conf;
+        "qimgv.conf" = ../../../stuff/home/theming/qimgv/qimgv.conf;
+        "theme.conf" = ../../../stuff/home/theming/qimgv/theme.conf;
       })
       // (mkSourcePrefix "vesktop" {
         "settings/settings.json" = vencord_settings;

@@ -36,14 +36,12 @@ let
            add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
         }
       }
-      location /index/.theme/ {
+      location /.theme/ {
         alias /website/index-theme/;
       }
       location /index/ {
         alias /website/index/;
-        sub_filter_once off;
-        sub_filter '/.theme' '/index/.theme';
-        add_before_body /index/.theme/theme.html;
+        add_before_body /.theme/theme.html;
         autoindex_exact_size off;
         autoindex on;
       }

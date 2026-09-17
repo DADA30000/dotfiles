@@ -793,10 +793,10 @@ in
               float = true;
               match.title = "Извлечённый текст";
             }
-            {
-              opacity = "0.99 override 0.99 override";
-              match.title = "^(QDiskInfo|MainPicker)$";
-            }
+            #{
+            #  opacity = "0.99 override 0.99 override";
+            #  match.title = "^(QDiskInfo|MainPicker)$";
+            #}
             {
               float = true;
               match = {
@@ -806,11 +806,11 @@ in
             }
           ];
           permission = [
-            {
-              binary = "${lib.escapeRegex (lib.getExe pkgs.wayvr)}";
-              type = "screencopy";
-              mode = "allow";
-            }
+            #{
+            #  binary = "${lib.escapeRegex (lib.getExe pkgs.wayvr)}";
+            #  type = "screencopy";
+            #  mode = "allow";
+            #}
             {
               binary = "${lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped"}";
               type = "screencopy";
@@ -865,10 +865,10 @@ in
       dataFile.nautilus-python.source = "${nautilus-extensions}/share/nautilus-python";
       portal = {
         enable = true;
+        config.common.default = "*";
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
         ];
-        config.common.default = "*";
       };
     };
     programs = {
@@ -1008,7 +1008,7 @@ in
             popup_shadows = false;
             launch_apps_custom_command = "app2unit-wrapped $CMD";
 
-            clipboard_history_max_entries = 1000;
+            clipboard_history_max_entries = 10000;
             polkit_agent = true;
 
             screenshot.directory = "~/Pictures/Screenshots";
@@ -1039,11 +1039,11 @@ in
               }
               {
                 action = "reboot";
-                command = "app2unit -- hyprshutdown -t 'Перезагрузка...' --post-cmd 'systemctl reboot'";
+                command = "app2unit -- gtkshutdown --post-cmd 'systemctl reboot'";
               }
               {
                 action = "shutdown";
-                command = "app2unit -- hyprshutdown -t 'Выключение...' --post-cmd 'systemctl poweroff'";
+                command = "app2unit -- gtkshutdown --post-cmd 'systemctl poweroff'";
                 variant = "destructive";
               }
             ];
@@ -1126,6 +1126,11 @@ in
           };
 
           widget = {
+            control-center = {
+              custom_image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-snowflake-white.svg";
+              custom_image_colorize = true;
+            };
+
             workspaces = {
               show_labels = false;
               pill_scale = 0.70;
@@ -1219,23 +1224,21 @@ in
         };
       };
     };
-    services = {
-      hypridle = {
-        enable = true;
-        settings = {
-          listener = [
-            {
-              timeout = 300;
-              on-timeout = ''hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
-              on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
-            }
-            {
-              timeout = 10;
-              on-timeout = ''pidof hyprlock && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
-              on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
-            }
-          ];
-        };
+    services.hypridle = {
+      enable = true;
+      settings = {
+        listener = [
+          {
+            timeout = 300;
+            on-timeout = ''hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
+            on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
+          }
+          {
+            timeout = 10;
+            on-timeout = ''pidof hyprlock && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' '';
+            on-resume = ''hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' '';
+          }
+        ];
       };
     };
   };

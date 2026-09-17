@@ -63,8 +63,8 @@ let
     '';
   });
 
-  steamrt4_data = builtins.fromJSON (builtins.readFile ../../../stuff/modules/home/umu/steamrt4.json);
-  steamrt3_data = builtins.fromJSON (builtins.readFile ../../../stuff/modules/home/umu/steamrt3.json);
+  steamrt4_data = builtins.fromJSON (builtins.readFile ../../../stuff/home/umu/steamrt4.json);
+  steamrt3_data = builtins.fromJSON (builtins.readFile ../../../stuff/home/umu/steamrt3.json);
 
   steamrt3 = pkgs.stdenv.mkDerivation {
     name = "steamrt3";

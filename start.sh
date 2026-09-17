@@ -170,7 +170,7 @@ main() {
       echo -e "\n\e[34mЗапуск установки системы...\e[0m\n"
 
       if [[ "$system_mode" == "prebuilt" ]]; then
-        INSTALL_CMD="nixos-install -v --system /etc/nixos-toplevel-reference --no-channel-copy --keep-going"
+        INSTALL_CMD="nixos-install --no-root-passwd -v --system /etc/nixos-toplevel-reference --no-channel-copy --keep-going"
 
       elif [[ "$system_mode" == "eval" ]]; then
         echo -e "\e[34mСборка системы (Оффлайн-эвалюация)...\e[0m"
@@ -178,11 +178,11 @@ main() {
           echo -e "\e[31mОшибка оффлайн-сборки toplevel!\e[0m"
           INSTALL_CMD="false"
         else
-          INSTALL_CMD="nixos-install -v --system /mnt/toplevel --no-channel-copy --keep-going"
+          INSTALL_CMD="nixos-install --no-root-passwd -v --system /mnt/toplevel --no-channel-copy --keep-going"
         fi
 
       else
-        INSTALL_CMD="nixos-install -v --flake /mnt/etc/nixos#${host} --keep-going"
+        INSTALL_CMD="nixos-install --no-root-passwd -v --flake /mnt/etc/nixos#${host} --keep-going"
       fi
 
       if [[ "$INSTALL_CMD" != "false" ]] && eval "$INSTALL_CMD"; then

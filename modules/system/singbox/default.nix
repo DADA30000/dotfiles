@@ -18,7 +18,7 @@ let
   CREDENTIAL_DIR = "/etc/credstore";
   BYPASS_MARK = "0x10000";
   zapret-flags = evalAndSubstitute {
-    string = builtins.readFile ../../../stuff/modules/system/sing-box/zapret-flags;
+    string = builtins.readFile ../../../stuff/system/sing-box/zapret-flags;
     scope = { inherit pkgs inputs; };
   };
 
@@ -34,11 +34,11 @@ let
   ];
 
   sanitize-awg-py = pkgs.writers.writePython3 "sanitize-awg.py" { } (
-    builtins.readFile ../../../stuff/modules/system/sing-box/sanitize-awg.py
+    builtins.readFile ../../../stuff/system/sing-box/sanitize-awg.py
   );
 
   build-config-py = pkgs.writers.writePython3 "build-config.py" { } (
-    builtins.readFile ../../../stuff/modules/system/sing-box/build-config.py
+    builtins.readFile ../../../stuff/system/sing-box/build-config.py
   );
 
   sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
@@ -135,6 +135,7 @@ let
             "rutracker.org"
             "rutracker.cc"
             "cache.nixos.org"
+            "bitwarden.com"
           ];
         }
         {
@@ -237,7 +238,7 @@ let
     pname = "vpnify";
     version = "1.0";
     dontUnpack = true;
-    buildPhase = "gcc -O2 -Wall ${../../../stuff/modules/system/sing-box/vpnify.c} -o vpnify";
+    buildPhase = "gcc -O2 -Wall ${../../../stuff/system/sing-box/vpnify.c} -o vpnify";
     installPhase = ''
       mkdir -p $out/bin
       install -m 0755 vpnify $out/bin/vpnify

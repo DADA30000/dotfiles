@@ -42,7 +42,7 @@ in
       ];
       nvidia = mkIf cfg.nvidia.enable {
         dynamicBoost.enable = true;
-        # package = config.boot.kernelPackages.nvidiaPackages.new_feature;
+        package = config.boot.kernelPackages.nvidiaPackages.latest;
         modesetting.enable = true;
         open = true;
         nvidiaSettings = false;

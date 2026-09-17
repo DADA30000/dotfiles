@@ -847,6 +847,137 @@ let
   # ---------------------------------------------------------------------------
   # Individual Package Overrides & Apps
   # ---------------------------------------------------------------------------
+  sounduxPkg = pkgs.stdenv.mkDerivation {
+    pname = "soundux";
+    version = "0.2.8-unstable";
+
+    src = pkgs.fetchgit {
+      url = "https://github.com/Soundux/Soundux.git";
+      rev = "e02845233221aff3261865afb7ea158d4a51bd52";
+      fetchSubmodules = true;
+      deepClone = false;
+      hash = "sha256-Dc+6EqH/2TriT2zUYsF+Xe3O3+7DBTdbXqIEHu053Ik=";
+    };
+
+    nativeBuildInputs = with pkgs; [
+      cmake
+      pkg-config
+      wrapGAppsHook3
+    ];
+
+    buildInputs = with pkgs; [
+      pipewire
+      libpulseaudio
+      libx11
+      libxi
+      libxtst
+      libwnck
+      gtk3
+      webkitgtk_4_1
+      libappindicator-gtk3
+      tl-expected
+      openssl
+      glib
+      gst_all_1.gstreamer
+      gst_all_1.gst-plugins-base
+      gst_all_1.gst-plugins-good
+    ];
+
+    cmakeFlags = [
+      "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+    ];
+
+    postPatch = ''
+      # Port from deprecated webkit2gtk-4.0 to modern webkit2gtk-4.1
+      substituteInPlace src/ui/impl/webview/lib/webviewpp/CMakeLists.txt \
+        --replace-fail "webkit2gtk-4.0" "webkit2gtk-4.1"
+
+      # Fix hardcoded /opt/soundux and /usr/share install destinations in CMakeLists.txt
+      substituteInPlace CMakeLists.txt \
+        --replace-fail 'set(CMAKE_INSTALL_PREFIX "/opt/soundux" CACHE PATH "Install path prefix, prepended onto install directories." FORCE)' "" \
+        --replace-fail 'install(TARGETS soundux DESTINATION .)' 'install(TARGETS soundux DESTINATION bin)' \
+        --replace-fail 'install(DIRECTORY "''${CMAKE_SOURCE_DIR}/build/dist" DESTINATION .)' 'install(DIRECTORY "''${CMAKE_SOURCE_DIR}/build/dist" DESTINATION bin)' \
+        --replace-fail 'DESTINATION /usr/share/' 'DESTINATION share/'
+
+      # Replace network FetchContent in guardpp with system tl-expected
+      substituteInPlace lib/guardpp/CMakeLists.txt \
+        --replace-fail 'include(FetchContent)' 'find_package(tl-expected REQUIRED)' \
+        --replace-fail 'FetchContent_Declare(expected GIT_REPOSITORY "https://github.com/TartanLlama/expected")' "" \
+        --replace-fail 'FetchContent_MakeAvailable(expected)' ""
+
+      # Fix desktop file executable path (/opt/soundux/soundux -> soundux)
+      substituteInPlace deployment/soundux.desktop \
+        --replace-fail "/opt/soundux/soundux" "soundux"
+
+      # Fix tray icon lookup path to point to nix store
+      substituteInPlace src/ui/impl/webview/webview.cpp \
+        --replace-fail '"/usr/share/pixmaps/soundux.png"' "\"$out/share/pixmaps/soundux.png\""
+
+      # Fix runtime dlopen paths for PipeWire, PulseAudio and libwnck
+      substituteInPlace src/helper/audio/linux/pipewire/forward.cpp \
+        --replace-fail '"libpipewire-0.3.so.0"' '"${pkgs.pipewire}/lib/libpipewire-0.3.so.0"'
+
+      substituteInPlace src/helper/audio/linux/pulseaudio/forward.cpp \
+        --replace-fail '"libpulse.so.0"' '"${pkgs.libpulseaudio}/lib/libpulse.so.0"'
+
+      substituteInPlace src/helper/icons/forward.cpp \
+        --replace-fail '"libwnck-3.so.0"' '"${pkgs.libwnck}/lib/libwnck-3.so.0"'
+
+      # Use yt-dlp instead of deprecated youtube-dl
+      substituteInPlace src/helper/ytdl/youtube-dl.cpp \
+        --replace-fail '"youtube-dl ' '"yt-dlp '
+    '';
+
+    preFixup = ''
+      gappsWrapperArgs+=(
+        --prefix PATH : ${
+          pkgs.lib.makeBinPath (
+            with pkgs;
+            [
+              ffmpeg
+              yt-dlp
+            ]
+          )
+        }
+        --prefix LD_LIBRARY_PATH : ${
+          pkgs.lib.makeLibraryPath (
+            with pkgs;
+            [
+              pipewire
+              libpulseaudio
+              libwnck
+            ]
+          )
+        }
+      )
+    '';
+
+    meta = {
+      description = "A cross-platform soundboard using PipeWire/PulseAudio";
+      homepage = "https://github.com/Soundux/Soundux";
+      license = pkgs.lib.licenses.gpl3Plus;
+      mainProgram = "soundux";
+      platforms = pkgs.lib.platforms.linux;
+    };
+  };
+
+  gtkshutdownPkg =
+    (pkgs.callPackage (inputs.gtkshutdown + "/nix") {
+      inputs = inputs.gtkshutdown.inputs;
+      toolchain = pkgs.symlinkJoin {
+        name = "rust-toolchain";
+        paths = [
+          pkgs.rustc
+          pkgs.cargo
+        ];
+      };
+    }).overrideAttrs
+      (oldAttrs: {
+        patches = (oldAttrs.patches or [ ]) ++ [
+          ../../../stuff/patches/gtkshutdown.patch
+        ];
+      });
+
   rustHelpersPkg = inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   json2xPkg = pkgs.callPackage "${inputs.nixpkgs}/pkgs/pkgs-lib/formats/json2x/package.nix" { };
@@ -1017,6 +1148,21 @@ let
     };
   };
 
+  sounduxSandbox = mkSandbox {
+    appId = "io.github.Soundux";
+    network = true;
+    audio = true;
+    wayland = true;
+    gpu = true;
+    x11 = true;
+    package = sounduxPkg;
+    additional_args =
+      { sloth, ... }:
+      {
+        bubblewrap.bind.rw = [ (sloth.mkdir (sloth.concat' (sloth.env "HOME") "/Music/Soundux")) ];
+      };
+  };
+
   ayugramDesktopSandbox = mkSandbox rec {
     appId = "com.ayugram.desktop";
     network_singbox = true;
@@ -1034,13 +1180,13 @@ let
   # Main Package List
   # ---------------------------------------------------------------------------
   package-list = [
+    pkgs.stress-ng
     pkgs.dash
     pkgs.furmark
     pkgs.xrdb
     pkgs.nix-tree
     pkgs.n-m3u8dl-re
     pkgs.yt-dlp
-    pkgs.hyprshutdown
     pkgs.pi-coding-agent
     pkgs.gcc
     pkgs.libcap-text-verifier
@@ -1050,7 +1196,6 @@ let
     pkgs.stdenv
     pkgs.gawk
     pkgs.sbsigntool
-    pkgs.wl-clip-persist
     pkgs.slurp
     pkgs.w3m-nographics
     pkgs.testdisk
@@ -1159,7 +1304,6 @@ let
     pkgs.adwaita-icon-theme
     pkgs.vmpk
     pkgs.socat
-    pkgs.wl-clipboard
     pkgs.neovide
     pkgs._7zz-rar
     pkgs.crudini
@@ -1255,6 +1399,8 @@ let
     heliumPkg
     qt6ctPkg
     aria2Pkg
+    gtkshutdownPkg
+    sounduxSandbox
     rustdeskSandbox
     prismLauncherSandbox
     discordCanarySandbox
@@ -1353,24 +1499,4 @@ in
     };
   };
 
-  security.wrappers = {
-    ryzenadj = {
-      owner = "root";
-      group = "root";
-      source = "${pkgs.ryzenadj}/bin/ryzenadj";
-      setuid = true;
-    };
-    nv-blindfold = {
-      setuid = true;
-      owner = "root";
-      group = "root";
-      source = "${nv-blindfold-pkg}/bin/nv-blindfold";
-    };
-    fan-control = {
-      setuid = true;
-      owner = "root";
-      group = "root";
-      source = "${fan-control-pkg}/bin/fan-control";
-    };
-  };
 }

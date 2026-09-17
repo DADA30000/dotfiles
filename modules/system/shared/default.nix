@@ -24,7 +24,6 @@ let
     "su"
     "passwd"
     "greetd"
-    "hyprlock"
   ];
 in
 {
@@ -190,6 +189,8 @@ in
 
   users = {
 
+    allowNoPasswordLogin = true;
+
     defaultUserShell = pkgs.zsh;
 
     mutableUsers = false;
@@ -202,11 +203,7 @@ in
         initialPassword = if user-hash == null then "1234" else null;
         initialHashedPassword = lib.mkForce null;
         home = "/home/${user}";
-        extraGroups = [
-          "wheel"
-          "kvm"
-          "adbusers"
-        ];
+        extraGroups = [ "kvm" ];
       };
     };
   };
@@ -236,6 +233,10 @@ in
       ];
       trusted-public-keys = [
         "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
+      ];
+      allowed-users = [
+        "@wheel"
+        user
       ];
       experimental-features = [
         "nix-command"
@@ -401,7 +402,7 @@ in
 
     tmpfiles.rules = [
       "d /var/lib/AccountsService/users 0755 root root -"
-      "f /var/lib/AccountsService/users/l0lk3k 0644 root root - [User]\\nSession=\\nIcon=${pkgs.nixos-icons}/share/icons/hicolor/512x512/apps/nix-snowflake.png\\nSystemAccount=false\\n"
+      "f /var/lib/AccountsService/users/${user} 0644 root root - [User]\\nSession=\\nIcon=${pkgs.nixos-icons}/share/icons/hicolor/512x512/apps/nix-snowflake.png\\nSystemAccount=false\\n"
     ];
 
     oomd = {
@@ -504,6 +505,22 @@ in
           Environment = "HOME=/root";
           ExecStartPre = "${pkgs.bash}/bin/bash -c \"${pkgs.psmisc}/bin/killall adb || true\"";
           ExecStart = "${pkgs.android-tools}/bin/adb reverse tcp:9757 tcp:9757";
+        };
+      };
+
+      hardware-control-daemon = {
+        description = "Hardware Control Daemon for Fan, NV-Blindfold, and Ryzen TDP";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "systemd-udev-settle.service" ];
+        path = [
+          pkgs.ryzenadj
+          pkgs.coreutils
+        ];
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "/run/current-system/sw/bin/hardware-control-daemon";
+          Restart = "always";
+          RestartSec = "2s";
         };
       };
 
@@ -662,7 +679,20 @@ in
     polkit = {
       enable = true;
       enablePkexecWrapper = true;
+      adminIdentities = [ "unix-user:${user}" ];
     };
+
+    sudo.extraRules = [
+      {
+        users = [ user ];
+        commands = [
+          {
+            command = "ALL";
+            options = [ "SETENV" ];
+          }
+        ];
+      }
+    ];
 
     # Disable usual coredumps (I hate them)
     pam = {

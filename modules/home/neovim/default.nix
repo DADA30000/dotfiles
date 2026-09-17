@@ -235,7 +235,7 @@ let
   '';
 
   # Read all modular .lua files in alphabetical order
-  luaDir = ../../../stuff/modules/home/neovim;
+  luaDir = ../../../stuff/home/neovim;
   luaFiles =
     lib.pipe
       [ luaDir ]
