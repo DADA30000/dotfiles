@@ -298,14 +298,6 @@ in
       home-manager.users.${user} = import ./home.nix;
       networking.hostName = "iso";
 
-      security.polkit.extraConfig = ''
-        polkit.addRule(function(action, subject) {
-          if (subject.isInGroup("wheel")) {
-            return polkit.Result.YES;
-          }
-        });
-      '';
-
       system.activationScripts.repo = {
         deps = [ "specialfs" ];
         text = ''
@@ -321,7 +313,6 @@ in
       };
 
       boot.kernel.sysctl."vm.swappiness" = lib.mkForce 200;
-      security.sudo.wheelNeedsPassword = false;
       disks.enable = lib.mkForce false;
       boot.loader.timeout = lib.mkForce 0;
       fonts.fontconfig.enable = true;

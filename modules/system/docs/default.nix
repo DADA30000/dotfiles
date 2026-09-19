@@ -3,7 +3,6 @@
   lib,
   pkgs,
   inputs,
-  user,
   system-modules,
   home-modules,
   ...
@@ -61,7 +60,7 @@ let
         modules = modules ++ [
           {
             config = {
-              home.stateVersion = config.home-manager.users.${user}.home.stateVersion;
+              home.stateVersion = config.system.stateVersion;
             };
           }
         ];
@@ -200,7 +199,7 @@ in
           options.warningsAreErrors = false;
           extraModuleSources = [ inputs.self ];
         };
-        home-manager.users.${user}.manual.manpages.enable = false;
+        home-manager.sharedModules = [ { manual.manpages.enable = false; } ];
         environment.systemPackages = [
           hm-manpage
           hm-html-opener

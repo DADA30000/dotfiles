@@ -438,7 +438,6 @@ let
                           "/etc/xdg"
                           "/run/current-system"
                           "/etc/fonts"
-                          "/usr/share/fonts"
                           "/etc/localtime"
                           "/etc/profiles"
                           "/etc/static"
@@ -468,6 +467,8 @@ let
                           (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
                           (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
                           (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
+                          (concat (sloth.env "XDG_DATA_HOME") "/icons")
+                          (concat (sloth.env "XDG_DATA_HOME") "/themes")
                         ]
                         ++ (lib.optionals gpu [
                           "/run/opengl-driver"

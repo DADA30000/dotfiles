@@ -4,61 +4,56 @@
   pkgs,
   ...
 }:
-with lib;
 let
   cfg = config.my-services;
+
+  corsHeaders = ''
+    add_header 'Access-Control-Allow-Origin' '*' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+  '';
 
   shared-config = {
     forceSSL = true;
     enableACME = true;
     root = "/website";
-    extraConfig = ''
-      location / {
-        if ($request_method = 'OPTIONS') {
-           add_header 'Access-Control-Allow-Origin' '*';
-           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-           add_header 'Access-Control-Max-Age' 1728000;
-           add_header 'Content-Type' 'text/plain; charset=utf-8';
-           add_header 'Content-Length' 0;
-           return 204;
-        }
-        if ($request_method = 'POST') {
-           add_header 'Access-Control-Allow-Origin' '*' always;
-           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-        }
-        if ($request_method = 'GET') {
-           add_header 'Access-Control-Allow-Origin' '*' always;
-           add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-           add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-           add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
-        }
-      }
-      location /.theme/ {
-        alias /website/index-theme/;
-      }
-      location /index/ {
-        alias /website/index/;
-        add_before_body /.theme/theme.html;
-        autoindex_exact_size off;
-        autoindex on;
-      }
-    '';
+    locations = {
+      "/" = {
+        extraConfig = ''
+          ${corsHeaders}
+          if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain; charset=utf-8';
+            add_header 'Content-Length' 0;
+            return 204;
+          }
+        '';
+      };
+      "/.theme/" = {
+        alias = "/website/index-theme/";
+      };
+      "/index/" = {
+        alias = "/website/index/";
+        extraConfig = ''
+          add_before_body /.theme/theme.html;
+          autoindex on;
+          autoindex_exact_size off;
+        '';
+      };
+    };
   };
 
 in
 {
   options.my-services = {
-    cloudflare-ddns.enable = mkEnableOption "automatic Cloudflare DDNS";
+    cloudflare-ddns.enable = lib.mkEnableOption "automatic Cloudflare DDNS";
     nginx = {
-      enable = mkEnableOption "nginx";
-      website.enable = mkEnableOption "my goofy website";
-      nextcloud.enable = mkEnableOption "nextcloud";
-      cape.enable = mkEnableOption "integration with CAPEv2 sandbox";
-      hostName = mkOption {
-        type = types.str;
+      enable = lib.mkEnableOption "nginx";
+      website.enable = lib.mkEnableOption "my goofy website";
+      cape.enable = lib.mkEnableOption "integration with CAPEv2 sandbox";
+      hostName = lib.mkOption {
+        type = lib.types.str;
         default = "sanic.space";
         example = "mybio.space";
         description = "Website domain";
@@ -66,7 +61,7 @@ in
     };
   };
 
-  config = mkIf cfg.nginx.enable {
+  config = lib.mkIf cfg.nginx.enable {
     security.acme.acceptTerms = true;
 
     # Ensure stream directories exist so Nginx mount namespace never fails
@@ -75,30 +70,24 @@ in
       "d /website/stream/dash 0750 nginx nginx -"
     ];
 
-    services.nextcloud = mkIf cfg.nginx.nextcloud.enable {
-      enable = true;
-      configureRedis = true;
-      config.adminpassFile = "/password";
-      https = true;
-      hostName = "nc.${cfg.nginx.hostName}";
-      package = pkgs.nextcloud29;
-    };
-
     services.nginx = {
       enable = true;
+      package = pkgs.nginx.override {
+        modules = [ pkgs.nginxModules.rtmp ];
+      };
+
       recommendedProxySettings = true;
-      virtualHosts = mkMerge [
-        (mkIf cfg.nginx.nextcloud.enable {
-          ${config.services.nextcloud.hostName} = {
-            forceSSL = true;
-            enableACME = true;
-          };
-        })
-        (mkIf cfg.nginx.website.enable {
+      recommendedTlsSettings = true;
+      recommendedOptimisation = true;
+      recommendedGzipSettings = true;
+      recommendedBrotliSettings = true;
+
+      virtualHosts = lib.mkMerge [
+        (lib.mkIf cfg.nginx.website.enable {
           "${cfg.nginx.hostName}" = shared-config;
           "ip.${cfg.nginx.hostName}" = shared-config;
         })
-        (mkIf cfg.nginx.cape.enable {
+        (lib.mkIf cfg.nginx.cape.enable {
           "cape.${cfg.nginx.hostName}" = {
             forceSSL = true;
             enableACME = true;
@@ -117,6 +106,7 @@ in
           };
         })
       ];
+
       appendConfig = ''
         rtmp {
           server {
@@ -142,7 +132,7 @@ in
     systemd = {
       services = {
         nginx.serviceConfig.ReadWritePaths = [ "/website/stream" ];
-        cloudflare-ddns = mkIf cfg.cloudflare-ddns.enable {
+        cloudflare-ddns = lib.mkIf cfg.cloudflare-ddns.enable {
           description = "Update Cloudflare DDNS Records";
           serviceConfig = {
             Type = "oneshot";
@@ -151,7 +141,7 @@ in
         };
       };
 
-      timers = mkIf cfg.cloudflare-ddns.enable {
+      timers = lib.mkIf cfg.cloudflare-ddns.enable {
         cloudflare-ddns = {
           description = "Timer for periodically updating Cloudflare DDNS";
           wantedBy = [ "timers.target" ];

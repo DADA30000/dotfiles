@@ -326,9 +326,11 @@ in
               return 1
             fi
 
-            local esl_file="/tmp/temp_sig_list.esl"
-            local auth_file="/tmp/temp_sig_list.auth"
-            local temp_pem="/tmp/temp_cert.pem"
+            local sb_tmpdir
+            sb_tmpdir=$(mktemp -d "$XDG_RUNTIME_DIR/sb-cert.XXXXXXXXXX")
+            local esl_file="$sb_tmpdir/temp_sig_list.esl"
+            local auth_file="$sb_tmpdir/temp_sig_list.auth"
+            local temp_pem="$sb_tmpdir/temp_cert.pem"
             local guid=$(uuidgen)
 
             if [[ "$infile" == *.esl || "$infile" == *.bin ]]; then
@@ -378,7 +380,7 @@ in
 
             echo "[+] Writing pre-signed update to $var..."
             sudo efi-updatevar $append -f "$auth_file" "$var"
-            sudo rm -f "$esl_file" "$auth_file"
+            sudo rm -rf "$sb_tmpdir"
           }
 
           fix-dbx() {
@@ -388,7 +390,7 @@ in
               return 1
             fi
 
-            local tmp_esl="/tmp/dbxDefault.esl"
+            local tmp_esl="$XDG_RUNTIME_DIR/dbxDefault.esl"
             echo "[+] Extracting default dbx signature list..."
             sudo tail -c +5 "''${DEFAULT_DBX_PATH[1]}" > "$tmp_esl"
 
@@ -482,7 +484,7 @@ in
                 
                 if [[ ! "$curr_word" == -* ]]; then
                   if [[ -n "$curr_word" ]]; then
-                    local cache_dir="/tmp/nix_completer_cache_dir"
+                    local cache_dir="$XDG_CACHE_HOME/nix_completer_cache" 
                     local current_flake_source="${flake-stuff}?rev=$NIX_HASH"
                     
                     if [[ -d "$cache_dir" ]]; then

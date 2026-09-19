@@ -1,7 +1,7 @@
 {
   config,
-  lib,
   pkgs,
+  lib,
   ...
 }:
 with lib;
@@ -16,9 +16,17 @@ in
   config = mkIf cfg.enable {
     systemd.user.services.replays = {
       wantedBy = [ "graphical-session.target" ];
+      path = [
+        pkgs.gpu-screen-recorder
+        pkgs.inotify-tools
+        pkgs.findutils
+        pkgs.gawk
+        pkgs.gnused
+        pkgs.gnugrep
+      ];
       script = ''
         set -x
-        export PATH="/run/wrappers/bin:/run/current-system/sw/bin:$PATH"
+        export PATH="/run/wrappers/bin:$PATH"
         mkdir -p "$HOME/Documents/Replays"
         rm_nv() {
           local tmp=$(mktemp -u ~/.nv.XXXXXX)

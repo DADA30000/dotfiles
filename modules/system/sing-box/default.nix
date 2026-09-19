@@ -172,6 +172,7 @@ let
       {
         tag = "mixed-in";
         listen_port = 2080;
+        listen = "127.0.0.1";
         type = "mixed";
       }
       {
@@ -788,9 +789,9 @@ in
     };
 
     security.wrappers.vpnify = {
-      setuid = true;
       owner = "root";
       group = "root";
+      capabilities = "cap_sys_admin+ep";
       source = "${vpnifyBin}/bin/vpnify";
     };
 

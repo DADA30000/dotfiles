@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  sharedStuff,
   ...
 }:
 {
-
   xdg.configFile = {
     "openxr/1/active_runtime.i686.json".source =
       config.lib.file.mkOutOfStoreSymlink "/etc/xdg/openxr/1/active_runtime.i686.json";
@@ -44,12 +44,7 @@
     NIXPKGS_ALLOW_UNFREE = "1";
   };
 
-  systemd.user = {
-    services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
-    packages = [ pkgs.gamemode ];
-  };
-
-  manual.manpages.enable = false;
+  systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
 
   sandboxing.enable = true;
 

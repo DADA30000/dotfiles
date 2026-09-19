@@ -736,18 +736,18 @@ in
             }
           ];
           permission = [
-            #{
-            #  binary = "${lib.escapeRegex (lib.getExe pkgs.wayvr)}";
-            #  type = "screencopy";
-            #  mode = "allow";
-            #}
             {
-              binary = "${lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped"}";
+              binary = lib.escapeRegex "${pkgs.sunshine}/bin/.sunshine-wrapped";
               type = "screencopy";
               mode = "allow";
             }
             {
-              binary = "${lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}"}/libexec/.xdg-desktop-portal-hyprland-wrapped";
+              binary = lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped";
+              type = "screencopy";
+              mode = "allow";
+            }
+            {
+              binary = lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}/libexec/.xdg-desktop-portal-hyprland-wrapped";
               type = "screencopy";
               mode = "allow";
             }

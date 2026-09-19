@@ -3,6 +3,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -17,17 +18,23 @@ int main(int argc, char **argv) {
 
   char **saved_env = environ;
 
-  int fd = open("/var/run/netns/vpn_wrapper", O_RDONLY);
+  // 1. Open with O_CLOEXEC to prevent leaking descriptor to child processes
+  int fd = open("/var/run/netns/vpn_wrapper", O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
     perror("open netns");
     return 1;
   }
 
+  // 2. Attach to the VPN network namespace
   if (setns(fd, CLONE_NEWNET) != 0) {
     perror("setns(net)");
+    close(fd);
     return 1;
   }
+  // 3. Immediately close the descriptor
+  close(fd);
 
+  // 4. Create an isolated mount namespace for DNS redirection
   if (unshare(CLONE_NEWNS) != 0) {
     perror("unshare mount ns");
     return 1;
@@ -47,8 +54,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (setuid(getuid()) != 0) {
-    perror("setuid");
+  // 5. Lock privileges: child process can NEVER gain capabilities or run SUID
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+    perror("prctl(PR_SET_NO_NEW_PRIVS)");
     return 1;
   }
 

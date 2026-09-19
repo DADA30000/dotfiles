@@ -53,7 +53,6 @@ let
 in
 {
   options.disks = {
-    impermanence = lib.mkEnableOption "Impermanence (remove all files except those that are needed)";
     enable = lib.mkEnableOption "Base disks configuration";
     encryption = lib.mkEnableOption "Enable LUKS encryption for the main drive";
     ssdOptimizations = lib.mkEnableOption "Enable SSD optimizations (TRIM, bypass workqueues, etc.)";
@@ -66,82 +65,73 @@ in
       "/boot".device = lib.mkForce "/dev/disk/by-label/BOOT";
       "/".neededForBoot = true;
       "/nix".neededForBoot = true;
-      "/home".neededForBoot = true;
-    }
-    // lib.optionalAttrs cfg.impermanence {
       "/persist".neededForBoot = true;
     };
 
     hardware.block.scheduler."*" = "bfq";
 
-    environment.persistence."/persist" = lib.mkMerge [
-      (lib.mkIf (!cfg.impermanence) { enable = false; })
-      (lib.mkIf cfg.impermanence {
-        enable = true;
-        hideMounts = true;
-        users = lib.genAttrs normalUsers (_: commonUserPersistence);
-        directories = [
-          "/website"
-          "/etc/NetworkManager/system-connections"
-          "/etc/nixos"
-          "/etc/ssh"
-          "/etc/lact"
-          "/etc/waydroid-extra"
-          "/var/log"
-          "/var/db/sudo/lectured"
-          "/var/lib/bluetooth"
-          "/var/lib/nixos"
-          "/var/lib/systemd"
-          "/var/lib/libvirt"
-          "/var/lib/flatpak"
-          "/var/lib/sbctl"
-          "/var/lib/waydroid"
-          "/var/lib/zerotier-one"
-          "/var/lib/llama-cpp"
-          {
-            directory = "/var/lib/iwd";
-            mode = "u=rwx,g=,o=";
-          }
-          {
-            directory = "/var/lib/private";
-            mode = "u=rwx,g=,o=";
-          }
-          {
-            directory = "/etc/credstore";
-            mode = "u=rwx,g=,o=";
-          }
-          {
-            directory = "/var/lib/acme";
-            user = "acme";
-            group = "acme";
-            mode = "u=rwx,g=rx,o=rx";
-          }
-          {
-            directory = "/var/lib/suricata";
-            user = "suricata";
-            group = "suricata";
-            mode = "u=rwx,g=rx,o=rx";
-          }
-          {
-            directory = "/var/lib/cape";
-            user = "cape";
-            group = "cape";
-            mode = "u=rwx,g=,o=";
-          }
-          {
-            directory = "/var/lib/postgresql";
-            user = "postgres";
-            group = "postgres";
-            mode = "u=rwx,g=rx,o=";
-          }
-        ];
-        files = [
-          "/etc/ly/save.txt"
-          "/etc/machine-id"
-          "/var/lib/searx-secret"
-        ];
-      })
-    ];
+    environment.persistence."/persist" = {
+      enable = true;
+      hideMounts = true;
+      users = lib.genAttrs (lib.filter (name: name != "guest") normalUsers) (_: commonUserPersistence);
+      directories = [
+        "/website"
+        "/etc/NetworkManager/system-connections"
+        "/etc/nixos"
+        "/etc/ssh"
+        "/etc/lact"
+        "/var/log"
+        "/var/db/sudo/lectured"
+        "/var/lib/bluetooth"
+        "/var/lib/nixos"
+        "/var/lib/systemd"
+        "/var/lib/libvirt"
+        "/var/lib/flatpak"
+        "/var/lib/sbctl"
+        "/var/lib/zerotier-one"
+        "/var/lib/llama-cpp"
+        {
+          directory = "/var/lib/iwd";
+          mode = "u=rwx,g=,o=";
+        }
+        {
+          directory = "/var/lib/private";
+          mode = "u=rwx,g=,o=";
+        }
+        {
+          directory = "/etc/credstore";
+          mode = "u=rwx,g=,o=";
+        }
+        {
+          directory = "/var/lib/acme";
+          user = "acme";
+          group = "acme";
+          mode = "u=rwx,g=rx,o=rx";
+        }
+        {
+          directory = "/var/lib/suricata";
+          user = "suricata";
+          group = "suricata";
+          mode = "u=rwx,g=rx,o=rx";
+        }
+        {
+          directory = "/var/lib/cape";
+          user = "cape";
+          group = "cape";
+          mode = "u=rwx,g=,o=";
+        }
+        {
+          directory = "/var/lib/postgresql";
+          user = "postgres";
+          group = "postgres";
+          mode = "u=rwx,g=rx,o=";
+        }
+      ];
+      files = [
+        "/etc/machine-id"
+        "/var/lib/searx-secret"
+      ];
+    };
 
     services.udev.extraRules = lib.mkIf cfg.autoScanZfs ''
       ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
@@ -150,6 +140,10 @@ in
 
     systemd.services.zfs-automount = lib.mkIf cfg.autoScanZfs {
       description = "Universal LUKS & ZFS Auto-Mount Engine";
+      path = [
+        config.boot.zfs.package
+        pkgs.util-linux
+      ];
       wantedBy = [
         "graphical.target"
         "multi-user.target"
@@ -223,27 +217,18 @@ in
       };
     };
 
-    boot = lib.mkMerge [
-      (lib.mkIf cfg.impermanence {
-        initrd = {
-          systemd.services.zfs-rollback = {
-            wantedBy = [ "initrd.target" ];
-            after = [ "zfs-import-nixos.service" ];
-            before = [ "sysroot.mount" ];
-            path = [ config.boot.zfs.package ];
-            unitConfig.DefaultDependencies = false;
-            description = "Rollback ZFS root and home to blank snapshots";
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = [
-                "${config.boot.zfs.package}/bin/zfs rollback -r nixos/root@blank"
-                "${config.boot.zfs.package}/bin/zfs rollback -r nixos/home@blank"
-              ];
-            };
-          };
-        };
-      })
-    ];
+    boot.initrd.systemd.services.zfs-rollback = {
+      wantedBy = [ "initrd.target" ];
+      after = [ "zfs-import-nixos.service" ];
+      before = [ "sysroot.mount" ];
+      path = [ config.boot.zfs.package ];
+      unitConfig.DefaultDependencies = false;
+      description = "Rollback ZFS root and home to blank snapshots";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${config.boot.zfs.package}/bin/zfs rollback -r nixos/root@blank";
+      };
+    };
 
     disko.devices = {
       disk.main = {
@@ -331,18 +316,6 @@ in
             mountpoint = "/nix";
             options.mountpoint = "legacy";
           };
-          home = {
-            type = "zfs_fs";
-            mountpoint = "/home";
-            options.mountpoint = "legacy";
-            mountOptions = [
-              "nodev"
-              "nosuid"
-            ];
-            postCreateHook = "zfs snapshot nixos/home@blank";
-          };
-        }
-        // lib.optionalAttrs cfg.impermanence {
           persist = {
             type = "zfs_fs";
             mountpoint = "/persist";

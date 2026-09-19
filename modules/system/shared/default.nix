@@ -8,6 +8,8 @@
   ...
 }:
 let
+  normalUsers = builtins.attrNames (lib.filterAttrs (_: u: u.isNormalUser) config.users.users);
+
   fastAuth = {
     nodelay = true;
     failDelay = {
@@ -23,7 +25,6 @@ let
     "sshd"
     "su"
     "passwd"
-    "greetd"
   ];
 in
 {
@@ -50,6 +51,9 @@ in
   replays.enable = true;
 
   umu.enable = true;
+
+  # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
+  disks.enable = true;
 
   zramSwap = {
     enable = true;
@@ -195,13 +199,15 @@ in
 
     users = {
       root.hashedPassword = "!";
+      guest = {
+        isNormalUser = true;
+        hashedPassword = "";
+      };
       ${user} = {
         isNormalUser = true;
         hashedPassword = user-hash;
         initialPassword = if user-hash == null then "1234" else null;
         initialHashedPassword = lib.mkForce null;
-        home = "/home/${user}";
-        extraGroups = [ "kvm" ];
       };
     };
   };
@@ -223,6 +229,7 @@ in
       max-connect-timeout = 1;
       download-attempts = 1;
       initial-connect-timeout = 1;
+      allowed-users = normalUsers;
       substituters = [
         "https://cache.nixos.org?priority=1"
       ];
@@ -231,10 +238,6 @@ in
       ];
       trusted-public-keys = [
         "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
-      ];
-      allowed-users = [
-        "@wheel"
-        user
       ];
       experimental-features = [
         "nix-command"
@@ -265,22 +268,18 @@ in
 
   };
 
-  disks = {
+  home-manager = {
 
-    # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
-    enable = true;
+    users = {
+      ${user} = { };
+      guest = { };
+    };
 
-    impermanence = true;
-
-  };
-
-  home-manager.extraSpecialArgs.kekma = {
-
-    nix = if config.docs.enable then config.docs.man-cache-nix else "configuration.nix";
-
-    home = if config.docs.enable then config.docs.man-cache-home else "home-configuration.nix";
-
-    nvidia = config.graphics.nvidia.enable;
+    extraSpecialArgs.kekma = {
+      nix = if config.docs.enable then config.docs.man-cache-nix else "configuration.nix";
+      home = if config.docs.enable then config.docs.man-cache-home else "home-configuration.nix";
+      nvidia = config.graphics.nvidia.enable;
+    };
 
   };
 
@@ -290,20 +289,20 @@ in
 
     tmp.useTmpfs = true;
 
-    kernelPackages =
-      let
-        zfsCompatibleKernelPackages = lib.filterAttrs (
-          name: kernelPackages:
-          (builtins.match "linux_[0-9]+_[0-9]+" name) != null
-          && (builtins.tryEval kernelPackages).success
-          && (!kernelPackages.${config.boot.zfs.package.kernelModuleAttribute}.meta.broken)
-        ) pkgs.linuxKernel.packages;
-      in
-      lib.last (
-        lib.sort (a: b: (lib.versionOlder a.kernel.version b.kernel.version)) (
-          builtins.attrValues zfsCompatibleKernelPackages
-        )
-      );
+    #kernelPackages =
+    #  let
+    #    zfsCompatibleKernelPackages = lib.filterAttrs (
+    #      name: kernelPackages:
+    #      (builtins.match "linux_[0-9]+_[0-9]+" name) != null
+    #      && (builtins.tryEval kernelPackages).success
+    #      && (!kernelPackages.${config.boot.zfs.package.kernelModuleAttribute}.meta.broken)
+    #    ) pkgs.linuxKernel.packages;
+    #  in
+    #  lib.last (
+    #    lib.sort (a: b: (lib.versionOlder a.kernel.version b.kernel.version)) (
+    #      builtins.attrValues zfsCompatibleKernelPackages
+    #    )
+    #  );
 
     kernelParams = [
       "iommu=pt"
@@ -355,6 +354,7 @@ in
 
   environment.etc = {
     texinfo.source = pkgs.texinfo;
+    stdenvNoCC.source = pkgs.stdenvNoCC;
     bashInteractive.source = pkgs.bashInteractive;
     "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
   };
@@ -400,8 +400,11 @@ in
 
     tmpfiles.rules = [
       "d /var/lib/AccountsService/users 0755 root root -"
-      "f /var/lib/AccountsService/users/${user} 0644 root root - [User]\\nSession=\\nIcon=${pkgs.nixos-icons}/share/icons/hicolor/512x512/apps/nix-snowflake.png\\nSystemAccount=false\\n"
-    ];
+    ]
+    ++ (map (
+      u:
+      "f /var/lib/AccountsService/users/${u} 0644 root root - [User]\\nSession=\\nIcon=${pkgs.nixos-icons}/share/icons/hicolor/512x512/apps/nix-snowflake.png\\nSystemAccount=false\\n"
+    ) normalUsers);
 
     oomd = {
       enable = true;
@@ -555,6 +558,8 @@ in
 
     systembus-notify.enable = true;
 
+    speechd.enable = false;
+
     gnome.gnome-keyring.enable = true;
 
     journald.settings.Journal = {
@@ -580,7 +585,7 @@ in
           user = user;
         };
         default_session = {
-          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";
+          command = "${pkgs.tuigreet}/bin/tuigreet --user-menu --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";
           user = "greeter";
         };
       };
@@ -589,16 +594,6 @@ in
     scx = {
       enable = true;
       scheduler = "scx_bpfland";
-    };
-
-    sunshine = {
-      autoStart = true;
-      enable = true;
-      capSysAdmin = true;
-      openFirewall = true;
-      package = (
-        pkgs.sunshine.override { cudaSupport = if config.graphics.nvidia.enable then true else false; }
-      );
     };
 
     udev.extraRules = ''
@@ -699,7 +694,24 @@ in
 
     # Disable usual coredumps (I hate them)
     pam = {
-      services = lib.genAttrs authServices (_: fastAuth);
+      services = lib.genAttrs authServices (_: fastAuth) // {
+        greetd = {
+          nodelay = true;
+          failDelay = {
+            enable = true;
+            delay = 500000;
+          };
+          rules.auth.guest-permit = {
+            order = config.security.pam.services.greetd.rules.auth.login.order - 10;
+            control = "sufficient";
+            modulePath = "pam_succeed_if.so";
+            args = [
+              "user = guest"
+              "quiet"
+            ];
+          };
+        };
+      };
       loginLimits = [
         {
           domain = "*";

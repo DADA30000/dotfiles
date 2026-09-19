@@ -6,7 +6,10 @@
   graphics.nvidia.enable = true;
   amd-ai.enable = true;
   nix-mineral.settings.kernel.intel-iommu = false;
-  home-manager.users.${user} = import ./home.nix;
+  home-manager.users = {
+    ${user} = import ./home.nix;
+    guest = import ./home.nix;
+  };
 
   disks = {
     encryption = true;
