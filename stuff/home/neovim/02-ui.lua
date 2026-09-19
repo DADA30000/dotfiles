@@ -164,6 +164,14 @@ end
 
 vim.o.tabline = "%!v:lua.MyTabLine()"
 
+-- Auto-redraw tabline on terminal title or output changes (updates running command in tab header)
+vim.api.nvim_create_autocmd({ "TextChangedT", "TermRequest" }, {
+	pattern = "term://*",
+	callback = function()
+		vim.cmd("redrawtabline")
+	end,
+})
+
 -- === TERMINAL, MAN PAGE & PAGER VS FILE LAYOUT AUTO-TOGGLE ===
 vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 	pattern = "*",
