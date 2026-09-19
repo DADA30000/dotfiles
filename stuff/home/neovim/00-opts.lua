@@ -10,8 +10,8 @@ _G.OPTS = {
 
 	-- Terminal Buffer & History Management
 	terminal = {
-		prune_threshold = 3000, -- Buffer line count threshold to trigger pruning
-		pruned_history = 1000, -- Scrollback limit applied during pruning
+		prune_threshold = 10000, -- Buffer line count threshold to trigger pruning
+		pruned_history = 5000, -- Scrollback limit applied during pruning
 		max_scrollback = 100000, -- Full scrollback capacity restored after pruning
 		prune_restore_delay_ms = 50, -- Delay before restoring max scrollback (ms)
 	},

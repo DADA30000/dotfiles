@@ -1,8 +1,45 @@
-diff --git a/src/nvim/register.c b/src/nvim/register.c
-index fb5fe5d..9bf966a 100644
---- a/src/nvim/register.c
-+++ b/src/nvim/register.c
-@@ -1050,32 +1050,49 @@ void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
+diff -uNr -x '*.orig' -x '*.rej' a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
+--- a/src/nvim/eval/funcs.c	2026-09-19 23:08:44.232280769 +0300
++++ b/src/nvim/eval/funcs.c	2026-09-19 23:08:54.265900193 +0300
+@@ -3625,6 +3625,9 @@
+   }
+ 
+   dict_T *env = create_environment(job_env, clear_env, pty, true, term_name);
++  if (term) {
++    tv_dict_add_nr(env, S_LEN("NVIM_BUF_ID"), curbuf->b_fnum);
++  }
+   Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,
+                                     rpc, overlapped, detach, stdin_mode, cwd,
+                                     width, height, env, &rettv->vval.v_number);
+diff -uNr -x '*.orig' -x '*.rej' a/src/nvim/normal.c b/src/nvim/normal.c
+--- a/src/nvim/normal.c	2026-09-19 23:08:44.238452981 +0300
++++ b/src/nvim/normal.c	2026-09-19 23:09:06.771412424 +0300
+@@ -1080,6 +1080,21 @@
+ 
+   LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
+ 
++  if (KeyTyped && curbuf->terminal != NULL) {
++    bool is_whitelisted = is_mouse_key(s->c)
++                          || s->c == K_EVENT || s->c == K_IGNORE
++                          || typebuf_maplen() > 0;
++    if (!is_whitelisted) {
++      if (VIsual_active) {
++        end_visual_mode();
++      }
++      stuffcharReadbuff(s->c);
++      terminal_enter();
++      s->command_finished = true;
++      return 1;
++    }
++  }
++
+   // If a mapping was started in Visual or Select mode, remember the length
+   // of the mapping.  This is used below to not return to Insert mode for as
+   // long as the mapping is being executed.
+diff -uNr -x '*.orig' -x '*.rej' a/src/nvim/register.c b/src/nvim/register.c
+--- a/src/nvim/register.c	2026-09-19 23:08:44.250048438 +0300
++++ b/src/nvim/register.c	2026-09-19 23:08:54.270735506 +0300
+@@ -1051,32 +1051,57 @@
      }
    }
  
@@ -12,6 +49,17 @@ index fb5fe5d..9bf966a 100644
 -      block_prep(oap, &bd, lnum, false);
 -      yank_copy_line(reg, &bd, y_idx, oap->excl_tr_ws);
 -      break;
+-
+-    case kMTLineWise:
+-      reg->y_array[y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
+-      break;
+-
+-    case kMTCharWise:
+-      charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
+-      // make sure bd.textlen is not longer than the text
+-      int tmp = (int)strlen(bd.textstart);
+-      if (tmp < bd.textlen) {
+-        bd.textlen = tmp;
 +  for (; lnum <= yankendlnum; lnum++) {
 +    bool is_cont = (curbuf->terminal != NULL && lnum > oap->start.lnum && terminal_line_is_continuation(curbuf, lnum));
 +    size_t cur_y_idx = (is_cont && y_idx > 0) ? y_idx - 1 : y_idx;
@@ -20,6 +68,16 @@ index fb5fe5d..9bf966a 100644
 +      // Append text directly to previous register line without inserting \n
 +      char *line_text = ml_get(lnum);
 +      size_t line_len = (size_t)ml_get_len(lnum);
++      if (reg->y_type == kMTCharWise && lnum == yankendlnum) {
++        charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
++        int tmp = (int)strlen(bd.textstart);
++        if (tmp < bd.textlen) {
++          bd.textlen = tmp;
++        }
++        line_len = (size_t)bd.textlen;
+       }
+-      yank_copy_line(reg, &bd, y_idx, false);
+-      break;
 +      String *prev = &reg->y_array[cur_y_idx];
 +      size_t new_size = prev->size + line_len;
 +      char *new_data = xmalloc(new_size + 1);
@@ -34,23 +92,14 @@ index fb5fe5d..9bf966a 100644
 +        block_prep(oap, &bd, lnum, false);
 +        yank_copy_line(reg, &bd, cur_y_idx, oap->excl_tr_ws);
 +        break;
- 
--    case kMTLineWise:
--      reg->y_array[y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
--      break;
++
 +      case kMTLineWise:
 +        reg->y_array[cur_y_idx] = cbuf_to_string(ml_get(lnum), (size_t)ml_get_len(lnum));
 +        break;
  
--    case kMTCharWise:
--      charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
--      // make sure bd.textlen is not longer than the text
--      int tmp = (int)strlen(bd.textstart);
--      if (tmp < bd.textlen) {
--        bd.textlen = tmp;
--      }
--      yank_copy_line(reg, &bd, y_idx, false);
--      break;
+-    // NOTREACHED
+-    case kMTUnknown:
+-      abort();
 +      case kMTCharWise:
 +        charwise_block_prep(oap->start, oap->end, &bd, lnum, oap->inclusive);
 +        int tmp = (int)strlen(bd.textstart);
@@ -59,10 +108,7 @@ index fb5fe5d..9bf966a 100644
 +        }
 +        yank_copy_line(reg, &bd, cur_y_idx, false);
 +        break;
- 
--    // NOTREACHED
--    case kMTUnknown:
--      abort();
++
 +      case kMTUnknown:
 +        abort();
 +      }
@@ -73,11 +119,10 @@ index fb5fe5d..9bf966a 100644
  
    if (curr != reg) {      // append the new block to the old block
      size_t j;
-diff --git a/src/nvim/terminal.c b/src/nvim/terminal.c
-index cb5a1ef..d71ff17 100644
---- a/src/nvim/terminal.c
-+++ b/src/nvim/terminal.c
-@@ -140,6 +140,7 @@ static bool refresh_pending = false;
+diff -uNr -x '*.orig' -x '*.rej' a/src/nvim/terminal.c b/src/nvim/terminal.c
+--- a/src/nvim/terminal.c	2026-09-19 23:08:44.251403222 +0300
++++ b/src/nvim/terminal.c	2026-09-19 23:08:54.271900205 +0300
+@@ -139,6 +139,7 @@
  
  typedef struct {
    size_t cols;
@@ -85,7 +130,7 @@ index cb5a1ef..d71ff17 100644
    VTermScreenCell cells[];
  } ScrollbackLine;
  
-@@ -1605,6 +1606,15 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
+@@ -1604,6 +1605,15 @@
    switch (prop) {
    case VTERM_PROP_ALTSCREEN:
      term->in_altscreen = val->boolean;
@@ -101,7 +146,7 @@ index cb5a1ef..d71ff17 100644
      break;
  
    case VTERM_PROP_CURSORVISIBLE:
-@@ -1741,6 +1751,10 @@ static int term_sb_push(int cols, const VTermScreenCell *cells, void *data)
+@@ -1740,6 +1750,10 @@
      term->sb_pending++;
    }
  
@@ -112,7 +157,7 @@ index cb5a1ef..d71ff17 100644
    memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
    if (!term->synchronized_output) {
      set_put(ptr_t, &invalidated_terminals, term);
-@@ -2259,6 +2273,14 @@ static bool send_mouse_event(Terminal *term, int c)
+@@ -2267,6 +2281,14 @@
    }
  
    if (c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT) {
@@ -127,7 +172,7 @@ index cb5a1ef..d71ff17 100644
      win_T *save_curwin = curwin;
      // switch window/buffer to perform the scroll
      curwin = mouse_win;
-@@ -2710,6 +2732,28 @@ static char *get_config_string(buf_T *buf, char *key)
+@@ -2721,6 +2743,28 @@
    return NULL;
  }
  
@@ -156,11 +201,10 @@ index cb5a1ef..d71ff17 100644
  // }}}
  
  // vim: foldmethod=marker
-diff --git a/src/nvim/terminal.h b/src/nvim/terminal.h
-index cdeb155..75bfbe9 100644
---- a/src/nvim/terminal.h
-+++ b/src/nvim/terminal.h
-@@ -24,4 +24,6 @@ typedef struct {
+diff -uNr -x '*.orig' -x '*.rej' a/src/nvim/terminal.h b/src/nvim/terminal.h
+--- a/src/nvim/terminal.h	2026-09-19 23:08:44.251424332 +0300
++++ b/src/nvim/terminal.h	2026-09-19 23:08:54.273470422 +0300
+@@ -24,4 +24,6 @@
    bool force_crlf;
  } TerminalOptions;
  

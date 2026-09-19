@@ -1,0 +1,45 @@
+diff --git a/crates/tuigreet/src/ipc.rs b/crates/tuigreet/src/ipc.rs
+index 2569b22..d1a36bd 100644
+--- a/crates/tuigreet/src/ipc.rs
++++ b/crates/tuigreet/src/ipc.rs
+@@ -98,7 +98,7 @@ impl Ipc {
+       };
+ 
+       self
+-        .parse_response(&mut *greeter.write().await, response)
++        .parse_response(&mut *greeter.write().await, &request, response)
+         .await?;
+     }
+ 
+@@ -108,6 +108,7 @@ impl Ipc {
+   async fn parse_response(
+     &mut self,
+     greeter: &mut Greeter,
++    request: &Request,
+     response: Response,
+   ) -> Result<(), Box<dyn Error>> {
+     // XXX: Do not display actual message from greetd, which may contain entered
+@@ -273,12 +274,17 @@ impl Ipc {
+         match error_type {
+           ErrorType::AuthError => {
+             greeter.message = Some(fl!("failed"));
+-            self
+-              .send(Request::CreateSession {
+-                username: greeter.username.value.clone(),
+-              })
+-              .await;
+-            greeter.reset(true).await;
++
++            if matches!(request, Request::PostAuthMessageResponse { .. }) {
++              self
++                .send(Request::CreateSession {
++                  username: greeter.username.value.clone(),
++                })
++                .await;
++              greeter.reset(true).await;
++            } else {
++              greeter.reset(false).await;
++            }
+           },
+ 
+           ErrorType::Error => {

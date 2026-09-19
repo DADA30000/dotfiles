@@ -117,10 +117,14 @@ let
       if [ ! -t 0 ]; then
         send_stdin_stream_rpc "man" "$@"
       elif [[ -n "$ARG" ]]; then
-        ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$ARG")
-        ABS_PATH_ESC="''${ABS_PATH//\'/\'\'}"
+        if [[ -f "$ARG" ]]; then
+          ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$ARG")
+          ARG_ESC="''${ABS_PATH//\'/\'\'}"
+        else
+          ARG_ESC="''${ARG//\'/\'\'}"
+        fi
         exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-          "v:lua._G.OpenManPath('$ABS_PATH_ESC')" >/dev/null 2>&1
+          "v:lua._G.OpenManPath('$ARG_ESC')" >/dev/null 2>&1
       else
         exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
           "v:lua._G.OpenManPath(\"\")" >/dev/null 2>&1
@@ -132,13 +136,48 @@ let
       send_stdin_stream_rpc "pager" "$@"
     fi
 
-    # 3. No arguments (`nvim`)
+    # 3. Invoked from within an existing Neovim terminal tab (overtake current tab like Kitty)
+    if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
+      RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      if [[ ! -d "$RUNTIME_DIR" ]]; then
+        RUNTIME_DIR="/tmp"
+      fi
+
+      FIFO=$(${pkgs.coreutils}/bin/mktemp -u "$RUNTIME_DIR/nvim-wait.XXXXXX")
+      ${pkgs.coreutils}/bin/mkfifo "$FIFO"
+
+      FILES_JSON="["
+      FIRST=1
+      for arg in "$@"; do
+        if [[ "$arg" != -* ]]; then
+          ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
+          CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          if [ $FIRST -eq 1 ]; then
+            FILES_JSON="$FILES_JSON\"$CLEAN_PATH\""
+            FIRST=0
+          else
+            FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
+          fi
+        fi
+      done
+      FILES_JSON="''${FILES_JSON}]"
+      FILES_JSON_ESC="''${FILES_JSON//\'/\'\'}"
+
+      "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
+        "v:lua._G.OvertakeTerminal($NVIM_BUF_ID, '$FILES_JSON_ESC', '$FIFO')" >/dev/null 2>&1 &
+
+      ${pkgs.coreutils}/bin/cat "$FIFO" >/dev/null 2>&1
+      ${pkgs.coreutils}/bin/rm -f "$FIFO"
+      exit 0
+    fi
+
+    # 4. No arguments (`nvim` outside terminal tab)
     if [ $# -eq 0 ]; then
       PWD_ESC="''${PWD//\'/\'\'}"
       exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD_ESC')" >/dev/null 2>&1
     fi
 
-    # 4. File arguments (`nvim file1 file2...`)
+    # 5. File arguments (`nvim file1 file2...` outside terminal tab)
     FILES_JSON="["
     FIRST=1
     for arg in "$@"; do

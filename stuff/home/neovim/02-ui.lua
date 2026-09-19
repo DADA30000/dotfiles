@@ -11,13 +11,26 @@ vim.api.nvim_set_hl(0, "EndOfBuffer", { bg = "none", ctermbg = "none" })
 vim.api.nvim_set_hl(0, "SignColumn", { bg = "none", ctermbg = "none" })
 vim.api.nvim_set_hl(0, "NonText", { bg = "none", ctermbg = "none" })
 vim.api.nvim_set_hl(0, "StatusLine", { bg = "none" })
+vim.api.nvim_set_hl(0, "StatusLineNC", { bg = "none" })
 
 require("ibl").setup({
 	indent = { char = _G.OPTS.editor.indent_char },
 	scope = { enabled = true, show_start = true, show_end = true },
 })
 
-require("cord").setup({})
+require("cord").setup({
+	text = {
+		terminal = false,
+	},
+	hooks = {
+		post_activity = function(opts, activity)
+			if vim.bo.buftype == "terminal" or opts.type == "terminal" then
+				opts.manager:clear_activity()
+				opts.manager:skip_update()
+			end
+		end,
+	},
+})
 
 require("fidget").setup({
 	notification = {
@@ -152,10 +165,18 @@ end
 vim.o.tabline = "%!v:lua.MyTabLine()"
 
 -- === TERMINAL, MAN PAGE & PAGER VS FILE LAYOUT AUTO-TOGGLE ===
-vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen", "FileType" }, {
+vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 	pattern = "*",
 	callback = function()
+		-- Ignore floating windows so popups/diagnostics never toggle global statusline
+		local win = vim.api.nvim_get_current_win()
+		local win_config = vim.api.nvim_win_get_config(win)
+		if win_config and win_config.relative and win_config.relative ~= "" then
+			return
+		end
+
 		if vim.bo.buftype == "terminal" or vim.bo.filetype == "man" or vim.b.is_pager then
+			vim.opt_local.statusline = " "
 			vim.o.laststatus = 0
 			vim.o.cmdheight = 0
 
@@ -193,19 +214,20 @@ if vim.g.neovide then
 end
 
 _G.InstantTabSwitch = function(cmd)
-	local old_scroll = vim.g.neovide_scroll_animation_length or _G.OPTS.neovide.scroll_animation_length
-	local old_cursor = vim.g.neovide_cursor_animation_length or _G.OPTS.neovide.cursor_animation_length
-	local old_pos = vim.g.neovide_position_animation_length or _G.OPTS.neovide.position_animation_length
+	-- Guard against single-tab operations: never touch animations or throw on single tab
+	if (cmd == "tabclose" or cmd == "tabnext" or cmd == "tabprevious") and vim.fn.tabpagenr("$") <= 1 then
+		return
+	end
 
 	vim.g.neovide_scroll_animation_length = 0
 	vim.g.neovide_cursor_animation_length = 0
 	vim.g.neovide_position_animation_length = 0
 
-	vim.cmd(cmd)
+	pcall(vim.cmd, cmd)
 
-	vim.schedule(function()
-		vim.g.neovide_scroll_animation_length = old_scroll
-		vim.g.neovide_cursor_animation_length = old_cursor
-		vim.g.neovide_position_animation_length = old_pos
-	end)
+	vim.defer_fn(function()
+		vim.g.neovide_scroll_animation_length = _G.OPTS.neovide.scroll_animation_length
+		vim.g.neovide_cursor_animation_length = _G.OPTS.neovide.cursor_animation_length
+		vim.g.neovide_position_animation_length = _G.OPTS.neovide.position_animation_length
+	end, 50)
 end

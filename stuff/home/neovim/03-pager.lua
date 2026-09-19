@@ -28,6 +28,126 @@ _G.OpenFiles = function(files_json)
 	end
 end
 
+-- === OVERTAKE TERMINAL TAB WHEN NVIM IS INVOKED FROM WITHIN IT ===
+_G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
+	term_buf = tonumber(term_buf)
+	local win = vim.fn.bufwinid(term_buf)
+	if win == -1 then
+		for _, w in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_get_buf(w) == term_buf then
+				win = w
+				break
+			end
+		end
+	end
+	if win == -1 or not vim.api.nvim_win_is_valid(win) then
+		win = vim.api.nvim_get_current_win()
+	end
+
+	local target_tab = vim.api.nvim_win_get_tabpage(win)
+	if target_tab ~= vim.api.nvim_get_current_tabpage() then
+		vim.api.nvim_set_current_tabpage(target_tab)
+	end
+	vim.api.nvim_set_current_win(win)
+
+	local ok, files = pcall(vim.json.decode, files_json)
+	local target_buf
+	if ok and files and #files > 0 then
+		vim.cmd("edit " .. vim.fn.fnameescape(files[1]))
+		target_buf = vim.api.nvim_get_current_buf()
+		for i = 2, #files do
+			vim.cmd("badd " .. vim.fn.fnameescape(files[i]))
+		end
+	else
+		vim.cmd("enew")
+		target_buf = vim.api.nvim_get_current_buf()
+	end
+
+	local restored = false
+	local function restore_terminal()
+		if restored then
+			return
+		end
+		restored = true
+
+		if vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(term_buf) then
+			vim.api.nvim_win_set_buf(win, term_buf)
+			vim.cmd("startinsert")
+		end
+
+		if fifo_path and fifo_path ~= "" then
+			vim.schedule(function()
+				local uv = vim.uv or vim.loop
+				local flags = uv.constants.O_WRONLY
+				if uv.constants.O_NONBLOCK then
+					flags = bit.bor(flags, uv.constants.O_NONBLOCK)
+				end
+				local fd = uv.fs_open(fifo_path, flags, 438)
+				if fd then
+					uv.fs_write(fd, "done\n", -1, function()
+						uv.fs_close(fd)
+					end)
+				end
+			end)
+		end
+	end
+
+	_G._OvertakeRestores = _G._OvertakeRestores or {}
+	_G._OvertakeRestores[target_buf] = restore_terminal
+
+	local quit_cmds = {
+		{ cmd = "q", write = false, force = false },
+		{ cmd = "q!", write = false, force = true },
+		{ cmd = "wq", write = true, force = false },
+		{ cmd = "wq!", write = true, force = true },
+		{ cmd = "x", write = true, force = false },
+		{ cmd = "xa", write = true, force = false },
+		{ cmd = "wqa", write = true, force = false },
+	}
+	for _, q in ipairs(quit_cmds) do
+		vim.cmd(string.format(
+			"cnoreabbrev <buffer> <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? 'lua _G.RestoreOvertakenTerminal(%s, %s)' : '%s'",
+			q.cmd,
+			q.cmd,
+			tostring(q.write),
+			tostring(q.force),
+			q.cmd
+		))
+	end
+
+	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+		buffer = target_buf,
+		once = true,
+		callback = function()
+			restore_terminal()
+		end,
+	})
+end
+
+_G.RestoreOvertakenTerminal = function(save_first, force)
+	local cur_buf = vim.api.nvim_get_current_buf()
+	if save_first then
+		if vim.bo[cur_buf].modified then
+			local ok, err = pcall(vim.cmd, "write")
+			if not ok then
+				vim.notify("Error saving file: " .. tostring(err), vim.log.levels.ERROR)
+				return
+			end
+		end
+	else
+		if not force and vim.bo[cur_buf].modified then
+			vim.notify("E37: No write since last change (add ! to override)", vim.log.levels.ERROR)
+			return
+		end
+	end
+
+	local restore = _G._OvertakeRestores and _G._OvertakeRestores[cur_buf]
+	if restore then
+		_G._OvertakeRestores[cur_buf] = nil
+		restore()
+	end
+end
+
 -- === CLAMPED PAGER SCROLLING HELPER (HARD STOP AT LAST LINE + GPU ANIMATION) ===
 local function setup_pager_scroll(buf, win)
 	local function scroll_down(amount)

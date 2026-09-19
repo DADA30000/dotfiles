@@ -99,7 +99,7 @@ vim.api.nvim_create_autocmd("LspDetach", {
 })
 
 -- Auto-wipe unused file buffers when tab/window is closed
-vim.api.nvim_create_autocmd({ "BufHidden", "TabClosed" }, {
+vim.api.nvim_create_autocmd({ "TabClosed", "WinClosed" }, {
 	group = vim.api.nvim_create_augroup("AutoWipeHiddenBuffers", { clear = true }),
 	callback = function(ev)
 		vim.schedule(function()

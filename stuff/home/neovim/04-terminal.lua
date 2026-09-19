@@ -2,17 +2,20 @@
 vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
 
 local function set_terminal_cursor_hidden(hide)
-	local current = vim.o.guicursor
-	local cleaned = current
-		:gsub(",?n%-v:HiddenCursor", "")
-		:gsub(",?n:HiddenCursor", "")
-		:gsub(",?v:ver25%-HiddenCursor", "")
-		:gsub(",?v:HiddenCursor", "")
-	if hide then
-		vim.o.guicursor = cleaned .. ",n:HiddenCursor,v:ver25-HiddenCursor"
-	else
-		vim.o.guicursor = cleaned
-	end
+	pcall(function()
+		local current = vim.o.guicursor
+		local cleaned = current
+			:gsub(",?n%-v:HiddenCursor", "")
+			:gsub(",?n:HiddenCursor", "")
+			:gsub(",?v:ver25%-HiddenCursor", "")
+			:gsub(",?v:HiddenCursor", "")
+		cleaned = cleaned:gsub("^,", ""):gsub(",$", ""):gsub(",,", ",")
+		if hide then
+			vim.o.guicursor = cleaned .. ",n:HiddenCursor,v:ver25-HiddenCursor"
+		else
+			vim.o.guicursor = cleaned
+		end
+	end)
 end
 
 vim.api.nvim_create_autocmd("ModeChanged", {
@@ -214,58 +217,16 @@ vim.api.nvim_create_autocmd("TermOpen", {
 			return _G.OPTS.scroll.step .. "\x19"
 		end, { buffer = bufnr, expr = true, silent = true })
 
-		local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-=~!@#$%^&*()_+[]{}|;:',./<>?"
-		local cyrillic =
-			"абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
-		local char_list = vim.fn.split(chars .. cyrillic, [[\zs]])
-
-		local function exit_visual_and_type(char)
-			vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
-			vim.schedule(function()
+		local function term_paste()
+			local job_id = vim.b[bufnr].terminal_job_id
+			local text = vim.fn.getreg("+")
+			if job_id and text ~= "" then
+				vim.api.nvim_chan_send(job_id, text)
 				vim.cmd("startinsert")
-				vim.schedule(function()
-					vim.api.nvim_feedkeys(char, "m", true)
-				end)
-			end)
-		end
-
-		for _, mode in ipairs({ "n", "v" }) do
-			local prefix = (mode == "v" and "<Esc>i" or "i")
-			for _, char in ipairs(char_list) do
-				vim.keymap.set(mode, char, prefix .. char, { buffer = bufnr, nowait = true, silent = true })
 			end
-			vim.keymap.set(mode, "<Space>", prefix .. " ", { buffer = bufnr, nowait = true, silent = true })
-			vim.keymap.set(mode, "<CR>", prefix .. "<CR>", { buffer = bufnr, nowait = true, silent = true })
-			vim.keymap.set(mode, "<BS>", prefix .. "<BS>", { buffer = bufnr, nowait = true, silent = true })
 		end
 
-		local ctrl_keys = { "a", "b", "c", "d", "e", "f", "g", "h", "k", "l", "p", "r", "u", "z" }
-		for _, key in ipairs(ctrl_keys) do
-			local keycode = "<C-" .. key .. ">"
-			vim.keymap.set("n", keycode, "i" .. keycode, { buffer = bufnr, nowait = true, silent = true })
-			vim.keymap.set("v", keycode, function()
-				exit_visual_and_type(vim.api.nvim_replace_termcodes(keycode, true, false, true))
-			end, { buffer = bufnr, nowait = true, silent = true })
-		end
-
-		vim.keymap.set("t", "<C-S-v>", function()
-			vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
-		end, { buffer = bufnr, silent = true })
-
-		vim.keymap.set("n", "<C-S-v>", function()
-			vim.cmd("startinsert")
-			vim.schedule(function()
-				vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
-			end)
-		end, { buffer = bufnr, silent = true })
-
-		vim.keymap.set("v", "<C-S-v>", function()
-			vim.cmd([[normal! \<Esc>]])
-			vim.cmd("startinsert")
-			vim.schedule(function()
-				vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
-			end)
-		end, { buffer = bufnr, silent = true })
+		vim.keymap.set({ "t", "n", "v" }, "<C-S-v>", term_paste, { buffer = bufnr, silent = true })
 
 		local mouse_events = {
 			"<C-LeftMouse>",
@@ -324,11 +285,11 @@ vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
 				return
 			end
 
-			vim.opt_local.scrollback = _G.OPTS.terminal.pruned_history
+			vim.bo[bufnr].scrollback = _G.OPTS.terminal.pruned_history
 
 			vim.defer_fn(function()
 				if vim.api.nvim_buf_is_valid(bufnr) then
-					vim.opt_local.scrollback = _G.OPTS.terminal.max_scrollback
+					vim.bo[bufnr].scrollback = _G.OPTS.terminal.max_scrollback
 				end
 			end, _G.OPTS.terminal.prune_restore_delay_ms)
 		end

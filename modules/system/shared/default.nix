@@ -577,19 +577,25 @@ in
       };
     };
 
-    greetd = {
-      enable = true;
-      settings = {
-        initial_session = {
-          command = "uwsm start hyprland-uwsm.desktop > /dev/null 2>&1";
-          user = user;
-        };
-        default_session = {
-          command = "${pkgs.tuigreet}/bin/tuigreet --user-menu --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";
-          user = "greeter";
+    greetd =
+      let
+        tuigreet-patched = pkgs.tuigreet.overrideAttrs (prev: {
+          patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/tuigreet.patch ];
+        });
+      in
+      {
+        enable = true;
+        settings = {
+          initial_session = {
+            command = "uwsm start hyprland-uwsm.desktop > /dev/null 2>&1";
+            user = user;
+          };
+          default_session = {
+            command = "${tuigreet-patched}/bin/tuigreet --user-menu --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";
+            user = "greeter";
+          };
         };
       };
-    };
 
     scx = {
       enable = true;
