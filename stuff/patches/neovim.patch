@@ -1,6 +1,6 @@
 diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
---- a/src/nvim/eval/funcs.c	2026-09-20 20:05:58.623144984 +0300
-+++ b/src/nvim/eval/funcs.c	2026-09-20 20:05:58.648343426 +0300
+--- a/src/nvim/eval/funcs.c	2026-09-20 20:42:38.548727646 +0300
++++ b/src/nvim/eval/funcs.c	2026-09-20 20:42:38.574454100 +0300
 @@ -3625,6 +3625,13 @@
    }
  
@@ -16,13 +16,13 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
                                      rpc, overlapped, detach, stdin_mode, cwd,
                                      width, height, env, &rettv->vval.v_number);
 diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
---- a/src/nvim/normal.c	2026-09-20 20:05:58.628223587 +0300
-+++ b/src/nvim/normal.c	2026-09-20 20:05:58.648552601 +0300
+--- a/src/nvim/normal.c	2026-09-20 20:42:38.554062818 +0300
++++ b/src/nvim/normal.c	2026-09-20 20:42:38.574993928 +0300
 @@ -1080,6 +1080,22 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
  
-+  if (KeyTyped && curbuf->terminal != NULL) {
++  if (curbuf->terminal != NULL) {
 +    bool is_whitelisted = is_mouse_key(s->c)
 +                          || s->c == K_EVENT || s->c == K_IGNORE
 +                          || typebuf_maplen() > 0;
@@ -42,8 +42,8 @@ diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
    // of the mapping.  This is used below to not return to Insert mode for as
    // long as the mapping is being executed.
 diff -uNr a/src/nvim/register.c b/src/nvim/register.c
---- a/src/nvim/register.c	2026-09-20 20:05:58.633746675 +0300
-+++ b/src/nvim/register.c	2026-09-20 20:05:58.648625027 +0300
+--- a/src/nvim/register.c	2026-09-20 20:42:38.559209968 +0300
++++ b/src/nvim/register.c	2026-09-20 20:42:38.575072695 +0300
 @@ -1051,30 +1051,54 @@
      }
    }
@@ -122,8 +122,8 @@ diff -uNr a/src/nvim/register.c b/src/nvim/register.c
    }
  
 diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
---- a/src/nvim/terminal.c	2026-09-20 20:05:58.637999972 +0300
-+++ b/src/nvim/terminal.c	2026-09-20 20:05:58.648878194 +0300
+--- a/src/nvim/terminal.c	2026-09-20 20:42:38.564310881 +0300
++++ b/src/nvim/terminal.c	2026-09-20 20:42:38.575355022 +0300
 @@ -139,6 +139,7 @@
  
  typedef struct {
@@ -132,7 +132,18 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
    VTermScreenCell cells[];
  } ScrollbackLine;
  
-@@ -1343,7 +1344,7 @@
+@@ -963,7 +964,9 @@
+   curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
+ 
+   if (curbuf->terminal == s->term && !s->close) {
+-    terminal_check_cursor();
++    if (curwin->w_topline + curwin->w_view_height >= curbuf->b_ml.ml_line_count) {
++      terminal_check_cursor();
++    }
+   }
+   if (restart_edit) {
+     showmode();
+@@ -1343,7 +1346,7 @@
    }
  }
  
@@ -141,7 +152,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
  {
    VTermModifier mod = VTERM_MOD_NONE;
  
-@@ -1595,6 +1596,7 @@
+@@ -1595,6 +1598,7 @@
    buf->b_locked--;
    api_clear_error(&err);
    status_redraw_buf(buf);
@@ -149,7 +160,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
  }
  
  static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
-@@ -1604,6 +1606,15 @@
+@@ -1604,6 +1608,15 @@
    switch (prop) {
    case VTERM_PROP_ALTSCREEN:
      term->in_altscreen = val->boolean;
@@ -165,7 +176,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
      break;
  
    case VTERM_PROP_CURSORVISIBLE:
-@@ -1741,6 +1752,10 @@
+@@ -1741,6 +1754,10 @@
    }
  
    memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
@@ -176,7 +187,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
    if (!term->synchronized_output) {
      set_put(ptr_t, &invalidated_terminals, term);
    }
-@@ -2267,6 +2282,14 @@
+@@ -2267,6 +2284,14 @@
    }
  
    if (c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT) {
@@ -191,7 +202,16 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
      win_T *save_curwin = curwin;
      // switch window/buffer to perform the scroll
      curwin = mouse_win;
-@@ -2723,4 +2746,26 @@
+@@ -2665,7 +2690,7 @@
+         continue;
+       }
+ 
+-      bool following = ml_end == wp->w_cursor.lnum + added;  // cursor at end?
++      bool following = (wp->w_cursor.lnum == ml_end - added) && (wp->w_topline + wp->w_view_height >= ml_end - added);
+       if (following) {
+         // "Follow" the terminal output
+         wp->w_cursor.lnum = ml_end;
+@@ -2723,4 +2748,26 @@
  
  // }}}
  
@@ -219,8 +239,8 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
 +
  // vim: foldmethod=marker
 diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
---- a/src/nvim/terminal.h	2026-09-20 20:05:58.642863148 +0300
-+++ b/src/nvim/terminal.h	2026-09-20 20:05:58.648907079 +0300
+--- a/src/nvim/terminal.h	2026-09-20 20:42:38.569138956 +0300
++++ b/src/nvim/terminal.h	2026-09-20 20:42:38.575383705 +0300
 @@ -24,4 +24,7 @@
    bool force_crlf;
  } TerminalOptions;

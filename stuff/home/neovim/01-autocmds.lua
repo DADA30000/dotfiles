@@ -56,11 +56,31 @@ vim.api.nvim_create_autocmd("FileType", {
 	end,
 })
 
--- Track last mode when leaving terminal
-vim.api.nvim_create_autocmd("BufLeave", {
+-- Track last mode & preserve scroll position when leaving terminal window/tab
+vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
 	pattern = "term://*",
-	callback = function()
-		vim.b.last_mode = vim.fn.mode()
+	callback = function(ev)
+		local win = vim.api.nvim_get_current_win()
+		if not vim.api.nvim_win_is_valid(win) then
+			return
+		end
+		local buf = ev.buf or vim.api.nvim_win_get_buf(win)
+		vim.b[buf].last_mode = vim.fn.mode()
+
+		local win_info = vim.fn.getwininfo(win)[1]
+		if win_info then
+			local max_bottom = vim.api.nvim_buf_line_count(buf)
+			if win_info.botline < max_bottom then
+				local lnum = math.min(win_info.botline, math.max(win_info.topline, vim.api.nvim_win_get_cursor(win)[1]))
+				vim.w[win].saved_term_view = {
+					topline = win_info.topline,
+					lnum = lnum,
+					col = 0,
+				}
+			else
+				vim.w[win].saved_term_view = nil
+			end
+		end
 	end,
 })
 
