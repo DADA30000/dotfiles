@@ -1,5 +1,6 @@
---- a/src/nvim/eval/funcs.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/nvim/eval/funcs.c	2026-09-19 23:30:00.000000000 +0300
+diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
+--- a/src/nvim/eval/funcs.c	2026-09-20 20:05:58.623144984 +0300
++++ b/src/nvim/eval/funcs.c	2026-09-20 20:05:58.648343426 +0300
 @@ -3625,6 +3625,13 @@
    }
  
@@ -14,9 +15,10 @@
    Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,
                                      rpc, overlapped, detach, stdin_mode, cwd,
                                      width, height, env, &rettv->vval.v_number);
---- a/src/nvim/normal.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/nvim/normal.c	2026-09-19 23:30:00.000000000 +0300
-@@ -1080,6 +1080,21 @@
+diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
+--- a/src/nvim/normal.c	2026-09-20 20:05:58.628223587 +0300
++++ b/src/nvim/normal.c	2026-09-20 20:05:58.648552601 +0300
+@@ -1080,6 +1080,22 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
  
@@ -28,7 +30,8 @@
 +      if (VIsual_active) {
 +        end_visual_mode();
 +      }
-+      stuffcharReadbuff(s->c);
++      got_int = false;
++      terminal_send_key(curbuf->terminal, s->c);
 +      terminal_enter();
 +      s->command_finished = true;
 +      return 1;
@@ -38,9 +41,10 @@
    // If a mapping was started in Visual or Select mode, remember the length
    // of the mapping.  This is used below to not return to Insert mode for as
    // long as the mapping is being executed.
---- a/src/nvim/register.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/nvim/register.c	2026-09-19 23:30:00.000000000 +0300
-@@ -1051,32 +1051,57 @@
+diff -uNr a/src/nvim/register.c b/src/nvim/register.c
+--- a/src/nvim/register.c	2026-09-20 20:05:58.633746675 +0300
++++ b/src/nvim/register.c	2026-09-20 20:05:58.648625027 +0300
+@@ -1051,30 +1051,54 @@
      }
    }
  
@@ -116,12 +120,10 @@
 +      y_idx++;
      }
    }
-+  reg->y_size = y_idx;
  
-   if (curr != reg) {      // append the new block to the old block
-     size_t j;
---- a/src/nvim/terminal.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/nvim/terminal.c	2026-09-19 23:30:00.000000000 +0300
+diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
+--- a/src/nvim/terminal.c	2026-09-20 20:05:58.637999972 +0300
++++ b/src/nvim/terminal.c	2026-09-20 20:05:58.648878194 +0300
 @@ -139,6 +139,7 @@
  
  typedef struct {
@@ -129,6 +131,15 @@
 +  bool continuation;
    VTermScreenCell cells[];
  } ScrollbackLine;
+ 
+@@ -1343,7 +1344,7 @@
+   }
+ }
+ 
+-static void terminal_send_key(Terminal *term, int c)
++void terminal_send_key(Terminal *term, int c)
+ {
+   VTermModifier mod = VTERM_MOD_NONE;
  
 @@ -1595,6 +1596,7 @@
    buf->b_locked--;
@@ -156,7 +167,7 @@
    case VTERM_PROP_CURSORVISIBLE:
 @@ -1741,6 +1752,10 @@
    }
-
+ 
    memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
 +  VTermState *state = vterm_obtain_state(term->vt);
 +  const VTermLineInfo *info = vterm_state_get_lineinfo(state, 0);
@@ -180,9 +191,9 @@
      win_T *save_curwin = curwin;
      // switch window/buffer to perform the scroll
      curwin = mouse_win;
-@@ -2721,6 +2748,28 @@
-   return NULL;
- }
+@@ -2723,4 +2746,26 @@
+ 
+ // }}}
  
 +bool terminal_line_is_continuation(buf_T *buf, int linenr)
 +{
@@ -206,15 +217,15 @@
 +  return false;
 +}
 +
- // }}}
- 
  // vim: foldmethod=marker
---- a/src/nvim/terminal.h	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/nvim/terminal.h	2026-09-19 23:30:00.000000000 +0300
-@@ -24,4 +24,6 @@
+diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
+--- a/src/nvim/terminal.h	2026-09-20 20:05:58.642863148 +0300
++++ b/src/nvim/terminal.h	2026-09-20 20:05:58.648907079 +0300
+@@ -24,4 +24,7 @@
    bool force_crlf;
  } TerminalOptions;
  
 +bool terminal_line_is_continuation(buf_T *buf, int linenr);
++void terminal_send_key(Terminal *term, int c);
 +
  #include "terminal.h.generated.h"
