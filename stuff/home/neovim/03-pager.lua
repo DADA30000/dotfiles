@@ -273,6 +273,7 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 	local chan = vim.api.nvim_open_term(buf, {})
 	vim.api.nvim_chan_send(chan, raw)
 	vim.cmd("redraw")
+	pcall(vim.fn.chanclose, chan)
 
 	setup_pager_scroll(buf, win)
 	vim.cmd("stopinsert")
@@ -281,11 +282,11 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 	local win_h = vim.api.nvim_win_get_height(win)
 	if jump_bottom then
 		local max_top = math.max(1, line_count - win_h + 1)
-		vim.cmd("normal! " .. max_top .. "zt")
 		pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+		pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
 	else
 		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-		vim.cmd("normal! zt")
+		pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
 	end
 end
 

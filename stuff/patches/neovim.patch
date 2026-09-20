@@ -1,10 +1,14 @@
 --- a/src/nvim/eval/funcs.c	1970-01-01 03:00:01.000000000 +0300
 +++ b/src/nvim/eval/funcs.c	2026-09-19 23:30:00.000000000 +0300
-@@ -3625,6 +3625,9 @@
+@@ -3625,6 +3625,13 @@
    }
  
    dict_T *env = create_environment(job_env, clear_env, pty, true, term_name);
 +  if (term) {
++    dictitem_T *dv = tv_dict_find(env, S_LEN("NVIM_BUF_ID"));
++    if (dv) {
++      tv_dict_item_remove(env, dv);
++    }
 +    tv_dict_add_nr(env, S_LEN("NVIM_BUF_ID"), curbuf->b_fnum);
 +  }
    Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,

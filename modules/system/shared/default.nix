@@ -305,6 +305,8 @@ in
     #  );
 
     kernelParams = [
+      "panic=0"
+      "drm.panic_screen=qr_code"
       "iommu=pt"
       "iommu.passthrough=1"
       "zfs.spa_slop_shift=8"
@@ -312,10 +314,7 @@ in
 
     initrd = {
       supportedFilesystems.zfs = true;
-      systemd = {
-        enable = true;
-        services.systemd-bsod.wantedBy = [ "initrd.target" ];
-      };
+      systemd.enable = true;
     };
 
     kernel.sysctl = {
@@ -323,6 +322,7 @@ in
       "net.core.default_qdisc" = "cake";
       "net.ipv4.tcp_congestion_control" = "bbr";
       "kernel.sysrq" = 1;
+      "kernel.panic" = 0;
     };
 
     binfmt.registrations.exe = {
@@ -395,8 +395,6 @@ in
   };
 
   systemd = {
-
-    additionalUpstreamSystemUnits = [ "systemd-bsod.service" ];
 
     tmpfiles.rules = [
       "d /var/lib/AccountsService/users 0755 root root -"
@@ -491,8 +489,6 @@ in
     };
 
     services = {
-
-      systemd-bsod.wantedBy = [ "sysinit.target" ];
 
       NetworkManager-wait-online.enable = false;
 
