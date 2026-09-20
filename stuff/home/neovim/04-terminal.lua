@@ -69,7 +69,7 @@ vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
 local function term_scroll_down(buf)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "i<ScrollWheelDown>"
+		return "<ScrollWheelDown>"
 	end
 
 	local max_bottom = vim.fn.line("$")
@@ -79,13 +79,17 @@ local function term_scroll_down(buf)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		if can_scroll <= step then
-			return to_scroll .. "\x05i"
-		else
-			return to_scroll .. "\x05"
+		if can_scroll <= to_scroll then
+			vim.schedule(function()
+				if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "terminal" then
+					vim.cmd("startinsert")
+				end
+			end)
 		end
+		return to_scroll .. "\x05"
 	else
-		return "i"
+		vim.cmd("startinsert")
+		return ""
 	end
 end
 
@@ -118,7 +122,7 @@ end, { expr = true, silent = true, desc = "Scroll down in terminal, enter insert
 vim.keymap.set("n", "<ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
 		if vim.b.terminal_altscreen then
-			return "i<ScrollWheelUp>"
+			return "<ScrollWheelUp>"
 		end
 		return _G.OPTS.scroll.step .. "\x19"
 	end
@@ -230,7 +234,7 @@ vim.api.nvim_create_autocmd("TermOpen", {
 
 		vim.keymap.set("n", "<ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "i<ScrollWheelUp>"
+				return "<ScrollWheelUp>"
 			end
 			return _G.OPTS.scroll.step .. "\x19"
 		end, { buffer = bufnr, expr = true, silent = true })
