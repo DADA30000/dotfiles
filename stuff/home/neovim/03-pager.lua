@@ -1,4 +1,5 @@
 -- === MODE-SAFE RPC HELPER FUNCTIONS ===
+local setup_pager_scroll
 _G.OpenNewTab = function(dir)
 	vim.cmd("tabnew")
 	if dir and dir ~= "" then
@@ -8,11 +9,34 @@ end
 
 _G.OpenManPath = function(path_or_arg)
 	pcall(vim.cmd, "runtime ftplugin/man.vim")
-	vim.cmd("tabnew")
-	if path_or_arg and path_or_arg ~= "" then
-		vim.cmd("silent! Man " .. vim.fn.fnameescape(path_or_arg))
+	if path_or_arg and path_or_arg ~= "" and vim.fn.filereadable(path_or_arg) == 1 then
+		vim.cmd("tabnew " .. vim.fn.fnameescape(path_or_arg))
+		local buf = vim.api.nvim_get_current_buf()
+		local win = vim.api.nvim_get_current_win()
+		vim.bo[buf].bufhidden = "wipe"
+		vim.b[buf].is_pager = true
+		vim.wo[win].wrap = true
+		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.cmd("silent! Man!")
+		setup_pager_scroll(buf, win)
 	else
-		vim.cmd("silent! Man")
+		vim.cmd("tabnew")
+		local buf = vim.api.nvim_get_current_buf()
+		local win = vim.api.nvim_get_current_win()
+		vim.bo[buf].bufhidden = "wipe"
+		vim.b[buf].is_pager = true
+		vim.wo[win].wrap = true
+		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		if path_or_arg and path_or_arg ~= "" then
+			vim.cmd("silent! Man " .. vim.fn.fnameescape(path_or_arg))
+		else
+			vim.cmd("silent! Man")
+		end
+		setup_pager_scroll(buf, win)
 	end
 end
 
@@ -149,7 +173,7 @@ _G.RestoreOvertakenTerminal = function(save_first, force)
 end
 
 -- === CLAMPED PAGER SCROLLING HELPER (HARD STOP AT LAST LINE + GPU ANIMATION) ===
-local function setup_pager_scroll(buf, win)
+setup_pager_scroll = function(buf, win)
 	local function scroll_down(amount)
 		if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then
 			return
@@ -270,24 +294,51 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 	vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
 	vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
 
+	setup_pager_scroll(buf, win)
+
+	local function reset_view()
+		if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then
+			return
+		end
+		pcall(vim.cmd, "stopinsert")
+
+		local line_count = vim.api.nvim_buf_line_count(buf)
+		local win_h = vim.api.nvim_win_get_height(win)
+
+		if jump_bottom then
+			local max_top = math.max(1, line_count - win_h + 1)
+			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+			pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
+		else
+			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+			pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
+		end
+	end
+
+	local detached = false
+	local detach_autocmd = vim.api.nvim_create_autocmd({ "CursorMoved", "WinScrolled" }, {
+		buffer = buf,
+		once = true,
+		callback = function()
+			detached = true
+		end,
+	})
+
+	vim.api.nvim_buf_attach(buf, false, {
+		on_lines = function()
+			if detached then
+				pcall(vim.api.nvim_del_autocmd, detach_autocmd)
+				return true
+			end
+			vim.schedule(reset_view)
+		end,
+	})
+
 	local chan = vim.api.nvim_open_term(buf, {})
 	vim.api.nvim_chan_send(chan, raw)
 	vim.cmd("redraw")
-	pcall(vim.fn.chanclose, chan)
-
-	setup_pager_scroll(buf, win)
 	vim.cmd("stopinsert")
-
-	local line_count = vim.api.nvim_buf_line_count(buf)
-	local win_h = vim.api.nvim_win_get_height(win)
-	if jump_bottom then
-		local max_top = math.max(1, line_count - win_h + 1)
-		pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
-		pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
-	else
-		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-		pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
-	end
+	reset_view()
 end
 
 _G.OpenManPageFile = function(filepath, jump_bottom)

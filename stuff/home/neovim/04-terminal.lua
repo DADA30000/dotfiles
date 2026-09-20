@@ -24,6 +24,9 @@ vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "FileType" }, {
 	pattern = "*",
 	callback = function(ev)
 		local buf = ev.buf
+		if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+			return
+		end
 		if vim.bo[buf].filetype == "man" or vim.b[buf].is_pager then
 			set_terminal_cursor_hidden(true)
 		elseif vim.bo[buf].buftype == "terminal" then
@@ -66,7 +69,9 @@ vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
 local function term_scroll_down(buf)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "<ScrollWheelDown>"
+		local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelDown>", true, false, true)
+		vim.api.nvim_feedkeys(termcode, "n", false)
+		return
 	end
 
 	local max_bottom = vim.fn.line("$")
@@ -76,24 +81,21 @@ local function term_scroll_down(buf)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
+		vim.cmd("normal! " .. to_scroll .. "\x05")
 		if can_scroll <= to_scroll then
-			vim.schedule(function()
-				if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "terminal" then
-					vim.cmd("startinsert")
-				end
-			end)
+			vim.cmd("startinsert")
 		end
-		return to_scroll .. "\x05"
 	else
 		vim.cmd("startinsert")
-		return ""
 	end
 end
 
 local function term_scroll_up(buf)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "<ScrollWheelUp>"
+		local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
+		vim.api.nvim_feedkeys(termcode, "n", false)
+		return
 	end
 
 	local current_top = vim.fn.line("w0")
@@ -102,25 +104,27 @@ local function term_scroll_up(buf)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		return to_scroll .. "\x19"
-	else
-		return ""
+		vim.cmd("normal! " .. to_scroll .. "\x19")
 	end
 end
 
 vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_down()
+		term_scroll_down()
+		return
 	end
-	return "<ScrollWheelDown>"
-end, { expr = true, silent = true, desc = "Scroll down in terminal" })
+	local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelDown>", true, false, true)
+	vim.api.nvim_feedkeys(termcode, "n", false)
+end, { silent = true, desc = "Scroll down in terminal" })
 
 vim.keymap.set({ "n", "x" }, "<ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_up()
+		term_scroll_up()
+		return
 	end
-	return "<ScrollWheelUp>"
-end, { expr = true, silent = true, desc = "Scroll up in terminal" })
+	local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
+	vim.api.nvim_feedkeys(termcode, "n", false)
+end, { silent = true, desc = "Scroll up in terminal" })
 
 -- === MOUSE DRAG AUTO-SCROLL SELECTION ===
 local drag_timer = nil
@@ -195,25 +199,29 @@ vim.api.nvim_create_autocmd("TermOpen", {
 
 		vim.keymap.set("t", "<ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<ScrollWheelUp>"
+				local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
+				vim.api.nvim_feedkeys(termcode, "n", false)
+				return
 			end
-			return vim.api.nvim_replace_termcodes("<C-\\><C-n>" .. _G.OPTS.scroll.step .. "<C-y>", true, false, true)
-		end, { buffer = bufnr, expr = true, silent = true })
+			vim.cmd("stopinsert")
+			term_scroll_up(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("t", "<ScrollWheelDown>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<ScrollWheelDown>"
+				local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelDown>", true, false, true)
+				vim.api.nvim_feedkeys(termcode, "n", false)
+				return
 			end
-			return ""
-		end, { buffer = bufnr, expr = true, silent = true })
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set({ "n", "x" }, "<ScrollWheelDown>", function()
-			return term_scroll_down(bufnr)
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_down(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set({ "n", "x" }, "<ScrollWheelUp>", function()
-			return term_scroll_up(bufnr)
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_up(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		local function term_paste()
 			local job_id = vim.b[bufnr].terminal_job_id
@@ -268,7 +276,7 @@ vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
 		end
 
 		local line_count = vim.api.nvim_buf_line_count(bufnr)
-		if line_count > _G.OPTS.terminal.prune_threshold then
+		if _G.OPTS and _G.OPTS.terminal and _G.OPTS.terminal.prune_threshold and line_count > _G.OPTS.terminal.prune_threshold then
 			local win_id = vim.fn.bufwinid(bufnr)
 			if win_id == -1 then
 				return

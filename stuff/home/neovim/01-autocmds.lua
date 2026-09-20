@@ -32,6 +32,9 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 vim.api.nvim_create_autocmd("TermClose", {
 	group = vim.api.nvim_create_augroup("AutoCloseTermOnSuccess", { clear = true }),
 	callback = function(ev)
+		if vim.b[ev.buf].is_pager then
+			return
+		end
 		if vim.v.event.status == 0 then
 			vim.schedule(function()
 				if vim.api.nvim_buf_is_valid(ev.buf) then
