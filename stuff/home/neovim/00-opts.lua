@@ -4,7 +4,7 @@
 _G.OPTS = {
 	-- Terminal & Pager Scrolling
 	scroll = {
-		step = 3, -- Number of lines to scroll per mouse wheel tick
+		step = 10, -- Number of lines to scroll per mouse wheel tick
 		drag_scroll_interval_ms = 12, -- Auto-scroll interval during mouse selection drag (ms)
 	},
 
