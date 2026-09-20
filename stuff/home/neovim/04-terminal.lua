@@ -73,6 +73,9 @@ local function term_scroll_down(buf)
 		vim.api.nvim_feedkeys(termcode, "n", false)
 		return
 	end
+	if vim.api.nvim_get_mode().mode == "t" then
+		return
+	end
 
 	local max_bottom = vim.fn.line("$")
 	local current_bottom = vim.fn.line("w$")
@@ -95,6 +98,9 @@ local function term_scroll_up(buf)
 	if vim.b[bufnr].terminal_altscreen then
 		local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
 		vim.api.nvim_feedkeys(termcode, "n", false)
+		return
+	end
+	if vim.api.nvim_get_mode().mode == "t" then
 		return
 	end
 
@@ -196,16 +202,6 @@ vim.api.nvim_create_autocmd("TermOpen", {
 		if not vim.b[bufnr].is_pager then
 			vim.cmd("startinsert")
 		end
-
-		vim.keymap.set("t", "<ScrollWheelUp>", function()
-			if vim.b[bufnr].terminal_altscreen then
-				local termcode = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
-				vim.api.nvim_feedkeys(termcode, "n", false)
-				return
-			end
-			vim.cmd("stopinsert")
-			term_scroll_up(bufnr)
-		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("t", "<ScrollWheelDown>", function()
 			if vim.b[bufnr].terminal_altscreen then

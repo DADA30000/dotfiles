@@ -63,6 +63,7 @@ vim.opt.undodir = _G.OPTS.editor.undodir
 vim.opt.clipboard = "unnamedplus"
 vim.opt.selection = "inclusive"
 vim.opt.tabclose = "uselast"
+vim.opt.mousescroll = "ver:" .. _G.OPTS.scroll.step .. ",hor:0"
 vim.opt.guicursor:append("t:ver25")
 vim.g.suda_smart_edit = 1
 vim.cmd("set report=99999")
