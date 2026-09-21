@@ -593,11 +593,6 @@ in
         };
       };
 
-    scx = {
-      enable = true;
-      scheduler = "scx_bpfland";
-    };
-
     udev.extraRules = ''
       SUBSYSTEMS=="usb", ATTRS{idVendor}=="0414", ATTRS{idProduct}=="8104", MODE="0660", TAG+="uaccess"
       ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2833", ATTR{idProduct}=="5013", RUN+="${pkgs.systemd}/bin/systemctl restart quest-adb-reverse.service"

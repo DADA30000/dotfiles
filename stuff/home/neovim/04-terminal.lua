@@ -247,6 +247,12 @@ vim.api.nvim_create_autocmd("TermOpen", {
 			return _G.OPTS.scroll.step .. "\x19"
 		end, { buffer = bufnr, expr = true, silent = true })
 
+		vim.keymap.set("x", "y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		vim.keymap.set("x", "Y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		vim.keymap.set("x", "<C-S-c>", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		vim.keymap.set("x", "<Esc>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
+		vim.keymap.set("x", "<C-c>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
+
 		local function term_paste()
 			local job_id = vim.b[bufnr].terminal_job_id
 			local text = vim.fn.getreg("+")

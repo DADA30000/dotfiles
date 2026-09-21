@@ -48,13 +48,15 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
 diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
 --- a/src/nvim/normal.c	2026-09-20 21:26:07.041570825 +0300
 +++ b/src/nvim/normal.c	2026-09-20 21:26:07.070789754 +0300
-@@ -1080,6 +1080,22 @@
+@@ -1080,6 +1080,24 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
  
 +  if (curbuf->terminal != NULL) {
 +    bool is_whitelisted = is_mouse_key(s->c)
 +                          || s->c == K_EVENT || s->c == K_IGNORE
++                          || !KeyTyped
++                          || s->mapped_len > 0
 +                          || typebuf_maplen() > 0;
 +    if (!is_whitelisted) {
 +      if (VIsual_active) {

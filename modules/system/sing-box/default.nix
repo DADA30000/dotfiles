@@ -250,14 +250,53 @@ let
 
   vpnRoutingNft = pkgs.writeText "vpn_routing.nft" ''
     table inet vpn_routing {
+      # Dynamic stateful map for inbound UDP sessions (10 minute idle timeout)
+      # Key: { client_ip . client_port . server_port } => Value: local_nic_ip
+      map inbound_udp_v4 {
+        type ipv4_addr . inet_service . inet_service : ipv4_addr
+        flags dynamic, timeout
+        timeout 10m
+      }
+
+      map inbound_udp_v6 {
+        type ipv6_addr . inet_service . inet_service : ipv6_addr
+        flags dynamic, timeout
+        timeout 10m
+      }
+
       chain prerouting {
         type filter hook prerouting priority mangle; policy accept;
-        iifname != { "tun0", "lo", "veth_host", "veth_peer" } ct state new ct mark set ct mark or ${BYPASS_MARK}
+
+        # Ignore traffic on virtual / tunnel / loopback interfaces
+        iifname { "tun*", "awg*", "lo", "veth*" } accept
+
+        # 1. TCP and general conntrack mark for inbound connections
+        ct state new ct mark set ct mark or ${BYPASS_MARK}
+
+        # 2. Dynamic tracking of inbound UDP sessions across any port
+        ip version 4 udp dport != 0 update @inbound_udp_v4 { ip saddr . udp sport . udp dport : ip daddr }
+        ip6 version 6 udp dport != 0 update @inbound_udp_v6 { ip6 saddr . udp sport . udp dport : ip6 daddr }
       }
 
       chain output {
         type route hook output priority mangle; policy accept;
-        ct mark and ${BYPASS_MARK} == ${BYPASS_MARK} meta mark set meta mark or ${BYPASS_MARK}
+
+        # TCP replies: Conntrack mark restoration (TCP sockets bind saddr automatically upon accept)
+        meta l4proto tcp ct mark and ${BYPASS_MARK} == ${BYPASS_MARK} meta mark set meta mark or ${BYPASS_MARK}
+
+        # UDP replies from 0.0.0.0 wildcard sockets:
+        # Match outbound UDP against the active inbound session map.
+        # 1) Restore saddr from tun0 IP back to physical interface IP (e.g. 192.168.0.225)
+        # 2) Set fwmark to trigger ip_route_me_harder() via table main (eno1 / wlan0)
+        ip daddr . udp dport . udp sport @inbound_udp_v4 \
+          ip saddr set ip daddr . udp dport . udp sport map @inbound_udp_v4 \
+          meta mark set meta mark or ${BYPASS_MARK}
+
+        ip6 daddr . udp dport . udp sport @inbound_udp_v6 \
+          ip6 saddr set ip6 daddr . udp dport . udp sport map @inbound_udp_v6 \
+          meta mark set meta mark or ${BYPASS_MARK}
+
+        # Zapret NFQWS bypass preservation
         meta mark ${toString zapret-mark} counter queue num ${zapret-qnum} bypass
       }
 
