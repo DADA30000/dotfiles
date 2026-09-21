@@ -88,56 +88,75 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 	end
 
 	local restored = false
+	local function signal_fifo()
+		if fifo_path and fifo_path ~= "" then
+			local uv = vim.uv or vim.loop
+			local flags = uv.constants.O_WRONLY
+			if uv.constants.O_NONBLOCK then
+				flags = bit.bor(flags, uv.constants.O_NONBLOCK)
+			end
+			local fd = uv.fs_open(fifo_path, flags, 438)
+			if fd then
+				uv.fs_write(fd, "done\n", -1, function()
+					uv.fs_close(fd)
+				end)
+			end
+		end
+	end
+
 	local function restore_terminal()
 		if restored then
 			return
 		end
 		restored = true
 
-		if vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(term_buf) then
-			vim.api.nvim_win_set_buf(win, term_buf)
+		if vim.api.nvim_buf_is_valid(term_buf) then
+			if vim.api.nvim_win_is_valid(win) then
+				vim.api.nvim_win_set_buf(win, term_buf)
+			else
+				-- Window/tab was closed (:q! or :wq on modified) —
+				-- show terminal in current window
+				vim.api.nvim_set_current_buf(term_buf)
+			end
 			vim.cmd("startinsert")
 		end
 
-		if fifo_path and fifo_path ~= "" then
+		vim.schedule(signal_fifo)
+	end
+
+	-- QuitPre: before :q/:q!/:wq/:x closes the window, open a split
+	-- with the terminal buffer so the tab survives the window close.
+	-- The user sees exactly what they type (:q, :q!, :wq, :x).
+	vim.api.nvim_create_autocmd("QuitPre", {
+		buffer = target_buf,
+		nested = true,
+		callback = function()
+			if restored then
+				return
+			end
+			if not vim.api.nvim_buf_is_valid(term_buf) then
+				return
+			end
+
+			local file_win = vim.api.nvim_get_current_win()
+
+			-- Create a minimal split with the terminal to keep the tab alive
+			vim.cmd("1split")
+			local term_win = vim.api.nvim_get_current_win()
+			vim.api.nvim_win_set_buf(term_win, term_buf)
+			vim.api.nvim_set_current_win(file_win)
+
 			vim.schedule(function()
-				local uv = vim.uv or vim.loop
-				local flags = uv.constants.O_WRONLY
-				if uv.constants.O_NONBLOCK then
-					flags = bit.bor(flags, uv.constants.O_NONBLOCK)
+				restored = true
+				if vim.api.nvim_win_is_valid(term_win) then
+					vim.api.nvim_set_current_win(term_win)
+					pcall(vim.cmd, "only")
+					vim.cmd("startinsert")
 				end
-				local fd = uv.fs_open(fifo_path, flags, 438)
-				if fd then
-					uv.fs_write(fd, "done\n", -1, function()
-						uv.fs_close(fd)
-					end)
-				end
+				signal_fifo()
 			end)
-		end
-	end
-
-	_G._OvertakeRestores = _G._OvertakeRestores or {}
-	_G._OvertakeRestores[target_buf] = restore_terminal
-
-	local quit_cmds = {
-		{ cmd = "q", write = false, force = false },
-		{ cmd = "q!", write = false, force = true },
-		{ cmd = "wq", write = true, force = false },
-		{ cmd = "wq!", write = true, force = true },
-		{ cmd = "x", write = true, force = false },
-		{ cmd = "xa", write = true, force = false },
-		{ cmd = "wqa", write = true, force = false },
-	}
-	for _, q in ipairs(quit_cmds) do
-		vim.cmd(string.format(
-			"cnoreabbrev <buffer> <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? 'lua _G.RestoreOvertakenTerminal(%s, %s)' : '%s'",
-			q.cmd,
-			q.cmd,
-			tostring(q.write),
-			tostring(q.force),
-			q.cmd
-		))
-	end
+		end,
+	})
 
 	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
 		buffer = target_buf,
@@ -146,31 +165,6 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 			restore_terminal()
 		end,
 	})
-end
-
-_G.RestoreOvertakenTerminal = function(save_first, force)
-	local cur_buf = vim.api.nvim_get_current_buf()
-	if save_first then
-		if vim.bo[cur_buf].modified then
-			local ok, err = pcall(vim.cmd, "write")
-			if not ok then
-				vim.notify("Error saving file: " .. tostring(err), vim.log.levels.ERROR)
-				return
-			end
-		end
-	else
-		if not force and vim.bo[cur_buf].modified then
-			vim.notify("E37: No write since last change (add ! to override)", vim.log.levels.ERROR)
-			return
-		end
-	end
-
-	local restore = _G._OvertakeRestores and _G._OvertakeRestores[cur_buf]
-	if restore then
-		_G._OvertakeRestores[cur_buf] = nil
-		restore()
-	end
-end
 
 -- === CLAMPED PAGER SCROLLING HELPER (HARD STOP AT LAST LINE + GPU ANIMATION) ===
 setup_pager_scroll = function(buf, win)
