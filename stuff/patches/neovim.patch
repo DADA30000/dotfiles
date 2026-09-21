@@ -1,6 +1,6 @@
 diff -uNr a/src/nvim/drawscreen.c b/src/nvim/drawscreen.c
---- a/src/nvim/drawscreen.c	2026-09-20 21:26:07.028287233 +0300
-+++ b/src/nvim/drawscreen.c	2026-09-20 21:26:07.071435528 +0300
+--- a/src/nvim/drawscreen.c	2026-09-21 23:24:15.337891905 +0300
++++ b/src/nvim/drawscreen.c	2026-09-21 23:24:22.127924317 +0300
 @@ -437,12 +437,11 @@
  /// and redraw_all_later() to mark parts of the screen as needing a redraw.
  int update_screen(void)
@@ -29,8 +29,8 @@ diff -uNr a/src/nvim/drawscreen.c b/src/nvim/drawscreen.c
    }
    repeat_message();
 diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
---- a/src/nvim/eval/funcs.c	2026-09-20 21:26:07.034792622 +0300
-+++ b/src/nvim/eval/funcs.c	2026-09-20 21:26:07.070553560 +0300
+--- a/src/nvim/eval/funcs.c	2026-09-21 23:24:15.338157085 +0300
++++ b/src/nvim/eval/funcs.c	2026-09-21 23:24:22.128195087 +0300
 @@ -3625,6 +3625,13 @@
    }
  
@@ -45,9 +45,22 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
    Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,
                                      rpc, overlapped, detach, stdin_mode, cwd,
                                      width, height, env, &rettv->vval.v_number);
+diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
+--- a/src/nvim/getchar.c	2026-09-21 23:24:15.339608830 +0300
++++ b/src/nvim/getchar.c	2026-09-21 23:24:42.560676665 +0300
+@@ -2646,7 +2646,8 @@
+           line_breakcheck();
+         } else {
+           // os_breakcheck() can call input_enqueue()
+-          if ((mapped_ctrl_c | curbuf->b_mapped_ctrl_c) & get_real_state()) {
++          if ((curbuf != NULL && curbuf->terminal != NULL)
++              || ((mapped_ctrl_c | curbuf->b_mapped_ctrl_c) & get_real_state())) {
+             ctrl_c_interrupts = false;
+           }
+           os_breakcheck();  // check for CTRL-C
 diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
---- a/src/nvim/normal.c	2026-09-20 21:26:07.041570825 +0300
-+++ b/src/nvim/normal.c	2026-09-20 21:26:07.070789754 +0300
+--- a/src/nvim/normal.c	2026-09-21 23:24:15.341138423 +0300
++++ b/src/nvim/normal.c	2026-09-21 23:24:22.128516613 +0300
 @@ -1080,6 +1080,24 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
@@ -73,9 +86,33 @@ diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
    // If a mapping was started in Visual or Select mode, remember the length
    // of the mapping.  This is used below to not return to Insert mode for as
    // long as the mapping is being executed.
+diff -uNr a/src/nvim/os/input.c b/src/nvim/os/input.c
+--- a/src/nvim/os/input.c	2026-09-21 23:24:15.341794700 +0300
++++ b/src/nvim/os/input.c	2026-09-21 23:24:38.480624681 +0300
+@@ -128,8 +128,9 @@
+ 
+   TRY_READ();
+ 
+-  // No risk of a UI flood, so disable CTRL-C "interrupt" behavior if it's mapped.
+-  if ((mapped_ctrl_c | curbuf->b_mapped_ctrl_c) & get_real_state()) {
++  // No risk of a UI flood, so disable CTRL-C "interrupt" behavior if it's mapped or in a terminal.
++  if ((curbuf != NULL && curbuf->terminal != NULL)
++      || ((mapped_ctrl_c | curbuf->b_mapped_ctrl_c) & get_real_state())) {
+     ctrl_c_interrupts = false;
+   }
+ 
+@@ -538,7 +539,7 @@
+ 
+ static void process_ctrl_c(void)
+ {
+-  if (!ctrl_c_interrupts) {
++  if (!ctrl_c_interrupts || (curbuf != NULL && curbuf->terminal != NULL)) {
+     return;
+   }
+ 
 diff -uNr a/src/nvim/register.c b/src/nvim/register.c
---- a/src/nvim/register.c	2026-09-20 21:26:07.046723127 +0300
-+++ b/src/nvim/register.c	2026-09-20 21:26:07.070883780 +0300
+--- a/src/nvim/register.c	2026-09-21 23:24:15.343984827 +0300
++++ b/src/nvim/register.c	2026-09-21 23:24:22.128716450 +0300
 @@ -1051,30 +1051,54 @@
      }
    }
@@ -154,8 +191,8 @@ diff -uNr a/src/nvim/register.c b/src/nvim/register.c
    }
  
 diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
---- a/src/nvim/terminal.c	2026-09-20 21:26:07.053046338 +0300
-+++ b/src/nvim/terminal.c	2026-09-20 21:26:07.071166382 +0300
+--- a/src/nvim/terminal.c	2026-09-21 23:24:15.344518883 +0300
++++ b/src/nvim/terminal.c	2026-09-21 23:24:22.128828852 +0300
 @@ -139,6 +139,7 @@
  
  typedef struct {
@@ -271,8 +308,8 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
 +
  // vim: foldmethod=marker
 diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
---- a/src/nvim/terminal.h	2026-09-20 21:26:07.059158258 +0300
-+++ b/src/nvim/terminal.h	2026-09-20 21:26:07.071195446 +0300
+--- a/src/nvim/terminal.h	2026-09-21 23:24:15.344533681 +0300
++++ b/src/nvim/terminal.h	2026-09-21 23:24:22.128906498 +0300
 @@ -24,4 +24,7 @@
    bool force_crlf;
  } TerminalOptions;
@@ -282,8 +319,8 @@ diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
 +
  #include "terminal.h.generated.h"
 diff -uNr a/src/nvim/version.c b/src/nvim/version.c
---- a/src/nvim/version.c	2026-09-20 21:26:07.064495862 +0300
-+++ b/src/nvim/version.c	2026-09-20 21:26:07.071301315 +0300
+--- a/src/nvim/version.c	2026-09-21 23:24:15.345255191 +0300
++++ b/src/nvim/version.c	2026-09-21 23:24:22.128981850 +0300
 @@ -4219,8 +4219,7 @@
  {
    return (buf_is_empty(curbuf)

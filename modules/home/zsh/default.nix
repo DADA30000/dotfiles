@@ -471,6 +471,7 @@ in
                 subcommand="$1"
                 local attr_prefix
                 attr_prefix="$2"
+                setopt localoptions extendedglob
                 local -a processed_words
                 for word in "''${words[@]}"; do
                   if [[ "$word" == -* || "$word" == "nix" || "$word" == "shell" || "$word" == "develop" || "$word" == "eval" ]]; then
@@ -583,7 +584,7 @@ in
                                 -J regular -X '%F{blue}-- regular matches --%f' -a prefix_matches
                       fi
                       if (( ''${#fuzzy_matches[@]} > 0 )); then
-                        compadd -M 'm:{[:lower:]}={[:upper:]} r:|[-_./]=* l:|=*' \
+                        compadd -M 'm:{[:lower:]}={[:upper:]} l:|=*' \
                                 -J fuzzy -X '%F{yellow}-- fuzzy matches --%f' -a fuzzy_matches
                       fi
                     fi

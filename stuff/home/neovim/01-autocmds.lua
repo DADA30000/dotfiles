@@ -32,7 +32,13 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 vim.api.nvim_create_autocmd("TermClose", {
 	group = vim.api.nvim_create_augroup("AutoCloseTermOnSuccess", { clear = true }),
 	callback = function(ev)
-		if vim.b[ev.buf].is_pager then
+		if not (ev.buf and vim.api.nvim_buf_is_valid(ev.buf)) then
+			return
+		end
+		local ok, is_pager = pcall(function()
+			return vim.b[ev.buf].is_pager
+		end)
+		if ok and is_pager then
 			return
 		end
 		if vim.v.event.status == 0 then
@@ -65,7 +71,12 @@ vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
 			return
 		end
 		local buf = ev.buf or vim.api.nvim_win_get_buf(win)
-		vim.b[buf].last_mode = vim.fn.mode()
+		if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+			return
+		end
+		pcall(function()
+			vim.b[buf].last_mode = vim.fn.mode()
+		end)
 
 		local win_info = vim.fn.getwininfo(win)[1]
 		if win_info then

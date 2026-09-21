@@ -1,3 +1,9 @@
+-- === UNMAP NEOVIM DEFAULT EDITING MAPPINGS IN TERMINALS ===
+-- Ensures <C-L>, Y, and & are not intercepted by Neovim and pass to terminal
+pcall(vim.keymap.del, "n", "<C-L>")
+pcall(vim.keymap.del, "n", "&")
+pcall(vim.keymap.del, "n", "Y")
+
 -- === CURSOR VISIBILITY FOR TERMINALS, MANPAGES & PAGERS ===
 vim.api.nvim_set_hl(0, "HiddenCursor", { blend = 100, nocombine = true })
 
@@ -251,7 +257,6 @@ vim.api.nvim_create_autocmd("TermOpen", {
 		vim.keymap.set("x", "Y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
 		vim.keymap.set("x", "<C-S-c>", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
 		vim.keymap.set("x", "<Esc>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
-		vim.keymap.set("x", "<C-c>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
 
 		local function term_paste()
 			local job_id = vim.b[bufnr].terminal_job_id
