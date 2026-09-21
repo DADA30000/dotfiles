@@ -288,6 +288,8 @@ vim.api.nvim_create_autocmd("TermOpen", {
 		for i, event in ipairs(mouse_events) do
 			vim.keymap.set({ "n", "v", "t" }, event, standard_events[i], { buffer = bufnr, silent = true })
 		end
+
+		vim.keymap.set("n", "!nos", ":Hh<CR>", { buffer = bufnr, desc = "Open nos terminal", noremap = true, silent = true })
 	end,
 })
 

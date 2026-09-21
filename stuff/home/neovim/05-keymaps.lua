@@ -52,10 +52,35 @@ vim.keymap.set("t", "<ScrollWheelRight>", function()
 	return "<Nop>"
 end, { expr = true, silent = true })
 
--- Black hole register for delete operations
-vim.keymap.set({ "n", "v" }, "d", '"_d')
-vim.keymap.set("n", "dd", '"_dd')
-vim.keymap.set({ "n", "v" }, "x", '"_x')
+-- Black hole register for delete operations (only for editable buffers)
+for _, lhs in ipairs({ "d", "x" }) do
+	vim.keymap.set({ "n", "v" }, lhs, function()
+		if vim.bo.buftype == "terminal" then
+			if vim.api.nvim_get_mode().mode:match("[vV\22]") then
+				vim.cmd("normal! \27")
+			end
+			local chan = vim.b.terminal_job_id or vim.bo.channel
+			if chan and chan > 0 then
+				vim.api.nvim_chan_send(chan, lhs)
+			end
+			vim.cmd("startinsert")
+			return ""
+		end
+		return '"_' .. lhs
+	end, { expr = true })
+end
+
+vim.keymap.set("n", "dd", function()
+	if vim.bo.buftype == "terminal" then
+		local chan = vim.b.terminal_job_id or vim.bo.channel
+		if chan and chan > 0 then
+			vim.api.nvim_chan_send(chan, "dd")
+		end
+		vim.cmd("startinsert")
+		return ""
+	end
+	return '"_dd'
+end, { expr = true })
 
 -- Silent manual save abbreviations
 local silent_commands = {

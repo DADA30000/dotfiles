@@ -48,7 +48,20 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
 diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
 --- a/src/nvim/getchar.c	2026-09-21 23:24:15.339608830 +0300
 +++ b/src/nvim/getchar.c	2026-09-21 23:24:42.560676665 +0300
-@@ -2646,7 +2646,8 @@
+@@ -2232,7 +2232,12 @@
+     // First try buffer-local mappings.
+     mp = get_buf_maphash_list(local_State, tb_c1);
+     mp2 = get_maphash_list(local_State, tb_c1);
++    if (curbuf != NULL && curbuf->terminal != NULL && (local_State & (MODE_NORMAL | MODE_VISUAL))) {
++      if (tb_c1 != K_SPECIAL && (uint8_t)tb_c1 != Ctrl_C) {
++        mp2 = NULL;
++      }
++    }
+     if (mp == NULL) {
+       // There are no buffer-local mappings.
+       mp = mp2;
+       mp2 = NULL;
+@@ -2646,7 +2651,8 @@
            line_breakcheck();
          } else {
            // os_breakcheck() can call input_enqueue()
