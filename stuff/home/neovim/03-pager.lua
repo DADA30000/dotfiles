@@ -165,6 +165,7 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 			restore_terminal()
 		end,
 	})
+end
 
 -- === CLAMPED PAGER SCROLLING HELPER (HARD STOP AT LAST LINE + GPU ANIMATION) ===
 setup_pager_scroll = function(buf, win)
