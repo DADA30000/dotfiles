@@ -346,7 +346,7 @@
         };
 
       user = "l0lk3k";
-      user-hash = "$y$j9T$4Q2h.L51xcYILK8eRbquT1$rtuCEsO2kdtTLjUL3pOwvraDy9M773cr4hsNaKcSIs1";
+      user-hash = "$y$j9T$mmnKVCySRsfjJQ66A1Gp30$Hj6IS7y9eDJ4DYDrSjxF.5IsBxuF7.FbhZAxloKnteC";
       user_iso = "nixos";
     in
     {

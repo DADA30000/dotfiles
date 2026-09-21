@@ -114,8 +114,6 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 			if vim.api.nvim_win_is_valid(win) then
 				vim.api.nvim_win_set_buf(win, term_buf)
 			else
-				-- Window/tab was closed (:q! or :wq on modified) —
-				-- show terminal in current window
 				vim.api.nvim_set_current_buf(term_buf)
 			end
 			vim.cmd("startinsert")
@@ -124,9 +122,30 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 		vim.schedule(signal_fifo)
 	end
 
-	-- QuitPre: before :q/:q!/:wq/:x closes the window, open a split
-	-- with the terminal buffer so the tab survives the window close.
-	-- The user sees exactly what they type (:q, :q!, :wq, :x).
+	-- Track whether the quit command allows closing a modified buffer.
+	-- CmdlineLeave fires before QuitPre, so the flag is set in time.
+	local quit_allowed_modified = false
+	local cmdleave_id
+	cmdleave_id = vim.api.nvim_create_autocmd("CmdlineLeave", {
+		pattern = ":",
+		callback = function()
+			if restored then
+				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
+				return
+			end
+			local cmd = vim.fn.getcmdline():match("^%s*(.-)%s*$")
+			-- q! wq wq! x xa wqa → allowed to close modified
+			-- q → NOT allowed (user should see E37)
+			-- qa qa! → skip interception entirely (handled by Neovim)
+			quit_allowed_modified = (
+				cmd == "q!" or
+				cmd:match("^wq") ~= nil or
+				cmd == "x" or
+				cmd == "x!"
+			)
+		end,
+	})
+
 	vim.api.nvim_create_autocmd("QuitPre", {
 		buffer = target_buf,
 		nested = true,
@@ -138,9 +157,31 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 				return
 			end
 
-			local file_win = vim.api.nvim_get_current_win()
+			local allowed = quit_allowed_modified
+			quit_allowed_modified = false
 
-			-- Create a minimal split with the terminal to keep the tab alive
+			-- Modified buffer + plain :q → block the quit, show error
+			if vim.bo[target_buf].modified and not allowed then
+				local file_win = vim.api.nvim_get_current_win()
+				-- Guard split so the tab survives :q closing the window
+				vim.cmd("1split")
+				local guard_win = vim.api.nvim_get_current_win()
+				vim.api.nvim_set_current_win(file_win)
+
+				vim.schedule(function()
+					-- :q closed file_win; re-show the file in guard_win
+					if vim.api.nvim_win_is_valid(guard_win) and vim.api.nvim_buf_is_valid(target_buf) then
+						vim.api.nvim_win_set_buf(guard_win, target_buf)
+						vim.api.nvim_set_current_win(guard_win)
+						pcall(vim.cmd, "only")
+						vim.api.nvim_err_writeln("E37: No write since last change (add ! to override)")
+					end
+				end)
+				return
+			end
+
+			-- Proceed: create split with terminal, let :q close the file window
+			local file_win = vim.api.nvim_get_current_win()
 			vim.cmd("1split")
 			local term_win = vim.api.nvim_get_current_win()
 			vim.api.nvim_win_set_buf(term_win, term_buf)
@@ -148,10 +189,14 @@ _G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
 
 			vim.schedule(function()
 				restored = true
+				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
 				if vim.api.nvim_win_is_valid(term_win) then
 					vim.api.nvim_set_current_win(term_win)
 					pcall(vim.cmd, "only")
 					vim.cmd("startinsert")
+				end
+				if vim.api.nvim_buf_is_valid(target_buf) then
+					pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
 				end
 				signal_fifo()
 			end)
