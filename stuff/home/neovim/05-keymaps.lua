@@ -27,7 +27,12 @@ for _, mode in ipairs({ "n", "i", "t", "v", "x", "s" }) do
 		prefix .. "<Cmd>lua InstantTabSwitch('tabclose')<CR>",
 		{ desc = "Close Tab", silent = true }
 	)
-	vim.keymap.set(mode, "<C-S-t>", prefix .. "<Cmd>tabnew +term<CR>", { desc = "New Terminal Tab", silent = true })
+	vim.keymap.set(
+		mode,
+		"<C-S-t>",
+		prefix .. "<Cmd>tabnew | tcd ~ | term<CR>",
+		{ desc = "New Terminal Tab in Home", silent = true }
+	)
 end
 
 -- Clipboard operations

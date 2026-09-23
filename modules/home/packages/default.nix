@@ -496,6 +496,10 @@ in
     pkgs.sshfs
     pkgs.gdu
     pkgs.nixd
+    pkgs.go
+    pkgs.gopls
+    pkgs.delve
+    pkgs.gotools
     pkgs.wget
     pkgs.zenity
     pkgs.procps

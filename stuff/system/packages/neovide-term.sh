@@ -69,10 +69,10 @@ fi
 set -- "$@" +startinsert \
   '+set laststatus=0' \
   '+set cmdheight=0' \
-  '+nnoremap <C-S-t> :tabnew +term<CR>' \
-  '+inoremap <C-S-t> <C-o>:tabnew +term<CR>' \
-  '+tnoremap <C-S-t> <C-\><C-n>:tabnew +term<CR>' \
-  '+xnoremap <C-S-t> <Esc>:tabnew +term<CR>' \
-  '+snoremap <C-S-t> <Esc>:tabnew +term<CR>'
+  '+nnoremap <C-S-t> :tabnew <bar> tcd ~ <bar> term<CR>' \
+  '+inoremap <C-S-t> <C-o>:tabnew <bar> tcd ~ <bar> term<CR>' \
+  '+tnoremap <C-S-t> <C-\><C-n>:tabnew <bar> tcd ~ <bar> term<CR>' \
+  '+xnoremap <C-S-t> <Esc>:tabnew <bar> tcd ~ <bar> term<CR>' \
+  '+snoremap <C-S-t> <Esc>:tabnew <bar> tcd ~ <bar> term<CR>'
 
 exec neovide "$@"

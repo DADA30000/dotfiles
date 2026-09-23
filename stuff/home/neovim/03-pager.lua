@@ -1,215 +1,15 @@
 -- === MODE-SAFE RPC HELPER FUNCTIONS ===
 local setup_pager_scroll
+
 _G.OpenNewTab = function(dir)
 	vim.cmd("tabnew")
 	if dir and dir ~= "" then
-		pcall(vim.cmd, "lcd " .. vim.fn.fnameescape(dir))
-	end
-end
-
-_G.OpenManPath = function(path_or_arg)
-	pcall(vim.cmd, "runtime ftplugin/man.vim")
-	if path_or_arg and path_or_arg ~= "" and vim.fn.filereadable(path_or_arg) == 1 then
-		vim.cmd("tabnew " .. vim.fn.fnameescape(path_or_arg))
-		local buf = vim.api.nvim_get_current_buf()
-		local win = vim.api.nvim_get_current_win()
-		vim.bo[buf].bufhidden = "wipe"
-		vim.b[buf].is_pager = true
-		vim.wo[win].wrap = true
-		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		vim.cmd("silent! Man!")
-		setup_pager_scroll(buf, win)
+		pcall(vim.cmd, "tcd " .. vim.fn.fnameescape(dir))
 	else
-		vim.cmd("tabnew")
-		local buf = vim.api.nvim_get_current_buf()
-		local win = vim.api.nvim_get_current_win()
-		vim.bo[buf].bufhidden = "wipe"
-		vim.b[buf].is_pager = true
-		vim.wo[win].wrap = true
-		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
-		if path_or_arg and path_or_arg ~= "" then
-			vim.cmd("silent! Man " .. vim.fn.fnameescape(path_or_arg))
-		else
-			vim.cmd("silent! Man")
-		end
-		setup_pager_scroll(buf, win)
+		pcall(vim.cmd, "tcd ~")
 	end
-end
-
-_G.OpenFiles = function(files_json)
-	local ok, files = pcall(vim.json.decode, files_json)
-	if ok and files and #files > 0 then
-		vim.cmd("tabnew " .. vim.fn.fnameescape(files[1]))
-		for i = 2, #files do
-			vim.cmd("tabedit " .. vim.fn.fnameescape(files[i]))
-		end
-	else
-		vim.cmd("tabnew")
-	end
-end
-
--- === OVERTAKE TERMINAL TAB WHEN NVIM IS INVOKED FROM WITHIN IT ===
-_G.OvertakeTerminal = function(term_buf, files_json, fifo_path)
-	term_buf = tonumber(term_buf)
-	local win = vim.fn.bufwinid(term_buf)
-	if win == -1 then
-		for _, w in ipairs(vim.api.nvim_list_wins()) do
-			if vim.api.nvim_win_get_buf(w) == term_buf then
-				win = w
-				break
-			end
-		end
-	end
-	if win == -1 or not vim.api.nvim_win_is_valid(win) then
-		win = vim.api.nvim_get_current_win()
-	end
-
-	local target_tab = vim.api.nvim_win_get_tabpage(win)
-	if target_tab ~= vim.api.nvim_get_current_tabpage() then
-		vim.api.nvim_set_current_tabpage(target_tab)
-	end
-	vim.api.nvim_set_current_win(win)
-
-	local ok, files = pcall(vim.json.decode, files_json)
-	local target_buf
-	if ok and files and #files > 0 then
-		vim.cmd("edit " .. vim.fn.fnameescape(files[1]))
-		target_buf = vim.api.nvim_get_current_buf()
-		for i = 2, #files do
-			vim.cmd("badd " .. vim.fn.fnameescape(files[i]))
-		end
-	else
-		vim.cmd("enew")
-		target_buf = vim.api.nvim_get_current_buf()
-	end
-
-	local restored = false
-	local function signal_fifo()
-		if fifo_path and fifo_path ~= "" then
-			local uv = vim.uv or vim.loop
-			local flags = uv.constants.O_WRONLY
-			if uv.constants.O_NONBLOCK then
-				flags = bit.bor(flags, uv.constants.O_NONBLOCK)
-			end
-			local fd = uv.fs_open(fifo_path, flags, 438)
-			if fd then
-				uv.fs_write(fd, "done\n", -1, function()
-					uv.fs_close(fd)
-				end)
-			end
-		end
-	end
-
-	local function restore_terminal()
-		if restored then
-			return
-		end
-		restored = true
-
-		if vim.api.nvim_buf_is_valid(term_buf) then
-			if vim.api.nvim_win_is_valid(win) then
-				vim.api.nvim_win_set_buf(win, term_buf)
-			else
-				vim.api.nvim_set_current_buf(term_buf)
-			end
-			vim.cmd("startinsert")
-		end
-
-		vim.schedule(signal_fifo)
-	end
-
-	-- Track whether the quit command allows closing a modified buffer.
-	-- CmdlineLeave fires before QuitPre, so the flag is set in time.
-	local quit_allowed_modified = false
-	local cmdleave_id
-	cmdleave_id = vim.api.nvim_create_autocmd("CmdlineLeave", {
-		pattern = ":",
-		callback = function()
-			if restored then
-				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
-				return
-			end
-			local cmd = vim.fn.getcmdline():match("^%s*(.-)%s*$")
-			-- q! wq wq! x xa wqa → allowed to close modified
-			-- q → NOT allowed (user should see E37)
-			-- qa qa! → skip interception entirely (handled by Neovim)
-			quit_allowed_modified = (
-				cmd == "q!" or
-				cmd:match("^wq") ~= nil or
-				cmd == "x" or
-				cmd == "x!"
-			)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("QuitPre", {
-		buffer = target_buf,
-		nested = true,
-		callback = function()
-			if restored then
-				return
-			end
-			if not vim.api.nvim_buf_is_valid(term_buf) then
-				return
-			end
-
-			local allowed = quit_allowed_modified
-			quit_allowed_modified = false
-
-			-- Modified buffer + plain :q → block the quit, show error
-			if vim.bo[target_buf].modified and not allowed then
-				local file_win = vim.api.nvim_get_current_win()
-				-- Guard split so the tab survives :q closing the window
-				vim.cmd("1split")
-				local guard_win = vim.api.nvim_get_current_win()
-				vim.api.nvim_set_current_win(file_win)
-
-				vim.schedule(function()
-					-- :q closed file_win; re-show the file in guard_win
-					if vim.api.nvim_win_is_valid(guard_win) and vim.api.nvim_buf_is_valid(target_buf) then
-						vim.api.nvim_win_set_buf(guard_win, target_buf)
-						vim.api.nvim_set_current_win(guard_win)
-						pcall(vim.cmd, "only")
-						vim.api.nvim_err_writeln("E37: No write since last change (add ! to override)")
-					end
-				end)
-				return
-			end
-
-			-- Proceed: create split with terminal, let :q close the file window
-			local file_win = vim.api.nvim_get_current_win()
-			vim.cmd("1split")
-			local term_win = vim.api.nvim_get_current_win()
-			vim.api.nvim_win_set_buf(term_win, term_buf)
-			vim.api.nvim_set_current_win(file_win)
-
-			vim.schedule(function()
-				restored = true
-				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
-				if vim.api.nvim_win_is_valid(term_win) then
-					vim.api.nvim_set_current_win(term_win)
-					pcall(vim.cmd, "only")
-					vim.cmd("startinsert")
-				end
-				if vim.api.nvim_buf_is_valid(target_buf) then
-					pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
-				end
-				signal_fifo()
-			end)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
-		buffer = target_buf,
-		once = true,
-		callback = function()
-			restore_terminal()
-		end,
-	})
+	vim.cmd("term")
+	vim.cmd("startinsert")
 end
 
 -- === CLAMPED PAGER SCROLLING HELPER (HARD STOP AT LAST LINE + GPU ANIMATION) ===
@@ -307,6 +107,325 @@ setup_pager_scroll = function(buf, win)
 	vim.keymap.set("n", "<Up>", function()
 		scroll_up(1)
 	end, { buffer = buf, silent = true, nowait = true })
+
+	-- Bind Search Keys
+	vim.keymap.set("n", "/", "/", { buffer = buf, silent = false })
+	vim.keymap.set("n", "?", "?", { buffer = buf, silent = false })
+	vim.keymap.set("n", "n", "n", { buffer = buf, silent = false })
+	vim.keymap.set("n", "N", "N", { buffer = buf, silent = false })
+end
+
+_G.OpenManPath = function(path_or_arg)
+	pcall(vim.cmd, "runtime ftplugin/man.vim")
+	if path_or_arg and path_or_arg ~= "" and vim.fn.filereadable(path_or_arg) == 1 then
+		vim.cmd("tabnew " .. vim.fn.fnameescape(path_or_arg))
+		local buf = vim.api.nvim_get_current_buf()
+		local win = vim.api.nvim_get_current_win()
+		vim.bo[buf].bufhidden = "wipe"
+		vim.b[buf].is_pager = true
+		vim.wo[win].wrap = true
+		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.cmd("silent! Man!")
+		setup_pager_scroll(buf, win)
+	else
+		vim.cmd("tabnew")
+		local buf = vim.api.nvim_get_current_buf()
+		local win = vim.api.nvim_get_current_win()
+		vim.bo[buf].bufhidden = "wipe"
+		vim.b[buf].is_pager = true
+		vim.wo[win].wrap = true
+		vim.keymap.set("n", "q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "Q", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		vim.keymap.set("n", "<Esc>", "<Cmd>tabclose<CR>", { buffer = buf, silent = true, nowait = true })
+		if path_or_arg and path_or_arg ~= "" then
+			vim.cmd("silent! Man " .. vim.fn.fnameescape(path_or_arg))
+		else
+			vim.cmd("silent! Man")
+		end
+		setup_pager_scroll(buf, win)
+	end
+end
+
+_G.OpenFiles = function(files_json)
+	local ok, files = pcall(vim.json.decode, files_json)
+	if ok and files and #files > 0 then
+		vim.cmd("tabnew " .. vim.fn.fnameescape(files[1]))
+		for i = 2, #files do
+			vim.cmd("tabedit " .. vim.fn.fnameescape(files[i]))
+		end
+	else
+		vim.cmd("tabnew")
+	end
+end
+
+-- === OVERTAKE TERMINAL TAB WHEN NVIM IS INVOKED FROM WITHIN IT ===
+_G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
+	term_buf = tonumber(term_buf)
+	local win = vim.fn.bufwinid(term_buf)
+	if win == -1 then
+		for _, w in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_get_buf(w) == term_buf then
+				win = w
+				break
+			end
+		end
+	end
+	if win == -1 or not vim.api.nvim_win_is_valid(win) then
+		win = vim.api.nvim_get_current_win()
+	end
+
+	local target_tab = vim.api.nvim_win_get_tabpage(win)
+	if target_tab ~= vim.api.nvim_get_current_tabpage() then
+		vim.api.nvim_set_current_tabpage(target_tab)
+	end
+	vim.api.nvim_set_current_win(win)
+
+	local ok, action = pcall(vim.json.decode, action_json)
+	if not ok or not action or type(action) ~= "table" then
+		action = { type = "files", files = {} }
+	end
+
+	local target_buf
+	local is_pager_view = false
+
+	if action.type == "man" then
+		pcall(vim.cmd, "runtime ftplugin/man.vim")
+		local arg = action.arg or ""
+		if arg ~= "" and vim.fn.filereadable(arg) == 1 then
+			vim.cmd("edit " .. vim.fn.fnameescape(arg))
+			target_buf = vim.api.nvim_get_current_buf()
+			vim.cmd("silent! Man!")
+		else
+			vim.cmd("enew")
+			target_buf = vim.api.nvim_get_current_buf()
+			if arg ~= "" then
+				vim.cmd("silent! Man " .. vim.fn.fnameescape(arg))
+			else
+				vim.cmd("silent! Man")
+			end
+		end
+		is_pager_view = true
+		vim.bo[target_buf].bufhidden = "wipe"
+		vim.b[target_buf].is_pager = true
+		vim.wo[win].wrap = true
+		setup_pager_scroll(target_buf, win)
+	elseif action.type == "man_stdin" then
+		pcall(vim.cmd, "runtime ftplugin/man.vim")
+		local filepath = action.tmpfile
+		local f = filepath and io.open(filepath, "rb")
+		local content = ""
+		if f then
+			content = f:read("*a") or ""
+			f:close()
+		end
+		if filepath then
+			pcall(os.remove, filepath)
+		end
+
+		local lines = vim.split(content, "\n", { plain = true })
+		vim.cmd("enew")
+		target_buf = vim.api.nvim_get_current_buf()
+		vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, lines)
+		vim.cmd("silent! Man!")
+		is_pager_view = true
+		vim.bo[target_buf].bufhidden = "wipe"
+		vim.b[target_buf].is_pager = true
+		vim.wo[win].wrap = true
+		setup_pager_scroll(target_buf, win)
+		if action.jump_bottom then
+			local line_count = vim.api.nvim_buf_line_count(target_buf)
+			local win_h = vim.api.nvim_win_get_height(win)
+			local max_top = math.max(1, line_count - win_h + 1)
+			vim.cmd("normal! " .. max_top .. "zt")
+			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+		else
+			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+			vim.cmd("normal! zt")
+		end
+	elseif action.type == "pager" then
+		local filepath = action.tmpfile
+		local f = filepath and io.open(filepath, "rb")
+		local raw = ""
+		if f then
+			raw = f:read("*a") or ""
+			f:close()
+		end
+		if filepath then
+			pcall(os.remove, filepath)
+		end
+		raw = raw:gsub("\r?\n", "\r\n")
+
+		vim.cmd("enew")
+		target_buf = vim.api.nvim_get_current_buf()
+		pcall(vim.api.nvim_buf_set_name, target_buf, "[Pager " .. target_buf .. "]")
+		is_pager_view = true
+		vim.bo[target_buf].bufhidden = "wipe"
+		vim.b[target_buf].is_pager = true
+		vim.wo[win].wrap = true
+
+		local chan = vim.api.nvim_open_term(target_buf, {})
+		vim.api.nvim_chan_send(chan, raw)
+		vim.cmd("redraw")
+		pcall(vim.fn.chanclose, chan)
+		vim.cmd("redraw")
+		vim.cmd("stopinsert")
+
+		setup_pager_scroll(target_buf, win)
+
+		local line_count = vim.api.nvim_buf_line_count(target_buf)
+		local win_h = vim.api.nvim_win_get_height(win)
+		if action.jump_bottom then
+			local max_top = math.max(1, line_count - win_h + 1)
+			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+			pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
+		else
+			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+			pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
+		end
+	else -- "files"
+		if action.files and #action.files > 0 then
+			vim.cmd("edit " .. vim.fn.fnameescape(action.files[1]))
+			target_buf = vim.api.nvim_get_current_buf()
+			for i = 2, #action.files do
+				vim.cmd("badd " .. vim.fn.fnameescape(action.files[i]))
+			end
+		else
+			vim.cmd("enew")
+			target_buf = vim.api.nvim_get_current_buf()
+		end
+	end
+
+	local restored = false
+	local function signal_fifo()
+		if fifo_path and fifo_path ~= "" then
+			local uv = vim.uv or vim.loop
+			local flags = uv.constants.O_WRONLY
+			if uv.constants.O_NONBLOCK then
+				flags = bit.bor(flags, uv.constants.O_NONBLOCK)
+			end
+			local fd = uv.fs_open(fifo_path, flags, 438)
+			if fd then
+				uv.fs_write(fd, "done\n", -1, function()
+					uv.fs_close(fd)
+				end)
+			end
+		end
+	end
+
+	local function restore_terminal()
+		if restored then
+			return
+		end
+		restored = true
+
+		if vim.api.nvim_buf_is_valid(term_buf) then
+			if vim.api.nvim_win_is_valid(win) then
+				vim.api.nvim_win_set_buf(win, term_buf)
+			else
+				vim.api.nvim_set_current_buf(term_buf)
+			end
+			vim.cmd("startinsert")
+		end
+
+		if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
+			pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+		end
+
+		vim.schedule(signal_fifo)
+	end
+
+	if is_pager_view then
+		vim.keymap.set("n", "q", restore_terminal, { buffer = target_buf, silent = true, nowait = true })
+		vim.keymap.set("n", "Q", restore_terminal, { buffer = target_buf, silent = true, nowait = true })
+		vim.keymap.set("n", "<Esc>", restore_terminal, { buffer = target_buf, silent = true, nowait = true })
+	end
+
+	-- Track whether the quit command allows closing a modified buffer.
+	local quit_allowed_modified = false
+	local cmdleave_id
+	cmdleave_id = vim.api.nvim_create_autocmd("CmdlineLeave", {
+		pattern = ":",
+		callback = function()
+			if restored then
+				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
+				return
+			end
+			local cmd = vim.fn.getcmdline():match("^%s*(.-)%s*$")
+			quit_allowed_modified = (
+				cmd == "q!" or
+				cmd:match("^wq") ~= nil or
+				cmd == "x" or
+				cmd == "x!"
+			)
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("QuitPre", {
+		buffer = target_buf,
+		nested = true,
+		callback = function()
+			if restored then
+				return
+			end
+			if not vim.api.nvim_buf_is_valid(term_buf) then
+				return
+			end
+
+			local allowed = quit_allowed_modified or is_pager_view
+			quit_allowed_modified = false
+
+			-- Modified buffer + plain :q → block the quit, show error
+			if not is_pager_view and vim.bo[target_buf].modified and not allowed then
+				local file_win = vim.api.nvim_get_current_win()
+				-- Guard split so the tab survives :q closing the window
+				vim.cmd("1split")
+				local guard_win = vim.api.nvim_get_current_win()
+				vim.api.nvim_set_current_win(file_win)
+
+				vim.schedule(function()
+					-- :q closed file_win; re-show the file in guard_win
+					if vim.api.nvim_win_is_valid(guard_win) and vim.api.nvim_buf_is_valid(target_buf) then
+						vim.api.nvim_win_set_buf(guard_win, target_buf)
+						vim.api.nvim_set_current_win(guard_win)
+						pcall(vim.cmd, "only")
+						vim.api.nvim_err_writeln("E37: No write since last change (add ! to override)")
+					end
+				end)
+				return
+			end
+
+			-- Proceed: create split with terminal, let :q close the file window
+			local file_win = vim.api.nvim_get_current_win()
+			vim.cmd("1split")
+			local term_win = vim.api.nvim_get_current_win()
+			vim.api.nvim_win_set_buf(term_win, term_buf)
+			vim.api.nvim_set_current_win(file_win)
+
+			vim.schedule(function()
+				restored = true
+				pcall(vim.api.nvim_del_autocmd, cmdleave_id)
+				if vim.api.nvim_win_is_valid(term_win) then
+					vim.api.nvim_set_current_win(term_win)
+					pcall(vim.cmd, "only")
+					vim.cmd("startinsert")
+				end
+				if vim.api.nvim_buf_is_valid(target_buf) then
+					pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
+				end
+				signal_fifo()
+			end)
+		end,
+	})
+
+	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+		buffer = target_buf,
+		once = true,
+		callback = function()
+			restore_terminal()
+		end,
+	})
 end
 
 -- === USER-ISOLATED TMPFS ANSI PAGER & MAN PAGER ===
@@ -376,6 +495,8 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 
 	local chan = vim.api.nvim_open_term(buf, {})
 	vim.api.nvim_chan_send(chan, raw)
+	vim.cmd("redraw")
+	pcall(vim.fn.chanclose, chan)
 	vim.cmd("redraw")
 	vim.cmd("stopinsert")
 	reset_view()

@@ -59,6 +59,7 @@ conform.setup({
 		python = { "ruff_format" },
 		rust = { "rustfmt" },
 		nix = { "nixfmt" },
+		go = { "gofmt", "goimports" },
 	},
 	default_format_opts = {
 		lsp_format = "fallback",
@@ -315,6 +316,20 @@ vim.lsp.config("lua_ls", {
 	},
 })
 vim.lsp.enable("lua_ls")
+
+vim.lsp.config("gopls", {
+	capabilities = capabilities,
+	settings = {
+		gopls = {
+			analyses = {
+				unusedparams = true,
+			},
+			staticcheck = true,
+			gofumpt = true,
+		},
+	},
+})
+vim.lsp.enable("gopls")
 
 local standard_lsps = { "bashls", "html", "cssls", "jsonls", "jdtls", "taplo", "yamlls" }
 for _, lsp in ipairs(standard_lsps) do

@@ -52,7 +52,12 @@ vim.api.nvim_create_autocmd("ModeChanged", {
 	pattern = "*",
 	callback = function()
 		if vim.bo.filetype == "man" or vim.b.is_pager then
-			set_terminal_cursor_hidden(true)
+			local mode = vim.api.nvim_get_mode().mode
+			if mode:match("^c") then
+				set_terminal_cursor_hidden(false)
+			else
+				set_terminal_cursor_hidden(true)
+			end
 		elseif vim.bo.buftype == "terminal" then
 			local mode = vim.api.nvim_get_mode().mode
 			if mode == "nt" or mode == "v" or mode == "V" or mode == "\22" then

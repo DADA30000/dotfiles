@@ -109,7 +109,79 @@ let
       exit 0
     }
 
-    # 1. MANPAGER invocation (`nvim +Man!` or `nvim +Man`)
+    # 1. Invoked from within an existing Neovim terminal tab (overtake current tab like Kitty)
+    if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
+      RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      if [[ ! -d "$RUNTIME_DIR" ]]; then
+        RUNTIME_DIR="/tmp"
+      fi
+
+      FIFO=$(${pkgs.coreutils}/bin/mktemp -u "$RUNTIME_DIR/nvim-wait.XXXXXX")
+      ${pkgs.coreutils}/bin/mkfifo "$FIFO"
+
+      ACTION_JSON=""
+      if [[ "$1" == "+Man!" || "$1" == "+Man" ]]; then
+        shift
+        if [ ! -t 0 ]; then
+          TMPFILE=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
+          ${pkgs.coreutils}/bin/cat > "$TMPFILE"
+          ACTION_JSON="{\"type\":\"man_stdin\",\"tmpfile\":\"$TMPFILE\",\"jump_bottom\":false}"
+        elif [[ -n "$1" ]]; then
+          if [[ -f "$1" ]]; then
+            ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$1")
+            ARG_CLEAN=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          else
+            ARG_CLEAN=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          fi
+          ACTION_JSON="{\"type\":\"man\",\"arg\":\"$ARG_CLEAN\"}"
+        else
+          ACTION_JSON="{\"type\":\"man\",\"arg\":\"\"}"
+        fi
+      elif [ ! -t 0 ]; then
+        TMPFILE=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
+        ${pkgs.coreutils}/bin/cat > "$TMPFILE"
+        JUMP_BOTTOM="false"
+        for arg in "$@"; do
+          case "$arg" in
+            +G|+G*|-e|--pager-end)
+              JUMP_BOTTOM="true"
+              ;;
+          esac
+        done
+        if [[ "$LESS" == *"+G"* ]]; then
+          JUMP_BOTTOM="true"
+        fi
+        ACTION_JSON="{\"type\":\"pager\",\"tmpfile\":\"$TMPFILE\",\"jump_bottom\":$JUMP_BOTTOM}"
+      else
+        FILES_JSON="["
+        FIRST=1
+        for arg in "$@"; do
+          if [[ "$arg" != -* ]]; then
+            ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
+            CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            if [ $FIRST -eq 1 ]; then
+              FILES_JSON="$FILES_JSON\"$CLEAN_PATH\""
+              FIRST=0
+            else
+              FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
+            fi
+          fi
+        done
+        FILES_JSON="''${FILES_JSON}]"
+        ACTION_JSON="{\"type\":\"files\",\"files\":$FILES_JSON}"
+      fi
+
+      ACTION_JSON_ESC="''${ACTION_JSON//\'/\'\'}"
+
+      "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
+        "v:lua._G.OvertakeTerminal($NVIM_BUF_ID, '$ACTION_JSON_ESC', '$FIFO')" >/dev/null 2>&1 &
+
+      ${pkgs.coreutils}/bin/cat "$FIFO" >/dev/null 2>&1
+      ${pkgs.coreutils}/bin/rm -f "$FIFO"
+      exit 0
+    fi
+
+    # 2. MANPAGER invocation outside terminal tab (`nvim +Man!` or `nvim +Man`)
     if [[ "$1" == "+Man!" || "$1" == "+Man" ]]; then
       shift
       ARG="$1"
@@ -131,53 +203,18 @@ let
       fi
     fi
 
-    # 2. Piped Stdin (e.g. `cat file | nvim` or `git diff | nvim` or `journalctl | nvim`)
+    # 3. Piped Stdin outside terminal tab (e.g. `cat file | nvim` or `git diff | nvim` or `journalctl | nvim`)
     if [ ! -t 0 ]; then
       send_stdin_stream_rpc "pager" "$@"
     fi
 
-    # 3. Invoked from within an existing Neovim terminal tab (overtake current tab like Kitty)
-    if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
-      RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-      if [[ ! -d "$RUNTIME_DIR" ]]; then
-        RUNTIME_DIR="/tmp"
-      fi
-
-      FIFO=$(${pkgs.coreutils}/bin/mktemp -u "$RUNTIME_DIR/nvim-wait.XXXXXX")
-      ${pkgs.coreutils}/bin/mkfifo "$FIFO"
-
-      FILES_JSON="["
-      FIRST=1
-      for arg in "$@"; do
-        if [[ "$arg" != -* ]]; then
-          ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
-          CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
-          if [ $FIRST -eq 1 ]; then
-            FILES_JSON="$FILES_JSON\"$CLEAN_PATH\""
-            FIRST=0
-          else
-            FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
-          fi
-        fi
-      done
-      FILES_JSON="''${FILES_JSON}]"
-      FILES_JSON_ESC="''${FILES_JSON//\'/\'\'}"
-
-      "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-        "v:lua._G.OvertakeTerminal($NVIM_BUF_ID, '$FILES_JSON_ESC', '$FIFO')" >/dev/null 2>&1 &
-
-      ${pkgs.coreutils}/bin/cat "$FIFO" >/dev/null 2>&1
-      ${pkgs.coreutils}/bin/rm -f "$FIFO"
-      exit 0
-    fi
-
-    # 4. No arguments (`nvim` outside terminal tab)
+    # 4. No arguments outside terminal tab (`nvim`)
     if [ $# -eq 0 ]; then
       PWD_ESC="''${PWD//\'/\'\'}"
       exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD_ESC')" >/dev/null 2>&1
     fi
 
-    # 5. File arguments (`nvim file1 file2...` outside terminal tab)
+    # 5. File arguments outside terminal tab (`nvim file1 file2...`)
     FILES_JSON="["
     FIRST=1
     for arg in "$@"; do
