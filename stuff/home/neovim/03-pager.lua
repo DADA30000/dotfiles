@@ -113,7 +113,18 @@ setup_pager_scroll = function(buf, win)
 	vim.keymap.set("n", "?", "?", { buffer = buf, silent = false })
 	vim.keymap.set("n", "n", "n", { buffer = buf, silent = false })
 	vim.keymap.set("n", "N", "N", { buffer = buf, silent = false })
+
+	-- Bind Ctrl-Arrows
+	vim.keymap.set("n", "<C-Up>", function()
+		scroll_up(math.max(1, vim.api.nvim_win_get_height(win) - 2))
+	end, { buffer = buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<C-Down>", function()
+		scroll_down(math.max(1, vim.api.nvim_win_get_height(win) - 2))
+	end, { buffer = buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<C-Left>", "b", { buffer = buf, silent = true, nowait = true })
+	vim.keymap.set("n", "<C-Right>", "w", { buffer = buf, silent = true, nowait = true })
 end
+_G.setup_pager_scroll = setup_pager_scroll
 
 _G.OpenManPath = function(path_or_arg)
 	pcall(vim.cmd, "runtime ftplugin/man.vim")
@@ -187,6 +198,19 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 		action = { type = "files", files = {} }
 	end
 
+	-- Inherit tab title from overtaken terminal
+	local inherited_title = nil
+	if term_buf and vim.api.nvim_buf_is_valid(term_buf) then
+		local term_title = vim.b[term_buf].term_title
+		if term_title and term_title ~= "" then
+			local cmd = term_title:match("([^/]+)$") or term_title
+			cmd = cmd:match("^([^%s]+)") or cmd
+			inherited_title = " " .. cmd
+		else
+			inherited_title = " term"
+		end
+	end
+
 	local target_buf
 	local is_pager_view = false
 
@@ -238,11 +262,11 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 			local line_count = vim.api.nvim_buf_line_count(target_buf)
 			local win_h = vim.api.nvim_win_get_height(win)
 			local max_top = math.max(1, line_count - win_h + 1)
-			vim.cmd("normal! " .. max_top .. "zt")
 			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+			pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
 		else
 			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-			vim.cmd("normal! zt")
+			pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
 		end
 	elseif action.type == "pager" then
 		local filepath = action.tmpfile
@@ -255,11 +279,11 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 		if filepath then
 			pcall(os.remove, filepath)
 		end
+		raw = raw:gsub("[\r\n]+$", "")
 		raw = raw:gsub("\r?\n", "\r\n")
 
 		vim.cmd("enew")
 		target_buf = vim.api.nvim_get_current_buf()
-		pcall(vim.api.nvim_buf_set_name, target_buf, "[Pager " .. target_buf .. "]")
 		is_pager_view = true
 		vim.bo[target_buf].bufhidden = "wipe"
 		vim.b[target_buf].is_pager = true
@@ -268,22 +292,28 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 		local chan = vim.api.nvim_open_term(target_buf, {})
 		vim.api.nvim_chan_send(chan, raw)
 		vim.cmd("redraw")
-		pcall(vim.fn.chanclose, chan)
-		vim.cmd("redraw")
 		vim.cmd("stopinsert")
 
 		setup_pager_scroll(target_buf, win)
 
-		local line_count = vim.api.nvim_buf_line_count(target_buf)
-		local win_h = vim.api.nvim_win_get_height(win)
-		if action.jump_bottom then
-			local max_top = math.max(1, line_count - win_h + 1)
-			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
-			pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
-		else
-			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-			pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
-		end
+		local jump_bottom = action.jump_bottom == true or action.jump_bottom == "true"
+		vim.defer_fn(function()
+			if not (vim.api.nvim_buf_is_valid(target_buf) and vim.api.nvim_win_is_valid(win)) then
+				return
+			end
+			pcall(vim.api.nvim_set_current_win, win)
+			pcall(vim.api.nvim_feedkeys, vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), "n", false)
+			local line_count = vim.api.nvim_buf_line_count(target_buf)
+			local win_h = vim.api.nvim_win_get_height(win)
+			if jump_bottom then
+				local max_top = math.max(1, line_count - win_h + 1)
+				pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
+				pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
+			else
+				pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+				pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
+			end
+		end, 30)
 	else -- "files"
 		if action.files and #action.files > 0 then
 			vim.cmd("edit " .. vim.fn.fnameescape(action.files[1]))
@@ -295,6 +325,10 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 			vim.cmd("enew")
 			target_buf = vim.api.nvim_get_current_buf()
 		end
+	end
+
+	if inherited_title and target_buf and vim.api.nvim_buf_is_valid(target_buf) then
+		vim.b[target_buf].overtaken_title = inherited_title
 	end
 
 	local restored = false
@@ -438,6 +472,7 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 	end
 	pcall(os.remove, filepath)
 
+	raw = raw:gsub("[\r\n]+$", "")
 	raw = raw:gsub("\r?\n", "\r\n")
 
 	vim.cmd("tabnew")
@@ -455,51 +490,24 @@ _G.OpenAnsiPagerFile = function(filepath, jump_bottom)
 
 	setup_pager_scroll(buf, win)
 
-	local function reset_view()
-		if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then
-			return
-		end
-		pcall(vim.cmd, "stopinsert")
-
-		local line_count = vim.api.nvim_buf_line_count(buf)
-		local win_h = vim.api.nvim_win_get_height(win)
-
-		if jump_bottom then
-			local max_top = math.max(1, line_count - win_h + 1)
-			pcall(vim.api.nvim_win_set_cursor, win, { line_count, 0 })
-			pcall(vim.fn.winrestview, { topline = max_top, lnum = line_count, col = 0 })
-		else
-			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
-			pcall(vim.fn.winrestview, { topline = 1, lnum = 1, col = 0 })
-		end
-	end
-
-	local detached = false
-	local detach_autocmd = vim.api.nvim_create_autocmd({ "CursorMoved", "WinScrolled" }, {
-		buffer = buf,
-		once = true,
-		callback = function()
-			detached = true
-		end,
-	})
-
-	vim.api.nvim_buf_attach(buf, false, {
-		on_lines = function()
-			if detached then
-				pcall(vim.api.nvim_del_autocmd, detach_autocmd)
-				return true
-			end
-			vim.schedule(reset_view)
-		end,
-	})
-
 	local chan = vim.api.nvim_open_term(buf, {})
 	vim.api.nvim_chan_send(chan, raw)
 	vim.cmd("redraw")
-	pcall(vim.fn.chanclose, chan)
-	vim.cmd("redraw")
 	vim.cmd("stopinsert")
-	reset_view()
+
+	local should_jump_bottom = jump_bottom == true or jump_bottom == "true" or jump_bottom == "v:true"
+	vim.defer_fn(function()
+		if not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)) then
+			return
+		end
+		pcall(vim.api.nvim_set_current_win, win)
+		pcall(vim.cmd, "stopinsert")
+		if should_jump_bottom then
+			vim.cmd("normal! G")
+		else
+			vim.cmd("normal! gg")
+		end
+	end, 30)
 end
 
 _G.OpenManPageFile = function(filepath, jump_bottom)

@@ -47,7 +47,9 @@ _G.GetWindowTitle = function()
 	local bufnr = vim.api.nvim_get_current_buf()
 	local bufname = vim.api.nvim_buf_get_name(bufnr)
 
-	if vim.b[bufnr].is_pager then
+	if vim.b[bufnr].overtaken_title then
+		return vim.b[bufnr].overtaken_title:gsub("^%s*", "")
+	elseif vim.b[bufnr].is_pager then
 		return "Pager"
 	elseif vim.bo[bufnr].buftype == "terminal" then
 		local term_title = vim.b[bufnr].term_title
@@ -83,7 +85,9 @@ _G.MyTabLine = function()
 		local bufname = bufnr and vim.api.nvim_buf_get_name(bufnr) or ""
 
 		local tabname = ""
-		if bufnr and vim.b[bufnr].is_pager then
+		if bufnr and vim.b[bufnr].overtaken_title then
+			tabname = vim.b[bufnr].overtaken_title
+		elseif bufnr and vim.b[bufnr].is_pager then
 			tabname = "Pager"
 		elseif bufnr and vim.bo[bufnr].buftype == "terminal" then
 			local term_title = vim.b[bufnr].term_title

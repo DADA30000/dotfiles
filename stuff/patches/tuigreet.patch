@@ -43,3 +43,12 @@ index 2569b22..d1a36bd 100644
            },
  
            ErrorType::Error => {
+diff --git a/crates/tuigreet/src/info.rs b/crates/tuigreet/src/info.rs
+index e5a3c21..84f0b2a 100644
+--- a/crates/tuigreet/src/info.rs
++++ b/crates/tuigreet/src/info.rs
+@@ -228,3 +228,3 @@ pub fn get_users(min_uid: u32, max_uid: u32) -> Vec<User> {
+   users
+-    .filter(|user| user.uid() >= min_uid && user.uid() <= max_uid)
++    .filter(|u| u.uid() >= min_uid && u.uid() <= max_uid && !u.shell().to_string_lossy().ends_with("nologin") && !u.shell().to_string_lossy().ends_with("false"))
+     .map(|user| {

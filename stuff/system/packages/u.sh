@@ -54,40 +54,40 @@ run_action() {
   # Route arguments between eval and nh
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -H|--hostname)
-        HOST="$2"
-        shift 2
-        ;;
-      --hostname=*)
-        HOST="${1#*=}"
-        shift
-        ;;
-      # Flags specific to nh or build actions
-      -n|-a|--ask|--diff|--diff=*|-e|--elevation-strategy|-e=*|--elevation-strategy=*)
-        NH_PASSTHROUGH+=("$1")
-        shift
-        ;;
-      --dry|--dry-run)
-        NH_PASSTHROUGH+=("--dry")
-        shift
-        ;;
-      --no-validate|--show-activation-logs|--install-bootloader|-R|--bypass-root-check|--no-nom)
-        NH_PASSTHROUGH+=("$1")
-        shift
-        ;;
-      -o|--out-link|--profile)
-        NH_PASSTHROUGH+=("$1" "$2")
-        shift 2
-        ;;
-      --out-link=*|--profile=*)
-        NH_PASSTHROUGH+=("$1")
-        shift
-        ;;
-      *)
-        EVAL_ARGS+=("$1")
-        NH_PASSTHROUGH+=("$1")
-        shift
-        ;;
+    -H | --hostname)
+      HOST="$2"
+      shift 2
+      ;;
+    --hostname=*)
+      HOST="${1#*=}"
+      shift
+      ;;
+    # Flags specific to nh or build actions
+    -n | -a | --ask | --diff | --diff=* | -e | --elevation-strategy | -e=* | --elevation-strategy=*)
+      NH_PASSTHROUGH+=("$1")
+      shift
+      ;;
+    --dry | --dry-run)
+      NH_PASSTHROUGH+=("--dry")
+      shift
+      ;;
+    --no-validate | --show-activation-logs | --install-bootloader | -R | --bypass-root-check | --no-nom)
+      NH_PASSTHROUGH+=("$1")
+      shift
+      ;;
+    -o | --out-link | --profile)
+      NH_PASSTHROUGH+=("$1" "$2")
+      shift 2
+      ;;
+    --out-link=* | --profile=*)
+      NH_PASSTHROUGH+=("$1")
+      shift
+      ;;
+    *)
+      EVAL_ARGS+=("$1")
+      NH_PASSTHROUGH+=("$1")
+      shift
+      ;;
     esac
   done
 
@@ -107,11 +107,11 @@ run_action() {
     "${EVAL_ARGS[@]}" "${NIX_ARGS[@]}") || exit $?
 
   EVAL_END=$(date +%s%N)
-  EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
-  if (( EVAL_MS < 1000 )); then
+  EVAL_MS=$(((EVAL_END - EVAL_START) / 1000000))
+  if ((EVAL_MS < 1000)); then
     EVAL_TIME="${EVAL_MS}ms"
   else
-    EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+    EVAL_TIME="$(printf "%d.%02ds" "$((EVAL_MS / 1000))" "$(((EVAL_MS % 1000) / 10))")"
   fi
 
   echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivation:\e[0m $DRV" >&2
@@ -120,26 +120,26 @@ run_action() {
   # Stage 2: Build / Action stage (single nom build run by nh, or direct for debug)
   # ----------------------------------------------------------------------------
   case "$action" in
-    debug)
-      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Realising derivation with ${DEBUG_BUILD_CMD[0]} (debugger enabled)...\e[0m" >&2
-      "${DEBUG_BUILD_CMD[@]}" "${DRV}^*" --no-link "${NH_PASSTHROUGH[@]}" "${NIX_ARGS[@]}"
-      ;;
-    build)
-      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Building NixOS configuration with nh...\e[0m" >&2
-      nh os build "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
-      ;;
-    test)
-      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Testing NixOS configuration with nh...\e[0m" >&2
-      nh os test "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
-      ;;
-    boot)
-      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Setting boot configuration with nh...\e[0m" >&2
-      nh os boot "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
-      ;;
-    switch)
-      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Building and switching with nh...\e[0m" >&2
-      nh os switch "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
-      ;;
+  debug)
+    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Realising derivation with ${DEBUG_BUILD_CMD[0]} (debugger enabled)...\e[0m" >&2
+    "${DEBUG_BUILD_CMD[@]}" "${DRV}^*" --no-link "${NH_PASSTHROUGH[@]}" "${NIX_ARGS[@]}"
+    ;;
+  build)
+    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Building NixOS configuration with nh...\e[0m" >&2
+    nh os build "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
+    ;;
+  test)
+    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Testing NixOS configuration with nh...\e[0m" >&2
+    nh os test "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
+    ;;
+  boot)
+    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Setting boot configuration with nh...\e[0m" >&2
+    nh os boot "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
+    ;;
+  switch)
+    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Building and switching with nh...\e[0m" >&2
+    nh os switch "$NIXOS_DIR" -H "$HOST" "${NH_PASSTHROUGH[@]}" "${NH_ARGS[@]}"
+    ;;
   esac
 }
 
@@ -296,7 +296,7 @@ full)
   if [[ $CURRENT_STATE -le 6 ]]; then
     echo "Building and switching NixOS configuration..."
 
-    run_action switch "${FULL_ARGS[@]}" --extra-substituters "https://hyprland.cachix.org"
+    run_action switch "${FULL_ARGS[@]}"
 
     # Only remove state file on absolute success
     rm -f "$STATE_FILE"

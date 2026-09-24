@@ -36,7 +36,7 @@ let
       (pkgs.pkgsi686Linux.callPackage pkg_opencomposite.override { })
     ];
   };
-  pkg_wivrn = inputs.wivrn.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+  pkg_wivrn = pkgs.wivrn.override {
     cudaSupport = if config.graphics.nvidia.enable then true else false;
     xrizer = xrizer_multilib;
     opencomposite = opencomposite_multilib;

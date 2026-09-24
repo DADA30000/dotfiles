@@ -109,16 +109,6 @@ in
         backend = "iwd";
         macAddress = "stable-ssid";
       };
-      plugins = [
-        pkgs.networkmanager-fortisslvpn
-        pkgs.networkmanager-iodine
-        pkgs.networkmanager-l2tp
-        pkgs.networkmanager-openconnect
-        pkgs.networkmanager-openvpn
-        pkgs.networkmanager-sstp
-        pkgs.networkmanager-strongswan
-        pkgs.networkmanager-vpnc
-      ];
     };
 
   };

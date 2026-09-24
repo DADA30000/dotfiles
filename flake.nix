@@ -109,10 +109,6 @@
       url = "github:schembriaiden/helium-browser-nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    wivrn = {
-      url = "github:WiVRn/WiVRn";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nixpak = {
       url = "github:DADA30000/nixpak";
       inputs.nixpkgs.follows = "nixpkgs";

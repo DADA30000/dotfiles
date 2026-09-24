@@ -48,11 +48,12 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
 diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
 --- a/src/nvim/getchar.c	2026-09-21 23:24:15.339608830 +0300
 +++ b/src/nvim/getchar.c	2026-09-21 23:24:42.560676665 +0300
-@@ -2232,7 +2232,12 @@
+@@ -2232,7 +2232,13 @@
      // First try buffer-local mappings.
      mp = get_buf_maphash_list(local_State, tb_c1);
      mp2 = get_maphash_list(local_State, tb_c1);
-+    if (curbuf != NULL && curbuf->terminal != NULL && (local_State & (MODE_NORMAL | MODE_VISUAL))) {
++    bool is_pager = (curbuf != NULL && curbuf->b_vars != NULL && tv_dict_find(curbuf->b_vars, S_LEN("is_pager")) != NULL);
++    if (curbuf != NULL && curbuf->terminal != NULL && !is_pager && (local_State & (MODE_NORMAL | MODE_VISUAL))) {
 +      if (tb_c1 != K_SPECIAL && (uint8_t)tb_c1 != Ctrl_C) {
 +        mp2 = NULL;
 +      }
@@ -74,11 +75,20 @@ diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
 diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
 --- a/src/nvim/normal.c	2026-09-21 23:24:15.341138423 +0300
 +++ b/src/nvim/normal.c	2026-09-21 23:24:22.128516613 +0300
-@@ -1080,6 +1080,24 @@
+@@ -31,6 +31,7 @@
+ #include "nvim/errors.h"
+ #include "nvim/eval.h"
+ #include "nvim/eval/vars.h"
++#include "nvim/eval/typval.h"
+ #include "nvim/ex_cmds.h"
+ #include "nvim/ex_docmd.h"
+ #include "nvim/extmark.h"
+@@ -1080,6 +1081,25 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
  
-+  if (curbuf->terminal != NULL) {
++  bool is_pager = (curbuf != NULL && curbuf->b_vars != NULL && tv_dict_find(curbuf->b_vars, S_LEN("is_pager")) != NULL);
++  if (curbuf->terminal != NULL && !is_pager) {
 +    bool is_whitelisted = is_mouse_key(s->c)
 +                          || s->c == K_EVENT || s->c == K_IGNORE
 +                          || !KeyTyped
