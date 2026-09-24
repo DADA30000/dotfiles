@@ -349,9 +349,18 @@ vim.api.nvim_create_autocmd("TermOpen", {
 			return term_scroll_up(bufnr, get_fast_scroll_step())
 		end, { buffer = bufnr, expr = true, silent = true })
 
-		vim.keymap.set("x", "y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
-		vim.keymap.set("x", "Y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
-		vim.keymap.set("x", "<C-S-c>", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		local function term_copy()
+			vim.cmd('normal! "+y')
+			local text = vim.fn.getreg("+")
+			if text and text ~= "" then
+				local stripped = text:gsub("[\r\n%s]+$", "") .. "\n"
+				vim.fn.setreg("+", stripped, vim.fn.getregtype("+"))
+			end
+		end
+
+		vim.keymap.set("x", "y", term_copy, { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		vim.keymap.set("x", "Y", term_copy, { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
+		vim.keymap.set("x", "<C-S-c>", term_copy, { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
 		vim.keymap.set("x", "<Esc>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
 
 		local function term_paste()

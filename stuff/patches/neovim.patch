@@ -136,7 +136,7 @@ diff -uNr a/src/nvim/os/input.c b/src/nvim/os/input.c
 diff -uNr a/src/nvim/register.c b/src/nvim/register.c
 --- a/src/nvim/register.c	2026-09-21 23:24:15.343984827 +0300
 +++ b/src/nvim/register.c	2026-09-21 23:24:22.128716450 +0300
-@@ -1051,30 +1051,54 @@
+@@ -1051,30 +1051,55 @@
      }
    }
  
@@ -212,6 +212,7 @@ diff -uNr a/src/nvim/register.c b/src/nvim/register.c
 +      y_idx++;
      }
    }
++  reg->y_size = y_idx;
  
 diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
 --- a/src/nvim/terminal.c	2026-09-21 23:24:15.344518883 +0300
