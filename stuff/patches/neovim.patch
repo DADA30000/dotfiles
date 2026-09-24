@@ -1,6 +1,5 @@
-diff -uNr a/src/nvim/drawscreen.c b/src/nvim/drawscreen.c
---- a/src/nvim/drawscreen.c	2026-09-21 23:24:15.337891905 +0300
-+++ b/src/nvim/drawscreen.c	2026-09-21 23:24:22.127924317 +0300
+--- a/src/nvim/drawscreen.c
++++ b/src/nvim/drawscreen.c
 @@ -437,12 +437,11 @@
  /// and redraw_all_later() to mark parts of the screen as needing a redraw.
  int update_screen(void)
@@ -28,9 +27,8 @@ diff -uNr a/src/nvim/drawscreen.c b/src/nvim/drawscreen.c
      intro_message(false);
    }
    repeat_message();
-diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
---- a/src/nvim/eval/funcs.c	2026-09-21 23:24:15.338157085 +0300
-+++ b/src/nvim/eval/funcs.c	2026-09-21 23:24:22.128195087 +0300
+--- a/src/nvim/eval/funcs.c
++++ b/src/nvim/eval/funcs.c
 @@ -3625,6 +3625,13 @@
    }
  
@@ -45,10 +43,9 @@ diff -uNr a/src/nvim/eval/funcs.c b/src/nvim/eval/funcs.c
    Channel *chan = channel_job_start(argv, NULL, on_stdout, on_stderr, on_exit, pty,
                                      rpc, overlapped, detach, stdin_mode, cwd,
                                      width, height, env, &rettv->vval.v_number);
-diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
---- a/src/nvim/getchar.c	2026-09-21 23:24:15.339608830 +0300
-+++ b/src/nvim/getchar.c	2026-09-21 23:24:42.560676665 +0300
-@@ -2232,7 +2232,13 @@
+--- a/src/nvim/getchar.c
++++ b/src/nvim/getchar.c
+@@ -2232,6 +2232,12 @@
      // First try buffer-local mappings.
      mp = get_buf_maphash_list(local_State, tb_c1);
      mp2 = get_maphash_list(local_State, tb_c1);
@@ -61,8 +58,7 @@ diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
      if (mp == NULL) {
        // There are no buffer-local mappings.
        mp = mp2;
-       mp2 = NULL;
-@@ -2646,7 +2651,8 @@
+@@ -2646,7 +2652,8 @@
            line_breakcheck();
          } else {
            // os_breakcheck() can call input_enqueue()
@@ -72,17 +68,16 @@ diff -uNr a/src/nvim/getchar.c b/src/nvim/getchar.c
              ctrl_c_interrupts = false;
            }
            os_breakcheck();  // check for CTRL-C
-diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
---- a/src/nvim/normal.c	2026-09-21 23:24:15.341138423 +0300
-+++ b/src/nvim/normal.c	2026-09-21 23:24:22.128516613 +0300
-@@ -31,6 +31,7 @@
+--- a/src/nvim/normal.c
++++ b/src/nvim/normal.c
+@@ -32,6 +32,7 @@
  #include "nvim/errors.h"
  #include "nvim/eval.h"
  #include "nvim/eval/vars.h"
 +#include "nvim/eval/typval.h"
  #include "nvim/ex_cmds.h"
+ #include "nvim/ex_cmds2.h"
  #include "nvim/ex_docmd.h"
- #include "nvim/extmark.h"
 @@ -1080,6 +1081,25 @@
  
    LANGMAP_ADJUST(s->c, get_real_state() != MODE_SELECT);
@@ -109,9 +104,8 @@ diff -uNr a/src/nvim/normal.c b/src/nvim/normal.c
    // If a mapping was started in Visual or Select mode, remember the length
    // of the mapping.  This is used below to not return to Insert mode for as
    // long as the mapping is being executed.
-diff -uNr a/src/nvim/os/input.c b/src/nvim/os/input.c
---- a/src/nvim/os/input.c	2026-09-21 23:24:15.341794700 +0300
-+++ b/src/nvim/os/input.c	2026-09-21 23:24:38.480624681 +0300
+--- a/src/nvim/os/input.c
++++ b/src/nvim/os/input.c
 @@ -128,8 +128,9 @@
  
    TRY_READ();
@@ -133,10 +127,9 @@ diff -uNr a/src/nvim/os/input.c b/src/nvim/os/input.c
      return;
    }
  
-diff -uNr a/src/nvim/register.c b/src/nvim/register.c
---- a/src/nvim/register.c	2026-09-21 23:24:15.343984827 +0300
-+++ b/src/nvim/register.c	2026-09-21 23:24:22.128716450 +0300
-@@ -1051,30 +1051,55 @@
+--- a/src/nvim/register.c
++++ b/src/nvim/register.c
+@@ -1051,32 +1051,57 @@
      }
    }
  
@@ -214,9 +207,10 @@ diff -uNr a/src/nvim/register.c b/src/nvim/register.c
    }
 +  reg->y_size = y_idx;
  
-diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
---- a/src/nvim/terminal.c	2026-09-21 23:24:15.344518883 +0300
-+++ b/src/nvim/terminal.c	2026-09-21 23:24:22.128828852 +0300
+   if (curr != reg) {      // append the new block to the old block
+     size_t j;
+--- a/src/nvim/terminal.c
++++ b/src/nvim/terminal.c
 @@ -139,6 +139,7 @@
  
  typedef struct {
@@ -269,18 +263,25 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
      break;
  
    case VTERM_PROP_CURSORVISIBLE:
-@@ -1741,6 +1754,10 @@
+@@ -1695,7 +1708,7 @@
+ /// giving us a chance to store it.
+ ///
+ /// Code adapted from pangoterm.
+-static int term_sb_push(int cols, const VTermScreenCell *cells, void *data)
++static int term_sb_push(int cols, const VTermScreenCell *cells, bool continuation, void *data)
+ {
+   Terminal *term = data;
+ 
+@@ -1741,6 +1754,8 @@
    }
  
    memcpy(sbrow->cells, cells, sizeof(cells[0]) * c);
-+  VTermState *state = vterm_obtain_state(term->vt);
-+  const VTermLineInfo *info = vterm_state_get_lineinfo(state, 0);
-+  sbrow->continuation = info ? info->continuation : false;
++  sbrow->continuation = continuation;
 +
    if (!term->synchronized_output) {
      set_put(ptr_t, &invalidated_terminals, term);
    }
-@@ -2267,6 +2284,14 @@
+@@ -2267,6 +2282,14 @@
    }
  
    if (c == K_MOUSEUP || c == K_MOUSEDOWN || c == K_MOUSELEFT || c == K_MOUSERIGHT) {
@@ -295,7 +296,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
      win_T *save_curwin = curwin;
      // switch window/buffer to perform the scroll
      curwin = mouse_win;
-@@ -2665,7 +2690,7 @@
+@@ -2665,7 +2688,7 @@
          continue;
        }
  
@@ -304,7 +305,7 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
        if (following) {
          // "Follow" the terminal output
          wp->w_cursor.lnum = ml_end;
-@@ -2723,4 +2748,26 @@
+@@ -2723,4 +2746,26 @@
  
  // }}}
  
@@ -331,9 +332,8 @@ diff -uNr a/src/nvim/terminal.c b/src/nvim/terminal.c
 +}
 +
  // vim: foldmethod=marker
-diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
---- a/src/nvim/terminal.h	2026-09-21 23:24:15.344533681 +0300
-+++ b/src/nvim/terminal.h	2026-09-21 23:24:22.128906498 +0300
+--- a/src/nvim/terminal.h
++++ b/src/nvim/terminal.h
 @@ -24,4 +24,7 @@
    bool force_crlf;
  } TerminalOptions;
@@ -342,9 +342,8 @@ diff -uNr a/src/nvim/terminal.h b/src/nvim/terminal.h
 +void terminal_send_key(Terminal *term, int c);
 +
  #include "terminal.h.generated.h"
-diff -uNr a/src/nvim/version.c b/src/nvim/version.c
---- a/src/nvim/version.c	2026-09-21 23:24:15.345255191 +0300
-+++ b/src/nvim/version.c	2026-09-21 23:24:22.128981850 +0300
+--- a/src/nvim/version.c
++++ b/src/nvim/version.c
 @@ -4219,8 +4219,7 @@
  {
    return (buf_is_empty(curbuf)
@@ -355,3 +354,65 @@ diff -uNr a/src/nvim/version.c b/src/nvim/version.c
            && one_window(curwin, NULL)
            && (vim_strchr(p_shm, SHM_INTRO) == NULL));
  }
+--- a/src/nvim/vterm/screen.c
++++ b/src/nvim/vterm/screen.c
+@@ -158,7 +158,10 @@
+     vterm_screen_get_cell(screen, pos, screen->sb_buffer + pos.col);
+   }
+ 
+-  (screen->callbacks->sb_pushline)(screen->cols, screen->sb_buffer, screen->cbdata);
++  const VTermLineInfo *info = vterm_state_get_lineinfo(screen->state, row);
++  (screen->callbacks->sb_pushline)(screen->cols, screen->sb_buffer,
++                                   info ? info->continuation : false,
++                                   screen->cbdata);
+ }
+ 
+ static int moverect_internal(VTermRect dest, VTermRect src, void *user)
+--- a/src/nvim/vterm/state.c
++++ b/src/nvim/vterm/state.c
+@@ -162,6 +162,16 @@
+     rightward = -cols;
+   }
+ 
++  bool handled = false;
++  if (state->callbacks && state->callbacks->scrollrect) {
++    handled = (*state->callbacks->scrollrect)(rect, downward, rightward, state->cbdata);
++  }
++
++  if (!handled && state->callbacks) {
++    vterm_scroll_rect(rect, downward, rightward,
++                      state->callbacks->moverect, state->callbacks->erase, state->cbdata);
++  }
++
+   // Update lineinfo if full line
+   if (rect.start_col == 0 && rect.end_col == state->cols && rightward == 0) {
+     int height = rect.end_row - rect.start_row - abs(downward);
+@@ -182,17 +192,6 @@
+       }
+     }
+   }
+-
+-  if (state->callbacks && state->callbacks->scrollrect) {
+-    if ((*state->callbacks->scrollrect)(rect, downward, rightward, state->cbdata)) {
+-      return;
+-    }
+-  }
+-
+-  if (state->callbacks) {
+-    vterm_scroll_rect(rect, downward, rightward,
+-                      state->callbacks->moverect, state->callbacks->erase, state->cbdata);
+-  }
+ }
+ 
+ static void linefeed(VTermState *state)
+--- a/src/nvim/vterm/vterm_defs.h
++++ b/src/nvim/vterm/vterm_defs.h
+@@ -122,7 +122,7 @@
+   int (*bell)(void *user);
+   int (*resize)(int rows, int cols, void *user);
+   int (*theme)(bool *dark, void *user);
+-  int (*sb_pushline)(int cols, const VTermScreenCell *cells, void *user);
++  int (*sb_pushline)(int cols, const VTermScreenCell *cells, bool continuation, void *user);
+   int (*sb_popline)(int cols, VTermScreenCell *cells, void *user);
+   int (*sb_clear)(void *user);
+ } VTermScreenCallbacks;
