@@ -1,0 +1,83 @@
+diff --git a/src/shell/bar/widgets/sysmon_widget.cpp b/src/shell/bar/widgets/sysmon_widget.cpp
+index a1cfc54..c596985 100644
+--- a/src/shell/bar/widgets/sysmon_widget.cpp
++++ b/src/shell/bar/widgets/sysmon_widget.cpp
+@@ -1027,6 +1027,9 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+     return std::nullopt;
+   case SysmonStat::CpuFreq:
+     if (stats.cpuFreqAvailable) {
++      if (stats.cpuMaxCurFreqMhz > 0.0) {
++        return std::format("{:.1f} GHz ({:.1f} GHz)", stats.cpuMaxCurFreqMhz / 1000.0, stats.cpuFreqMhz / 1000.0);
++      }
+       return std::format("{:.1f} GHz", stats.cpuFreqMhz / 1000.0);
+     }
+     return std::nullopt;
+diff --git a/src/system/cpu_freq.cpp b/src/system/cpu_freq.cpp
+index 933a437..e0d1dc2 100644
+--- a/src/system/cpu_freq.cpp
++++ b/src/system/cpu_freq.cpp
+@@ -29,6 +29,7 @@ namespace noctalia::system::cpu_freq {
+   CpuFreqs readFreqs(const std::filesystem::path& root) {
+     CpuFreqs freqs;
+     double totalMhz = 0.0;
++    double maxCurMhz = 0.0;
+     std::size_t count = 0;
+     std::uint64_t best = 0;
+     std::error_code ec;
+@@ -37,14 +38,18 @@ namespace noctalia::system::cpu_freq {
+         continue;
+       const auto base = entry.path() / "cpufreq";
+       if (const auto kHz = readUintFile(base / "scaling_cur_freq"); kHz.has_value() && *kHz != 0) {
+-        totalMhz += static_cast<double>(*kHz) / 1000.0;
++        const double mhz = static_cast<double>(*kHz) / 1000.0;
++        totalMhz += mhz;
++        maxCurMhz = std::max(maxCurMhz, mhz);
+         ++count;
+       }
+       if (const auto maxKhz = readUintFile(base / "scaling_max_freq"); maxKhz.has_value())
+         best = std::max(best, *maxKhz);
+     }
+-    if (count > 0)
++    if (count > 0) {
+       freqs.curMhz = totalMhz / static_cast<double>(count);
++      freqs.maxCurMhz = maxCurMhz;
++    }
+     if (best > 0)
+       freqs.maxMhz = static_cast<double>(best) / 1000.0;
+     return freqs;
+diff --git a/src/system/cpu_freq.h b/src/system/cpu_freq.h
+index c4dcb3a..b2d2204 100644
+--- a/src/system/cpu_freq.h
++++ b/src/system/cpu_freq.h
+@@ -10,6 +10,7 @@ namespace noctalia::system::cpu_freq {
+   // Both nullopt when nothing readable exists (no cpufreq driver). `root` is a test seam.
+   struct CpuFreqs {
+     std::optional<double> curMhz;
++    std::optional<double> maxCurMhz;
+     std::optional<double> maxMhz;
+   };
+ 
+diff --git a/src/system/system_monitor_service.cpp b/src/system/system_monitor_service.cpp
+index 00e95b9..7c0d144 100644
+--- a/src/system/system_monitor_service.cpp
++++ b/src/system/system_monitor_service.cpp
+@@ -1361,6 +1361,7 @@ void SystemMonitorService::samplingLoop() {
+         std::scoped_lock lock{m_statsMutex};
+         m_latest.cpuFreqAvailable = freq.curMhz.has_value();
+         m_latest.cpuFreqMhz = freq.curMhz.value_or(0.0);
++        m_latest.cpuMaxCurFreqMhz = freq.maxCurMhz.value_or(m_latest.cpuFreqMhz);
+         m_latest.cpuMaxFreqMhz = freq.curMhz.has_value() ? freq.maxMhz : std::nullopt;
+       }
+       statsTouched = true;
+diff --git a/src/system/system_monitor_service.h b/src/system/system_monitor_service.h
+index c6a5982..2e05e1a 100644
+--- a/src/system/system_monitor_service.h
++++ b/src/system/system_monitor_service.h
+@@ -37,6 +37,7 @@ struct SystemStats {
+   std::optional<double> cpuTempC;
+   bool cpuTempAvailable{false};
+   double cpuFreqMhz{0.0};
++  double cpuMaxCurFreqMhz{0.0};
+   std::optional<double> cpuMaxFreqMhz;
+   bool cpuFreqAvailable{false};
+   std::optional<double> gpuTempC;

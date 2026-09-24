@@ -1,5 +1,35 @@
+diff --git a/lib/NOM/NixMessage/JSON.hs b/lib/NOM/NixMessage/JSON.hs
+index 4153fbb..8780e2f 100644
+--- a/lib/NOM/NixMessage/JSON.hs
++++ b/lib/NOM/NixMessage/JSON.hs
+@@ -85,6 +85,7 @@ makeFieldLabelsNoPrefix ''ActivityProgress
+ 
+ data StartAction = MkStartAction
+   { id :: ActivityId
++  , parent :: ActivityId
+   , level :: Verbosity
+   , text :: Text
+   , activity :: Activity
+diff --git a/lib/NOM/Parser/JSON.hs b/lib/NOM/Parser/JSON.hs
+index 79e3a8b..29bc77c 100644
+--- a/lib/NOM/Parser/JSON.hs
++++ b/lib/NOM/Parser/JSON.hs
+@@ -130,6 +130,7 @@ parseStopAction = MkStopAction . MkId <$> JSON.atKey "id" JSON.uint
+ parseStartAction :: JSON.FieldsDecoder StartAction
+ parseStartAction = do
+   idField <- JSON.atKey "id" JSON.uint
++  parentField <- (MkId <$> JSON.atKey "parent" JSON.uint) <|> pure (MkId 0)
+   text <- JSON.atKey "text" JSON.text
+   level <- JSON.atKey "level" parseVerbosity
+   activityType <- JSON.atKey "type" (JSON.withInt parseActivityType)
+@@ -163,4 +164,4 @@ parseStartAction = do
+     PostBuildHookType -> PostBuildHook <$> (one txt >>= parseDerivation)
+     BuildWaitingType -> pure BuildWaiting
+     FetchTreeType -> pure FetchTree
+-  pure MkStartAction{id = MkId idField, text, activity, level}
++  pure MkStartAction{id = MkId idField, parent = parentField, text, activity, level}
 diff --git a/lib/NOM/Print.hs b/lib/NOM/Print.hs
-index 992bc9a..3ae30d0 100644
+index 992bc9a..4f5d655 100644
 --- a/lib/NOM/Print.hs
 +++ b/lib/NOM/Print.hs
 @@ -14,7 +14,7 @@ import Data.Time (NominalDiffTime, ZonedTime, defaultTimeLocale, formatTime)
@@ -250,7 +280,18 @@ index 992bc9a..3ae30d0 100644
    printDerivation drvInfo _input_store_paths = do
      let store_paths_in :: StorePathSet -> Bool
          store_paths_in some_set = not $ Map.null $ Map.filter (`CSet.member` some_set) drvInfo.outputs
-@@ -545,40 +585,28 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+@@ -538,6 +578,10 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+           activity_status <- Map.lookup activityId.value nomState.activities
+           Strict.toLazy $ view field activity_status
+         progressMay = activityField #progress
++        downloadProgressMay activityId' = do
++          aid <- Strict.toLazy activityId'
++          let childProg = find (\st -> st.parent == Strict.Just aid) (Map.elems nomState.activities) >>= (Strict.toLazy . (.progress))
++          childProg <|> activityField #progress activityId'
+         phaseMay = activityField #phase
+         drvName = appendDifferingPlatform nomState drvInfo drvInfo.name.storePath.name
+         downloadingOutputs = store_paths_in_map drvInfo.dependencySummary.runningDownloads
+@@ -545,40 +589,28 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
          plannedDownloads = store_paths_in drvInfo.dependencySummary.plannedDownloads
          downloadedOutputs = store_paths_in_map drvInfo.dependencySummary.completedDownloads
          uploadedOutputs = store_paths_in_map drvInfo.dependencySummary.completedUploads
@@ -269,7 +310,7 @@ index 992bc9a..3ae30d0 100644
              | not $ null downloadingOutputs
 -            , (prct, prog) <-
 -                printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) downloadingOutputs) ->
-+            , Just prog <- printTransferProgress (toListOf (folded % #activityId % to progressMay % _Just) downloadingOutputs) ->
++            , Just prog <- printTransferProgress (toListOf (folded % #activityId % to downloadProgressMay % _Just) downloadingOutputs) ->
                  ( False
                  , \now ->
                      unwords
@@ -296,7 +337,16 @@ index 992bc9a..3ae30d0 100644
                  )
            Unknown
              | plannedDownloads -> (True, const $ markup blue (down <> " " <> todo <> " " <> drvName), const Nothing)
-@@ -621,9 +649,20 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+@@ -590,7 +622,7 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+                     : fmap
+                       (markup grey)
+                       ( (\b -> [printBytes b | b > 0])
+-                          (sumOf (folded % #activityId % to progressMay % _Just % #expected) downloadedOutputs)
++                          (sumOf (folded % #activityId % to downloadProgressMay % _Just % #expected) downloadedOutputs)
+                           <> ifTimeDurRelevant (build_sum downloadedOutputs) id
+                           <> print_hosts_down False (hosts downloadedOutputs)
+                       )
+@@ -621,9 +653,20 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
                      <> hostMarkup True buildInfo.host
                      <> phaseList
                  after_time = Strict.maybe [] (\x -> ["(" <> average <> " " <> timeDiffSeconds x <> ")"]) buildInfo.estimate
@@ -318,7 +368,7 @@ index 992bc9a..3ae30d0 100644
                  )
            Failed buildInfo ->
              let MkBuildFail endTime failType = buildInfo.end
-@@ -653,38 +692,24 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
+@@ -653,38 +696,24 @@ printBuilds nomState@MkNOMState{..} hostAbbrevs limits = printBuildsWithTime
              , const Nothing
              )
  
@@ -370,7 +420,7 @@ index 992bc9a..3ae30d0 100644
  
  sizes :: [Text]
  sizes = "B" : ((<> "iB") <$> ["K", "M", "G", "T", "P"])
-@@ -718,3 +743,15 @@ printDuration diff
+@@ -718,3 +747,15 @@ printDuration diff
  
  timeDiffSeconds :: Int -> Text
  timeDiffSeconds = printDuration . fromIntegral
@@ -386,11 +436,23 @@ index 992bc9a..3ae30d0 100644
 +           else
 +             let hostPart = fst $ Text.breakOn "/" (Text.drop 3 suffix)
 +             in if Text.null hostPart then Nothing else Just (Host (Just schema) Nothing hostPart)
+diff --git a/lib/NOM/State.hs b/lib/NOM/State.hs
+index 281f980..81d6711 100644
+--- a/lib/NOM/State.hs
++++ b/lib/NOM/State.hs
+@@ -211,6 +211,7 @@ makeFieldLabelsNoPrefix ''StorePathInfo
+ 
+ data ActivityStatus = MkActivityStatus
+   { activity :: Activity
++  , parent :: Strict.Maybe ActivityId
+   , phase :: Strict.Maybe Text
+   , progress :: Strict.Maybe ActivityProgress
+   }
 diff --git a/lib/NOM/Update.hs b/lib/NOM/Update.hs
-index b559429..eaaa8c7 100644
+index b559429..88d2889 100644
 --- a/lib/NOM/Update.hs
 +++ b/lib/NOM/Update.hs
-@@ -249,6 +249,7 @@ processJsonMessage = \case
+@@ -249,10 +249,11 @@ processJsonMessage = \case
          now <- getNow
          pathId <- getStorePathId path
          uploading to pathId now (Just id')
@@ -398,6 +460,11 @@ index b559429..eaaa8c7 100644
        JSON.Unknown | Text.isPrefixOf "querying info" startAction.text -> set_interesting
        JSON.QueryPathInfo{} -> set_interesting
        _ -> noChange -- tell [Right (encodeUtf8 (markup yellow "unused activity: " <> show startAction.id <> " " <> show startAction.activity))]
+-    when changed $ modifying' #activities $ Map.insert id'.value (MkActivityStatus startAction.activity Strict.Nothing Strict.Nothing)
++    when changed $ modifying' #activities $ Map.insert id'.value (MkActivityStatus startAction.activity (Strict.Just startAction.parent) Strict.Nothing Strict.Nothing)
+     pure changed
+   Stop MkStopAction{id = id'} -> do
+     activity <- preuse (#activities % ix id'.value)
 diff --git a/lib/NOM/Update/Monad.hs b/lib/NOM/Update/Monad.hs
 index bceecf2..91be577 100644
 --- a/lib/NOM/Update/Monad.hs

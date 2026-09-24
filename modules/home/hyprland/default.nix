@@ -806,7 +806,10 @@ in
         enable = true;
         systemd.enable = true;
         package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
-          patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/noctalia.patch ];
+          patches = (prev.patches or [ ]) ++ [
+            ../../../stuff/patches/noctalia.patch
+            ../../../stuff/patches/noctalia-cpu-freq.patch
+          ];
         });
         customPalettes.transparent-blue = {
           id = "transparent-blue";
