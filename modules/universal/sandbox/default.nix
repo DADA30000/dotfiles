@@ -150,13 +150,13 @@ let
         stage1_inside = writeDash "stage1_inside" (
           if network_singbox then
             ''
-              ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
-              ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@"
+              ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@" &
+              exec ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run
             ''
           else
             ''
-              . ${stage2_inside}
-              exit $?
+              ${stage2_inside} "$@" &
+              exec pause
             ''
         );
         stage2_inside = writeDash "stage2_inside" ''
