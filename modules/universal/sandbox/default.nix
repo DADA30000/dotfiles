@@ -237,9 +237,7 @@ let
               EXIT_CODE=0
               cleanup() {
                 trap "" INT TERM EXIT
-                exec 9<&-
-                rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$WAY_CLOSE_PIPE"
-                systemctl --user --no-block stop "$MY_SCOPE" &
+                exec 9<&- 2>/dev/null || true
                 exit $EXIT_CODE
               }
               trap cleanup INT TERM EXIT
@@ -329,7 +327,15 @@ let
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
-              cgroup-watcher "$MY_CGROUP/inside/cgroup.procs" "$GUEST_HOST_PID"
+              sandbox_supervisor \
+                --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
+                --runner-pid "$GUEST_HOST_PID" \
+                --parent-pid "$$" \
+                --scope "$MY_SCOPE" \
+                --sandbox-dir "$SANDBOX_DIR" \
+                ${lib.optionalString wayland "--close-fd 9"} &
+              SUPERVISOR_PID=$!
+              wait "$SUPERVISOR_PID" 2>/dev/null || true
               cleanup
             fi
           else
@@ -403,23 +409,18 @@ let
                         dev = true;
                       };
 
-                      extraArgs =
-                        (lib.optionals network_singbox [
-                          "--gid"
-                          "0"
-                          "--uid"
-                          "0"
-                          "--cap-add"
-                          "CAP_NET_ADMIN"
-                          "--cap-add"
-                          "CAP_SETFCAP"
-                          "--cap-add"
-                          "CAP_NET_RAW"
-                        ])
-                        ++ (lib.optionals wayland [
-                          "--sync-fd"
-                          "9"
-                        ]);
+                      extraArgs = lib.optionals network_singbox [
+                        "--gid"
+                        "0"
+                        "--uid"
+                        "0"
+                        "--cap-add"
+                        "CAP_NET_ADMIN"
+                        "--cap-add"
+                        "CAP_SETFCAP"
+                        "--cap-add"
+                        "CAP_NET_RAW"
+                      ];
 
                       sockets = {
                         pulse = audio;
