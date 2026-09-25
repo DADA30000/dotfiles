@@ -473,7 +473,7 @@ in
               ]
               [
                 "${mod} + CTRL + O"
-                "noctalia msg screenshot-annotatate"
+                "noctalia msg screenshot-annotate"
               ]
               [
                 "${mod} + SHIFT + O"

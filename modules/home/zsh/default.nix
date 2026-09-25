@@ -402,25 +402,12 @@ in
           ns() { ns-dev "$@" }
           ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" "$@" }
           nsl-bin() { nix-locate "$@" }
-          fastfetch() { command fastfetch --logo-color-1 'blue' --logo-color-2 'blue' "$@" }
           cps() { rsync -ahr --progress "$@" }
-          res() { screen -r "$@" }
-          record-h264() { gpu-screen-recorder -k h264 -w screen -a 'default_output|default_input' -o "$@" }
-          nvide() { neovide --no-fork "$@" }
           c() { 
             clear 
             printf '\n%.0s' {1..100}
             fastfetch "$@"
           }
-          cl() { 
-            clear
-            printf '\n%.0s' {1..100}
-            fastfetch --pipe false | lolcat -b -g 4f05fc:4287f5 "$@"
-          }
-          sudoe() { sudo -E "$@" }
-          suvide() { sudo -E neovide --no-fork "$@" }
-          record() { gpu-screen-recorder -w screen -a 'default_output|default_input' -o "$@" }
-          fzfd() { fzf | xargs xdg-open "$@" }
           ${pkgs.any-nix-shell}/bin/any-nix-shell zsh | source /dev/stdin
           _zsh_nix_bridge
           if [ -f /run/.containerenv ]; then

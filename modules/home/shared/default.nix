@@ -39,7 +39,6 @@
     MOZ_ENABLE_WAYLAND = "1";
     TERMINAL = "neovide-term";
     EGL_PLATFORM = "wayland";
-    MOZ_DISABLE_RDD_SANDBOX = "1";
     NIXPKGS_ALLOW_UNFREE = "1";
   };
 
@@ -73,7 +72,9 @@
 
   programs.git = {
     enable = true;
+    lfs.enable = true;
     settings = {
+      safe.directory = "/nix/store/*";
       color.ui = "auto";
       credential.helper = "store --file=${config.xdg.configHome}/git/credentials";
     };

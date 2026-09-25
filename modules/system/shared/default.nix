@@ -216,9 +216,9 @@ in
       allow-import-from-derivation = false;
       use-xdg-base-directories = true;
       auto-optimise-store = true;
-      max-connect-timeout = 1;
-      download-attempts = 1;
-      initial-connect-timeout = 1;
+      #max-connect-timeout = 1;
+      #download-attempts = 1;
+      #initial-connect-timeout = 1;
       allowed-users = normalUsers;
       substituters = [
         "https://cache.nixos.org?priority=1"
@@ -311,7 +311,7 @@ in
       "vm.swappiness" = 100;
       "net.core.default_qdisc" = "cake";
       "net.ipv4.tcp_congestion_control" = "bbr";
-      "kernel.sysrq" = 1;
+      "kernel.sysrq" = 756;
       "kernel.panic" = 0;
     };
 
@@ -839,12 +839,6 @@ in
             --add-flags "dmenu -i -p"
         '';
       });
-    };
-
-    git = {
-      enable = true;
-      lfs.enable = true;
-      config.safe.directory = "*";
     };
 
     appimage = {

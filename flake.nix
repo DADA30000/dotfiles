@@ -110,7 +110,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpak = {
-      url = "github:DADA30000/nixpak";
+      url = "github:DADA30000/nixpak/new_stuff";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     lanzaboote = {

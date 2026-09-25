@@ -147,8 +147,44 @@ let
         "Sandbox Error (${appId}): 'network', 'network_singbox', and 'network_full' are mutually exclusive. You have enabled ${toString enabledModesCount} modes.";
       let
         writeDash = pkgs.writers.writeDash;
-        startup_script = writeDash "startup_script" ''
+        stage1_inside = writeDash "stage1_inside" (
+          if network_singbox then
+            ''
+              ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
+              ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@"
+            ''
+          else
+            ''
+              . ${stage2_inside}
+              exit $?
+            ''
+        );
+        stage2_inside = writeDash "stage2_inside" ''
+          ${additional_inside_commands}
+          ${lib.optionalString start_sesatt "sesatt -d \"$APP_ID\""}
+          ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
+          ${lib.optionalString network_singbox "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
+          env SANDBOX_ROLE=executor ${executor_script} "$@" &
+          exit 0
+        '';
+        executor_script = writeDash "executor_script" ''
+          exec 7<> "$XDG_RUNTIME_DIR/cgroup_pipe"
+          exec 8<> "$XDG_RUNTIME_DIR/go_pipe"
+          echo "ready" >&7
+          read -r _ <&8
+          exec 7<&-
+          exec 8<&-
+          ("$@" &)
+          echo "[$APP_ID] Startup: $(( ($(${pkgs.coreutils}/bin/date +%s%N) - START_TIME) / 1000000 )) ms"
+          echo "ready" > "$XDG_RUNTIME_DIR/ready_pipe"
+          exec 3<> "$XDG_RUNTIME_DIR/command_pipe"
+          while read -r cmd <&3; do 
+            (eval "$cmd" &)
+          done
+        '';
+        startup_script = writeDash "startups_script" ''
           if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
+            export START_TIME=$(date +%s%N)
             SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
             SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
             COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
@@ -211,6 +247,7 @@ let
               echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
               echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control"
               export MY_CGROUP MY_SCOPE
+
               rm -f "$COMMAND_PIPE"
               mkdir -p "$SANDBOXED_RUNTIME_DIR"
               mkfifo "$COMMAND_PIPE"
@@ -227,10 +264,13 @@ let
               mkfifo "$GO_PIPE"
               exec 8<> "$GO_PIPE"
               mkdir "$MY_CGROUP/inside"
+
               ${additional_outside_commands}
+
               ${lib.optionalString network_singbox ''
                 rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
               ''}
+
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
                 NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-secure-notify-$APP_ID"
@@ -249,42 +289,21 @@ let
                 exec 3<&-
                 rm -f "$NOTIFY_PIPE"
               ''}
+
               ${lib.optionalString portals_for_files ''
                 export PATH="${portal-xdg-open}/bin:$PATH"
                 export XDG_DATA_DIRS="${portal-files}:''${XDG_DATA_DIRS:-/usr/share:/run/current-system/sw/share}"
                 export XDG_CONFIG_DIRS="${portal-files}:''${XDG_CONFIG_DIRS:-/etc/xdg}"
               ''}
+
               ${lib.optionalString network_singbox ''
                 export ORIG_UID="$(id -u)"
                 export ORIG_GID="$(id -g)"
               ''}
+
               ${lib.optionalString use_landlock "landlock \\"}
-              "$SANDBOXED_DASH"/bin/dash -c '
-                ${additional_inside_commands}
-                ${lib.optionalString start_sesatt "sesatt -d \"$APP_ID\""}
-                ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
-                ${lib.optionalString network_singbox ''
-                  ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run &
-                  rust-bridge -r listen -s "$XDG_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 -d
-                  exec landlock ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${pkgs.dash}/bin/dash -c "
-                ''}
-                ${lib.optionalString (!network_singbox) ''
-                  exec ${pkgs.dash}/bin/dash -c "
-                ''}
-                  exec 7<> \"\$XDG_RUNTIME_DIR/cgroup_pipe\"
-                  exec 8<> \"\$XDG_RUNTIME_DIR/go_pipe\"
-                  echo \"ready\" >&7
-                  read -r _ <&8
-                  exec 7<&-
-                  exec 8<&-
-                  (\"\$@\" &)
-                  echo \"ready\" > \"\$XDG_RUNTIME_DIR/ready_pipe\"
-                  exec 3<> \"\$XDG_RUNTIME_DIR/command_pipe\"
-                  while read -r cmd <&3; do 
-                    (eval \"\$cmd\" &)
-                  done
-                " -- "$@"
-              ' -- "$TARGET" "$@" &
+              "$SANDBOXED_DASH"/bin/dash ${stage1_inside} "$TARGET" "$@" &
+
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
                   EXIT_CODE=1
@@ -328,29 +347,32 @@ let
                     app.package = pkgs.dash;
                     app.binPath = "bin/dash";
 
-                    dbus.policies = {
-                      # Alternative tray
-                      "org.ayatana.indicator.application" = "talk";
-                      # Prevents system from sleeping or locking automatically
-                      "org.freedesktop.ScreenSaver" = "talk";
-                      # Window Manager Idle Monitor (Used to update your 'Online' status)
-                      "org.gnome.Mutter.IdleMonitor" = "talk";
-                      # Music control
-                      "org.mpris.MediaPlayer2.Player" = "talk";
-                      # Notifications
-                      "org.freedesktop.Notifications" = "talk";
-                      # xdg-desktop-portal
-                      "org.freedesktop.portal.Desktop" = "talk";
-                      # show icon in tray
-                      "org.kde.StatusNotifierWatcher" = "talk";
-                      # add actions to tray icon
-                      "com.canonical.AppMenu.Registrar" = "talk";
-                      # Get and store individual secrets
-                      "org.freedesktop.portal.Secret" = "talk";
-                      # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
-                      "org.freedesktop.portal.Documents" = "talk";
-                      # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
-                      "org.freedesktop.FileManager1" = "talk";
+                    dbus = {
+                      enable = true;
+                      policies = {
+                        # Alternative tray
+                        "org.ayatana.indicator.application" = "talk";
+                        # Prevents system from sleeping or locking automatically
+                        "org.freedesktop.ScreenSaver" = "talk";
+                        # Window Manager Idle Monitor (Used to update your 'Online' status)
+                        "org.gnome.Mutter.IdleMonitor" = "talk";
+                        # Music control
+                        "org.mpris.MediaPlayer2.Player" = "talk";
+                        # Notifications
+                        "org.freedesktop.Notifications" = "talk";
+                        # xdg-desktop-portal
+                        "org.freedesktop.portal.Desktop" = "talk";
+                        # show icon in tray
+                        "org.kde.StatusNotifierWatcher" = "talk";
+                        # add actions to tray icon
+                        "com.canonical.AppMenu.Registrar" = "talk";
+                        # Get and store individual secrets
+                        "org.freedesktop.portal.Secret" = "talk";
+                        # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
+                        "org.freedesktop.portal.Documents" = "talk";
+                        # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
+                        "org.freedesktop.FileManager1" = "talk";
+                      };
                     };
 
                     gpu.enable = gpu;
@@ -364,6 +386,8 @@ let
 
                     bubblewrap = {
 
+                      bindEntireStore = true;
+
                       network = network || network_singbox || network_full;
 
                       env =
@@ -371,6 +395,11 @@ let
                         // lib.optionalAttrs wayland {
                           WAYLAND_DISPLAY = "wayland-secure";
                         };
+
+                      apivfs = {
+                        proc = true;
+                        dev = true;
+                      };
 
                       extraArgs = lib.mkIf network_singbox [
                         "--gid"

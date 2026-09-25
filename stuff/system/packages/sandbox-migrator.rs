@@ -42,6 +42,7 @@ fn main() {
     let go_pipe = go_pipe.expect("Missing --go-pipe");
 
     let target_env = format!("APP_ID={}", app_id);
+    let target_role = b"SANDBOX_ROLE=executor";
     let mut guest_host_pid = None;
 
     if let Ok(entries) = fs::read_dir("/proc") {
@@ -86,14 +87,18 @@ fn main() {
                             let arg0 = String::from_utf8_lossy(parts[0]);
                             let arg1 = String::from_utf8_lossy(parts[1]);
 
-                            if (arg0.ends_with("/dash") || arg0 == "dash") && arg1 == "-c" {
+                            if arg0.ends_with("/dash") || arg0 == "dash" {
                                 let environ_path = pid_dir.join("environ");
                                 if let Ok(environ_bytes) = fs::read(&environ_path) {
                                     let has_app_id = environ_bytes
                                         .split(|&b| b == 0)
                                         .any(|var| var == target_env.as_bytes());
+                                    let has_role = environ_bytes
+                                        .split(|&b| b == 0)
+                                        .any(|var| var == target_role);
 
-                                    if has_app_id {
+
+                                    if has_app_id && has_role {
                                         guest_host_pid = Some(name_str.into_owned());
                                         break;
                                     }
