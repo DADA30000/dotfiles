@@ -47,20 +47,16 @@ fn read_pids(path: &str) -> HashSet<i32> {
 struct SupervisorConfig {
     cgroup_procs: String,
     runner_pid: Option<i32>,
-    parent_pid: Option<i32>,
-    scope: Option<String>,
-    sandbox_dir: Option<String>,
     close_fd: Option<i32>,
+    cleanup_cmd: Option<String>,
 }
 
 fn parse_args() -> Result<SupervisorConfig, String> {
     let args: Vec<String> = env::args().collect();
     let mut cgroup_procs = None;
     let mut runner_pid = None;
-    let mut parent_pid = None;
-    let mut scope = None;
-    let mut sandbox_dir = None;
     let mut close_fd = None;
+    let mut cleanup_cmd = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -81,36 +77,20 @@ fn parse_args() -> Result<SupervisorConfig, String> {
                     return Err("Missing argument for --runner-pid".into());
                 }
             }
-            "--parent-pid" => {
-                if i + 1 < args.len() {
-                    parent_pid = args[i + 1].parse().ok();
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --parent-pid".into());
-                }
-            }
-            "--scope" => {
-                if i + 1 < args.len() {
-                    scope = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --scope".into());
-                }
-            }
-            "--sandbox-dir" => {
-                if i + 1 < args.len() {
-                    sandbox_dir = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --sandbox-dir".into());
-                }
-            }
             "--close-fd" => {
                 if i + 1 < args.len() {
                     close_fd = args[i + 1].parse().ok();
                     i += 2;
                 } else {
                     return Err("Missing argument for --close-fd".into());
+                }
+            }
+            "--cleanup" => {
+                if i + 1 < args.len() {
+                    cleanup_cmd = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    return Err("Missing argument for --cleanup".into());
                 }
             }
             _ => {
@@ -123,29 +103,22 @@ fn parse_args() -> Result<SupervisorConfig, String> {
     Ok(SupervisorConfig {
         cgroup_procs,
         runner_pid,
-        parent_pid,
-        scope,
-        sandbox_dir,
         close_fd,
+        cleanup_cmd,
     })
 }
 
-fn cleanup(config: &SupervisorConfig) {
+fn run_cleanup(config: &SupervisorConfig) {
     if let Some(fd) = config.close_fd {
         unsafe { close(fd) };
     }
 
-    if let Some(ref dir) = config.sandbox_dir {
-        let _ = fs::remove_file(format!("{}/parent_pid", dir));
-        let _ = fs::remove_file(format!("{}/cgroup_path", dir));
-        let _ = fs::remove_file(format!("{}/scope", dir));
-        let _ = fs::remove_file(format!("{}/way-close-pipe", dir));
-    }
-
-    if let Some(ref scope) = config.scope {
-        let _ = Command::new("systemctl")
-            .args(["--user", "--no-block", "stop", scope])
-            .status();
+    if let Some(ref cmd) = config.cleanup_cmd {
+        // Try executing directly first; if failed, invoke via dash
+        let status = Command::new(cmd).status();
+        if status.is_err() {
+            let _ = Command::new("dash").args(["-c", cmd]).status();
+        }
     }
 }
 
@@ -160,18 +133,18 @@ fn main() {
 
     let epfd = unsafe { epoll_create1(0) };
     if epfd < 0 {
-        cleanup(&config);
+        run_cleanup(&config);
         process::exit(1);
     }
 
-    // 1. Monitor runner_pid (if specified)
+    // Monitor runner_pid (if specified)
     let mut runner_fd = -1;
     if let Some(r_pid) = config.runner_pid {
         if r_pid > 0 {
             runner_fd = unsafe { pidfd_open(r_pid, 0) };
             if runner_fd < 0 {
                 // Runner is already dead: tear down immediately
-                cleanup(&config);
+                run_cleanup(&config);
                 unsafe { close(epfd) };
                 process::exit(0);
             }
@@ -181,30 +154,6 @@ fn main() {
             };
             unsafe {
                 epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &mut ev);
-            }
-        }
-    }
-
-    // 2. Monitor parent_pid (if specified)
-    let mut parent_fd = -1;
-    if let Some(p_pid) = config.parent_pid {
-        if p_pid > 0 {
-            parent_fd = unsafe { pidfd_open(p_pid, 0) };
-            if parent_fd < 0 {
-                // Parent is already dead: tear down immediately
-                cleanup(&config);
-                if runner_fd >= 0 {
-                    unsafe { close(runner_fd) };
-                }
-                unsafe { close(epfd) };
-                process::exit(0);
-            }
-            let mut ev = EpollEvent {
-                events: EPOLLIN,
-                data: parent_fd as u64,
-            };
-            unsafe {
-                epoll_ctl(epfd, EPOLL_CTL_ADD, parent_fd, &mut ev);
             }
         }
     }
@@ -295,8 +244,8 @@ fn main() {
         let mut should_terminate = false;
         for i in 0..n as usize {
             let fd = events[i].data as i32;
-            if fd == runner_fd || fd == parent_fd {
-                // Runner or parent launcher process died
+            if fd == runner_fd {
+                // Runner died
                 should_terminate = true;
                 break;
             }
@@ -327,10 +276,7 @@ fn main() {
     if runner_fd >= 0 {
         unsafe { close(runner_fd) };
     }
-    if parent_fd >= 0 {
-        unsafe { close(parent_fd) };
-    }
     unsafe { close(epfd) };
 
-    cleanup(&config);
+    run_cleanup(&config);
 }

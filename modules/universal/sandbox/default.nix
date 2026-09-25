@@ -182,6 +182,10 @@ let
             (eval "$cmd" &)
           done
         '';
+        cleanup_script = writeDash "cleanup_script" ''
+          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$WAY_CLOSE_PIPE"
+          systemctl --user --no-block stop "$MY_SCOPE"
+        '';
         startup_script = writeDash "startups_script" ''
           if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
             export START_TIME=$(date +%s%N)
@@ -327,16 +331,14 @@ let
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
-              sandbox_supervisor \
+              nohup sandbox_supervisor \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --runner-pid "$GUEST_HOST_PID" \
-                --parent-pid "$$" \
-                --scope "$MY_SCOPE" \
-                --sandbox-dir "$SANDBOX_DIR" \
-                ${lib.optionalString wayland "--close-fd 9"} &
-              SUPERVISOR_PID=$!
-              wait "$SUPERVISOR_PID" 2>/dev/null || true
-              cleanup
+                ${lib.optionalString wayland "--close-fd 9"} \
+                --cleanup "${cleanup_script}" \
+                >/dev/null 2>&1 &
+              trap "" INT TERM EXIT
+              exit 0
             fi
           else
             exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"
