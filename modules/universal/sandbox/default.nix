@@ -3,6 +3,7 @@
   lib,
   config,
   options,
+  osConfig,
   pkgs,
   ...
 }:
@@ -21,11 +22,13 @@ let
         {
           action = "sniff";
         }
+      ]
+      ++ (lib.optionals (osConfig ? sing-box.processes_to_proxy) [
         {
           outbound = "to-host-vpn";
-          process_name = (config.sing-box.processes_to_proxy or [ ]);
+          process_name = osConfig.sing-box.processes_to_proxy;
         }
-      ];
+      ]);
     };
     inbounds = [
       {
@@ -155,7 +158,7 @@ let
             ''
           else
             ''
-              ${stage2_inside} "$@" &
+              . ${stage2_inside} "$@" &
               exec pause
             ''
         );
@@ -239,12 +242,6 @@ let
                   ;;
               esac
               EXIT_CODE=0
-              cleanup() {
-                trap "" INT TERM EXIT
-                exec 9<&- 2>/dev/null || true
-                exit $EXIT_CODE
-              }
-              trap cleanup INT TERM EXIT
               mkdir "$MY_CGROUP/helpers"
               echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
               echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
@@ -337,7 +334,6 @@ let
                 ${lib.optionalString wayland "--close-fd 9"} \
                 --cleanup "${cleanup_script}" \
                 >/dev/null 2>&1 &
-              trap "" INT TERM EXIT
               exit 0
             fi
           else
