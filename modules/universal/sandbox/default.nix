@@ -237,8 +237,9 @@ let
               EXIT_CODE=0
               cleanup() {
                 trap "" INT TERM EXIT
-                rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope"
-                systemctl --user --no-block stop "$MY_SCOPE" >/dev/null 2>&1 </dev/null &
+                exec 9<&-
+                rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$WAY_CLOSE_PIPE"
+                systemctl --user --no-block stop "$MY_SCOPE" &
                 exit $EXIT_CODE
               }
               trap cleanup INT TERM EXIT
@@ -274,12 +275,14 @@ let
               ${lib.optionalString wayland ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
                 NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-secure-notify-$APP_ID"
+                WAY_CLOSE_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-close-pipe"
 
-                rm -f "$SOCK" "$SOCK.lock" "$NOTIFY_PIPE"
-                mkfifo "$NOTIFY_PIPE"
+                rm -f "$SOCK" "$SOCK.lock" "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
+                mkfifo "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
                 exec 3<> "$NOTIFY_PIPE"
+                exec 9<> "$WAY_CLOSE_PIPE"
 
-                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 4> "$NOTIFY_PIPE" &
+                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 -c 9 4> "$NOTIFY_PIPE" &
                 if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3; then
                     echo "way-secure started"
                 else
@@ -327,8 +330,7 @@ let
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
               cgroup-watcher "$MY_CGROUP/inside/cgroup.procs" "$GUEST_HOST_PID"
-              rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope"
-              systemctl --user --no-block stop "$MY_SCOPE"
+              cleanup
             fi
           else
             exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"
@@ -401,18 +403,23 @@ let
                         dev = true;
                       };
 
-                      extraArgs = lib.mkIf network_singbox [
-                        "--gid"
-                        "0"
-                        "--uid"
-                        "0"
-                        "--cap-add"
-                        "CAP_NET_ADMIN"
-                        "--cap-add"
-                        "CAP_SETFCAP"
-                        "--cap-add"
-                        "CAP_NET_RAW"
-                      ];
+                      extraArgs =
+                        (lib.optionals network_singbox [
+                          "--gid"
+                          "0"
+                          "--uid"
+                          "0"
+                          "--cap-add"
+                          "CAP_NET_ADMIN"
+                          "--cap-add"
+                          "CAP_SETFCAP"
+                          "--cap-add"
+                          "CAP_NET_RAW"
+                        ])
+                        ++ (lib.optionals wayland [
+                          "--sync-fd"
+                          "9"
+                        ]);
 
                       sockets = {
                         pulse = audio;
