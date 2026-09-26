@@ -838,7 +838,11 @@ in
         resolveLocalQueries = false;
         settings = {
           bind-dynamic = true;
-          except-interface = "waydroid0";
+          interface = [
+            "lo"
+            "veth_host"
+            "tun-sb"
+          ];
           server = [
             dns
             dns-ipv6
