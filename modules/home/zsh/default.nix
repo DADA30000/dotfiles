@@ -56,6 +56,12 @@ in
           directory = {
             style = "bold blue";
           };
+          env_var.SESATT_SESSION = {
+            variable = "SESATT_SESSION";
+            symbol = " ";
+            style = "bold cyan";
+            format = "[$symbol$env_value]($style) ";
+          };
         };
       };
       zsh = {

@@ -460,6 +460,8 @@ let
                         ];
 
                         ro = [
+                          "/bin"
+                          "/usr/bin"
                           "/etc/xdg"
                           "/run/current-system"
                           "/etc/fonts"
