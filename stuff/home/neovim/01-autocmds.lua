@@ -160,6 +160,41 @@ vim.api.nvim_create_autocmd({ "TabClosed", "WinClosed" }, {
 	end,
 })
 
+-- Smart Netrw directory browsing (supports suda:// and root-edited files)
+local function get_clean_buffer_dir()
+	local name = vim.api.nvim_buf_get_name(0)
+	if name == "" then
+		return nil
+	end
+	local clean_path = name:gsub("^suda://", "")
+	local dir = vim.fs.dirname(clean_path)
+	if dir and vim.fn.isdirectory(dir) == 1 then
+		return dir
+	end
+	return nil
+end
+
+local netrw_cmd_configs = {
+	Ex = { dosplit = 0, style = 0 },
+	Explore = { dosplit = 0, style = 0 },
+	Sexplore = { dosplit = 1, style = 0 },
+	Hexplore = { dosplit = 1, style = 2 },
+	Vexplore = { dosplit = 1, style = 4 },
+	Texplore = { dosplit = 0, style = 6 },
+}
+
+for cmd_name, cfg in pairs(netrw_cmd_configs) do
+	vim.api.nvim_create_user_command(cmd_name, function(opts)
+		local target_dir = opts.args
+		if not target_dir or target_dir == "" then
+			target_dir = get_clean_buffer_dir() or ""
+		end
+		local bang_val = opts.bang and 1 or 0
+		local style = (cfg.style == 6) and 6 or (cfg.style + bang_val)
+		vim.fn["netrw#Explore"](opts.count or 0, cfg.dosplit, style, target_dir)
+	end, { bang = true, nargs = "*", count = 0, complete = "dir" })
+end
+
 -- Tab origin tracker (Return to origin tab on close)
 local tab_origins = {}
 local last_tabpage = vim.api.nvim_get_current_tabpage()

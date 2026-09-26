@@ -747,6 +747,11 @@ in
               mode = "allow";
             }
             {
+              binary = lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped";
+              type = "cursorpos";
+              mode = "allow";
+            }
+            {
               binary = lib.escapeRegex "${config.wayland.windowManager.hyprland.portalPackage}/libexec/.xdg-desktop-portal-hyprland-wrapped";
               type = "screencopy";
               mode = "allow";

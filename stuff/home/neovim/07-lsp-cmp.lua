@@ -133,11 +133,56 @@ vim.diagnostic.config({
 	},
 })
 
+local diag_float_win = nil
+
+local function close_diag_float()
+	if diag_float_win and vim.api.nvim_win_is_valid(diag_float_win) then
+		pcall(vim.api.nvim_win_close, diag_float_win, true)
+	end
+	diag_float_win = nil
+end
+
 vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+	group = vim.api.nvim_create_augroup("DiagnosticFloatHover", { clear = true }),
 	callback = function()
-		vim.diagnostic.open_float(nil, { focusable = false, scope = "cursor" })
+		local mode = vim.api.nvim_get_mode().mode
+		if mode:match("^[ic]") or vim.bo.buftype ~= "" then
+			close_diag_float()
+			return
+		end
+
+		local line = vim.fn.line(".") - 1
+		local diags = vim.diagnostic.get(0, { lnum = line })
+		if #diags == 0 then
+			close_diag_float()
+			return
+		end
+
+		close_diag_float()
+		local _, winid = vim.diagnostic.open_float(nil, {
+			focusable = false,
+			scope = "cursor",
+			close_events = {
+				"CursorMoved",
+				"CursorMovedI",
+				"BufLeave",
+				"BufHidden",
+				"WinLeave",
+				"CmdlineEnter",
+				"InsertEnter",
+			},
+		})
+		diag_float_win = winid
 	end,
 })
+
+vim.api.nvim_create_autocmd(
+	{ "CursorMoved", "CursorMovedI", "BufLeave", "BufHidden", "WinLeave", "CmdlineEnter", "InsertEnter" },
+	{
+		group = vim.api.nvim_create_augroup("DiagnosticFloatDismiss", { clear = true }),
+		callback = close_diag_float,
+	}
+)
 
 -- Modern 0.11/0.12 vim.diagnostic.jump() replacing deprecated goto_prev/goto_next
 vim.keymap.set("n", "[g", function()
