@@ -70,13 +70,9 @@ in
 
   hardware = {
 
-    steam-hardware.enable = true;
-
     xpadneo.enable = true;
 
     xone.enable = true;
-
-    opentabletdriver.enable = true;
 
     cpu.amd = {
       updateMicrocode = true;
