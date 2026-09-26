@@ -737,7 +737,7 @@ in
           ];
           permission = [
             {
-              binary = lib.escapeRegex "${pkgs.sunshine}/bin/.sunshine-wrapped";
+              binary = lib.escapeRegex "${pkgs.sunshine}/bin/sunshine";
               type = "screencopy";
               mode = "allow";
             }
