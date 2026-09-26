@@ -607,7 +607,7 @@ in
       enable = true;
       package = pkgs.pipewire.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
-          ../../../stuff/system/packages/pipewire-quirk-block-mute.patch
+          ../../../stuff/patches/pipewire-quirk-block-mute.patch
         ];
       });
       alsa.enable = true;
