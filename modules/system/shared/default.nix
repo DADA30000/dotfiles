@@ -646,13 +646,27 @@ in
           "pipewire-0-restricted" = "flatpak";
         };
       };
-      extraConfig.pipewire-pulse."99-restricted-socket"."pulse.properties"."server.address" = [
-        "unix:native"
-        {
-          address = "unix:restricted";
-          "client.access" = "restricted";
-        }
-      ];
+      extraConfig.pipewire-pulse."99-restricted-socket" = {
+        "pulse.properties"."server.address" = [
+          "unix:native"
+          {
+            address = "unix:restricted";
+            "client.access" = "restricted";
+          }
+        ];
+        "pulse.rules" = [
+          {
+            matches = [ { "pipewire.client.access" = "restricted"; } ];
+            actions = {
+              quirks = [
+                "block-source-volume"
+                "block-sink-volume"
+              ];
+              update-props."channelmix.lock-volumes" = true;
+            };
+          }
+        ];
+      };
     };
 
     tlp = {
