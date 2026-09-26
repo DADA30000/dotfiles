@@ -1,15 +1,18 @@
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fs;
-use std::process::{self, Command};
-use std::thread;
-use std::time::Duration;
+use std::collections::HashSet;
+use std::{env, fs, process::Command, thread, time::Duration};
 
+const SYS_RT_SIGPROCMASK: i64 = 14;
+const SYS_SIGNALFD4: i64 = 289;
 const SYS_PIDFD_OPEN: i64 = 434;
+
+const SIG_BLOCK: i64 = 0;
+const SIG_SETMASK: i64 = 2;
+const SFD_CLOEXEC: i64 = 0x80000;
+const SFD_NONBLOCK: i64 = 0x800;
+
 const EPOLL_CTL_ADD: i32 = 1;
 const EPOLL_CTL_DEL: i32 = 2;
 const EPOLLIN: u32 = 1;
-const MAX_EVENTS: i32 = 64;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -26,213 +29,131 @@ extern "C" {
     fn close(fd: i32) -> i32;
 }
 
-unsafe fn pidfd_open(pid: i32, flags: u32) -> i32 {
-    syscall(SYS_PIDFD_OPEN, pid as i64, flags as i64) as i32
-}
-
 fn read_pids(path: &str) -> HashSet<i32> {
-    let mut pids = HashSet::new();
-    if let Ok(content) = fs::read_to_string(path) {
-        for line in content.lines() {
-            if let Ok(pid) = line.trim().parse::<i32>() {
-                if pid > 0 {
-                    pids.insert(pid);
-                }
-            }
-        }
-    }
-    pids
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.trim().parse().ok())
+        .filter(|&p| p > 0)
+        .collect()
 }
 
-struct SupervisorConfig {
-    cgroup_procs: String,
-    runner_pid: Option<i32>,
-    close_fd: Option<i32>,
-    cleanup_cmd: Option<String>,
-}
-
-fn parse_args() -> Result<SupervisorConfig, String> {
+fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut cgroup_procs = None;
-    let mut runner_pid = None;
-    let mut close_fd = None;
-    let mut cleanup_cmd = None;
+    let mut procs_path = String::new();
+    let mut runner_pid = 0;
+    let mut close_fd = -1;
+    let mut cleanup_cmd = String::new();
 
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--cgroup-procs" => {
-                if i + 1 < args.len() {
-                    cgroup_procs = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --cgroup-procs".into());
-                }
+            "--cgroup-procs" if i + 1 < args.len() => {
+                procs_path = args[i + 1].clone();
+                i += 2;
             }
-            "--runner-pid" => {
-                if i + 1 < args.len() {
-                    runner_pid = args[i + 1].parse().ok();
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --runner-pid".into());
-                }
+            "--runner-pid" if i + 1 < args.len() => {
+                runner_pid = args[i + 1].parse().unwrap_or(0);
+                i += 2;
             }
-            "--close-fd" => {
-                if i + 1 < args.len() {
-                    close_fd = args[i + 1].parse().ok();
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --close-fd".into());
-                }
+            "--close-fd" if i + 1 < args.len() => {
+                close_fd = args[i + 1].parse().unwrap_or(-1);
+                i += 2;
             }
-            "--cleanup" => {
-                if i + 1 < args.len() {
-                    cleanup_cmd = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    return Err("Missing argument for --cleanup".into());
-                }
+            "--cleanup" if i + 1 < args.len() => {
+                cleanup_cmd = args[i + 1].clone();
+                i += 2;
             }
-            _ => {
-                i += 1;
-            }
+            _ => i += 1,
         }
     }
 
-    let cgroup_procs = cgroup_procs.ok_or("Missing required --cgroup-procs")?;
-    Ok(SupervisorConfig {
-        cgroup_procs,
-        runner_pid,
-        close_fd,
-        cleanup_cmd,
-    })
-}
-
-fn run_cleanup(config: &SupervisorConfig) {
-    if let Some(fd) = config.close_fd {
-        unsafe { close(fd) };
+    if procs_path.is_empty() {
+        return;
     }
-
-    if let Some(ref cmd) = config.cleanup_cmd {
-        // Try executing directly first; if failed, invoke via dash
-        let status = Command::new(cmd).status();
-        if status.is_err() {
-            let _ = Command::new("dash").args(["-c", cmd]).status();
-        }
-    }
-}
-
-fn main() {
-    let config = match parse_args() {
-        Ok(c) => c,
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            process::exit(1);
-        }
-    };
 
     let epfd = unsafe { epoll_create1(0) };
-    if epfd < 0 {
-        run_cleanup(&config);
-        process::exit(1);
+
+    // Block SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) via raw Linux syscall
+    let mask: u64 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 14);
+    unsafe {
+        syscall(
+            SYS_RT_SIGPROCMASK,
+            SIG_BLOCK,
+            &mask as *const u64 as i64,
+            0i64,
+            8i64,
+        );
+    }
+    let sfd = unsafe {
+        syscall(
+            SYS_SIGNALFD4,
+            -1i64,
+            &mask as *const u64 as i64,
+            8i64,
+            SFD_CLOEXEC | SFD_NONBLOCK,
+        ) as i32
+    };
+    if sfd >= 0 {
+        let mut ev = EpollEvent {
+            events: EPOLLIN,
+            data: sfd as u64,
+        };
+        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &mut ev) };
     }
 
-    // Monitor runner_pid (if specified)
-    let mut runner_fd = -1;
-    if let Some(r_pid) = config.runner_pid {
-        if r_pid > 0 {
-            runner_fd = unsafe { pidfd_open(r_pid, 0) };
-            if runner_fd < 0 {
-                // Runner is already dead: tear down immediately
-                run_cleanup(&config);
-                unsafe { close(epfd) };
-                process::exit(0);
-            }
-            let mut ev = EpollEvent {
-                events: EPOLLIN,
-                data: runner_fd as u64,
-            };
-            unsafe {
-                epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &mut ev);
-            }
-        }
+    // Monitor runner_pid
+    let runner_fd = if runner_pid > 0 {
+        unsafe { syscall(SYS_PIDFD_OPEN, runner_pid as i64, 0) as i32 }
+    } else {
+        -1
+    };
+    if runner_fd >= 0 {
+        let mut ev = EpollEvent {
+            events: EPOLLIN,
+            data: runner_fd as u64,
+        };
+        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &mut ev) };
     }
 
-    let mut monitored_apps: HashMap<i32, i32> = HashMap::new(); // pid -> pidfd
-    let mut has_seen_apps = false;
-    let mut startup_retries = 0;
+    // Startup grace period: wait up to 500ms for app to spawn into cgroup
+    let mut retries = 0;
+    while read_pids(&procs_path).len() <= 1 && retries < 10 {
+        thread::sleep(Duration::from_millis(50));
+        retries += 1;
+    }
+
+    let mut monitored = HashSet::new();
 
     loop {
-        let current_pids = read_pids(&config.cgroup_procs);
+        let current_pids = read_pids(&procs_path);
 
-        // Teardown condition 1: runner PID specified but missing from inside cgroup
-        if let Some(r_pid) = config.runner_pid {
-            if !current_pids.contains(&r_pid) {
-                if !has_seen_apps && startup_retries < 10 {
-                    startup_retries += 1;
-                    thread::sleep(Duration::from_millis(50));
-                    continue;
-                }
-                break;
-            }
-        }
-
-        // Teardown condition 2: no apps running (<= 1 process in cgroup)
-        if current_pids.len() <= 1 {
-            if !has_seen_apps && startup_retries < 10 {
-                startup_retries += 1;
-                thread::sleep(Duration::from_millis(50));
-                continue;
-            }
+        // Teardown condition: runner missing, or no apps left (<= 1 process)
+        if (runner_pid > 0 && !current_pids.contains(&runner_pid)) || current_pids.len() <= 1 {
             break;
         }
 
-        // Clean up monitored apps that exited and left cgroup.procs
-        monitored_apps.retain(|pid, &mut pfd| {
-            if !current_pids.contains(pid) {
-                unsafe {
-                    epoll_ctl(epfd, EPOLL_CTL_DEL, pfd, std::ptr::null_mut());
-                    close(pfd);
-                }
-                false
-            } else {
-                true
-            }
-        });
-
-        // Add newly appeared app processes
+        // Add newly appeared app processes to epoll
         for &pid in &current_pids {
-            if Some(pid) == config.runner_pid || monitored_apps.contains_key(&pid) {
+            if pid == runner_pid || monitored.contains(&pid) {
                 continue;
             }
-
-            let pfd = unsafe { pidfd_open(pid, 0) };
+            let pfd = unsafe { syscall(SYS_PIDFD_OPEN, pid as i64, 0) as i32 };
             if pfd >= 0 {
                 let mut ev = EpollEvent {
                     events: EPOLLIN,
                     data: pfd as u64,
                 };
                 if unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, pfd, &mut ev) } == 0 {
-                    monitored_apps.insert(pid, pfd);
-                    has_seen_apps = true;
+                    monitored.insert(pid);
                 } else {
                     unsafe { close(pfd) };
                 }
             }
         }
 
-        // If after trying to add apps none could be monitored
-        if monitored_apps.is_empty() {
-            if !has_seen_apps && startup_retries < 10 {
-                startup_retries += 1;
-                thread::sleep(Duration::from_millis(50));
-                continue;
-            }
-            break;
-        }
-
-        let mut events = [EpollEvent { events: 0, data: 0 }; MAX_EVENTS as usize];
-        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), MAX_EVENTS, -1) };
+        let mut events = [EpollEvent { events: 0, data: 0 }; 16];
+        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), 16, -1) };
         if n < 0 {
             let err = std::io::Error::last_os_error();
             if err.raw_os_error() == Some(4) { // EINTR
@@ -241,42 +162,41 @@ fn main() {
             break;
         }
 
-        let mut should_terminate = false;
+        let mut terminate = false;
         for i in 0..n as usize {
             let fd = events[i].data as i32;
-            if fd == runner_fd {
-                // Runner died
-                should_terminate = true;
+            if fd == sfd || fd == runner_fd {
+                terminate = true;
                 break;
             }
-
-            // An app process exited
-            monitored_apps.retain(|_, &mut pfd| {
-                if pfd == fd {
-                    unsafe {
-                        epoll_ctl(epfd, EPOLL_CTL_DEL, pfd, std::ptr::null_mut());
-                        close(pfd);
-                    }
-                    false
-                } else {
-                    true
-                }
-            });
+            // An app subprocess exited: clean it up from epoll to prevent busy-spinning
+            unsafe {
+                epoll_ctl(epfd, EPOLL_CTL_DEL, fd, std::ptr::null_mut());
+                close(fd);
+            };
         }
-
-        if should_terminate {
+        if terminate {
             break;
         }
     }
 
-    // Teardown
-    for (_, pfd) in monitored_apps {
-        unsafe { close(pfd) };
+    if close_fd >= 0 {
+        unsafe { close(close_fd) };
     }
-    if runner_fd >= 0 {
-        unsafe { close(runner_fd) };
-    }
-    unsafe { close(epfd) };
 
-    run_cleanup(&config);
+    // Unblock signals so cleanup command runs normally
+    let empty_mask = 0u64;
+    unsafe {
+        syscall(
+            SYS_RT_SIGPROCMASK,
+            SIG_SETMASK,
+            &empty_mask as *const u64 as i64,
+            0i64,
+            8i64,
+        );
+    }
+
+    if !cleanup_cmd.is_empty() {
+        let _ = Command::new(&cleanup_cmd).status();
+    }
 }

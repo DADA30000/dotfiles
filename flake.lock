@@ -1157,11 +1157,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1790376099,
+        "lastModified": 1790426041,
         "narHash": "sha256-khpsGWp4BO+HZnRRnaXUW7mgAIbxjGZUcKa0b7T7M6c=",
         "owner": "DADA30000",
         "repo": "nixpak",
-        "rev": "79469bfcd374bbeb1fd929e25d6848770ce70b85",
+        "rev": "0c2ed13741df5f0bffc6f0aaeaff3420f08d3e0b",
         "type": "github"
       },
       "original": {

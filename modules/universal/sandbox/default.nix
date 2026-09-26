@@ -29,7 +29,10 @@ let
         {
           ip_cidr = [
             "127.0.0.0/8"
+            "::1/128"
             "192.168.0.0/16"
+            "fe80::/10"
+            "fd00::/8"
           ];
           outbound = "direct";
         }
@@ -196,7 +199,8 @@ let
           done
         '';
         cleanup_script = writeDash "cleanup_script" ''
-          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$WAY_CLOSE_PIPE"
+          SANDBOX_DIR="''${XDG_RUNTIME_DIR}/.nixpak/${appId}"
+          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/way-close-pipe"
           systemctl --user --no-block stop "$MY_SCOPE"
         '';
         startup_script = writeDash "startups_script" ''
@@ -248,6 +252,8 @@ let
                   printf '%s\n' "$$" > "$SANDBOX_DIR/parent_pid"
                   ;;
                 *)
+                  [ -z "$_SANDBOX_RECURSION_GUARD" ] || { echo "Error: Scope failed to match $APP_ID" >&2; exit 1; }
+                  export _SANDBOX_RECURSION_GUARD=1
                   exec app2unit -a "$APP_ID" -- "$0" "$@"
                   ;;
               esac
@@ -289,9 +295,8 @@ let
                 rm -f "$SOCK" "$SOCK.lock" "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
                 mkfifo "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
                 exec 3<> "$NOTIFY_PIPE"
-                exec 9<> "$WAY_CLOSE_PIPE"
-
-                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 -c 9 4> "$NOTIFY_PIPE" &
+                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 -c 8 4> "$NOTIFY_PIPE" 8< "$WAY_CLOSE_PIPE" &
+                exec 9> "$WAY_CLOSE_PIPE"
                 if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3; then
                     echo "way-secure started"
                 else
@@ -320,21 +325,25 @@ let
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
                   EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
+                  exit 1
               fi
               if ! GUEST_HOST_PID=$(sandbox-migrator \
                 --app-id "$APP_ID" \
                 --scope "$MY_SCOPE" \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --go-pipe "$SANDBOXED_RUNTIME_DIR/go_pipe"); then
+                  echo "Error: sandbox-migrator failed" >&2
                   EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
+                  exit 1
               fi
               exec 6<&-
               exec 8<&-
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5; then
-                  echo "Error: Timeout waiting for sandbox ready signal"
+                  echo "Error: Timeout waiting for sandbox ready signal" >&2
                   EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
+                  exit 1
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
