@@ -208,6 +208,29 @@ vim.lsp.config("rust_analyzer", {
 		local standalone_dir = "/tmp/ra_standalone_" .. hash
 		vim.fn.mkdir(standalone_dir, "p")
 
+		local clippy_bin = _G.NIX and _G.NIX.rust_toolchain and (_G.NIX.rust_toolchain .. "/bin/clippy-driver")
+		local runnables = {}
+		if clippy_bin and vim.fn.executable(clippy_bin) == 1 then
+			runnables = {
+				{
+					program = clippy_bin,
+					args = {
+						"--error-format=json",
+						"--emit=metadata",
+						"--out-dir",
+						standalone_dir,
+						"-W",
+						"clippy::all",
+						"-W",
+						"clippy::pedantic",
+						"{saved_file}",
+					},
+					cwd = standalone_dir,
+					kind = "flycheck",
+				},
+			}
+		end
+
 		local project_json = standalone_dir .. "/rust-project.json"
 		local f = io.open(project_json, "w")
 		if f then
@@ -222,11 +245,17 @@ vim.lsp.config("rust_analyzer", {
 						cfg = { "unix", "debug_assertions" },
 						is_workspace_member = true,
 						source = {
-							include_dirs = { standalone_dir },
+							include_dirs = { fname },
 							exclude_dirs = {},
+						},
+						build = {
+							label = "standalone",
+							build_file = standalone_dir .. "/build.rs",
+							target_kind = "bin",
 						},
 					},
 				},
+				runnables = runnables,
 			})
 			f:write(content)
 			f:close()

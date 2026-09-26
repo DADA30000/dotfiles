@@ -261,6 +261,15 @@ let
     ]
   );
 
+  rust-analyzer-unwrapped = pkgs.rust-analyzer-unwrapped.overrideAttrs (prev: {
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/rust-analyzer.patch ];
+    doCheck = false;
+  });
+
+  rust-analyzer = pkgs.rust-analyzer.override {
+    inherit rust-analyzer-unwrapped;
+  };
+
   rust-toolchain = pkgs.symlinkJoin {
     name = "nixos-system-toolchain";
     paths = with pkgs; [
@@ -300,7 +309,7 @@ let
       python = "${python}/bin/python3",
       gdb = "${pkgs.gdb}/bin/gdb",
       cppdbg = "${pkgs.vscode-extensions.ms-vscode.cpptools}/share/vscode/extensions/ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7",
-      rust_analyzer = "${pkgs.rust-analyzer}/bin/rust-analyzer",
+      rust_analyzer = "${rust-analyzer}/bin/rust-analyzer",
       rust_toolchain = "${rust-toolchain}",
       rust_lib_src = "${pkgs.rustPlatform.rustLibSrc}",
       kekma_home = "${kekma.home}",

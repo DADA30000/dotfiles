@@ -689,7 +689,10 @@ let
     ];
     "pulse.rules" = [
       {
-        matches = [ { "pipewire.client.access" = "restricted"; } ];
+        matches = [
+          { "pipewire.client.access" = "restricted"; }
+          { "pipewire.client.access" = "flatpak"; }
+        ];
         actions = {
           quirks = [
             "block-source-volume"
@@ -720,7 +723,10 @@ let
     ];
     "access.rules" = [
       {
-        matches = [ { "pipewire.client.access" = "restricted"; } ];
+        matches = [
+          { "pipewire.client.access" = "restricted"; }
+          { "pipewire.client.access" = "flatpak"; }
+        ];
         actions.update-props.permission_manager_name = "sandbox-restricted";
       }
     ];

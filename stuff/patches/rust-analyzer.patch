@@ -1,0 +1,15 @@
+--- a/crates/vfs/src/file_set.rs
++++ b/crates/vfs/src/file_set.rs
+@@ -140,6 +140,12 @@
+     ///
+     /// `scratch_space` is used as a buffer and will be entirely replaced.
+     fn classify(&self, path: &VfsPath, scratch_space: &mut Vec<u8>) -> usize {
++        scratch_space.clear();
++        path.encode(scratch_space);
++        if let Some(v) = self.map.get(scratch_space.as_slice()) {
++            return v as usize;
++        }
++
+         // `path` is a file, but r-a only cares about the containing directory. We don't
+         // want `/foo/bar_baz.rs` to be attributed to source root directory `/foo/bar`.
+         let path = path.parent().unwrap_or_else(|| path.clone());
