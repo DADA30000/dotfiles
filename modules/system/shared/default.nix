@@ -610,48 +610,49 @@ in
       jack.enable = true;
       pulse.enable = true;
       wireplumber.extraConfig."99-restricted-permissions" = {
-        "access.rules" = [
+        "access.permission-managers" = [
           {
-            matches = [
+            name = "sandbox-restricted";
+            default_permissions = "rx";
+            core_permissions = "rx";
+            rules = [
               {
-                "pipewire.client.access" = "restricted";
+                matches = [ { "media.class" = "~Audio/.*"; } ];
+                actions.set-permissions = "rx";
+              }
+              {
+                matches = [ { "object.type" = "Device"; } ];
+                actions.set-permissions = "rx";
               }
             ];
-            actions = {
-              update-props = {
-                default_permissions = "rx";
-              };
-            };
+          }
+        ];
+        "access.rules" = [
+          {
+            matches = [ { "pipewire.client.access" = "restricted"; } ];
+            actions.update-props.permission_manager_name = "sandbox-restricted";
           }
         ];
       };
       extraConfig.pipewire."99-restricted-socket" = {
-        "module.protocol-native.args" = {
-          sockets = [
-            { name = "pipewire-0"; }
-            { name = "pipewire-0-manager"; }
-            { name = "pipewire-0-restricted"; }
-          ];
-        };
-        "module.access.args" = {
-          "access.socket" = {
-            "pipewire-0" = "unrestricted";
-            "pipewire-0-manager" = "unrestricted";
-            "pipewire-0-restricted" = "flatpak";
-          };
+        "module.protocol-native.args".sockets = [
+          { name = "pipewire-0"; }
+          { name = "pipewire-0-manager"; }
+          { name = "pipewire-0-restricted"; }
+        ];
+        "module.access.args"."access.socket" = {
+          "pipewire-0" = "unrestricted";
+          "pipewire-0-manager" = "unrestricted";
+          "pipewire-0-restricted" = "flatpak";
         };
       };
-      extraConfig.pipewire-pulse."99-restricted-socket" = {
-        "pulse.properties" = {
-          "server.address" = [
-            "unix:native"
-            {
-              address = "unix:restricted";
-              "client.access" = "restricted";
-            }
-          ];
-        };
-      };
+      extraConfig.pipewire-pulse."99-restricted-socket"."pulse.properties"."server.address" = [
+        "unix:native"
+        {
+          address = "unix:restricted";
+          "client.access" = "restricted";
+        }
+      ];
     };
 
     tlp = {
