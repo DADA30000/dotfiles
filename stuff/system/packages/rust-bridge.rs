@@ -5,7 +5,8 @@
     clippy::items_after_statements,
     clippy::needless_pass_by_value,
     clippy::uninlined_format_args,
-    clippy::redundant_closure_for_method_calls
+    clippy::redundant_closure_for_method_calls,
+    clippy::collapsible_if
 )]
 
 use std::collections::{HashMap, HashSet};
@@ -19,7 +20,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-extern "C" {
+unsafe extern "C" {
     fn fork() -> i32;
     fn setsid() -> i32;
     fn open(path: *const c_char, oflag: i32) -> i32;

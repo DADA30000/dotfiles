@@ -138,7 +138,8 @@ let
         nativeBuildInputs = [ pkgs.pkgsStatic.rustc ];
 
         buildPhase = ''
-          rustc --target x86_64-unknown-linux-musl \
+          rustc --edition 2024 \
+            --target x86_64-unknown-linux-musl \
             -C target-feature=+crt-static \
             -C linker=$CC \
             -C opt-level=s \

@@ -14,7 +14,8 @@
     clippy::manual_let_else,
     clippy::trivially_copy_pass_by_ref,
     clippy::format_push_string,
-    clippy::unnecessary_debug_formatting
+    clippy::unnecessary_debug_formatting,
+    clippy::collapsible_if
 )]
 
 use std::collections::BTreeMap;
@@ -59,7 +60,7 @@ struct Winsize {
 }
 
 #[link(name = "util")]
-extern "C" {
+unsafe extern "C" {
     fn openpty(
         amaster: *mut CInt,
         aslave: *mut CInt,

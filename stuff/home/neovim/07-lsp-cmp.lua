@@ -260,6 +260,8 @@ vim.lsp.config("rust_analyzer", {
 				{
 					program = clippy_bin,
 					args = {
+						"--edition",
+						"2024",
 						"--error-format=json",
 						"--emit=metadata",
 						"--out-dir",
@@ -285,7 +287,7 @@ vim.lsp.config("rust_analyzer", {
 				crates = {
 					{
 						root_module = fname,
-						edition = "2021",
+						edition = "2024",
 						deps = {},
 						cfg = { "unix", "debug_assertions" },
 						is_workspace_member = true,

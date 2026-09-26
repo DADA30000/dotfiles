@@ -27,7 +27,7 @@ struct EpollEvent {
     data: u64,
 }
 
-extern "C" {
+unsafe extern "C" {
     fn syscall(number: i64, ...) -> i64;
     fn epoll_create1(flags: i32) -> i32;
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;

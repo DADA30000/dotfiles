@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::verbose_bit_mask)]
+#![allow(clippy::verbose_bit_mask, clippy::collapsible_if)]
 
 use std::fs::{self, Permissions};
 use std::io::{BufRead, BufReader, Write};
