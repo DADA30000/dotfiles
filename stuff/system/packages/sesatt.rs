@@ -317,26 +317,21 @@ fn main() -> io::Result<()> {
             env::var("NVIM").unwrap_or_default()
         };
 
-        if !target_nvim.is_empty() {
-            let mut cmd = Command::new("nvr");
-            cmd.arg("--servername").arg(&target_nvim);
-            cmd.arg("--remote-tab-wait");
-            cmd.arg("+setlocal bufhidden=wipe");
-            for a in editor_args {
-                cmd.arg(a);
-            }
-            let err = cmd.exec();
-            eprintln!("Error launching nvr: {}", err);
-            std::process::exit(1);
+        let mut cmd = if target_nvim.is_empty() {
+            Command::new("nvim")
         } else {
-            let mut cmd = Command::new("nvim");
-            for a in editor_args {
-                cmd.arg(a);
-            }
-            let err = cmd.exec();
-            eprintln!("Error launching nvim: {}", err);
-            std::process::exit(1);
+            let mut c = Command::new("nvr");
+            c.arg("--servername").arg(&target_nvim);
+            c.arg("--remote-tab-wait");
+            c.arg("+setlocal bufhidden=wipe");
+            c
+        };
+        for a in &editor_args {
+            cmd.arg(a);
         }
+        let err = cmd.exec();
+        eprintln!("Error launching editor: {err}");
+        std::process::exit(1);
     }
 
     if args.len() < 2 {
