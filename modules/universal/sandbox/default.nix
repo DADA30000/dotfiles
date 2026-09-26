@@ -665,6 +665,66 @@ let
             }
           );
       });
+
+  pipewireRestrictedSocketConfig = {
+    "module.protocol-native.args".sockets = [
+      { name = "pipewire-0"; }
+      { name = "pipewire-0-manager"; }
+      { name = "pipewire-0-restricted"; }
+    ];
+    "module.access.args"."access.socket" = {
+      "pipewire-0" = "unrestricted";
+      "pipewire-0-manager" = "unrestricted";
+      "pipewire-0-restricted" = "flatpak";
+    };
+  };
+
+  pipewirePulseRestrictedSocketConfig = {
+    "pulse.properties"."server.address" = [
+      "unix:native"
+      {
+        address = "unix:restricted";
+        "client.access" = "restricted";
+      }
+    ];
+    "pulse.rules" = [
+      {
+        matches = [ { "pipewire.client.access" = "restricted"; } ];
+        actions = {
+          quirks = [
+            "block-source-volume"
+            "block-sink-volume"
+          ];
+          update-props."channelmix.lock-volumes" = true;
+        };
+      }
+    ];
+  };
+
+  wireplumberRestrictedPermissionsConfig = {
+    "access.permission-managers" = [
+      {
+        name = "sandbox-restricted";
+        default_permissions = "rx";
+        core_permissions = "rx";
+        rules = [
+          {
+            matches = [
+              { "device.name" = "~.*"; }
+              { "node.name" = "~.*"; }
+            ];
+            actions.set-permissions = "rx";
+          }
+        ];
+      }
+    ];
+    "access.rules" = [
+      {
+        matches = [ { "pipewire.client.access" = "restricted"; } ];
+        actions.update-props.permission_manager_name = "sandbox-restricted";
+      }
+    ];
+  };
 in
 {
   options.sandboxing.enable = lib.mkEnableOption "app sandboxing using nixpak";
@@ -672,13 +732,30 @@ in
     _module.args.mkSandbox = mkSandbox;
   }
   // lib.optionalAttrs (options ? home.file) {
-    home = {
-      file.".not-a-sandbox".text = "not a sandbox";
+    home.file.".not-a-sandbox".text = "not a sandbox";
+    xdg.configFile = lib.mapAttrs' (path: conf:
+      lib.nameValuePair path {
+        source = (pkgs.formats.json { }).generate (baseNameOf path) conf;
+      }
+    ) {
+      "pipewire/pipewire.conf.d/99-restricted-socket.conf" = pipewireRestrictedSocketConfig;
+      "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf" = pipewirePulseRestrictedSocketConfig;
+      "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" = wireplumberRestrictedPermissionsConfig;
     };
   }
   // lib.optionalAttrs (options ? environment.etc) {
-    environment = {
-      etc.".not-a-sandbox".text = "not a sandbox";
+    environment.etc.".not-a-sandbox".text = "not a sandbox";
+    services.pipewire = {
+      package = pkgs.pipewire.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ../../../stuff/patches/pipewire-quirk-block-mute.patch
+        ];
+      });
+      wireplumber.extraConfig."99-restricted-permissions" = wireplumberRestrictedPermissionsConfig;
+      extraConfig = {
+        pipewire."99-restricted-socket" = pipewireRestrictedSocketConfig;
+        pipewire-pulse."99-restricted-socket" = pipewirePulseRestrictedSocketConfig;
+      };
     };
   };
 }

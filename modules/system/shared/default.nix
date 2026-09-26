@@ -605,72 +605,10 @@ in
 
     pipewire = {
       enable = true;
-      package = pkgs.pipewire.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [
-          ../../../stuff/patches/pipewire-quirk-block-mute.patch
-        ];
-      });
       alsa.enable = true;
       alsa.support32Bit = true;
       jack.enable = true;
       pulse.enable = true;
-      wireplumber.extraConfig."99-restricted-permissions" = {
-        "access.permission-managers" = [
-          {
-            name = "sandbox-restricted";
-            default_permissions = "rx";
-            core_permissions = "rx";
-            rules = [
-              {
-                matches = [
-                  { "device.name" = "~.*"; }
-                  { "node.name" = "~.*"; }
-                ];
-                actions.set-permissions = "rx";
-              }
-            ];
-          }
-        ];
-        "access.rules" = [
-          {
-            matches = [ { "pipewire.client.access" = "restricted"; } ];
-            actions.update-props.permission_manager_name = "sandbox-restricted";
-          }
-        ];
-      };
-      extraConfig.pipewire."99-restricted-socket" = {
-        "module.protocol-native.args".sockets = [
-          { name = "pipewire-0"; }
-          { name = "pipewire-0-manager"; }
-          { name = "pipewire-0-restricted"; }
-        ];
-        "module.access.args"."access.socket" = {
-          "pipewire-0" = "unrestricted";
-          "pipewire-0-manager" = "unrestricted";
-          "pipewire-0-restricted" = "flatpak";
-        };
-      };
-      extraConfig.pipewire-pulse."99-restricted-socket" = {
-        "pulse.properties"."server.address" = [
-          "unix:native"
-          {
-            address = "unix:restricted";
-            "client.access" = "restricted";
-          }
-        ];
-        "pulse.rules" = [
-          {
-            matches = [ { "pipewire.client.access" = "restricted"; } ];
-            actions = {
-              quirks = [
-                "block-source-volume"
-                "block-sink-volume"
-              ];
-              update-props."channelmix.lock-volumes" = true;
-            };
-          }
-        ];
-      };
     };
 
     tlp = {
@@ -787,112 +725,7 @@ in
 
     dconf.enable = true;
 
-    steam = {
-      enable = true;
-      package =
-        let
-          overriddenSteam = pkgs.steam.override {
-            privateTmp = false;
-          };
 
-          sandboxed = mkSandbox rec {
-            appId = "com.valvesoftware.Steam";
-            network = "sandboxed";
-            audio_pulse = "sandboxed";
-            gpu = true;
-            wayland = "sandboxed";
-            use_landlock = false;
-            sandbox_tmp = false;
-            sandbox_shm = false;
-            additional_outside_commands = ''
-              rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
-              mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_DATA_HOME/vulkan"
-              SANDBOXED_XDG_DATA_HOME="$HOME/.nixpak/${appId}/home''${XDG_DATA_HOME#"/home/$USER"}"
-              ln -sf "$HOME/.nixpak/${appId}/home/.steam" "$HOME/.steam"
-              ln -sf "$SANDBOXED_XDG_DATA_HOME/Steam" "$XDG_DATA_HOME/Steam"
-              ln -sf "$SANDBOXED_XDG_DATA_HOME/vulkan/implicit_layer.d" "$XDG_DATA_HOME/vulkan/implicit_layer.d"
-            '';
-            additional_inside_commands = ''
-              rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d
-            '';
-            additional_args =
-              { sloth, ... }:
-              {
-                dbus = {
-                  enable = true;
-                  policies = {
-                    "com.steampowered.*" = "own";
-                    "com.feralinteractive.GameMode" = "talk";
-                  };
-                };
-                bubblewrap = {
-                  sharePid = true;
-                  bind = {
-                    dev = [ "/dev" ];
-                    ro = [
-                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
-                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
-                      (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
-                    ];
-                    rw = lib.mkAfter [
-                      (sloth.mkdir (
-                        sloth.concat [
-                          "/mnt/data-nvme/"
-                          (sloth.env "USER")
-                          "/SteamLibrary"
-                        ]
-                      ))
-                      (sloth.mkdir (
-                        sloth.concat [
-                          "/mnt/data-hdd/"
-                          (sloth.env "USER")
-                          "/SteamLibrary"
-                        ]
-                      ))
-                      "/tmp"
-                      "/sys/class"
-                      "/sys/bus"
-                      "/sys/dev"
-                      "/sys/devices"
-                      "/sys/block"
-                      "/run/udev"
-                    ];
-                  };
-                };
-              };
-            package = overriddenSteam;
-          };
-        in
-        sandboxed
-        // {
-          override = attrs: (sandboxed.override attrs) // { run = overriddenSteam.run; };
-          run = overriddenSteam.run;
-        };
-      protontricks.enable = true;
-      extraPackages = [
-        pkgs.libgdiplus
-        pkgs.fontconfig
-        pkgs.attr
-        pkgs.libXcursor
-        pkgs.libXinerama
-        pkgs.libXScrnSaver
-        pkgs.libXi
-        pkgs.nss
-        pkgs.nspr
-        pkgs.atk
-        pkgs.at-spi2-atk
-        pkgs.libdrm
-        pkgs.libGL
-        pkgs.libXcomposite
-        pkgs.libXdamage
-        pkgs.libXrandr
-        pkgs.libXext
-        pkgs.libXfixes
-        pkgs.mesa
-        pkgs.libva
-        pkgs.pipewire
-      ];
-    };
 
     uwsm = {
       enable = true;

@@ -136,6 +136,111 @@ let
     package = pkgs.ayugram-desktop;
   };
 
+  steamExtraPackages = with pkgs; [
+    libgdiplus
+    fontconfig
+    attr
+    libXcursor
+    libXinerama
+    libXScrnSaver
+    libXi
+    nss
+    nspr
+    atk
+    at-spi2-atk
+    libdrm
+    libGL
+    libXcomposite
+    libXdamage
+    libXrandr
+    libXext
+    libXfixes
+    mesa
+    libva
+    protontricks
+  ];
+
+  steamSandbox =
+    let
+      overriddenSteam = pkgs.steam.override {
+        privateTmp = false;
+        extraPkgs = pkgs: steamExtraPackages;
+      };
+
+      sandboxed = mkSandbox rec {
+        appId = "com.valvesoftware.Steam";
+        network = "sandboxed";
+        audio_pulse = "sandboxed";
+        gpu = true;
+        wayland = "sandboxed";
+        use_landlock = false;
+        sandbox_tmp = false;
+        sandbox_shm = false;
+        additional_outside_commands = ''
+          rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
+          mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_DATA_HOME/vulkan"
+          SANDBOXED_XDG_DATA_HOME="$HOME/.nixpak/${appId}/home''${XDG_DATA_HOME#"/home/$USER"}"
+          ln -sf "$HOME/.nixpak/${appId}/home/.steam" "$HOME/.steam"
+          ln -sf "$SANDBOXED_XDG_DATA_HOME/Steam" "$XDG_DATA_HOME/Steam"
+          ln -sf "$SANDBOXED_XDG_DATA_HOME/vulkan/implicit_layer.d" "$XDG_DATA_HOME/vulkan/implicit_layer.d"
+        '';
+        additional_inside_commands = ''
+          rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d
+        '';
+        additional_args =
+          { sloth, ... }:
+          {
+            dbus = {
+              enable = true;
+              policies = {
+                "com.steampowered.*" = "own";
+                "com.feralinteractive.GameMode" = "talk";
+              };
+            };
+            bubblewrap = {
+              sharePid = true;
+              bind = {
+                dev = [ "/dev" ];
+                ro = [
+                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
+                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
+                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
+                ];
+                rw = lib.mkAfter [
+                  (sloth.mkdir (
+                    sloth.concat [
+                      "/mnt/data-nvme/"
+                      (sloth.env "USER")
+                      "/SteamLibrary"
+                    ]
+                  ))
+                  (sloth.mkdir (
+                    sloth.concat [
+                      "/mnt/data-hdd/"
+                      (sloth.env "USER")
+                      "/SteamLibrary"
+                    ]
+                  ))
+                  "/tmp"
+                  "/sys/class"
+                  "/sys/bus"
+                  "/sys/dev"
+                  "/sys/devices"
+                  "/sys/block"
+                  "/run/udev"
+                ];
+              };
+            };
+          };
+        package = overriddenSteam;
+      };
+    in
+    sandboxed
+    // {
+      override = attrs: (sandboxed.override attrs) // { run = overriddenSteam.run; };
+      run = overriddenSteam.run;
+    };
+
   # ---------------------------------------------------------------------------
   # Custom Derivations & Overrides
   # ---------------------------------------------------------------------------
@@ -619,5 +724,7 @@ in
     prismLauncherSandbox
     discordCanarySandbox
     ayugramDesktopSandbox
-  ];
+    steamSandbox
+    steamSandbox.run
+  ] ++ steamExtraPackages;
 }
