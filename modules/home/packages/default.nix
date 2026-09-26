@@ -39,7 +39,7 @@ let
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    dbus = true;
+    additional_args.dbus.enable = true;
     package = pkgs.rustdesk-flutter;
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/rustdesk" "$XDG_CONFIG_HOME/rustdesk"
@@ -53,10 +53,10 @@ let
     wayland = "sandboxed";
     x11 = "sandboxed";
     gpu = true;
-    dbus = true;
     additional_args =
       { sloth, ... }:
       {
+        dbus.enable = true;
         dbus.policies."com.feralinteractive.GameMode" = "talk";
         bubblewrap.bind.ro = [
           (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
@@ -83,11 +83,11 @@ let
     wayland = "sandboxed";
     x11 = "sandboxed";
     gpu = true;
-    dbus = true;
     webcam = 5;
     additional_args =
       { sloth, ... }:
       {
+        dbus.enable = true;
         bubblewrap = {
           sharePid = true;
           bind.rw = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
@@ -128,8 +128,8 @@ let
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    dbus = true;
     webcam = 5;
+    additional_args.dbus.enable = true;
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/AyuGramDesktop" "$XDG_DATA_HOME/AyuGramDesktop"
     '';

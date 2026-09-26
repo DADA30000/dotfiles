@@ -766,7 +766,6 @@ in
             audio_pulse = "sandboxed";
             gpu = true;
             wayland = "sandboxed";
-            dbus = true;
             use_landlock = false;
             sandbox_tmp = false;
             sandbox_shm = false;
@@ -784,9 +783,12 @@ in
             additional_args =
               { sloth, ... }:
               {
-                dbus.policies = {
-                  "com.steampowered.*" = "own";
-                  "com.feralinteractive.GameMode" = "talk";
+                dbus = {
+                  enable = true;
+                  policies = {
+                    "com.steampowered.*" = "own";
+                    "com.feralinteractive.GameMode" = "talk";
+                  };
                 };
                 bubblewrap = {
                   sharePid = true;

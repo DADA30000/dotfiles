@@ -56,9 +56,11 @@ in
         gpu = true;
         wayland = "sandboxed";
         x11 = "sandboxed";
-        dbus = true;
         portals_for_files = false;
-        additional_args.dbus.policies."org.mpris.MediaPlayer2.spotify" = "own";
+        additional_args.dbus = {
+          enable = true;
+          policies."org.mpris.MediaPlayer2.spotify" = "own";
+        };
         package = config.programs.spicetify.spicedSpotify.overrideAttrs {
           fixupPhase = ''
             runHook preFixup
