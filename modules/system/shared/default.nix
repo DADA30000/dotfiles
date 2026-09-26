@@ -617,11 +617,10 @@ in
             core_permissions = "rx";
             rules = [
               {
-                matches = [ { "media.class" = "~Audio/.*"; } ];
-                actions.set-permissions = "rx";
-              }
-              {
-                matches = [ { "object.type" = "Device"; } ];
+                matches = [
+                  { "device.name" = "~.*"; }
+                  { "node.name" = "~.*"; }
+                ];
                 actions.set-permissions = "rx";
               }
             ];
