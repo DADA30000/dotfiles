@@ -35,10 +35,11 @@ let
   # ---------------------------------------------------------------------------
   rustdeskSandbox = mkSandbox rec {
     appId = "com.rustdesk.RustDesk";
-    network = true;
-    audio = true;
-    wayland = true;
+    network = "sandboxed";
+    audio_pulse = "sandboxed";
+    wayland = "sandboxed";
     gpu = true;
+    dbus = true;
     package = pkgs.rustdesk-flutter;
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/rustdesk" "$XDG_CONFIG_HOME/rustdesk"
@@ -47,11 +48,12 @@ let
 
   prismLauncherSandbox = mkSandbox rec {
     appId = "org.prismlauncher.PrismLauncher";
-    network_singbox = true;
-    audio = true;
-    wayland = true;
+    network = "singbox";
+    audio_pulse = "sandboxed";
+    wayland = "sandboxed";
+    x11 = "sandboxed";
     gpu = true;
-    x11 = true;
+    dbus = true;
     additional_args =
       { sloth, ... }:
       {
@@ -76,11 +78,12 @@ let
 
   discordCanarySandbox = mkSandbox rec {
     appId = "com.discordapp.DiscordCanary";
-    network_singbox = true;
-    audio = true;
-    wayland = true;
+    network = "singbox";
+    audio_pulse = "sandboxed";
+    wayland = "sandboxed";
+    x11 = "sandboxed";
     gpu = true;
-    x11 = true;
+    dbus = true;
     webcam = 5;
     additional_args =
       { sloth, ... }:
@@ -105,11 +108,12 @@ let
 
   sounduxSandbox = mkSandbox {
     appId = "io.github.Soundux";
-    network = true;
-    audio = true;
-    wayland = true;
+    network = "sandboxed";
+    audio_pulse = "passthrough";
+    audio_pipewire = "passthrough";
+    wayland = "sandboxed";
+    x11 = "sandboxed";
     gpu = true;
-    x11 = true;
     package = sounduxPkg;
     additional_args =
       { sloth, ... }:
@@ -120,10 +124,11 @@ let
 
   ayugramDesktopSandbox = mkSandbox rec {
     appId = "com.ayugram.desktop";
-    network_singbox = true;
-    audio = true;
-    wayland = true;
+    network = "singbox";
+    audio_pulse = "sandboxed";
+    wayland = "sandboxed";
     gpu = true;
+    dbus = true;
     webcam = 5;
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/AyuGramDesktop" "$XDG_DATA_HOME/AyuGramDesktop"

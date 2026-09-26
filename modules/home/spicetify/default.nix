@@ -51,11 +51,12 @@ in
     home.packages = [
       (mkSandbox {
         appId = "com.spotify.Client";
-        audio = true;
+        network = "singbox";
+        audio_pulse = "sandboxed";
         gpu = true;
-        wayland = true;
-        x11 = true;
-        network_singbox = true;
+        wayland = "sandboxed";
+        x11 = "sandboxed";
+        dbus = true;
         portals_for_files = false;
         additional_args.dbus.policies."org.mpris.MediaPlayer2.spotify" = "own";
         package = config.programs.spicetify.spicedSpotify.overrideAttrs {

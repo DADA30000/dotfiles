@@ -609,6 +609,33 @@ in
       alsa.support32Bit = true;
       jack.enable = true;
       pulse.enable = true;
+      extraConfig.pipewire."99-restricted-socket" = {
+        "module.protocol-native.args" = {
+          sockets = [
+            { name = "pipewire-0"; }
+            { name = "pipewire-0-manager"; }
+            { name = "pipewire-0-restricted"; }
+          ];
+        };
+        "module.access.args" = {
+          "access.socket" = {
+            "pipewire-0" = "unrestricted";
+            "pipewire-0-manager" = "unrestricted";
+            "pipewire-0-restricted" = "flatpak";
+          };
+        };
+      };
+      extraConfig.pipewire-pulse."99-restricted-socket" = {
+        "pulse.properties" = {
+          "server.address" = [
+            "unix:native"
+            {
+              address = "unix:restricted";
+              "client.access" = "restricted";
+            }
+          ];
+        };
+      };
     };
 
     tlp = {
@@ -735,10 +762,11 @@ in
 
           sandboxed = mkSandbox rec {
             appId = "com.valvesoftware.Steam";
-            network = true;
-            audio = true;
+            network = "sandboxed";
+            audio_pulse = "sandboxed";
             gpu = true;
-            wayland = true;
+            wayland = "sandboxed";
+            dbus = true;
             use_landlock = false;
             sandbox_tmp = false;
             sandbox_shm = false;

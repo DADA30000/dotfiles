@@ -129,15 +129,18 @@ let
         appId,
         package,
         gpu ? false,
-        network ? false,
+        network ? "off",
         network_singbox ? false,
         network_full ? false,
         webcam ? 0,
-        audio ? false,
-        wayland ? false,
+        audio ? null,
+        audio_pulse ? "off",
+        audio_pipewire ? "off",
+        wayland ? "off",
         wayland_full ? false,
         x11_shared ? false,
-        x11 ? false,
+        x11 ? "off",
+        dbus ? false,
         use_landlock ? true,
         portals_for_files ? true,
         sandbox_shm ? true,
@@ -149,21 +152,52 @@ let
         extraAttrs ? [ ],
       }:
       let
-        enabledModesCount = lib.length (
-          lib.filter (x: x) [
-            network
-            network_singbox
-            network_full
-          ]
-        );
-        isExclusive = enabledModesCount <= 1;
+        # 1. Network mode: "off" | "sandboxed" | "singbox" | "passthrough"
+        networkMode =
+          if network_singbox then "singbox"
+          else if network_full then "passthrough"
+          else if network == true then "sandboxed"
+          else if network == false then "off"
+          else network;
+
+        # 2. Wayland mode: "off" | "sandboxed" | "passthrough"
+        waylandMode =
+          if wayland_full then "passthrough"
+          else if wayland == true then "sandboxed"
+          else if wayland == false then "off"
+          else wayland;
+
+        # 3. X11 mode: "off" | "sandboxed" | "passthrough"
+        x11Mode =
+          if x11_shared then "passthrough"
+          else if x11 == true then "sandboxed"
+          else if x11 == false then "off"
+          else x11;
+
+        # 4. Audio Pulse mode: "off" | "sandboxed" | "passthrough"
+        audioPulseMode =
+          if audio_pulse == true then "sandboxed"
+          else if audio_pulse == false then "off"
+          else if audio_pulse != "off" then audio_pulse
+          else if audio == true || audio == "sandboxed" then "sandboxed"
+          else if audio == "passthrough" then "passthrough"
+          else "off";
+
+        # 5. Audio PipeWire mode: "off" | "sandboxed" | "passthrough"
+        audioPipewireMode =
+          if audio_pipewire == true then "sandboxed"
+          else if audio_pipewire == false then "off"
+          else if audio_pipewire != "off" then audio_pipewire
+          else if audio == "passthrough" then "passthrough"
+          else "off";
+
+        # 6. D-Bus mode
+        dbusEnable = if builtins.isBool dbus then dbus else false;
       in
-      assert lib.assertMsg isExclusive
-        "Sandbox Error (${appId}): 'network', 'network_singbox', and 'network_full' are mutually exclusive. You have enabled ${toString enabledModesCount} modes.";
       let
         writeDash = pkgs.writers.writeDash;
         stage1_inside = writeDash "stage1_inside" (
-          if network_singbox then
+          if (networkMode == "singbox") then
             ''
               ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@" &
               exec ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run
@@ -176,8 +210,8 @@ let
         );
         stage2_inside = writeDash "stage2_inside" ''
           ${additional_inside_commands}
-          ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
-          ${lib.optionalString network_singbox "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
+          ${lib.optionalString (x11Mode == "sandboxed") "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
+          ${lib.optionalString (networkMode == "singbox") "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
           env SANDBOX_ROLE=executor ${executor_script} "$@" &
           exit 0
         '';
@@ -275,11 +309,11 @@ let
 
               ${additional_outside_commands}
 
-              ${lib.optionalString network_singbox ''
+              ${lib.optionalString (networkMode == "singbox") ''
                 rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
               ''}
 
-              ${lib.optionalString wayland ''
+              ${lib.optionalString (waylandMode == "sandboxed") ''
                 SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
                 NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-secure-notify-$APP_ID"
                 WAY_CLOSE_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-close-pipe"
@@ -305,7 +339,7 @@ let
                 export XDG_CONFIG_DIRS="${portal-files}:''${XDG_CONFIG_DIRS:-/etc/xdg}"
               ''}
 
-              ${lib.optionalString network_singbox ''
+              ${lib.optionalString (networkMode == "singbox") ''
                 export ORIG_UID="$(id -u)"
                 export ORIG_GID="$(id -g)"
               ''}
@@ -339,7 +373,7 @@ let
               exec sandbox_supervisor \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --runner-pid "$GUEST_HOST_PID" \
-                ${lib.optionalString wayland "--close-fd 9"} \
+                ${lib.optionalString (waylandMode == "sandboxed") "--close-fd 9"} \
                 --cleanup "${cleanup_script}"
             fi
           else
@@ -360,7 +394,7 @@ let
                     app.binPath = "bin/dash";
 
                     dbus = {
-                      enable = true;
+                      enable = lib.mkDefault dbusEnable;
                       policies = {
                         # Alternative tray
                         "org.ayatana.indicator.application" = "talk";
@@ -392,7 +426,7 @@ let
                     flatpak.appId = appId;
 
                     pasta = {
-                      enable = network || network_singbox;
+                      enable = networkMode == "sandboxed" || networkMode == "singbox";
                       mode = "isolate";
                     };
 
@@ -400,11 +434,11 @@ let
 
                       bindEntireStore = true;
 
-                      network = network || network_singbox || network_full;
+                      network = networkMode == "passthrough";
 
                       env =
                         { }
-                        // lib.optionalAttrs wayland {
+                        // lib.optionalAttrs (waylandMode == "sandboxed") {
                           WAYLAND_DISPLAY = "wayland-secure";
                         };
 
@@ -413,7 +447,7 @@ let
                         dev = true;
                       };
 
-                      extraArgs = lib.optionals network_singbox [
+                      extraArgs = lib.optionals (networkMode == "singbox") [
                         "--gid"
                         "0"
                         "--uid"
@@ -427,9 +461,9 @@ let
                       ];
 
                       sockets = {
-                        pulse = audio;
-                        pipewire = audio;
-                        wayland = false;
+                        pulse = audioPulseMode == "passthrough";
+                        pipewire = audioPipewireMode == "passthrough";
+                        wayland = waylandMode == "passthrough";
                         x11 = false;
                       };
 
@@ -438,7 +472,7 @@ let
                         dev =
                           [ ]
                           ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
-                          ++ (lib.optionals network_singbox [ "/dev/net/tun" ])
+                          ++ (lib.optionals (networkMode == "singbox") [ "/dev/net/tun" ])
                           ++ (lib.optionals gpu [
                             "/dev/dri"
                             "/dev/nvidia0"
@@ -510,21 +544,33 @@ let
                           (concat (sloth.env "XDG_DATA_HOME") "/icons")
                           (concat (sloth.env "XDG_DATA_HOME") "/themes")
                         ]
-                        ++ (lib.optionals gpu [
+                        ++ (lib.optionals (gpu) [
                           "/run/opengl-driver"
                           "/run/opengl-driver-32"
                           "/sys/class/drm"
                           "/sys/devices"
                           "/sys/bus/pci"
                         ])
-                        ++ (lib.optionals x11_shared [ "/tmp/.X11-unix" ])
+                        ++ (lib.optionals (x11Mode == "passthrough") [ "/tmp/.X11-unix" ])
                         ++ (lib.optionals portals_for_files [ (concat (sloth.env "XDG_CONFIG_HOME") "/mimeapps.list") ])
-                        ++ (lib.optionals wayland_full [
+                        ++ (lib.optionals (waylandMode == "passthrough") [
                           (sloth.concat [
                             (sloth.env "XDG_RUNTIME_DIR")
                             "/"
                             (sloth.env "WAYLAND_DISPLAY")
                           ])
+                        ])
+                        ++ (lib.optionals (audioPulseMode == "sandboxed") [
+                          [
+                            (sloth.concat' sloth.runtimeDir "/pulse/restricted")
+                            (sloth.concat' sloth.runtimeDir "/pulse/native")
+                          ]
+                        ])
+                        ++ (lib.optionals (audioPipewireMode == "sandboxed") [
+                          [
+                            (sloth.concat' sloth.runtimeDir "/pipewire-0-restricted")
+                            (sloth.concat' sloth.runtimeDir "/pipewire-0")
+                          ]
                         ]);
 
                       };
