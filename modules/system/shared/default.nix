@@ -609,6 +609,22 @@ in
       alsa.support32Bit = true;
       jack.enable = true;
       pulse.enable = true;
+      wireplumber.extraConfig."99-restricted-permissions" = {
+        "access.rules" = [
+          {
+            matches = [
+              {
+                "pipewire.client.access" = "restricted";
+              }
+            ];
+            actions = {
+              update-props = {
+                default_permissions = "rx";
+              };
+            };
+          }
+        ];
+      };
       extraConfig.pipewire."99-restricted-socket" = {
         "module.protocol-native.args" = {
           sockets = [
