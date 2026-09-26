@@ -537,9 +537,12 @@ in
             export XDG_RUNTIME_DIR="/run/user/$USER_UID"
             export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
             if [ -f "$XDG_RUNTIME_DIR/sunshine.env" ]; then
+              set -a
               # shellcheck disable=SC1090
-              source "$XDG_RUNTIME_DIR/sunshine.env"
+              . "$XDG_RUNTIME_DIR/sunshine.env"
+              set +a
             fi
+            export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
             exec ${pkgs.sunshine}/bin/sunshine
           '';
         in
@@ -607,8 +610,11 @@ in
         Restart = "on-failure";
         RestartSec = "3s";
         ExecStartPre = pkgs.writeShellScript "sunshine-env-forward" ''
-          echo "WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-1}" > "$XDG_RUNTIME_DIR/sunshine.env"
-          echo "DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}" >> "$XDG_RUNTIME_DIR/sunshine.env"
+          echo "export WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-1}" > "$XDG_RUNTIME_DIR/sunshine.env"
+          echo "export DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}" >> "$XDG_RUNTIME_DIR/sunshine.env"
+          if [ -n "''${DISPLAY:-}" ]; then
+            echo "export DISPLAY=$DISPLAY" >> "$XDG_RUNTIME_DIR/sunshine.env"
+          fi
         '';
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
