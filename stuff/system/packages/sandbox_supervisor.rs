@@ -2,7 +2,8 @@
     clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_lossless
+    clippy::cast_lossless,
+    clippy::cast_possible_wrap
 )]
 
 use std::collections::HashSet;
@@ -33,6 +34,88 @@ unsafe extern "C" {
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
     fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
     fn close(fd: i32) -> i32;
+}
+
+struct Epoll(i32);
+
+impl Epoll {
+    fn new() -> Option<Self> {
+        let fd = unsafe { epoll_create1(0) };
+        if fd >= 0 {
+            Some(Self(fd))
+        } else {
+            None
+        }
+    }
+
+    fn add(&self, fd: i32) -> bool {
+        let mut ev = EpollEvent {
+            events: EPOLLIN,
+            data: fd as u64,
+        };
+        unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
+    }
+
+    fn del_and_close(&self, fd: i32) {
+        unsafe {
+            epoll_ctl(self.0, EPOLL_CTL_DEL, fd, std::ptr::null_mut());
+            close(fd);
+        }
+    }
+
+    fn wait(&self, events: &mut [EpollEvent]) -> Result<usize, i32> {
+        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), events.len() as i32, -1) };
+        if n < 0 {
+            let err = std::io::Error::last_os_error();
+            Err(err.raw_os_error().unwrap_or(0))
+        } else {
+            Ok(n as usize)
+        }
+    }
+}
+
+impl Drop for Epoll {
+    fn drop(&mut self) {
+        unsafe { close(self.0) };
+    }
+}
+
+fn pidfd_open(pid: i32) -> Option<i32> {
+    if pid <= 0 {
+        return None;
+    }
+    let fd = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) as i32 };
+    if fd >= 0 {
+        Some(fd)
+    } else {
+        None
+    }
+}
+
+fn create_signalfd() -> Option<i32> {
+    // Block SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) via raw Linux syscall
+    let mask: u64 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 14);
+    unsafe {
+        syscall(
+            SYS_RT_SIGPROCMASK,
+            SIG_BLOCK,
+            &raw const mask as i64,
+            0i64,
+            8i64,
+        );
+        let sfd = syscall(
+            SYS_SIGNALFD4,
+            -1i64,
+            &raw const mask as i64,
+            8i64,
+            SFD_CLOEXEC | SFD_NONBLOCK,
+        ) as i32;
+        if sfd >= 0 {
+            Some(sfd)
+        } else {
+            None
+        }
+    }
 }
 
 fn read_pids(path: &str) -> HashSet<i32> {
@@ -78,48 +161,18 @@ fn main() {
         return;
     }
 
-    let epfd = unsafe { epoll_create1(0) };
-
-    // Block SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) via raw Linux syscall
-    let mask: u64 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 14);
-    unsafe {
-        syscall(
-            SYS_RT_SIGPROCMASK,
-            SIG_BLOCK,
-            &raw const mask as i64,
-            0i64,
-            8i64,
-        );
-    }
-    let sfd = unsafe {
-        syscall(
-            SYS_SIGNALFD4,
-            -1i64,
-            &raw const mask as i64,
-            8i64,
-            SFD_CLOEXEC | SFD_NONBLOCK,
-        ) as i32
+    let Some(epoll) = Epoll::new() else {
+        return;
     };
+
+    let sfd = create_signalfd().unwrap_or(-1);
     if sfd >= 0 {
-        let mut ev = EpollEvent {
-            events: EPOLLIN,
-            data: sfd as u64,
-        };
-        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &raw mut ev) };
+        epoll.add(sfd);
     }
 
-    // Monitor runner_pid
-    let runner_fd = if runner_pid > 0 {
-        unsafe { syscall(SYS_PIDFD_OPEN, runner_pid as i64, 0) as i32 }
-    } else {
-        -1
-    };
+    let runner_fd = pidfd_open(runner_pid).unwrap_or(-1);
     if runner_fd >= 0 {
-        let mut ev = EpollEvent {
-            events: EPOLLIN,
-            data: runner_fd as u64,
-        };
-        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &raw mut ev) };
+        epoll.add(runner_fd);
     }
 
     let mut monitored = HashSet::new();
@@ -144,13 +197,8 @@ fn main() {
             if monitored.contains(&pid) {
                 continue;
             }
-            let pfd = unsafe { syscall(SYS_PIDFD_OPEN, pid as i64, 0) as i32 };
-            if pfd >= 0 {
-                let mut ev = EpollEvent {
-                    events: EPOLLIN,
-                    data: pfd as u64,
-                };
-                if unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, pfd, &raw mut ev) } == 0 {
+            if let Some(pfd) = pidfd_open(pid) {
+                if epoll.add(pfd) {
                     monitored.insert(pid);
                 } else {
                     unsafe { close(pfd) };
@@ -159,27 +207,21 @@ fn main() {
         }
 
         let mut events = [EpollEvent { events: 0, data: 0 }; 16];
-        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), 16, -1) };
-        if n < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.raw_os_error() == Some(4) { // EINTR
-                continue;
-            }
-            break;
-        }
+        let n = match epoll.wait(&mut events) {
+            Ok(n) => n,
+            Err(4) => continue, // EINTR
+            Err(_) => break,
+        };
 
         let mut terminate = false;
-        for event in events.iter().take(n as usize) {
+        for event in events.iter().take(n) {
             let fd = event.data as i32;
             if fd == sfd || fd == runner_fd {
                 terminate = true;
                 break;
             }
             // An app subprocess exited: clean it up from epoll to prevent busy-spinning
-            unsafe {
-                epoll_ctl(epfd, EPOLL_CTL_DEL, fd, std::ptr::null_mut());
-                close(fd);
-            };
+            epoll.del_and_close(fd);
         }
         if terminate {
             break;

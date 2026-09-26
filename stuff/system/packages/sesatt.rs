@@ -38,7 +38,7 @@ type CChar = i8;
 type CVoid = std::ffi::c_void;
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct Termios {
     c_iflag: u32,
     c_oflag: u32,
@@ -51,12 +51,32 @@ struct Termios {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 struct Winsize {
     ws_row: u16,
     ws_col: u16,
     ws_xpixel: u16,
     ws_ypixel: u16,
+}
+
+impl Winsize {
+    fn to_bytes(self) -> [u8; 8] {
+        let mut b = [0u8; 8];
+        b[0..2].copy_from_slice(&self.ws_row.to_ne_bytes());
+        b[2..4].copy_from_slice(&self.ws_col.to_ne_bytes());
+        b[4..6].copy_from_slice(&self.ws_xpixel.to_ne_bytes());
+        b[6..8].copy_from_slice(&self.ws_ypixel.to_ne_bytes());
+        b
+    }
+
+    fn from_bytes(b: [u8; 8]) -> Self {
+        Self {
+            ws_row: u16::from_ne_bytes([b[0], b[1]]),
+            ws_col: u16::from_ne_bytes([b[2], b[3]]),
+            ws_xpixel: u16::from_ne_bytes([b[4], b[5]]),
+            ws_ypixel: u16::from_ne_bytes([b[6], b[7]]),
+        }
+    }
 }
 
 #[link(name = "util")]
@@ -101,8 +121,8 @@ extern "C" fn sigwinch_handler(_: CInt) {
 }
 
 fn ffi_get_terminal_size() -> io::Result<Winsize> {
-    let mut ws: Winsize = unsafe { std::mem::zeroed() };
-    let res = unsafe { ioctl(0, TIOCGWINSZ, &mut ws) };
+    let mut ws = Winsize::default();
+    let res = unsafe { ioctl(0, TIOCGWINSZ, &raw mut ws) };
     if res == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
         Ok(ws)
     } else {
@@ -111,13 +131,13 @@ fn ffi_get_terminal_size() -> io::Result<Winsize> {
 }
 
 fn ffi_set_raw_mode() -> io::Result<Termios> {
-    let mut orig: Termios = unsafe { std::mem::zeroed() };
-    if unsafe { tcgetattr(0, &mut orig) } != 0 {
+    let mut orig = Termios::default();
+    if unsafe { tcgetattr(0, &raw mut orig) } != 0 {
         return Err(io::Error::last_os_error());
     }
     let mut raw = orig;
-    unsafe { cfmakeraw(&mut raw) };
-    if unsafe { tcsetattr(0, TCSANOW, &raw) } != 0 {
+    unsafe { cfmakeraw(&raw mut raw) };
+    if unsafe { tcsetattr(0, TCSANOW, &raw const raw) } != 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(orig)
@@ -587,10 +607,9 @@ fn kill_session(session: &str) {
 }
 
 fn send_resize_pkt(stream: &mut UnixStream, ws: &Winsize) -> io::Result<()> {
-    let ws_bytes: [u8; 8] = unsafe { std::mem::transmute(*ws) };
     let mut pkt = Vec::with_capacity(9);
     pkt.push(0x01);
-    pkt.extend_from_slice(&ws_bytes);
+    pkt.extend_from_slice(&ws.to_bytes());
     stream.write_all(&pkt)
 }
 
@@ -652,13 +671,14 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
     });
 
     thread::spawn(move || {
+        let mut stdin = io::stdin();
         let mut buf = [0u8; 1024];
         loop {
-            let n = unsafe { read(0, buf.as_mut_ptr() as *mut CVoid, 1024) };
-            if n <= 0 {
-                break;
-            }
-            let chunk = &buf[..n as usize];
+            let n = match stdin.read(&mut buf) {
+                Ok(n) if n > 0 => n,
+                _ => break,
+            };
+            let chunk = &buf[..n];
 
             if chunk.contains(&0x1c) {
                 ffi_reset_mode(&orig_termios);
@@ -679,14 +699,14 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
     });
 
     let mut buf = [0u8; 4096];
+    let mut stdout = io::stdout();
     loop {
         let n = stream.read(&mut buf)?;
         if n == 0 {
             break;
         }
-        unsafe {
-            write(1, buf.as_ptr() as *const CVoid, n);
-        }
+        stdout.write_all(&buf[..n])?;
+        stdout.flush()?;
     }
 
     ffi_reset_mode(&orig_termios);
@@ -887,7 +907,9 @@ fn run_daemon_server(
                         Err(_) => return,
                     };
 
-                    clients_inner.lock().unwrap().push(s_clone);
+                    if let Ok(mut guard) = clients_inner.lock() {
+                        guard.push(s_clone);
+                    }
 
                     let mut my_nvim = String::new();
                     let mut current_tag = tag[0];
@@ -919,9 +941,9 @@ fn run_daemon_server(
                                 if s.read_exact(&mut ws_buf).is_err() {
                                     break;
                                 }
-                                let client_ws: Winsize = unsafe { std::mem::transmute(ws_buf) };
+                                let client_ws = Winsize::from_bytes(ws_buf);
                                 unsafe {
-                                    ioctl(master_fd, TIOCSWINSZ, &client_ws);
+                                    ioctl(master_fd, TIOCSWINSZ, &raw const client_ws);
                                 }
                             }
                             0x02 => {
@@ -964,8 +986,9 @@ fn run_daemon_server(
 
         let _ = (&*log_file).write_all(chunk);
 
-        let mut guard = clients.lock().unwrap();
-        guard.retain_mut(|c| c.write_all(chunk).is_ok());
+        if let Ok(mut guard) = clients.lock() {
+            guard.retain_mut(|c| c.write_all(chunk).is_ok());
+        }
     }
 
     let _ = fs::remove_file(sock_path);
