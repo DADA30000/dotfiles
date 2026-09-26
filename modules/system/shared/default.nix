@@ -317,7 +317,8 @@ in
 
     binfmt.registrations.exe = {
       magicOrExtension = "MZ";
-      interpreter = "/run/current-system/sw/bin/run-exe";
+/etc/profiles/per-user/l0lk3k/bin
+      interpreter = "";
       recognitionType = "magic";
     };
 
@@ -724,8 +725,6 @@ in
     seahorse.enable = true;
 
     dconf.enable = true;
-
-
 
     uwsm = {
       enable = true;
