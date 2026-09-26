@@ -130,6 +130,8 @@ let
         package,
         gpu ? false,
         network ? false,
+        network_singbox ? false,
+        network_full ? false,
         webcam ? 0,
         audio ? false,
         wayland ? false,
