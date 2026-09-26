@@ -22,6 +22,17 @@ let
         {
           action = "sniff";
         }
+        {
+          port = [ 53 ];
+          outbound = "direct";
+        }
+        {
+          ip_cidr = [
+            "127.0.0.0/8"
+            "192.168.0.0/16"
+          ];
+          outbound = "direct";
+        }
       ]
       ++ (lib.optionals (osConfig ? sing-box.processes_to_proxy) [
         {
@@ -35,15 +46,14 @@ let
         type = "tun";
         tag = "tun-in";
         interface_name = "tun-sb";
-        address = "172.19.0.5/30";
+        address = [
+          "172.19.0.5/30"
+          "fd00::5/126"
+        ];
         auto_route = true;
         strict_route = true;
         stack = "system";
         mtu = 1480;
-        route_exclude_address = [
-          "127.0.0.1/32"
-          "192.168.0.0/16"
-        ];
       }
     ];
     outbounds = [
