@@ -552,8 +552,10 @@ in
             "/dev/nvidia-uvm-tools rw"
           ];
 
+          EnvironmentFile = "-/run/user/%U/sunshine.env";
           Environment = [
             "XDG_RUNTIME_DIR=/run/user/%U"
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
           ];
 
           ExecStart = "${pkgs.sunshine}/bin/sunshine";
@@ -596,6 +598,10 @@ in
         Type = "simple";
         Restart = "on-failure";
         RestartSec = "3s";
+        ExecStartPre = pkgs.writeShellScript "sunshine-env-forward" ''
+          echo "WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-1}" > "/run/user/%U/sunshine.env"
+          echo "DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/%U/bus}" >> "/run/user/%U/sunshine.env"
+        '';
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
       };
