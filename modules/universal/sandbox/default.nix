@@ -384,7 +384,7 @@ let
 
                       bindEntireStore = true;
 
-                      network = network == "passthrough";
+                      network = network != "off";
 
                       env =
                         { }
@@ -454,7 +454,10 @@ let
                             "/tmp"
                           ]
                         ])
-                        ++ [ (concat sloth.runtimeDir "/doc") ];
+                        ++ [
+                          (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
+                          (concat sloth.runtimeDir "/doc")
+                        ];
 
                         ro = [
                           "/etc/xdg"

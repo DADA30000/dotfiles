@@ -599,7 +599,7 @@ fn send_nvim_pkt(stream: &mut UnixStream) -> io::Result<()> {
 }
 
 fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
-    let mut stream = match connect_with_retry(sock_path, 100, Duration::from_millis(10)) {
+    let mut stream = match connect_with_retry(sock_path, 250, Duration::from_millis(10)) {
         Ok(s) => s,
         Err(e) => {
             if log_path.exists() {
