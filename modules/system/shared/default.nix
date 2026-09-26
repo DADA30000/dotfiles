@@ -70,6 +70,8 @@ in
 
   hardware = {
 
+    uinput.enable = true;
+
     xpadneo.enable = true;
 
     xone.enable = true;
@@ -271,6 +273,11 @@ in
 
   boot = {
 
+    blacklistedKernelModules = [
+      "hid-uclogic"
+      "wacom"
+    ];
+
     zfs.forceImportRoot = false;
 
     tmp.useTmpfs = true;
@@ -440,17 +447,6 @@ in
         };
       };
       services = {
-        load-aorus-laptop = {
-          description = "Load Gigabyte Aorus Laptop driver asynchronously";
-          after = [ "basic.target" ];
-          wantedBy = [ "multi-user.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = "-${pkgs.kmod}/bin/modprobe aorus_laptop";
-            RemainAfterExit = true;
-          };
-        };
-
         dbus-broker.serviceConfig = {
           Type = "notify";
           ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
@@ -504,6 +500,19 @@ in
         };
       };
 
+      load-aorus-laptop = {
+        description = "Load Gigabyte Aorus Laptop driver asynchronously";
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "-${pkgs.kmod}/bin/modprobe -q aorus_laptop";
+          Restart = "no";
+          RemainAfterExit = false;
+          StandardOutput = "null";
+          StandardError = "null";
+        };
+      };
+
       hardware-control-daemon = {
         description = "Hardware Control Daemon for Fan, NV-Blindfold, and Ryzen TDP";
         wantedBy = [ "multi-user.target" ];
@@ -520,11 +529,109 @@ in
         };
       };
 
+      "sunshine@" = {
+        description = "Sunshine Game Streaming Host for %i";
+        after = [
+          "graphical.target"
+          "user@%U.service"
+        ];
+        bindsTo = [ "user@%U.service" ];
+
+        serviceConfig = {
+          User = "%i";
+          Group = "users";
+          SupplementaryGroups = [ "uinput" ];
+          DeviceAllow = [
+            "/dev/uinput rw"
+            "/dev/dri/card* rw"
+            "/dev/dri/renderD* rw"
+            "/dev/nvidia* rw"
+            "/dev/nvidiactl rw"
+            "/dev/nvidia-modeset rw"
+            "/dev/nvidia-uvm rw"
+            "/dev/nvidia-uvm-tools rw"
+          ];
+
+          Environment = [
+            "XDG_RUNTIME_DIR=/run/user/%U"
+          ];
+
+          ExecStart = "${pkgs.sunshine}/bin/sunshine";
+          Restart = "on-failure";
+          RestartSec = "3s";
+        };
+      };
+
+      "opentabletdriver@" = {
+        description = "OpenTabletDriver Daemon for %i";
+        after = [
+          "graphical.target"
+          "user@%U.service"
+        ];
+        bindsTo = [ "user@%U.service" ];
+
+        serviceConfig = {
+          User = "%i";
+          Group = "users";
+          SupplementaryGroups = [ "uinput" ];
+          DeviceAllow = [ "/dev/uinput rw" ];
+          Environment = [
+            "XDG_RUNTIME_DIR=/run/user/%U"
+          ];
+          ExecStart = "${pkgs.opentabletdriver}/bin/otd-daemon";
+          Restart = "on-failure";
+          RestartSec = "3s";
+        };
+      };
+
+    };
+
+    user.services.sunshine = {
+      description = "Sunshine Game Streaming Host";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+
+      serviceConfig = {
+        Type = "simple";
+        Restart = "on-failure";
+        RestartSec = "3s";
+        ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
+        ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
+      };
+    };
+
+    user.services.opentabletdriver = {
+      description = "OpenTabletDriver User Bridge";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+
+      serviceConfig = {
+        Type = "simple";
+        Restart = "on-failure";
+        RestartSec = "3s";
+        ExecStart = "${pkgs.systemd}/bin/systemctl start --wait opentabletdriver@%u.service";
+        ExecStop = "${pkgs.systemd}/bin/systemctl stop opentabletdriver@%u.service";
+      };
     };
 
   };
 
+  environment.systemPackages = [
+    pkgs.opentabletdriver
+  ];
+
   services = {
+
+    udev.packages = [
+      (pkgs.runCommand "70-opentabletdriver-sanitized.rules" { } ''
+        mkdir -p $out/lib/udev/rules.d
+        substitute ${pkgs.opentabletdriver}/lib/udev/rules.d/70-opentabletdriver.rules \
+          $out/lib/udev/rules.d/70-opentabletdriver.rules \
+          --replace-fail 'KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", TAG+="uaccess", TAG+="udev-acl"' ""
+      '')
+    ];
 
     fwupd.enable = true;
 
@@ -663,6 +770,17 @@ in
       enable = true;
       enablePkexecWrapper = true;
       adminIdentities = [ "unix-user:${user}" ];
+      extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if (action.id == "org.freedesktop.systemd1.manage-units") {
+            var unit = action.lookup("unit");
+            if (unit === "sunshine@" + subject.user + ".service" ||
+                unit === "opentabletdriver@" + subject.user + ".service") {
+              return polkit.Result.YES;
+            }
+          }
+        });
+      '';
     };
 
     sudo.extraRules = [
@@ -728,7 +846,7 @@ in
       package = pkgs.uwsm.overrideAttrs (prev: {
         patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/uwsm.patch ];
         postInstall = (prev.postInstall or "") + ''
-          chmod -R 777 "$out/bin"
+          chmod -R u+w "$out/bin"
           wrapProgram "$out/bin/uuctl" \
             --add-flags "dmenu -i -p"
         '';
