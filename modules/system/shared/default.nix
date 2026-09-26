@@ -558,16 +558,6 @@ in
             User = "%i";
             Group = "users";
             SupplementaryGroups = [ "uinput" ];
-            DeviceAllow = [
-              "/dev/uinput rw"
-              "/dev/dri/card* rw"
-              "/dev/dri/renderD* rw"
-              "/dev/nvidia* rw"
-              "/dev/nvidiactl rw"
-              "/dev/nvidia-modeset rw"
-              "/dev/nvidia-uvm rw"
-              "/dev/nvidia-uvm-tools rw"
-            ];
 
             ExecStart = "${sunshine-system-runner} %i";
             Restart = "on-failure";
