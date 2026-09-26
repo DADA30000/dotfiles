@@ -599,8 +599,8 @@ in
         Restart = "on-failure";
         RestartSec = "3s";
         ExecStartPre = pkgs.writeShellScript "sunshine-env-forward" ''
-          echo "WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-1}" > "/run/user/%U/sunshine.env"
-          echo "DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/%U/bus}" >> "/run/user/%U/sunshine.env"
+          echo "WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-1}" > "$XDG_RUNTIME_DIR/sunshine.env"
+          echo "DBUS_SESSION_BUS_ADDRESS=''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}" >> "$XDG_RUNTIME_DIR/sunshine.env"
         '';
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
