@@ -338,13 +338,11 @@ let
               fi
               exec 5<&-
               rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
-              nohup sandbox_supervisor \
+              exec sandbox_supervisor \
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --runner-pid "$GUEST_HOST_PID" \
                 ${lib.optionalString wayland "--close-fd 9"} \
-                --cleanup "${cleanup_script}" \
-                >/dev/null 2>&1 &
-              exit 0
+                --cleanup "${cleanup_script}"
             fi
           else
             exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"
