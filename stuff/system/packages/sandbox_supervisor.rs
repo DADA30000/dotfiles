@@ -1,12 +1,11 @@
 use std::collections::HashSet;
-use std::{env, fs, process::Command, thread, time::Duration};
+use std::{env, fs, process::Command};
 
 const SYS_RT_SIGPROCMASK: i64 = 14;
 const SYS_SIGNALFD4: i64 = 289;
 const SYS_PIDFD_OPEN: i64 = 434;
 
 const SIG_BLOCK: i64 = 0;
-const SIG_SETMASK: i64 = 2;
 const SFD_CLOEXEC: i64 = 0x80000;
 const SFD_NONBLOCK: i64 = 0x800;
 
@@ -116,26 +115,26 @@ fn main() {
         unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &mut ev) };
     }
 
-    // Startup grace period: wait up to 500ms for app to spawn into cgroup
-    let mut retries = 0;
-    while read_pids(&procs_path).len() <= 1 && retries < 10 {
-        thread::sleep(Duration::from_millis(50));
-        retries += 1;
-    }
-
     let mut monitored = HashSet::new();
+    let mut has_seen_apps = false;
 
     loop {
         let current_pids = read_pids(&procs_path);
 
-        // Teardown condition: runner missing, or no apps left (<= 1 process)
-        if (runner_pid > 0 && !current_pids.contains(&runner_pid)) || current_pids.len() <= 1 {
+        // Teardown condition: runner missing, or all apps exited after having started
+        if (runner_pid > 0 && !current_pids.contains(&runner_pid))
+            || (has_seen_apps && current_pids.len() <= 1)
+        {
             break;
         }
 
         // Add newly appeared app processes to epoll
         for &pid in &current_pids {
-            if pid == runner_pid || monitored.contains(&pid) {
+            if pid == runner_pid {
+                continue;
+            }
+            has_seen_apps = true;
+            if monitored.contains(&pid) {
                 continue;
             }
             let pfd = unsafe { syscall(SYS_PIDFD_OPEN, pid as i64, 0) as i32 };
@@ -182,18 +181,6 @@ fn main() {
 
     if close_fd >= 0 {
         unsafe { close(close_fd) };
-    }
-
-    // Unblock signals so cleanup command runs normally
-    let empty_mask = 0u64;
-    unsafe {
-        syscall(
-            SYS_RT_SIGPROCMASK,
-            SIG_SETMASK,
-            &empty_mask as *const u64 as i64,
-            0i64,
-            8i64,
-        );
     }
 
     if !cleanup_cmd.is_empty() {
