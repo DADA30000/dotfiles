@@ -317,7 +317,9 @@ in
 
     binfmt.registrations.exe = {
       magicOrExtension = "MZ";
-      interpreter = "${inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/run-exe";
+      interpreter = "${
+        inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default
+      }/bin/run-exe";
       recognitionType = "magic";
     };
 
