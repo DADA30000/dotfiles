@@ -4,7 +4,7 @@
   user,
   lib,
   config,
-  mkSandbox,
+  inputs,
   ...
 }:
 let
@@ -317,8 +317,7 @@ in
 
     binfmt.registrations.exe = {
       magicOrExtension = "MZ";
-/etc/profiles/per-user/l0lk3k/bin
-      interpreter = "";
+      interpreter = "${inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/run-exe";
       recognitionType = "magic";
     };
 

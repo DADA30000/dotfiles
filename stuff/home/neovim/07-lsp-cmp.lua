@@ -51,6 +51,14 @@ cmp.setup({
 	}),
 })
 
+-- Ensure system Rust toolchain bin directory is prioritized in Neovim's PATH
+if _G.NIX and _G.NIX.rust_toolchain then
+	vim.env.PATH = _G.NIX.rust_toolchain .. "/bin:" .. (vim.env.PATH or "")
+	if _G.NIX.rust_lib_src and not vim.env.RUST_SRC_PATH then
+		vim.env.RUST_SRC_PATH = _G.NIX.rust_lib_src
+	end
+end
+
 -- === CONFORM FORMATTING SETUP ===
 local conform = require("conform")
 conform.setup({
@@ -60,6 +68,13 @@ conform.setup({
 		rust = { "rustfmt" },
 		nix = { "nixfmt" },
 		go = { "gofmt", "goimports" },
+	},
+	formatters = {
+		rustfmt = {
+			command = (_G.NIX and _G.NIX.rust_toolchain and vim.fn.executable(_G.NIX.rust_toolchain .. "/bin/rustfmt") == 1)
+					and (_G.NIX.rust_toolchain .. "/bin/rustfmt")
+				or "rustfmt",
+		},
 	},
 	default_format_opts = {
 		lsp_format = "fallback",
@@ -79,22 +94,26 @@ local is_formatting = false
 vim.api.nvim_create_autocmd("User", {
 	pattern = "AutoSaveWritePost",
 	group = vim.api.nvim_create_augroup("AutoSaveAsyncFormat", { clear = true }),
-	callback = function()
+	callback = function(args)
 		if is_formatting then
 			return
 		end
-		if not vim.bo.modifiable then
+		local target_buf = (args.data and args.data.saved_buffer) or vim.api.nvim_get_current_buf()
+		if not vim.api.nvim_buf_is_valid(target_buf) or not vim.bo[target_buf].modifiable then
 			return
 		end
 
 		is_formatting = true
 		conform.format({
+			bufnr = target_buf,
 			async = true,
 			lsp_format = "fallback",
 			callback = function()
 				is_formatting = false
-				if vim.bo.modified then
-					vim.cmd("silent! noautocmd write")
+				if vim.api.nvim_buf_is_valid(target_buf) and vim.bo[target_buf].modified then
+					vim.api.nvim_buf_call(target_buf, function()
+						vim.cmd("silent! noautocmd write")
+					end)
 				end
 			end,
 		})
