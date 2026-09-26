@@ -200,7 +200,7 @@ let
         '';
         cleanup_script = writeDash "cleanup_script" ''
           SANDBOX_DIR="''${XDG_RUNTIME_DIR}/.nixpak/${appId}"
-          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/way-close-pipe"
+          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/way-close-pipe"
           systemctl --user --no-block stop "$MY_SCOPE"
         '';
         startup_script = writeDash "startups_script" ''
@@ -212,7 +212,7 @@ let
             PARENT_PID="$(cat "$SANDBOX_DIR/parent_pid" 2>/dev/null)"
 
             # Check if parent supervisor is alive, command pipe is writable, and cgroup exists
-            if [ -n "$PARENT_PID" ] && kill -0 "$PARENT_PID" 2>/dev/null && [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null && [ -f "$SANDBOX_DIR/cgroup_path" ]; then
+            if [ -n "$PARENT_PID" ] && kill -0 "$PARENT_PID" 2>/dev/null && [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null; then
               CMD_LINE=""
               SQ=$(printf '\047')
               for arg in "$TARGET" "$@"; do
@@ -240,7 +240,7 @@ let
               if [ -f "$SANDBOX_DIR/scope" ]; then
                 systemctl --user stop "$(cat "$SANDBOX_DIR/scope")" 2>/dev/null || true
               fi
-              rm -f "$SANDBOX_DIR/cgroup_path" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/parent_pid" "$COMMAND_PIPE"
+              rm -f "$SANDBOX_DIR/scope" "$SANDBOX_DIR/parent_pid" "$COMMAND_PIPE"
 
               MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
               MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
@@ -248,16 +248,12 @@ let
                 *"$APP_ID"*)
                   mkdir -p "$SANDBOX_DIR"
                   printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
-                  printf '%s\n' "$MY_CGROUP" > "$SANDBOX_DIR/cgroup_path"
                   printf '%s\n' "$$" > "$SANDBOX_DIR/parent_pid"
                   ;;
                 *)
-                  [ -z "$_SANDBOX_RECURSION_GUARD" ] || { echo "Error: Scope failed to match $APP_ID" >&2; exit 1; }
-                  export _SANDBOX_RECURSION_GUARD=1
                   exec app2unit -a "$APP_ID" -- "$0" "$@"
                   ;;
               esac
-              EXIT_CODE=0
               mkdir "$MY_CGROUP/helpers"
               echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
               echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
@@ -323,7 +319,6 @@ let
 
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
-                  EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
                   exit 1
               fi
@@ -333,7 +328,6 @@ let
                 --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
                 --go-pipe "$SANDBOXED_RUNTIME_DIR/go_pipe"); then
                   echo "Error: sandbox-migrator failed" >&2
-                  EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
                   exit 1
               fi
@@ -341,7 +335,6 @@ let
               exec 8<&-
               if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5; then
                   echo "Error: Timeout waiting for sandbox ready signal" >&2
-                  EXIT_CODE=1
                   systemctl --user --no-block stop "$MY_SCOPE"
                   exit 1
               fi
