@@ -130,8 +130,6 @@ let
         package,
         gpu ? false,
         network ? false,
-        network_singbox ? false,
-        network_full ? false,
         webcam ? 0,
         audio ? false,
         wayland ? false,
@@ -142,7 +140,6 @@ let
         portals_for_files ? true,
         sandbox_shm ? true,
         sandbox_tmp ? true,
-        start_sesatt ? true,
         main_desktop_file ? "none",
         additional_args ? { },
         additional_inside_commands ? "",
@@ -198,14 +195,13 @@ let
           done
         '';
         cleanup_script = writeDash "cleanup_script" ''
-          SANDBOX_DIR="''${XDG_RUNTIME_DIR}/.nixpak/${appId}"
-          rm -f "$SANDBOX_DIR/parent_pid" "$SANDBOX_DIR/scope" "$SANDBOX_DIR/way-close-pipe"
+          rm -rf "$SANDBOX_DIR"
           systemctl --user --no-block stop "$MY_SCOPE"
         '';
         startup_script = writeDash "startups_script" ''
           if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
             export START_TIME=$(date +%s%N)
-            SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
+            export SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
             SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
             COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
             PARENT_PID="$(cat "$SANDBOX_DIR/parent_pid" 2>/dev/null)"
@@ -235,11 +231,10 @@ let
               PAYLOAD="eval \"\$(printf '%s' '$B64_CMD' | ${pkgs.coreutils}/bin/base64 -d)\""
               printf "%s\n" "$PAYLOAD" >> "$COMMAND_PIPE"
             else
-              # Stale or dead sandbox: destroy old scope and wipe state
               if [ -f "$SANDBOX_DIR/scope" ]; then
                 systemctl --user stop "$(cat "$SANDBOX_DIR/scope")" 2>/dev/null || true
               fi
-              rm -f "$SANDBOX_DIR/scope" "$SANDBOX_DIR/parent_pid" "$COMMAND_PIPE"
+              rm -rf "$SANDBOX_DIR"
 
               MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
               MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
@@ -473,9 +468,6 @@ let
                             "/tmp"
                           ]
                         ])
-                        ++ (lib.optionals start_sesatt [
-                          (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
-                        ])
                         ++ [ (concat sloth.runtimeDir "/doc") ];
 
                         ro = [
@@ -509,6 +501,8 @@ let
                           (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
                           (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
                           (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/starship.toml")
+                          (concat (sloth.env "XDG_CONFIG_HOME") "/fastfetch")
                           (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
                           (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
                           (concat (sloth.env "XDG_DATA_HOME") "/icons")
