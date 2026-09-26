@@ -1,3 +1,22 @@
+#![allow(
+    clippy::struct_field_names,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::needless_pass_by_value,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::unnecessary_wraps,
+    clippy::borrow_as_ptr,
+    clippy::ptr_as_ptr,
+    clippy::redundant_else,
+    clippy::if_not_else,
+    clippy::assigning_clones,
+    clippy::manual_let_else,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::format_push_string,
+    clippy::unnecessary_debug_formatting
+)]
+
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -86,10 +105,7 @@ fn ffi_get_terminal_size() -> io::Result<Winsize> {
     if res == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
         Ok(ws)
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to query terminal dimensions",
-        ))
+        Err(io::Error::other("Failed to query terminal dimensions"))
     }
 }
 
@@ -116,7 +132,7 @@ fn ffi_daemonize_server() {
     unsafe {
         setsid();
         signal(SIGHUP, SIG_IGN);
-        let devnull = open(b"/dev/null\0".as_ptr() as *const CChar, O_RDWR);
+        let devnull = open(c"/dev/null".as_ptr(), O_RDWR);
         if devnull >= 0 {
             dup2(devnull, 0);
             dup2(devnull, 1);
@@ -142,8 +158,8 @@ fn get_sesatt_dir() -> PathBuf {
     let dir = get_xdg_runtime_dir().join("sesatt");
     if let Err(e) = fs::create_dir_all(&dir) {
         eprintln!(
-            "Error: Failed to create sesatt runtime directory '{:?}': {}",
-            dir, e
+            "Error: Failed to create sesatt runtime directory '{}': {}",
+            dir.display(), e
         );
         std::process::exit(1);
     }
@@ -269,7 +285,7 @@ fn main() -> io::Result<()> {
     }
 
     // Helper editor launcher for git/SUDO_EDITOR/VISUAL
-    if args.len() >= 1
+    if !args.is_empty()
         && (args[0].ends_with("sesatt-editor") || (args.len() >= 2 && args[1] == "--editor"))
     {
         let editor_args: Vec<String> = if args.len() >= 2 && args[1] == "--editor" {
@@ -377,9 +393,8 @@ fn main() -> io::Result<()> {
                 return Ok(());
             }
             return attach_session(&sock_path, &log_path);
-        } else {
-            let _ = fs::remove_file(&sock_path);
         }
+        let _ = fs::remove_file(&sock_path);
     }
 
     if let Some(cmd_pipe) = get_sandbox_command_pipe(session) {
@@ -686,7 +701,7 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
 fn get_tail_bytes(path: &Path, max_bytes: u64, max_lines: usize) -> io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let len = file.metadata()?.len();
-    let start = if len > max_bytes { len - max_bytes } else { 0 };
+    let start = len.saturating_sub(max_bytes);
     file.seek(SeekFrom::Start(start))?;
 
     let mut bytes = Vec::new();
@@ -750,8 +765,7 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+        .is_ok_and(|s| s.success());
 
     let mut app = if app2unit_works {
         let mut cmd = Command::new("app2unit");
@@ -845,13 +859,12 @@ fn run_daemon_server(
     let log_path_clone = log_path.clone();
 
     thread::spawn(move || {
-        for stream in listener.incoming() {
-            if let Ok(mut s) = stream {
-                let latest_nvim_inner = latest_nvim_clone.clone();
-                let clients_inner = clients_clone.clone();
-                let log_path_inner = log_path_clone.clone();
+        for mut s in listener.incoming().flatten() {
+            let latest_nvim_inner = latest_nvim_clone.clone();
+            let clients_inner = clients_clone.clone();
+            let log_path_inner = log_path_clone.clone();
 
-                thread::spawn(move || {
+            thread::spawn(move || {
                     let mut tag = [0u8; 1];
                     if s.read_exact(&mut tag).is_err() {
                         return;
@@ -943,7 +956,6 @@ fn run_daemon_server(
                     }
                 });
             }
-        }
     });
 
     let mut buf = [0u8; 4096];

@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines, clippy::similar_names)]
+
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -41,67 +43,63 @@ fn main() {
     let cgroup_procs = cgroup_procs.expect("Missing --cgroup-procs");
     let go_pipe = go_pipe.expect("Missing --go-pipe");
 
-    let target_env = format!("APP_ID={}", app_id);
+    let target_env = format!("APP_ID={app_id}");
     let target_role = b"SANDBOX_ROLE=executor";
     let mut guest_host_pid = None;
 
     if let Ok(entries) = fs::read_dir("/proc") {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let file_name = entry.file_name();
-                let name_str = file_name.to_string_lossy();
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let name_str = file_name.to_string_lossy();
 
-                // Check if numeric directory (PID)
-                if name_str.chars().all(|c| c.is_digit(10)) {
-                    let pid_dir = entry.path();
+            // Check if numeric directory (PID)
+            if name_str.chars().all(|c| c.is_ascii_digit()) {
+                let pid_dir = entry.path();
 
-                    // 1. Verify cgroup belongs to our exact systemd scope
-                    let cgroup_path = pid_dir.join("cgroup");
-                    if let Ok(cgroup_content) = fs::read_to_string(&cgroup_path) {
-                        if !cgroup_content.contains(&format!("/{}", scope)) {
+                // 1. Verify cgroup belongs to our exact systemd scope
+                let cgroup_path = pid_dir.join("cgroup");
+                if let Ok(cgroup_content) = fs::read_to_string(&cgroup_path) {
+                    if !cgroup_content.contains(&format!("/{scope}")) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                // 2. Verify exe name is strictly 'dash'
+                let exe_symlink = pid_dir.join("exe");
+                if let Ok(target) = fs::read_link(&exe_symlink) {
+                    if let Some(filename) = target.file_name() {
+                        if filename != "dash" {
                             continue;
                         }
                     } else {
                         continue;
                     }
+                } else {
+                    continue;
+                }
 
-                    // 2. Verify exe name is strictly 'dash'
-                    let exe_symlink = pid_dir.join("exe");
-                    if let Ok(target) = fs::read_link(&exe_symlink) {
-                        if let Some(filename) = target.file_name() {
-                            if filename != "dash" {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
+                // 3. Verify cmdline argument structure and check process environment for APP_ID
+                let cmdline_path = pid_dir.join("cmdline");
+                if let Ok(cmdline_bytes) = fs::read(&cmdline_path) {
+                    let parts: Vec<&[u8]> = cmdline_bytes.split(|&b| b == 0).collect();
+                    if parts.len() >= 2 {
+                        let cmd0 = String::from_utf8_lossy(parts[0]);
 
-                    // 3. Verify cmdline argument structure and check process environment for APP_ID
-                    let cmdline_path = pid_dir.join("cmdline");
-                    if let Ok(cmdline_bytes) = fs::read(&cmdline_path) {
-                        let parts: Vec<&[u8]> = cmdline_bytes.split(|&b| b == 0).collect();
-                        if parts.len() >= 2 {
-                            let arg0 = String::from_utf8_lossy(parts[0]);
-                            let arg1 = String::from_utf8_lossy(parts[1]);
+                        if cmd0.ends_with("/dash") || cmd0 == "dash" {
+                            let environ_path = pid_dir.join("environ");
+                            if let Ok(environ_bytes) = fs::read(&environ_path) {
+                                let has_app_id = environ_bytes
+                                    .split(|&b| b == 0)
+                                    .any(|var| var == target_env.as_bytes());
+                                let has_role = environ_bytes
+                                    .split(|&b| b == 0)
+                                    .any(|var| var == target_role);
 
-                            if arg0.ends_with("/dash") || arg0 == "dash" {
-                                let environ_path = pid_dir.join("environ");
-                                if let Ok(environ_bytes) = fs::read(&environ_path) {
-                                    let has_app_id = environ_bytes
-                                        .split(|&b| b == 0)
-                                        .any(|var| var == target_env.as_bytes());
-                                    let has_role = environ_bytes
-                                        .split(|&b| b == 0)
-                                        .any(|var| var == target_role);
-
-
-                                    if has_app_id && has_role {
-                                        guest_host_pid = Some(name_str.into_owned());
-                                        break;
-                                    }
+                                if has_app_id && has_role {
+                                    guest_host_pid = Some(name_str.into_owned());
+                                    break;
                                 }
                             }
                         }
@@ -111,37 +109,28 @@ fn main() {
         }
     }
 
-    let guest_host_pid = match guest_host_pid {
-        Some(pid) => pid,
-        None => {
-            eprintln!(
-                "Error: Failed to find process with APP_ID {} under scope {}",
-                app_id, scope
-            );
-            process::exit(1);
-        }
+    let Some(guest_host_pid) = guest_host_pid else {
+        eprintln!("Error: Failed to find process with APP_ID {app_id} under scope {scope}");
+        process::exit(1);
     };
 
-    if let Err(e) = fs::write(cgroup_procs, format!("{}\n", guest_host_pid)) {
-        eprintln!(
-            "Error: Failed to write PID {} to {}: {}",
-            guest_host_pid, cgroup_procs, e
-        );
+    if let Err(e) = fs::write(cgroup_procs, format!("{guest_host_pid}\n")) {
+        eprintln!("Error: Failed to write PID {guest_host_pid} to {cgroup_procs}: {e}");
         process::exit(1);
     }
 
     let mut pipe = match fs::OpenOptions::new().write(true).open(go_pipe) {
         Ok(file) => file,
         Err(e) => {
-            eprintln!("Error: Failed to open go-pipe {}: {}", go_pipe, e);
+            eprintln!("Error: Failed to open go-pipe {go_pipe}: {e}");
             process::exit(1);
         }
     };
 
     if let Err(e) = pipe.write_all(b"go\n") {
-        eprintln!("Error: Failed to write to go-pipe: {}", e);
+        eprintln!("Error: Failed to write to go-pipe: {e}");
         process::exit(1);
     }
 
-    println!("{}", guest_host_pid);
+    println!("{guest_host_pid}");
 }

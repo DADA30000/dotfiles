@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(clippy::verbose_bit_mask)]
 
 use std::fs::{self, Permissions};
 use std::io::{BufRead, BufReader, Write};
@@ -17,9 +18,9 @@ fn has_fan() -> bool {
 
 fn set_fan_mode(mode: &str) -> Result<&'static str, &'static str> {
     match mode {
-        "quiet" => fs::write(FAN_MODE_PATH, b"3\n").map(|_| "ok").map_err(|_| "write error"),
-        "auto" => fs::write(FAN_MODE_PATH, b"0\n").map(|_| "ok").map_err(|_| "write error"),
-        "max" => fs::write(FAN_MODE_PATH, b"5\n").map(|_| "ok").map_err(|_| "write error"),
+        "quiet" => fs::write(FAN_MODE_PATH, b"3\n").map(|()| "ok").map_err(|_| "write error"),
+        "auto" => fs::write(FAN_MODE_PATH, b"0\n").map(|()| "ok").map_err(|_| "write error"),
+        "max" => fs::write(FAN_MODE_PATH, b"5\n").map(|()| "ok").map_err(|_| "write error"),
         _ => Err("invalid fan mode"),
     }
 }
@@ -29,7 +30,6 @@ fn get_fan_mode() -> &'static str {
         match content.trim() {
             "5" => "max",
             "3" => "quiet",
-            "0" => "auto",
             _ => "auto",
         }
     } else {
@@ -136,24 +136,24 @@ fn get_ryzen_limits() -> String {
             let mut slow = None;
             for line in text.lines() {
                 if line.contains("STAPM LIMIT") {
-                    let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
                     if parts.len() >= 3 {
                         stapm = parts[2].parse::<f64>().ok();
                     }
                 } else if line.contains("PPT LIMIT FAST") {
-                    let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
                     if parts.len() >= 3 {
                         fast = parts[2].parse::<f64>().ok();
                     }
                 } else if line.contains("PPT LIMIT SLOW") {
-                    let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
                     if parts.len() >= 3 {
                         slow = parts[2].parse::<f64>().ok();
                     }
                 }
             }
             if let (Some(s), Some(f), Some(sl)) = (stapm, fast, slow) {
-                return format!("{:.3} {:.3} {:.3}", s, f, sl);
+                return format!("{s:.3} {f:.3} {sl:.3}");
             }
         }
     }
@@ -183,14 +183,14 @@ fn handle_client(mut stream: UnixStream) {
 
             "check" => format!(
                 "has_fan:{} has_nv:{} has_ryzen:{}",
-                if has_fan() { 1 } else { 0 },
-                if has_nv() { 1 } else { 0 },
-                if has_ryzen() { 1 } else { 0 }
+                usize::from(has_fan()),
+                usize::from(has_nv()),
+                usize::from(has_ryzen()),
             ),
             "ping" => "pong".to_string(),
             _ => "unknown command".to_string(),
         };
-        let _ = writeln!(stream, "{}", response);
+        let _ = writeln!(stream, "{response}");
     }
 }
 
@@ -199,13 +199,13 @@ fn main() {
     let listener = match UnixListener::bind(SOCKET_PATH) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("Failed to bind {}: {}", SOCKET_PATH, e);
+            eprintln!("Failed to bind {SOCKET_PATH}: {e}");
             std::process::exit(1);
         }
     };
 
     if let Err(e) = fs::set_permissions(SOCKET_PATH, Permissions::from_mode(0o666)) {
-        eprintln!("Failed to set permissions on {}: {}", SOCKET_PATH, e);
+        eprintln!("Failed to set permissions on {SOCKET_PATH}: {e}");
     }
 
     for stream in listener.incoming() {
@@ -214,7 +214,7 @@ fn main() {
                 thread::spawn(|| handle_client(s));
             }
             Err(e) => {
-                eprintln!("Connection error: {}", e);
+                eprintln!("Connection error: {e}");
             }
         }
     }

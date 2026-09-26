@@ -1,3 +1,10 @@
+#![allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
+
 use std::collections::HashSet;
 use std::{env, fs, process::Command};
 
@@ -48,7 +55,7 @@ fn main() {
     while i < args.len() {
         match args[i].as_str() {
             "--cgroup-procs" if i + 1 < args.len() => {
-                procs_path = args[i + 1].clone();
+                procs_path.clone_from(&args[i + 1]);
                 i += 2;
             }
             "--runner-pid" if i + 1 < args.len() => {
@@ -60,7 +67,7 @@ fn main() {
                 i += 2;
             }
             "--cleanup" if i + 1 < args.len() => {
-                cleanup_cmd = args[i + 1].clone();
+                cleanup_cmd.clone_from(&args[i + 1]);
                 i += 2;
             }
             _ => i += 1,
@@ -79,7 +86,7 @@ fn main() {
         syscall(
             SYS_RT_SIGPROCMASK,
             SIG_BLOCK,
-            &mask as *const u64 as i64,
+            &raw const mask as i64,
             0i64,
             8i64,
         );
@@ -88,7 +95,7 @@ fn main() {
         syscall(
             SYS_SIGNALFD4,
             -1i64,
-            &mask as *const u64 as i64,
+            &raw const mask as i64,
             8i64,
             SFD_CLOEXEC | SFD_NONBLOCK,
         ) as i32
@@ -98,7 +105,7 @@ fn main() {
             events: EPOLLIN,
             data: sfd as u64,
         };
-        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &mut ev) };
+        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &raw mut ev) };
     }
 
     // Monitor runner_pid
@@ -112,7 +119,7 @@ fn main() {
             events: EPOLLIN,
             data: runner_fd as u64,
         };
-        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &mut ev) };
+        unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, runner_fd, &raw mut ev) };
     }
 
     let mut monitored = HashSet::new();
@@ -143,7 +150,7 @@ fn main() {
                     events: EPOLLIN,
                     data: pfd as u64,
                 };
-                if unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, pfd, &mut ev) } == 0 {
+                if unsafe { epoll_ctl(epfd, EPOLL_CTL_ADD, pfd, &raw mut ev) } == 0 {
                     monitored.insert(pid);
                 } else {
                     unsafe { close(pfd) };
@@ -162,8 +169,8 @@ fn main() {
         }
 
         let mut terminate = false;
-        for i in 0..n as usize {
-            let fd = events[i].data as i32;
+        for event in events.iter().take(n as usize) {
+            let fd = event.data as i32;
             if fd == sfd || fd == runner_fd {
                 terminate = true;
                 break;

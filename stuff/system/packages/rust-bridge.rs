@@ -1,3 +1,13 @@
+#![allow(
+    clippy::too_many_lines,
+    clippy::similar_names,
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    clippy::uninlined_format_args,
+    clippy::redundant_closure_for_method_calls
+)]
+
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -42,9 +52,8 @@ fn log_bridge(msg: &str) {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let _ = writeln!(file, "[{}] {}", timestamp, msg);
+                .map_or(0, |d| d.as_secs());
+            let _ = writeln!(file, "[{timestamp}] {msg}");
         }
     }
 }
@@ -78,7 +87,7 @@ fn daemonize() {
         }
 
         // Redirect standard file descriptors
-        let dev_null = b"/dev/null\0".as_ptr() as *const c_char;
+        let dev_null = c"/dev/null".as_ptr();
         let fd = open(dev_null, O_RDWR);
         if fd != -1 {
             dup2(fd, STDIN_FD);
@@ -296,8 +305,8 @@ fn run_pass_role(
 
                                 let to_remove: Vec<(String, u16)> = known_ports
                                     .iter()
-                                    .cloned()
                                     .filter(|x| !current_active.contains(x))
+                                    .cloned()
                                     .collect();
 
                                 for (ip_str, port) in to_remove {
@@ -508,8 +517,7 @@ fn run_listen_role(
                         loop {
                             let is_active = active_clone
                                 .lock()
-                                .map(|a| a.contains(&key))
-                                .unwrap_or(false);
+                                .is_ok_and(|a| a.contains(&key));
 
                             if !is_active {
                                 break;
@@ -658,12 +666,9 @@ fn main() {
         }
     };
 
-    let socket_path = match socket_path {
-        Some(s) => s,
-        None => {
-            eprintln!("Error: A socket path (-s <path>) is required.");
-            std::process::exit(1);
-        }
+    let Some(socket_path) = socket_path else {
+        eprintln!("Error: A socket path (-s <path>) is required.");
+        std::process::exit(1);
     };
 
     if role == ROLE_LISTEN && address_maps.is_empty() {
