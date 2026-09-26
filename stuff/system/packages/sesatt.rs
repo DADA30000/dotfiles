@@ -128,16 +128,18 @@ fn ffi_daemonize_server() {
     }
 }
 
-fn get_sesatt_dir() -> PathBuf {
-    let xdg = match env::var("XDG_RUNTIME_DIR") {
+fn get_xdg_runtime_dir() -> PathBuf {
+    match env::var("XDG_RUNTIME_DIR") {
         Ok(val) if !val.is_empty() => PathBuf::from(val),
         _ => {
             eprintln!("Error: 'XDG_RUNTIME_DIR' environment variable is not set.");
             std::process::exit(1);
         }
-    };
+    }
+}
 
-    let dir = xdg.join("sesatt");
+fn get_sesatt_dir() -> PathBuf {
+    let dir = get_xdg_runtime_dir().join("sesatt");
     if let Err(e) = fs::create_dir_all(&dir) {
         eprintln!(
             "Error: Failed to create sesatt runtime directory '{:?}': {}",
@@ -146,6 +148,27 @@ fn get_sesatt_dir() -> PathBuf {
         std::process::exit(1);
     }
     dir
+}
+
+fn get_nixpak_dir() -> PathBuf {
+    get_xdg_runtime_dir().join(".nixpak")
+}
+
+fn get_sandbox_command_pipe(app_id: &str) -> Option<PathBuf> {
+    let app_dir = get_nixpak_dir().join(app_id);
+    let parent_pid_file = app_dir.join("parent_pid");
+    let cmd_pipe = app_dir.join("runtime").join("command_pipe");
+
+    if parent_pid_file.exists() && cmd_pipe.exists() {
+        if let Ok(pid_str) = fs::read_to_string(&parent_pid_file) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                if Path::new(&format!("/proc/{}", pid)).exists() {
+                    return Some(cmd_pipe);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn validate_session_name(session: &str) {
@@ -359,6 +382,55 @@ fn main() -> io::Result<()> {
         }
     }
 
+    if let Some(cmd_pipe) = get_sandbox_command_pipe(session) {
+        const SKIP_VARS: &[&str] = &[
+            "PATH", "HOME", "USER", "LOGNAME", "SHELL",
+            "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
+            "DBUS_SESSION_BUS_ADDRESS", "WAYLAND_DISPLAY", "DISPLAY",
+            "LD_LIBRARY_PATH", "LD_PRELOAD",
+            "APP_ID", "SANDBOX_ROLE", "_", "PWD", "OLDPWD", "SHLVL"
+        ];
+        let mut exports = String::new();
+        for (k, v) in env::vars() {
+            if !SKIP_VARS.contains(&k.as_str()) {
+                let esc = v.replace('\'', "'\\''");
+                exports.push_str(&format!("export {}='{}'; ", k, esc));
+            }
+        }
+
+        let cmd_args_str = if args.len() > session_idx + 1 {
+            args[session_idx + 1..]
+                .iter()
+                .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+                .collect::<Vec<_>>()
+                .join(" ")
+        } else {
+            "/run/current-system/sw/bin/zsh".to_string()
+        };
+
+        let payload = format!("{}sesatt -d '{}' {}", exports, session, cmd_args_str);
+
+        let mut pipe = match OpenOptions::new().write(true).open(&cmd_pipe) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Error opening sandbox command pipe: {}", e);
+                std::process::exit(1);
+            }
+        };
+        if let Err(e) = writeln!(pipe, "{}", payload) {
+            eprintln!("Error sending launch command to sandbox: {}", e);
+            std::process::exit(1);
+        }
+        let _ = pipe.flush();
+
+        if detach_mode {
+            println!("Started session '{}' in sandbox in detached mode.", session);
+            return Ok(());
+        }
+
+        return attach_session(&sock_path, &log_path);
+    }
+
     if log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
         dump_scrollback(&log_path)?;
         println!("\n--- Process finished. Log preserved above. ---");
@@ -424,6 +496,22 @@ fn get_all_sessions() -> Vec<(String, bool)> {
         }
     }
 
+    let nixpak_dir = get_nixpak_dir();
+    if let Ok(entries) = fs::read_dir(&nixpak_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    if get_sandbox_command_pipe(name).is_some() {
+                        let sock_path = dir.join(name).join("sesatt.sock");
+                        let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
+                        sessions_map.entry(name.to_string()).or_insert(is_active);
+                    }
+                }
+            }
+        }
+    }
+
     sessions_map.into_iter().collect()
 }
 
@@ -437,6 +525,8 @@ fn list_sessions() {
     for (name, is_active) in sessions {
         if is_active {
             println!("• {} (active)", name);
+        } else if get_sandbox_command_pipe(&name).is_some() {
+            println!("• {} (sandbox, on-demand)", name);
         } else {
             println!("• {} (dead)", name);
         }
@@ -448,7 +538,7 @@ fn clean_dead_sessions() {
     let mut cleaned_count = 0;
 
     for (name, is_active) in sessions {
-        if !is_active {
+        if !is_active && get_sandbox_command_pipe(&name).is_none() {
             let session_dir = get_session_dir(&name);
             let _ = fs::remove_dir_all(&session_dir);
             println!("Cleaned dead session '{}'.", name);
@@ -509,7 +599,7 @@ fn send_nvim_pkt(stream: &mut UnixStream) -> io::Result<()> {
 }
 
 fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
-    let mut stream = match connect_with_retry(sock_path, 50, Duration::from_millis(10)) {
+    let mut stream = match connect_with_retry(sock_path, 100, Duration::from_millis(10)) {
         Ok(s) => s,
         Err(e) => {
             if log_path.exists() {

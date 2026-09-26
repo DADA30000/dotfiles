@@ -177,7 +177,6 @@ let
         );
         stage2_inside = writeDash "stage2_inside" ''
           ${additional_inside_commands}
-          ${lib.optionalString start_sesatt "sesatt -d \"$APP_ID\""}
           ${lib.optionalString x11 "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
           ${lib.optionalString network_singbox "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
           env SANDBOX_ROLE=executor ${executor_script} "$@" &
