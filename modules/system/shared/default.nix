@@ -529,40 +529,48 @@ in
         };
       };
 
-      "sunshine@" = {
-        description = "Sunshine Game Streaming Host for %i";
-        after = [
-          "graphical.target"
-          "user@%U.service"
-        ];
-        bindsTo = [ "user@%U.service" ];
-
-        serviceConfig = {
-          User = "%i";
-          Group = "users";
-          SupplementaryGroups = [ "uinput" ];
-          DeviceAllow = [
-            "/dev/uinput rw"
-            "/dev/dri/card* rw"
-            "/dev/dri/renderD* rw"
-            "/dev/nvidia* rw"
-            "/dev/nvidiactl rw"
-            "/dev/nvidia-modeset rw"
-            "/dev/nvidia-uvm rw"
-            "/dev/nvidia-uvm-tools rw"
+      "sunshine@" =
+        let
+          sunshine-system-runner = pkgs.writeShellScript "sunshine-system-runner" ''
+            USER_NAME="$1"
+            USER_UID="$(id -u "$USER_NAME")"
+            export XDG_RUNTIME_DIR="/run/user/$USER_UID"
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+            if [ -f "$XDG_RUNTIME_DIR/sunshine.env" ]; then
+              # shellcheck disable=SC1090
+              source "$XDG_RUNTIME_DIR/sunshine.env"
+            fi
+            exec ${pkgs.sunshine}/bin/sunshine
+          '';
+        in
+        {
+          description = "Sunshine Game Streaming Host for %i";
+          after = [
+            "graphical.target"
+            "user@%U.service"
           ];
+          bindsTo = [ "user@%U.service" ];
 
-          EnvironmentFile = "-/run/user/%U/sunshine.env";
-          Environment = [
-            "XDG_RUNTIME_DIR=/run/user/%U"
-            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
-          ];
+          serviceConfig = {
+            User = "%i";
+            Group = "users";
+            SupplementaryGroups = [ "uinput" ];
+            DeviceAllow = [
+              "/dev/uinput rw"
+              "/dev/dri/card* rw"
+              "/dev/dri/renderD* rw"
+              "/dev/nvidia* rw"
+              "/dev/nvidiactl rw"
+              "/dev/nvidia-modeset rw"
+              "/dev/nvidia-uvm rw"
+              "/dev/nvidia-uvm-tools rw"
+            ];
 
-          ExecStart = "${pkgs.sunshine}/bin/sunshine";
-          Restart = "on-failure";
-          RestartSec = "3s";
+            ExecStart = "${sunshine-system-runner} %i";
+            Restart = "on-failure";
+            RestartSec = "3s";
+          };
         };
-      };
 
       "opentabletdriver@" = {
         description = "OpenTabletDriver Daemon for %i";
