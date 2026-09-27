@@ -810,6 +810,8 @@ in
           (pkgs.oo7-portal.overrideAttrs (old: {
             postInstall = (old.postInstall or "") + ''
               rm -f $out/share/systemd/user/dbus-*.service $out/lib/systemd/user/dbus-*.service
+              substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
+                --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
             '';
           }))
         ];

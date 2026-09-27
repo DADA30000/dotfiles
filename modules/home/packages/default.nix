@@ -147,11 +147,9 @@ let
       policies = {
         "io.ente.auth" = "own";
         "io.ente.auth.*" = "own";
+        "org.freedesktop.secrets" = "talk";
       };
     };
-    additional_outside_commands = ''
-      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/io.ente.auth" "$XDG_DATA_HOME/io.ente.auth"
-    '';
     package = pkgs.ente-auth;
   };
 
