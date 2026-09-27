@@ -872,6 +872,11 @@ in
         PartOf = [ "graphical-session.target" ];
         After = [ "graphical-session.target" ];
       };
+      Service = {
+        Type = "dbus";
+        BusName = "org.freedesktop.impl.portal.desktop.oo7";
+        ExecStart = "${oo7-portal}/libexec/oo7-portal";
+      };
       Install = {
         WantedBy = [ "graphical-session.target" ];
       };
