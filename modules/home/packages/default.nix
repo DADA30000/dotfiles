@@ -142,7 +142,13 @@ let
     wayland = "sandboxed";
     x11 = "sandboxed";
     gpu = true;
-    additional_args.dbus.enable = true;
+    additional_args.dbus = {
+      enable = true;
+      policies = {
+        "io.ente.auth" = "own";
+        "io.ente.auth.*" = "own";
+      };
+    };
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/io.ente.auth" "$XDG_DATA_HOME/io.ente.auth"
     '';
