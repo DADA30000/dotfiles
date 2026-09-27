@@ -47,7 +47,6 @@ let
     sourceRoot = "source/portal";
     cargoRoot = "..";
     postInstall = (old.postInstall or "") + ''
-      rm -f $out/share/systemd/user/dbus-*.service $out/lib/systemd/user/dbus-*.service
       substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
         --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
     '';
@@ -864,6 +863,17 @@ in
       };
       Install = {
         WantedBy = [ "default.target" ];
+      };
+    };
+
+    systemd.user.services.oo7-portal = {
+      Unit = {
+        Description = "Secret portal service (oo7 implementation)";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Install = {
+        WantedBy = [ "graphical-session.target" ];
       };
     };
 
