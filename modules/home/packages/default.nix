@@ -136,6 +136,19 @@ let
     package = pkgs.ayugram-desktop;
   };
 
+  enteAuthSandbox = mkSandbox rec {
+    appId = "io.ente.auth";
+    network = "sandboxed";
+    wayland = "sandboxed";
+    x11 = "sandboxed";
+    gpu = true;
+    additional_args.dbus.enable = true;
+    additional_outside_commands = ''
+      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/io.ente.auth" "$XDG_DATA_HOME/io.ente.auth"
+    '';
+    package = pkgs.ente-auth;
+  };
+
   steamExtraPackages = with pkgs; [
     libgdiplus
     fontconfig
@@ -724,6 +737,7 @@ in
     prismLauncherSandbox
     discordCanarySandbox
     ayugramDesktopSandbox
+    enteAuthSandbox
     steamSandbox
     steamSandbox.run
   ] ++ steamExtraPackages;

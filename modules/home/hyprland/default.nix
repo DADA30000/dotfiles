@@ -801,6 +801,10 @@ in
       portal = {
         enable = true;
         config.common.default = "*";
+        config.hyprland = {
+          default = [ "hyprland" "gtk" ];
+          "org.freedesktop.impl.portal.Secret" = [ "oo7-portal" ];
+        };
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
         ];

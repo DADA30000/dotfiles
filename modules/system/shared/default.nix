@@ -661,7 +661,9 @@ in
 
     speechd.enable = false;
 
-    gnome.gnome-keyring.enable = true;
+    gnome.gnome-keyring.enable = false;
+
+    oo7.enable = true;
 
     journald.settings.Journal = {
       SystemMaxUse = "1G";
