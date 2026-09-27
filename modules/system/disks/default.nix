@@ -30,7 +30,6 @@ let
       ".local/share/containers"
       ".local/share/easyeffects"
       ".local/share/qBittorrent"
-      ".local/share/io.ente.auth"
       ".local/share/applications"
       ".config/pi"
       ".config/git"

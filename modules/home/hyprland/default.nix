@@ -807,6 +807,7 @@ in
         };
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
+          pkgs.oo7-portal
         ];
       };
     };
