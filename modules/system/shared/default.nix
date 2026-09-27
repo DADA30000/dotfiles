@@ -627,7 +627,6 @@ in
     };
 
     user.services.oo7-daemon.serviceConfig.SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
-    user.services."dbus-org.freedesktop.impl.portal.desktop.oo7".enable = false;
 
   };
 

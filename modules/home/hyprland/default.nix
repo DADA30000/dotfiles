@@ -807,7 +807,11 @@ in
         };
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
-          pkgs.oo7-portal
+          (pkgs.oo7-portal.overrideAttrs (old: {
+            postInstall = (old.postInstall or "") + ''
+              rm -f $out/share/systemd/user/dbus-*.service $out/lib/systemd/user/dbus-*.service
+            '';
+          }))
         ];
       };
     };
