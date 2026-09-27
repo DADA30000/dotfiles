@@ -65,6 +65,10 @@
       url = "github:DADA30000/AeroControlCenter";
       flake = false;
     };
+    oo7 = {
+      url = "github:linux-credentials/oo7";
+      flake = false;
+    };
     waywallen-display = {
       url = "github:waywallen/waywallen-display";
       flake = false;

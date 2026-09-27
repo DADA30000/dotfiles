@@ -18,6 +18,41 @@ let
     mode = "allow";
   };
   plugins = [ ];
+
+  cargoDeps = pkgs.rustPlatform.importCargoLock {
+    lockFile = "${inputs.oo7}/Cargo.lock";
+  };
+
+  oo7 = pkgs.oo7.overrideAttrs (old: {
+    src = inputs.oo7;
+    inherit cargoDeps;
+    sourceRoot = "source";
+  });
+
+  oo7-server = (pkgs.oo7-server.override {
+    inherit oo7;
+    useWrappedDaemon = false;
+  }).overrideAttrs (old: {
+    src = inputs.oo7;
+    inherit cargoDeps;
+    sourceRoot = "source/server";
+    cargoRoot = "..";
+  });
+
+  oo7-portal = (pkgs.oo7-portal.override {
+    inherit oo7;
+  }).overrideAttrs (old: {
+    src = inputs.oo7;
+    inherit cargoDeps;
+    sourceRoot = "source/portal";
+    cargoRoot = "..";
+    postInstall = (old.postInstall or "") + ''
+      rm -f $out/share/systemd/user/dbus-*.service $out/lib/systemd/user/dbus-*.service
+      substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
+        --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
+    '';
+  });
+
   plugin-loader =
     pkg:
     pkgs.stdenv.mkDerivation {
@@ -807,16 +842,31 @@ in
         };
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
-          (pkgs.oo7-portal.overrideAttrs (old: {
-            postInstall = (old.postInstall or "") + ''
-              rm -f $out/share/systemd/user/dbus-*.service $out/lib/systemd/user/dbus-*.service
-              substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
-                --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
-            '';
-          }))
+          oo7-portal
         ];
       };
     };
+
+    home.packages = [
+      oo7
+    ];
+
+    systemd.user.services.oo7-daemon = {
+      Unit = {
+        Description = "Secret service (oo7 implementation)";
+        PartOf = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${oo7-server}/libexec/oo7-daemon";
+        Restart = "on-failure";
+        SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
+        BusName = "org.freedesktop.secrets";
+      };
+      Install = {
+        WantedBy = [ "default.target" ];
+      };
+    };
+
     programs = {
       noctalia = {
         enable = true;

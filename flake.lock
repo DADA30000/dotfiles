@@ -1293,6 +1293,22 @@
         "type": "github"
       }
     },
+    "oo7": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790437111,
+        "narHash": "sha256-P7kQZhkGAL3vwmH0iaaWpf3OZw+GYufYylz/orOAJ9M=",
+        "owner": "linux-credentials",
+        "repo": "oo7",
+        "rev": "96c9548e00dd258ce6cfc872af3286893d1c2db8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "linux-credentials",
+        "repo": "oo7",
+        "type": "github"
+      }
+    },
     "open-wallpaper-engine": {
       "flake": false,
       "locked": {
@@ -1483,6 +1499,7 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-xr": "nixpkgs-xr",
         "noctalia": "noctalia",
+        "oo7": "oo7",
         "open-wallpaper-engine": "open-wallpaper-engine",
         "photogimp": "photogimp",
         "pipewire-screenaudio": "pipewire-screenaudio",

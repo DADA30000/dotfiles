@@ -147,7 +147,6 @@ let
       policies = {
         "io.ente.auth" = "own";
         "io.ente.auth.*" = "own";
-        "org.freedesktop.secrets" = "talk";
       };
     };
     package = pkgs.ente-auth;

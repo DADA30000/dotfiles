@@ -626,8 +626,6 @@ in
       };
     };
 
-    user.services.oo7-daemon.serviceConfig.SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
-
   };
 
   environment.systemPackages = [
@@ -664,8 +662,6 @@ in
     speechd.enable = false;
 
     gnome.gnome-keyring.enable = false;
-
-    oo7.enable = true;
 
     journald.settings.Journal = {
       SystemMaxUse = "1G";
