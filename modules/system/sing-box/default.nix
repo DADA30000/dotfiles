@@ -12,12 +12,8 @@ let
   dns = "94.140.14.14";
   dns-ipv6 = "2a10:50c0::ad1:ff";
   zapret-qnum = "210";
-  zapret-mark = 707;
   MTU = 1480;
-  START_FWMARK = 51820;
-  START_TABLE = 1234;
   CREDENTIAL_DIR = "/etc/credstore";
-  BYPASS_MARK = "0x10000";
   zapret-flags = evalAndSubstitute {
     string = builtins.readFile ../../../stuff/system/sing-box/zapret-flags;
     scope = { inherit pkgs inputs; };
@@ -33,10 +29,6 @@ let
     "electron"
     "prismlauncher"
   ];
-
-  sanitize-awg-py = pkgs.writers.writePython3 "sanitize-awg.py" { } (
-    builtins.readFile ../../../stuff/system/sing-box/sanitize-awg.py
-  );
 
   build-config-py = pkgs.writers.writePython3 "build-config.py" { } (
     builtins.readFile ../../../stuff/system/sing-box/build-config.py
@@ -179,8 +171,9 @@ let
         type = "tun";
         interface_name = "tun0";
         mtu = MTU;
-        strict_route = true;
+        strict_route = false;
         auto_route = true;
+        auto_redirect = true;
         address = [
           "172.19.0.1/30"
           "fd00::1/126"
@@ -212,7 +205,7 @@ let
       {
         type = "direct";
         tag = "zapret";
-        routing_mark = zapret-mark;
+        bind_interface = "zapret0";
       }
       {
         type = "selector";
@@ -247,59 +240,9 @@ let
 
   vpnRoutingNft = pkgs.writeText "vpn_routing.nft" ''
     table inet vpn_routing {
-      # Dynamic stateful map for inbound UDP sessions (10 minute idle timeout)
-      # Key: { client_ip . client_port . server_port } => Value: local_nic_ip
-      map inbound_udp_v4 {
-        type ipv4_addr . inet_service . inet_service : ipv4_addr
-        flags dynamic, timeout
-        timeout 10m
-      }
-
-      map inbound_udp_v6 {
-        type ipv6_addr . inet_service . inet_service : ipv6_addr
-        flags dynamic, timeout
-        timeout 10m
-      }
-
-      chain prerouting {
-        type filter hook prerouting priority mangle; policy accept;
-
-        # Ignore traffic on virtual / tunnel / loopback interfaces
-        iifname { "tun*", "awg*", "lo", "veth*" } accept
-
-        # 1. TCP and general conntrack mark for inbound connections
-        ct state new ct mark set ct mark or ${BYPASS_MARK}
-
-        # 2. Dynamic tracking of inbound UDP sessions across any port
-        ip version 4 udp dport != 0 update @inbound_udp_v4 { ip saddr . udp sport . udp dport : ip daddr }
-        ip6 version 6 udp dport != 0 update @inbound_udp_v6 { ip6 saddr . udp sport . udp dport : ip6 daddr }
-      }
-
       chain output {
         type route hook output priority mangle; policy accept;
-
-        # TCP replies: Conntrack mark restoration (TCP sockets bind saddr automatically upon accept)
-        meta l4proto tcp ct mark and ${BYPASS_MARK} == ${BYPASS_MARK} meta mark set meta mark or ${BYPASS_MARK}
-
-        # UDP replies from 0.0.0.0 wildcard sockets:
-        # Match outbound UDP against the active inbound session map.
-        # 1) Restore saddr from tun0 IP back to physical interface IP (e.g. 192.168.0.225)
-        # 2) Set fwmark to trigger ip_route_me_harder() via table main (eno1 / wlan0)
-        ip daddr . udp dport . udp sport @inbound_udp_v4 \
-          ip saddr set ip daddr . udp dport . udp sport map @inbound_udp_v4 \
-          meta mark set meta mark or ${BYPASS_MARK}
-
-        ip6 daddr . udp dport . udp sport @inbound_udp_v6 \
-          ip6 saddr set ip6 daddr . udp dport . udp sport map @inbound_udp_v6 \
-          meta mark set meta mark or ${BYPASS_MARK}
-
-        # Zapret NFQWS bypass preservation
-        meta mark ${toString zapret-mark} counter queue num ${zapret-qnum} bypass
-      }
-
-      chain postrouting {
-        type nat hook postrouting priority srcnat; policy accept;
-        oifname "awg*" masquerade
+        oifname "zapret0" counter queue num ${zapret-qnum} bypass
       }
     }
   '';
@@ -312,13 +255,8 @@ let
     rm -rf /etc/netns/vpn_wrapper
     ip netns del vpn_wrapper 2>/dev/null || true
     ip link del veth_host 2>/dev/null || true
+    ip link del zapret0 2>/dev/null || true
 
-    ip rule del fwmark ${toString zapret-mark}/${toString zapret-mark} lookup main priority 1 2>/dev/null || true
-    ip -6 rule del fwmark ${toString zapret-mark}/${toString zapret-mark} lookup main priority 1 2>/dev/null || true
-    ip rule del fwmark 0x40000000/0x40000000 lookup main priority 2 2>/dev/null || true
-    ip -6 rule del fwmark 0x40000000/0x40000000 lookup main priority 2 2>/dev/null || true
-    ip rule del fwmark ${BYPASS_MARK}/${BYPASS_MARK} lookup main priority 50 2>/dev/null || true
-    ip -6 rule del fwmark ${BYPASS_MARK}/${BYPASS_MARK} lookup main priority 50 2>/dev/null || true
     ip rule del to 10.200.0.0/24 lookup main priority 2 2>/dev/null || true
     ip -6 rule del to fd00:200::/126 lookup main priority 2 2>/dev/null || true
   '';
@@ -328,16 +266,16 @@ let
     ${cleanup_script}
     set -e
 
+    DEFAULT_IFACE=$(ip route show default | awk '{print $5; exit}')
+    if [[ -z "$DEFAULT_IFACE" ]]; then
+      DEFAULT_IFACE=$(ip -o link show up | awk -F': ' '$2 !~ /^(lo|tun|awg|veth)/ {print $2; exit}')
+    fi
+    if [[ -n "$DEFAULT_IFACE" ]]; then
+      ip link add link "$DEFAULT_IFACE" name zapret0 type ipvlan mode l2 2>/dev/null || true
+      ip link set zapret0 up
+    fi
+
     nft -f ${vpnRoutingNft}
-
-    ip rule add fwmark ${toString zapret-mark}/${toString zapret-mark} lookup main priority 1
-    ip -6 rule add fwmark ${toString zapret-mark}/${toString zapret-mark} lookup main priority 1 2>/dev/null || true
-
-    ip rule add fwmark 0x40000000/0x40000000 lookup main priority 2
-    ip -6 rule add fwmark 0x40000000/0x40000000 lookup main priority 2 2>/dev/null || true
-
-    ip rule add fwmark ${BYPASS_MARK}/${BYPASS_MARK} lookup main priority 50
-    ip -6 rule add fwmark ${BYPASS_MARK}/${BYPASS_MARK} lookup main priority 50 2>/dev/null || true
 
     ip netns add vpn_wrapper
     ip link add veth_host mtu ${toString MTU} type veth peer name veth_peer mtu ${toString MTU}
@@ -361,83 +299,13 @@ let
     echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf
   '';
 
-  awg_up_script = pkgs.writeShellScript "awg-up" ''
-    set -e
-    IFACE="$1"
-    source "/run/sing-box/$IFACE.state" 2>/dev/null || { echo "Missing state for $IFACE" >&2; exit 1; }
-    ${pkgs.amneziawg-tools}/bin/awg-quick up "/run/sing-box/$IFACE.conf"
-    ip route replace default dev "$IFACE" table "$TABLE" mtu ${toString MTU}
-    ip rule add oif "$IFACE" lookup "$TABLE" priority 1 2>/dev/null || true
-    ip rule add fwmark "$FWMARK" lookup main priority 10 2>/dev/null || true
-  '';
-
-  awg_down_script = pkgs.writeShellScript "awg-down" ''
-    IFACE="$1"
-    source "/run/sing-box/$IFACE.state" 2>/dev/null || true
-    ip rule del oif "$IFACE" lookup "''${TABLE:-1234}" priority 1 2>/dev/null || true
-    ip rule del fwmark "''${FWMARK:-51820}" lookup main priority 10 2>/dev/null || true
-    ip route flush table "''${TABLE:-1234}" 2>/dev/null || true
-    ${pkgs.amneziawg-tools}/bin/awg-quick down "/run/sing-box/$IFACE.conf" 2>/dev/null || true
-  '';
-
   init_script = pkgs.writeShellScript "sing-box-init" ''
     set -e
-    [[ -d "${CREDENTIAL_DIR}" ]] || { echo "Error: CREDENTIAL_DIR (${CREDENTIAL_DIR}) missing!" >&2; exit 1; }
 
     echo "Initializing base network policies..."
     ${setup_script}
 
-    START_FWMARK=${toString START_FWMARK}
-    START_TABLE=${toString START_TABLE}
-
-    find_free_id() {
-      local val=$1 type=$2
-      while true; do
-        if [[ "$type" == "mark" ]]; then
-          local hex; hex=$(printf "0x%x" "$val")
-          ip rule show | grep -qE "fwmark ($val|$hex)" || grep -rq "FWMARK=$val" /run/sing-box/*.state 2>/dev/null || { echo "$val"; return; }
-        else
-          ip rule show | grep -q "lookup $val" || ip route show table "$val" >/dev/null 2>&1 || grep -rq "TABLE=$val" /run/sing-box/*.state 2>/dev/null || { echo "$val"; return; }
-        fi
-        (( val++ ))
-      done
-    }
-
-    AWG_SERVICES=()
-    AWG_OUTBOUNDS="[]"
     ALL_NEW_TAGS="[]"
-
-    while IFS= read -r -d "" conf_file; do
-      iface_name="$(basename "$conf_file" .conf)"
-      FWMARK=$(find_free_id "$START_FWMARK" "mark")
-      TABLE=$(find_free_id "$START_TABLE" "table")
-      START_FWMARK=$((FWMARK + 1))
-      START_TABLE=$((TABLE + 1))
-
-      python3 ${sanitize-awg-py} "$conf_file" "/run/sing-box/$iface_name.conf" "$FWMARK"
-      printf "FWMARK=%s\nTABLE=%s\nINTERFACE=%s\n" "$FWMARK" "$TABLE" "$iface_name" > "/run/sing-box/$iface_name.state"
-
-      tag=$(grep -oP '(?<=# tag=")[^"]+' "$conf_file" || echo "$iface_name")
-      AWG_OUTBOUNDS=$(jq -n --argjson list "$AWG_OUTBOUNDS" --arg tag "$tag" --arg iface "$iface_name" \
-        '$list + [{tag: $tag, type: "direct", bind_interface: $iface}]')
-      ALL_NEW_TAGS=$(jq -n --argjson list "$ALL_NEW_TAGS" --arg tag "$tag" '[$tag] + $list')
-
-      systemctl start "awg-interface@$iface_name.service"
-      AWG_SERVICES+=("awg-interface@$iface_name.service")
-    done < <(find "${CREDENTIAL_DIR}" -maxdepth 1 -name "awg*.conf" -print0 2>/dev/null | sort -z)
-
-    for svc in "''${AWG_SERVICES[@]}"; do
-      count=0
-      while ! systemctl is-active --quiet "$svc"; do
-        sleep 0.5
-        (( ++count > 25 )) && {
-          echo "Error: $svc failed to start!" >&2
-          journalctl -u "$svc" -n 20 --no-pager >&2
-          exit 1
-        }
-      done
-    done
-
     CRED_CONF="${CREDENTIAL_DIR}/config.json"
     if [[ -f "$CRED_CONF" ]]; then
       EXTRA_TAGS=$(jq -r '[.outbounds[]?.tag // empty, .endpoints[]?.tag // empty] | reverse | .[]' "$CRED_CONF" 2>/dev/null || true)
@@ -453,7 +321,7 @@ let
       "${sing-box-config-file}" \
       "$CRED_CONF" \
       "/run/sing-box/config.json" \
-      "$AWG_OUTBOUNDS" \
+      "[]" \
       "$ALL_NEW_TAGS"
 
     chmod 600 /run/sing-box/config.json
@@ -461,9 +329,6 @@ let
   '';
 
   stop_script = pkgs.writeShellScript "sing-box-stop" ''
-    for svc in $(systemctl list-units --type=service --state=active --no-legend "awg-interface@*" | awk '{print $1}'); do
-      systemctl stop "$svc" || true
-    done
     ${cleanup_script}
   '';
 
@@ -643,17 +508,9 @@ in
 
   config = mkIf cfg.enable {
     environment.systemPackages = [
-      pkgs.amneziawg-tools
       pkgs.nftables
     ];
     sing-box.processes_to_proxy = processes;
-
-    boot = {
-      extraModulePackages = [
-        config.boot.kernelPackages.amneziawg
-      ];
-      kernelModules = [ "amneziawg" ];
-    };
 
     boot.kernel.sysctl = {
       "net.ipv6.conf.all.forwarding" = 1;
@@ -662,23 +519,6 @@ in
     };
 
     systemd.services = {
-      "awg-interface@" = {
-        description = "AmneziaWG Interface (%i)";
-        bindsTo = [ "sing-box-init.service" ];
-        partOf = [ "sing-box-init.service" ];
-        path = with pkgs; [
-          amneziawg-tools
-          iproute2
-        ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          User = "root";
-          ExecStart = "${awg_up_script} %i";
-          ExecStop = "${awg_down_script} %i";
-        };
-      };
-
       sing-box = {
         description = "Sing-box Connection Supervisor and Physical Link Watcher";
         wantedBy = [ "multi-user.target" ];
