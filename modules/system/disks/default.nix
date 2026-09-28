@@ -10,6 +10,7 @@ let
   commonUserPersistence = {
     files = [ ];
     directories = [
+      "Music"
       "Videos"
       "Desktop"
       "Pictures"
