@@ -81,7 +81,6 @@ let
     network = "singbox";
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
-    x11 = "sandboxed";
     gpu = true;
     webcam = 5;
     additional_args =
@@ -112,7 +111,6 @@ let
     audio_pulse = "passthrough";
     audio_pipewire = "passthrough";
     wayland = "sandboxed";
-    x11 = "sandboxed";
     gpu = true;
     package = sounduxPkg;
     additional_args =
@@ -129,18 +127,33 @@ let
     wayland = "sandboxed";
     gpu = true;
     webcam = 5;
-    additional_args.dbus.enable = true;
+    additional_args.dbus = {
+      enable = true;
+      policies = {
+        "com.ayugram.desktop" = "own";
+        "com.ayugram.desktop.*" = "own";
+      };
+    };
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/AyuGramDesktop" "$XDG_DATA_HOME/AyuGramDesktop"
     '';
-    package = pkgs.ayugram-desktop;
+    package = pkgs.symlinkJoin {
+      name = "ayugram-desktop-patched";
+      paths = [ pkgs.ayugram-desktop ];
+      postBuild = ''
+        rm -f $out/share/applications/com.ayugram.desktop.desktop
+        cp ${pkgs.ayugram-desktop}/share/applications/com.ayugram.desktop.desktop $out/share/applications/com.ayugram.desktop.desktop
+        chmod u+w $out/share/applications/com.ayugram.desktop.desktop
+        substituteInPlace $out/share/applications/com.ayugram.desktop.desktop \
+          --replace-fail "DBusActivatable=true" "DBusActivatable=false"
+      '';
+    };
   };
 
-  enteAuthSandbox = mkSandbox rec {
+  enteAuthSandbox = mkSandbox {
     appId = "io.ente.auth";
     network = "sandboxed";
     wayland = "sandboxed";
-    x11 = "sandboxed";
     gpu = true;
     additional_args.dbus = {
       enable = true;
