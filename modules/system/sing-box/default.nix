@@ -243,6 +243,7 @@ let
     table inet vpn_routing {
       chain output {
         type route hook output priority mangle; policy accept;
+        meta mark 0x40000000 meta mark set 0x2024 accept
         ip saddr 10.201.0.1 counter queue num ${zapret-qnum} bypass
         ip6 saddr fd00:201::1 counter queue num ${zapret-qnum} bypass
       }
