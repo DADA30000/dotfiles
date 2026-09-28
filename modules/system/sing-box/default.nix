@@ -171,7 +171,7 @@ let
         type = "tun";
         interface_name = "tun0";
         mtu = MTU;
-        strict_route = false;
+        strict_route = true;
         auto_route = true;
         auto_redirect = true;
         address = [
@@ -205,7 +205,8 @@ let
       {
         type = "direct";
         tag = "zapret";
-        bind_interface = "zapret0";
+        inet4_bind_address = "10.201.0.1";
+        inet6_bind_address = "fd00:201::1";
       }
       {
         type = "selector";
@@ -242,7 +243,14 @@ let
     table inet vpn_routing {
       chain output {
         type route hook output priority mangle; policy accept;
-        oifname "zapret0" counter queue num ${zapret-qnum} bypass
+        ip saddr 10.201.0.1 counter queue num ${zapret-qnum} bypass
+        ip6 saddr fd00:201::1 counter queue num ${zapret-qnum} bypass
+      }
+
+      chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip saddr 10.201.0.0/24 masquerade
+        ip6 saddr fd00:201::/112 masquerade
       }
     }
   '';
@@ -257,6 +265,9 @@ let
     ip link del veth_host 2>/dev/null || true
     ip link del zapret0 2>/dev/null || true
 
+    ip addr del 10.201.0.1/24 dev lo 2>/dev/null || true
+    ip -6 addr del fd00:201::1/112 dev lo 2>/dev/null || true
+
     ip rule del to 10.200.0.0/24 lookup main priority 2 2>/dev/null || true
     ip -6 rule del to fd00:200::/126 lookup main priority 2 2>/dev/null || true
   '';
@@ -266,14 +277,8 @@ let
     ${cleanup_script}
     set -e
 
-    DEFAULT_IFACE=$(ip route show default | awk '{print $5; exit}')
-    if [[ -z "$DEFAULT_IFACE" ]]; then
-      DEFAULT_IFACE=$(ip -o link show up | awk -F': ' '$2 !~ /^(lo|tun|awg|veth)/ {print $2; exit}')
-    fi
-    if [[ -n "$DEFAULT_IFACE" ]]; then
-      ip link add link "$DEFAULT_IFACE" name zapret0 type ipvlan mode l2 2>/dev/null || true
-      ip link set zapret0 up
-    fi
+    ip addr add 10.201.0.1/24 dev lo 2>/dev/null || true
+    ip -6 addr add fd00:201::1/112 dev lo 2>/dev/null || true
 
     nft -f ${vpnRoutingNft}
 
