@@ -214,7 +214,8 @@ vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 if vim.g.neovide then
 	vim.keymap.set({ "n", "x" }, "<C-S-c>", '"+y', { desc = "Copy system clipboard" })
 	vim.keymap.set({ "n", "x" }, "<C-S-v>", '"+p', { desc = "Paste system clipboard" })
-	vim.keymap.set("i", "<C-S-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
+	vim.keymap.set({ "i", "c" }, "<C-S-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
+	vim.keymap.set("c", "<C-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
 	vim.g.neovide_no_vsync = _G.OPTS.neovide.no_vsync
 	vim.g.neovide_idle_timer = _G.OPTS.neovide.idle_timer
 	vim.g.neovide_scroll_animation_length = _G.OPTS.neovide.scroll_animation_length

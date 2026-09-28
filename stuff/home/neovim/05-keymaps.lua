@@ -38,6 +38,8 @@ end
 -- Clipboard operations
 vim.keymap.set({ "n", "x" }, "<C-S-c>", '"+y', { desc = "Copy system clipboard" })
 vim.keymap.set({ "n", "x" }, "<C-S-v>", '"+p', { desc = "Paste system clipboard" })
+vim.keymap.set({ "i", "c" }, "<C-S-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
+vim.keymap.set("c", "<C-v>", "<C-r><C-o>+", { desc = "Paste system clipboard" })
 vim.keymap.set("s", "<C-S-c>", '<C-g>"+y', { silent = true, desc = "Copy selection in Select mode" })
 vim.keymap.set("s", "<C-S-v>", '<C-g>"+p', { silent = true, desc = "Paste/Replace in Select mode" })
 
