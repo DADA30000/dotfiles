@@ -57,14 +57,6 @@ in
           finegrained = true;
           kernelSuspendNotifier = true;
         };
-        prime = {
-          nvidiaBusId = "PCI:100@0:0:0";
-          amdgpuBusId = "PCI:102@0:0:0";
-          offload = {
-            enable = true;
-            enableOffloadCmd = true;
-          };
-        };
       };
     };
     services.xserver.videoDrivers = mkMerge [

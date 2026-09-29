@@ -502,18 +502,6 @@ in
                 "noctalia msg screenshot-fullscreen"
               ]
               [
-                "${mod} + O"
-                "noctalia msg screenshot-region"
-              ]
-              [
-                "${mod} + CTRL + O"
-                "noctalia msg screenshot-annotate"
-              ]
-              [
-                "${mod} + SHIFT + O"
-                "noctalia msg screenshot-fullscreen"
-              ]
-              [
                 "${mod} + CTRL + Q"
                 "app2unit -- kitty"
               ]

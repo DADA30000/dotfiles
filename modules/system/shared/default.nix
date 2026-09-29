@@ -202,13 +202,7 @@ in
 
   nix = {
 
-    package = pkgs.lixPackageSets.latest.lix;
-
-    daemonCPUSchedPolicy = "batch";
-
-    daemonIOSchedClass = "idle";
-
-    daemonIOSchedPriority = 7;
+    package = pkgs.nixVersions.latest;
 
     settings = {
       allow-import-from-derivation = false;
@@ -314,7 +308,7 @@ in
       "vm.swappiness" = 100;
       "net.core.default_qdisc" = "cake";
       "net.ipv4.tcp_congestion_control" = "bbr";
-      "kernel.sysrq" = 756;
+      "kernel.sysrq" = 240;
       "kernel.panic" = 0;
     };
 
@@ -431,7 +425,6 @@ in
         app-graphical.sliceConfig = {
           CPUWeight = 300;
           IOWeight = 300;
-          MemoryLow = "1500M";
         };
         app.sliceConfig = {
           CPUWeight = 200;
@@ -456,7 +449,6 @@ in
           serviceConfig = {
             CPUWeight = 1000;
             IOWeight = 1000;
-            MemoryLow = "500M";
           };
         };
         cgroup-executioner = {
@@ -480,13 +472,6 @@ in
         wantedBy = lib.mkForce [ "systemd-user-sessions.service" ];
         after = [ "systemd-user-sessions.service" ];
         serviceConfig.Type = lib.mkForce "simple";
-      };
-
-      nix-daemon.serviceConfig = {
-        Nice = 19;
-        CPUSchedulingPolicy = "batch";
-        CPUWeight = 1;
-        IOWeight = 1;
       };
 
       quest-adb-reverse = {

@@ -105,6 +105,33 @@ let
     };
   };
 
+  vesktopSandbox = mkSandbox rec {
+    appId = "dev.vencord.Vesktop";
+    network = "singbox";
+    audio_pulse = "sandboxed";
+    audio_pipewire = "sandboxed";
+    wayland = "sandboxed";
+    gpu = true;
+    webcam = 5;
+    additional_args =
+      { sloth, ... }:
+      {
+        dbus.enable = true;
+        bubblewrap = {
+          sharePid = true;
+          bind.rw = [
+            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord")
+            (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings.json"))
+            (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings/settings.json"))
+          ];
+        };
+      };
+    additional_outside_commands = ''
+      ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
+    '';
+    package = pkgs.vesktop;
+  };
+
   sounduxSandbox = mkSandbox {
     appId = "io.github.Soundux";
     network = "sandboxed";
@@ -753,6 +780,7 @@ in
       rustdeskSandbox
       prismLauncherSandbox
       discordCanarySandbox
+      vesktopSandbox
       ayugramDesktopSandbox
       enteAuthSandbox
       steamSandbox

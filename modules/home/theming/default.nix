@@ -100,11 +100,11 @@ let
   };
   # https://github.com/Vencord/Vesktop/blob/main/src/shared/settings.d.ts
   vesktop_settings = (pkgs.formats.json { }).generate "settings.json" {
-    discordBranch = "stable";
+    discordBranch = "canary";
     minimizeToTray = true;
-    arRPC = false;
-    splashColor = "rgb(222, 222, 222)";
-    splashBackground = "rgba(0, 0, 0, 0.2)";
+    arRPC = true;
+    splashColor = "rgb(255, 255, 255)";
+    splashBackground = "rgba(0, 0, 0, 0.05)";
     splashTheming = true;
     spellCheckLanguages = [
       "en"
@@ -186,24 +186,20 @@ in
         "menus/applications.menu".source = ../../../stuff/home/theming/plasma-applications.menu;
         "GIMP_fake".source = "${inputs.photogimp}/.config/GIMP";
         "Kvantum".source = ../../../stuff/home/theming/Kvantum;
-        "qt5ct".source =
-          pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/home/theming/qt5ct; }
-            ''
-              mkdir -p $out
-              cp -r $conf/* $out
-              chmod u+w $out/qt5ct.conf
-              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
-              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
-            '';
-        "qt6ct".source =
-          pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/home/theming/qt6ct; }
-            ''
-              mkdir -p $out
-              cp -r $conf/* $out
-              chmod u+w $out/qt6ct.conf
-              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
-              ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
-            '';
+        "qt5ct".source = pkgs.runCommand "qt5ct.conf" { conf = ../../../stuff/home/theming/qt5ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt5ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt5ct.conf Interface stylesheets "${config.xdg.configHome}/qt5ct/qss/kek.qss"
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
+        '';
+        "qt6ct".source = pkgs.runCommand "qt6ct.conf" { conf = ../../../stuff/home/theming/qt6ct; } ''
+          mkdir -p $out
+          cp -r $conf/* $out
+          chmod u+w $out/qt6ct.conf
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
+          ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
+        '';
       }
       // (mkSourcePrefix "easyeffects/db" {
         "graphrc" = ../../../stuff/home/theming/graphrc;

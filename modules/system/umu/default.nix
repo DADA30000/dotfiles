@@ -5,12 +5,26 @@
   ...
 }:
 let
-  proton-ge-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-ge";
+  proton-cachyos-11 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "proton-cachyos";
+    version = "11.0-20260703";
+    phases = [ "installPhase" ];
+    src = pkgs.fetchurl {
+      url = "https://github.com/CachyOS/${finalAttrs.name}/releases/download/cachyos-${finalAttrs.version}-slr/${finalAttrs.name}-${finalAttrs.version}-slr-x86_64.tar.xz";
+      hash = "sha256-UcWAtmqDPHOZj+APBxfurFcZdlQECi8u1RisPuaNdz0=";
+    };
+    installPhase = ''
+      mkdir -p "$out"
+      tar -C "$out" --strip-components=1 -xf "$src"
+    '';
+  });
+
+  proton-ge-custom-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "GE-Proton";
     version = "10-34";
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
-      url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton${finalAttrs.version}/GE-Proton${finalAttrs.version}.tar.gz";
+      url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${finalAttrs.name}${finalAttrs.version}/${finalAttrs.name}${finalAttrs.version}.tar.gz";
       hash = "sha256-UcWAtmqDPHOZj+APBxfurFcZdlQECi8u1RiePuaNdz0=";
     };
     installPhase = ''
@@ -19,12 +33,12 @@ let
     '';
   });
 
-  proton-umu-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-umu";
+  umu-proton-10 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "UMU-Proton";
     version = "10.0-4";
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
-      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/UMU-Proton-${finalAttrs.version}/UMU-Proton-${finalAttrs.version}.tar.gz";
+      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
       hash = "sha256-YumeApoY+jE+b6Y9QjkJGBAXMKlA40kcVNnVjKuIfGk=";
     };
     installPhase = ''
@@ -33,12 +47,12 @@ let
     '';
   });
 
-  proton-umu-9 = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-umu";
+  umu-proton-9 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "UMU-Proton";
     version = "9.0-4e";
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
-      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/UMU-Proton-${finalAttrs.version}/UMU-Proton-${finalAttrs.version}.tar.gz";
+      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
       hash = "sha256-1TYX073YlPTVyP1D6Cf/+7zbtJv0c9f7O+JhjdRx6/M=";
     };
     installPhase = ''
@@ -47,12 +61,12 @@ let
     '';
   });
 
-  proton-umu-8 = pkgs.stdenv.mkDerivation (finalAttrs: {
-    name = "proton-umu";
+  umu-proton-8 = pkgs.stdenv.mkDerivation (finalAttrs: {
+    name = "ULWGL-Proton";
     version = "8.0-5-3";
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
-      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/ULWGL-Proton-${finalAttrs.version}/ULWGL-Proton-${finalAttrs.version}.tar.gz";
+      url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
       hash = "sha256-JmBo/hk5pBnzi3JrRkv9WlEoCPYpe9AWs7Mcns7j0bA=";
     };
     installPhase = ''
@@ -204,11 +218,12 @@ let
       cp -rL --no-preserve=ownership "${steamrt3}/." "$TMP_HOME/.local/share/umu/steamrt3/"
       cp -rL --no-preserve=ownership "${steamrt4}/." "$TMP_HOME/.local/share/umu/steamrt4/"
 
-      cp -rL --no-preserve=ownership "${proton-ge-10}/." "$TMP_HOME/.local/share/umu/proton/proton-ge-10/"
-      cp -rL --no-preserve=ownership "${proton-umu-10}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-10/"
-      cp -rL --no-preserve=ownership "${proton-umu-9}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-9/"
-      cp -rL --no-preserve=ownership "${proton-umu-8}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-8/"
+      cp -rL --no-preserve=ownership "${proton-ge-custom-10}/." "$TMP_HOME/.local/share/umu/proton/proton-ge-10/"
+      cp -rL --no-preserve=ownership "${umu-proton-10}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-10/"
+      cp -rL --no-preserve=ownership "${umu-proton-9}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-9/"
+      cp -rL --no-preserve=ownership "${umu-proton-8}/." "$TMP_HOME/.local/share/umu/proton/proton-umu-8/"
       cp -rL --no-preserve=ownership "${pkgs.proton-ge-bin.steamcompattool}/." "$TMP_HOME/.local/share/umu/proton/proton-ge-latest/"
+      cp -rL --no-preserve=ownership "${proton-cachyos-11}/." "$TMP_HOME/.local/share/umu/proton/proton-cachyos-11/"
 
       chmod -R u+w "$TMP_HOME/.local/share/umu"
 
@@ -279,6 +294,7 @@ let
       run_wineboot_for_proton "proton-umu-10"
       run_wineboot_for_proton "proton-ge-10"
       run_wineboot_for_proton "proton-ge-latest"
+      run_wineboot_for_proton "proton-cachyos-11"
 
       echo "Base prefixes generated successfully. Cleaning temporary runtimes..."
       rm -rf "$TMP_HOME"
@@ -308,11 +324,12 @@ let
       mkdir -p build/proton
       cp -aL "${steamrt3}" build/steamrt3
       cp -aL "${steamrt4}" build/steamrt4
-      cp -aL "${proton-ge-10}" build/proton/proton-ge-10
-      cp -aL "${proton-umu-10}" build/proton/proton-umu-10
-      cp -aL "${proton-umu-9}" build/proton/proton-umu-9
-      cp -aL "${proton-umu-8}" build/proton/proton-umu-8
+      cp -aL "${proton-ge-custom-10}" build/proton/proton-ge-10
+      cp -aL "${umu-proton-10}" build/proton/proton-umu-10
+      cp -aL "${umu-proton-9}" build/proton/proton-umu-9
+      cp -aL "${umu-proton-8}" build/proton/proton-umu-8
       cp -aL "${pkgs.proton-ge-bin.steamcompattool}" build/proton/proton-ge-latest
+      cp -aL "${proton-cachyos-11}" build/proton/proton-cachyos-11
 
       # Ensure permissions for patching and pressure-vessel
       chmod -R u+w build
