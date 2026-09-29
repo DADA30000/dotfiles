@@ -9,6 +9,8 @@
 }:
 let
   cfg = config.sandboxing;
+  staticBwrap = pkgs.pkgsStatic.bubblewrap;
+
   mkNixPak = inputs.nixpak.lib.nixpak {
     inherit (pkgs) lib;
     inherit pkgs;
@@ -382,6 +384,8 @@ let
 
                     bubblewrap = {
 
+                      package = staticBwrap;
+
                       bindEntireStore = true;
 
                       network = network != "off";
@@ -738,6 +742,7 @@ in
     _module.args.mkSandbox = mkSandbox;
   }
   // lib.optionalAttrs (options ? home.file) {
+    home.packages = [ staticBwrap ];
     home.file.".not-a-sandbox".text = "not a sandbox";
     xdg.configFile = lib.mapAttrs' (path: conf:
       lib.nameValuePair path {
@@ -750,6 +755,7 @@ in
     };
   }
   // lib.optionalAttrs (options ? environment.etc) {
+    environment.systemPackages = [ staticBwrap ];
     environment.etc.".not-a-sandbox".text = "not a sandbox";
     services.pipewire = {
       package = pkgs.pipewire.overrideAttrs (old: {
