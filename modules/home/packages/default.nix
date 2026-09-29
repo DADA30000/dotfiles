@@ -56,8 +56,10 @@ let
     additional_args =
       { sloth, ... }:
       {
-        dbus.enable = true;
-        dbus.policies."com.feralinteractive.GameMode" = "talk";
+        dbus = {
+          enable = true;
+          policies."com.feralinteractive.GameMode" = "talk";
+        };
         bubblewrap.bind.ro = [
           (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
           (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
@@ -121,12 +123,14 @@ let
           sharePid = true;
           bind.rw = [
             (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord")
-            (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings.json"))
-            (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings/settings.json"))
+            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings.json")
+            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings/settings.json")
           ];
         };
       };
     additional_outside_commands = ''
+      mkdir -p "$XDG_CONFIG_HOME/Vencord" "$XDG_CONFIG_HOME/vesktop/settings"
+      touch "$XDG_CONFIG_HOME/vesktop/settings.json" "$XDG_CONFIG_HOME/vesktop/settings/settings.json"
       ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
     '';
     package = pkgs.vesktop;
@@ -184,10 +188,7 @@ let
     gpu = true;
     additional_args.dbus = {
       enable = true;
-      policies = {
-        "io.ente.auth" = "own";
-        "io.ente.auth.*" = "own";
-      };
+      policies."io.ente.auth" = "own";
     };
     package = pkgs.ente-auth;
   };
@@ -609,7 +610,6 @@ in
       pkgs.gparted
       pkgs.neovim-remote
       pkgs.stylua
-      pkgs.delve
       pkgs.rustup
       pkgs.vscode-extensions.ms-vscode.cpptools
       pkgs.hexpatch
@@ -621,7 +621,6 @@ in
       pkgs.taplo
       pkgs.yaml-language-server
       pkgs.shellcheck
-      pkgs.shellcheck.out
       pkgs.shfmt
       pkgs.asm-lsp
       pkgs.tmux
@@ -631,7 +630,6 @@ in
       pkgs.basedpyright
       pkgs.cmake-lint
       pkgs.clang-tools
-      pkgs.clang
       pkgs.cmake-language-server
       pkgs.flatpak
       pkgs.duperemove
@@ -669,7 +667,6 @@ in
       pkgs.gotools
       pkgs.wget
       pkgs.zenity
-      pkgs.procps
       pkgs.linuxConsoleTools
       pkgs.evtest
       pkgs.bat
@@ -731,7 +728,6 @@ in
       pkgs.yad
       pkgs.rsync
       pkgs.strace
-      pkgs.go
       pkgs.nix-diff
       pkgs.migrate-to-uv
       pkgs.ssdeep

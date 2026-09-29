@@ -6,10 +6,429 @@
   ...
 }:
 let
-  patched-umu = pkgs.umu-launcher-unwrapped.overrideAttrs (oldAttrs: {
-    postPatch = (oldAttrs.postPatch or "") + ''
-      substituteInPlace umu/umu_run.py --replace-fail 'env["SteamGameId"] = env["SteamAppId"]' 'env["SteamGameId"] = os.environ.get("SteamGameId", env["SteamAppId"])'
+  # ---------------------------------------------------------------------------
+  # Declarative Proton Versions Registry
+  # To add a new Proton, simply add an attribute here.
+  # ---------------------------------------------------------------------------
+  protons = {
+    proton-cachyos-11 = {
+      displayName = "Proton CachyOS 11";
+      pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
+        name = "proton-cachyos";
+        version = "11.0-20260703";
+        phases = [ "installPhase" ];
+        src = pkgs.fetchurl {
+          url = "https://github.com/CachyOS/${finalAttrs.name}/releases/download/cachyos-${finalAttrs.version}-slr/${finalAttrs.name}-${finalAttrs.version}-slr-x86_64.tar.xz";
+          hash = "sha512-cT/gCNZ+NJGu87Wx2a4sES18K1iz8j/COH0RIvwTH/fn8OonxnvyeXPZBr3OYjXDQJhTDsTHhgWUOLFTxuFhhw==";
+        };
+        installPhase = ''
+          mkdir -p "$out"
+          tar -C "$out" --strip-components=1 -xf "$src"
+        '';
+      });
+    };
+
+    proton-ge-10 = {
+      displayName = "Proton GE 10";
+      pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
+        name = "GE-Proton";
+        version = "10-34";
+        phases = [ "installPhase" ];
+        src = pkgs.fetchurl {
+          url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${finalAttrs.name}${finalAttrs.version}/${finalAttrs.name}${finalAttrs.version}.tar.gz";
+          hash = "sha256-UcWAtmqDPHOZj+APBxfurFcZdlQECi8u1RiePuaNdz0=";
+        };
+        installPhase = ''
+          mkdir -p "$out"
+          tar -C "$out" --strip-components=1 -xf "$src"
+        '';
+      });
+    };
+
+    proton-umu-10 = {
+      displayName = "Proton UMU 10";
+      default = true;
+      pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
+        name = "UMU-Proton";
+        version = "10.0-4";
+        phases = [ "installPhase" ];
+        src = pkgs.fetchurl {
+          url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
+          hash = "sha256-YumeApoY+jE+b6Y9QjkJGBAXMKlA40kcVNnVjKuIfGk=";
+        };
+        installPhase = ''
+          mkdir -p "$out"
+          tar -C "$out" --strip-components=1 -xf "$src"
+        '';
+      });
+    };
+
+    proton-umu-9 = {
+      displayName = "Proton UMU 9";
+      pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
+        name = "UMU-Proton";
+        version = "9.0-4e";
+        phases = [ "installPhase" ];
+        src = pkgs.fetchurl {
+          url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
+          hash = "sha256-1TYX073YlPTVyP1D6Cf/+7zbtJv0c9f7O+JhjdRx6/M=";
+        };
+        installPhase = ''
+          mkdir -p "$out"
+          tar -C "$out" --strip-components=1 -xf "$src"
+        '';
+      });
+    };
+
+    proton-umu-8 = {
+      displayName = "Proton UMU 8";
+      pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
+        name = "ULWGL-Proton";
+        version = "8.0-5-3";
+        phases = [ "installPhase" ];
+        src = pkgs.fetchurl {
+          url = "https://github.com/Open-Wine-Components/umu-proton/releases/download/${finalAttrs.name}-${finalAttrs.version}/${finalAttrs.name}-${finalAttrs.version}.tar.gz";
+          hash = "sha256-JmBo/hk5pBnzi3JrRkv9WlEoCPYpe9AWs7Mcns7j0bA=";
+        };
+        installPhase = ''
+          mkdir -p "$out"
+          tar -C "$out" --strip-components=1 -xf "$src"
+        '';
+      });
+    };
+
+    proton-ge-latest = {
+      displayName = "Proton GE (Latest)";
+      pkg = pkgs.proton-ge-bin.steamcompattool;
+    };
+  };
+
+  # Automatically resolve default proton
+  defaultProtonCode = lib.findFirst (
+    name: protons.${name}.default or false
+  ) (builtins.head (builtins.attrNames protons)) (builtins.attrNames protons);
+
+  defaultProton = protons.${defaultProtonCode};
+
+  protonCaseBranches = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (codeName: p: ''
+      "${p.displayName}" | "${codeName}")
+        export PROTONPATH="$SECURE_MOUNT/proton/${codeName}"
+        ;;
+    '') protons
+  );
+
+  # ---------------------------------------------------------------------------
+  # Steam Linux Runtimes
+  # ---------------------------------------------------------------------------
+  steamrt4_data = builtins.fromJSON (builtins.readFile ../../../stuff/home/umu/steamrt4.json);
+  steamrt3_data = builtins.fromJSON (builtins.readFile ../../../stuff/home/umu/steamrt3.json);
+
+  steamrt3 = pkgs.stdenv.mkDerivation {
+    name = "steamrt3";
+    version = steamrt3_data.version;
+    phases = [ "installPhase" ];
+    src = pkgs.fetchurl {
+      url = "https://repo.steampowered.com/steamrt3/images/${steamrt3_data.version}/SteamLinuxRuntime_sniper.tar.xz";
+      hash = steamrt3_data.hash;
+    };
+    installPhase = ''
+      mkdir -p "$out"
+      cd "$out"
+      tar -C . --strip-components=1 -xf "$src"
+      ln -s "_v2-entry-point" "umu"
+      echo "ok" > ".installed.ok"
     '';
+  };
+
+  steamrt4 = pkgs.stdenv.mkDerivation {
+    name = "steamrt4";
+    version = steamrt4_data.version;
+    phases = [ "installPhase" ];
+    src = pkgs.fetchurl {
+      url = "https://repo.steampowered.com/steamrt4/images/${steamrt4_data.version}/SteamLinuxRuntime_4.tar.xz";
+      hash = steamrt4_data.hash;
+    };
+    installPhase = ''
+      mkdir -p "$out"
+      cd "$out"
+      tar -C . --strip-components=1 -xf "$src"
+      ln -s "_v2-entry-point" "umu"
+      echo "ok" > ".installed.ok"
+    '';
+  };
+
+  openal =
+    (pkgs.pkgsCross.mingw32.openal.override {
+      alsaSupport = false;
+      pulseSupport = false;
+      dbusSupport = false;
+    }).overrideAttrs
+      (old: {
+        buildInputs = [ ];
+        nativeBuildInputs = old.nativeBuildInputs ++ [
+          pkgs.cmake
+          pkgs.ninja
+        ];
+        meta = old.meta // {
+          platforms = [ "i686-windows" ];
+        };
+        preConfigure = (old.preConfigure or "") + ''
+          export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++"
+        '';
+        cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+          "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+          "-DALSOFT_REQUIRE_WINMM=ON"
+          "-DALSOFT_REQUIRE_DSOUND=ON"
+          "-DALSOFT_BACKEND_ALSA=OFF"
+          "-DALSOFT_BACKEND_OSS=OFF"
+          "-DALSOFT_BACKEND_PULSEAUDIO=OFF"
+          "-DALSOFT_BACKEND_JACK=OFF"
+          "-DALSOFT_EXAMPLES=OFF"
+          "-DALSOFT_UTILS=OFF"
+        ];
+      });
+
+  patch-proton = pkgs.writers.writePython3 "patch-proton" { doCheck = false; } ''
+    import os
+    import sys
+
+    for path in sys.argv[1:]:
+        if not os.path.exists(path):
+            continue
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            s = f.read()
+
+        if "import filecmp" not in s:
+            s = s.replace("#!/usr/bin/env python3\n", "#!/usr/bin/env python3\nimport filecmp\n", 1)
+
+        old_check = "        if file_exists(dst, follow_symlinks=False):\n            os.remove(dst)"
+        new_check = (
+            "        if file_exists(dst, follow_symlinks=False):\n"
+            "            if os.path.isfile(dst) and os.path.isfile(src):\n"
+            "                try:\n"
+            "                    if os.path.samefile(src, dst) or (os.path.getsize(src) == os.path.getsize(dst) and filecmp.cmp(src, dst, shallow=False)):\n"
+            "                        return\n"
+            "                except OSError:\n"
+            "                    pass\n"
+            "            os.remove(dst)"
+        )
+        if old_check in s:
+            s = s.replace(old_check, new_check, 1)
+
+        old_file_check = "        if file_exists(dst, follow_symlinks=False):\n            os.remove(dst)\n        copyfile(src, dst)"
+        new_file_check = (
+            "        if file_exists(dst, follow_symlinks=False):\n"
+            "            if os.path.isfile(dst) and os.path.isfile(src):\n"
+            "                try:\n"
+            "                    if os.path.samefile(src, dst) or (os.path.getsize(src) == os.path.getsize(dst) and filecmp.cmp(src, dst, shallow=False)):\n"
+            "                        return\n"
+            "                except OSError:\n"
+            "                    pass\n"
+            "            os.remove(dst)\n"
+            "        copyfile(src, dst)"
+        )
+        if old_file_check in s:
+            s = s.replace(old_file_check, new_file_check, 1)
+
+        os.chmod(path, 0o755)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(s)
+        print("Successfully processed proton script:", path)
+  '';
+
+  # ---------------------------------------------------------------------------
+  # UMU Runtime EROFS Image (Base Prefixes + Runtimes + Protons)
+  # ---------------------------------------------------------------------------
+  runtime = pkgs.stdenv.mkDerivation {
+    name = "umu-runtime.img";
+    version = steamrt4_data.version;
+    nativeBuildInputs = [
+      pkgs.erofs-utils
+      pkgs.bubblewrap
+      pkgs.util-linux
+      pkgs.umu-launcher
+    ];
+    phases = [ "installPhase" ];
+    installPhase = ''
+      # =========================================================================
+      # STAGE 1: Generate clean base prefixes using wineboot inside bwrap
+      # =========================================================================
+      cat << "EOF" > run-wineboot-stage.sh
+      #!/bin/sh
+      set -e
+
+      TMP_HOME="$TMPDIR/stage1_home"
+      mkdir -p "$TMP_HOME/.local/share/umu/steamrt3"
+      mkdir -p "$TMP_HOME/.local/share/umu/steamrt4"
+      mkdir -p "$TMP_HOME/.local/share/umu/proton"
+
+      echo "Setting up temporary runtimes for wineboot..."
+      cp -rL --no-preserve=ownership "${steamrt3}/." "$TMP_HOME/.local/share/umu/steamrt3/"
+      cp -rL --no-preserve=ownership "${steamrt4}/." "$TMP_HOME/.local/share/umu/steamrt4/"
+
+      ${lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (codeName: p: ''
+          cp -rL --no-preserve=ownership "${p.pkg}/." "$TMP_HOME/.local/share/umu/proton/${codeName}/"
+        '') protons
+      )}
+
+      chmod -R u+w "$TMP_HOME/.local/share/umu"
+
+      # Patch proton scripts inside stage 1
+      ${patch-proton} "$TMP_HOME"/.local/share/umu/proton/*/proton
+
+      export HOME="$TMP_HOME"
+      export XDG_DATA_HOME="$TMP_HOME/.local/share"
+      export UMU_RUNTIME_UPDATE=0
+      BASE_PFX_OUT="$TMPDIR/base_prefixes"
+      mkdir -p "$BASE_PFX_OUT"
+
+      run_wineboot_for_proton() {
+        local name="$1"
+        local pfx_path="$BASE_PFX_OUT/$name"
+        local proton_path="$TMP_HOME/.local/share/umu/proton/$name"
+
+        echo "Generating base prefix via wineboot for: $name"
+        mkdir -p "$pfx_path"
+        WINEPREFIX="$pfx_path" PROTONPATH="$proton_path" umu-run wineboot -u
+
+        # Inject OpenAL32.dll into syswow64
+        mkdir -p "$pfx_path/drive_c/windows/syswow64"
+        cp --no-preserve=mode "${openal}/bin/OpenAL32.dll" "$pfx_path/drive_c/windows/syswow64/OpenAL32.dll"
+
+        # Inject Steam client stubs dynamically
+        local steam_dest="$pfx_path/drive_c/Program Files (x86)/Steam"
+        mkdir -p "$steam_dest"
+
+        local cand64
+        cand64=$(find "$proton_path" -path "*/x86_64-windows/lsteamclient.dll" 2>/dev/null | head -n 1)
+        if [ -n "$cand64" ]; then
+          cp --no-preserve=mode "$cand64" "$steam_dest/steamclient64.dll"
+        fi
+
+        local cand32
+        cand32=$(find "$proton_path" -path "*/i386-windows/lsteamclient.dll" 2>/dev/null | head -n 1)
+        if [ -n "$cand32" ]; then
+          cp --no-preserve=mode "$cand32" "$steam_dest/steamclient.dll"
+        fi
+
+        # Resolve all file symlinks into actual regular files
+        echo "Resolving file symlinks in base prefix for: $name"
+        find "$pfx_path" -type l | while read -r symlink; do
+          target=$(readlink -f "$symlink" 2>/dev/null || true)
+          if [ -n "$target" ] && [ -f "$target" ]; then
+            rm -f "$symlink"
+            cp "$target" "$symlink"
+          fi
+        done
+
+        # Remove sandbox-specific paths
+        rm -f "$pfx_path/dosdevices/x:"
+        rm -f "$pfx_path/drive_c/users/nixbld"
+
+        # Normalize config_info and .update-timestamp in base prefix
+        if [ -f "$pfx_path/config_info" ]; then
+          sed -i "s|$TMP_HOME|@UMU_USER_HOME@|g" "$pfx_path/config_info"
+          sed -i 's|^[0-9]\+\.[0-9]\+$|1.0|' "$pfx_path/config_info"
+        fi
+        echo -n "1" > "$pfx_path/.update-timestamp"
+
+        touch "$pfx_path/creation_sync_guard"
+        touch "$pfx_path/check-do_not_delete_this"
+        ln -sfn . "$pfx_path/pfx"
+      }
+
+      ${lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (codeName: _: ''
+          run_wineboot_for_proton "${codeName}"
+        '') protons
+      )}
+
+      echo "Base prefixes generated successfully. Cleaning temporary runtimes..."
+      rm -rf "$TMP_HOME"
+      EOF
+
+      chmod +x run-wineboot-stage.sh
+
+      # Run stage 1 inside bwrap to provide /sys, /proc, /dev and FHS root
+      bwrap \
+        --tmpfs / \
+        --dir /sys \
+        --ro-bind /nix /nix \
+        --ro-bind /bin /bin \
+        --ro-bind /etc /etc \
+        --dev /dev \
+        --proc /proc \
+        --bind /tmp /tmp \
+        --bind /build /build \
+        ./run-wineboot-stage.sh
+
+      rm -f run-wineboot-stage.sh
+
+      # =========================================================================
+      # STAGE 2: Assemble clean EROFS filesystem with runtime & base prefixes
+      # =========================================================================
+      echo "Assembling final runtime image..."
+      mkdir -p build/proton
+      cp -aL "${steamrt3}" build/steamrt3
+      cp -aL "${steamrt4}" build/steamrt4
+
+      ${lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (codeName: p: ''
+          cp -aL "${p.pkg}" build/proton/${codeName}
+        '') protons
+      )}
+
+      # Ensure permissions for patching and pressure-vessel
+      chmod -R u+w build
+
+      # Patch proton scripts in final image
+      ${patch-proton} build/proton/*/proton
+
+      # Copy generated clean base prefixes into image
+      mv "$TMPDIR/base_prefixes" build/base_prefixes
+
+      # Resolve any remaining file symlinks in build/ to actual file copies
+      echo "Resolving all file symlinks in build image..."
+      find build -type l | while read -r symlink; do
+        target=$(readlink -f "$symlink" 2>/dev/null || true)
+        if [ -n "$target" ] && [ -f "$target" ]; then
+          rm -f "$symlink"
+          cp "$target" "$symlink"
+        fi
+      done
+
+      # Ensure permissions for pressure-vessel
+      chmod -R u+w build
+
+      # Create immutable EROFS with inode deduplication
+      mkfs.erofs \
+        --force-uid=0 \
+        --force-gid=0 \
+        --workers "$NIX_BUILD_CORES" \
+        --ignore-mtime \
+        --zD=1 \
+        -z zstd,19 \
+        -C 65536 \
+        -m 65536:zstd,19 \
+        -E 48bit,all-fragments,dot-omitted,fragdedupe=inode \
+        -T 0 \
+        -x -1 \
+        "$out" \
+        build
+    '';
+  };
+
+  # ---------------------------------------------------------------------------
+  # UMU Launcher Environment
+  # ---------------------------------------------------------------------------
+  patched-umu = pkgs.umu-launcher-unwrapped.overrideAttrs (oldAttrs: {
+    postPatch =
+      (oldAttrs.postPatch or "")
+      + ''
+        substituteInPlace umu/umu_run.py --replace-fail 'env["SteamGameId"] = env["SteamAppId"]' 'env["SteamGameId"] = os.environ.get("SteamGameId", env["SteamAppId"])'
+      '';
   });
 
   umu = pkgs.steam.buildRuntimeEnv {
@@ -29,447 +448,9 @@ let
     '';
   };
 
-  protonVersions = [
-    {
-      name = "Proton GE (Latest)";
-      path = "$HOME/.local/share/umu/proton/proton-ge-latest";
-    }
-    {
-      name = "Proton GE 10";
-      path = "$HOME/.local/share/umu/proton/proton-ge-10";
-    }
-    {
-      name = "Proton UMU 10";
-      path = "$HOME/.local/share/umu/proton/proton-umu-10";
-      default = true;
-    }
-    {
-      name = "Proton UMU 9";
-      path = "$HOME/.local/share/umu/proton/proton-umu-9";
-    }
-    {
-      name = "Proton UMU 8";
-      path = "$HOME/.local/share/umu/proton/proton-umu-8";
-    }
-  ];
-
-  defaultProton = lib.findFirst (v: v.default or false) (builtins.head protonVersions) protonVersions;
-
-  protonCaseBranches = lib.concatStringsSep "\n" (
-    map (v: ''"${v.name}") export PROTONPATH="${v.path}" ;;'') protonVersions
-  );
-
-  umu-rebase-pfx = pkgs.writeScriptBin "umu-rebase-pfx" ''
-    #!${pkgs.python3}/bin/python3
-    import os
-    import sys
-    import re
-    import argparse
-
-    def parse_reg(path):
-        sections = {}
-        current_sec = None
-        header = []
-        if not path or not os.path.exists(path):
-            return header, sections
-
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        i = 0
-        n = len(lines)
-        while i < n:
-            line = lines[i]
-            stripped = line.strip()
-            if stripped.startswith("[") and "]" in stripped:
-                sec_name = stripped[:stripped.find("]")+1]
-                current_sec = sec_name
-                sections[current_sec] = {
-                    "raw_header": line.rstrip("\r\n"),
-                    "values": {}
-                }
-                i += 1
-            elif current_sec is not None:
-                if not stripped or stripped.startswith("#time=") or stripped.startswith(";"):
-                    i += 1
-                    continue
-                full_val_lines = [line.rstrip("\r\n")]
-                while full_val_lines[-1].endswith("\\") and i + 1 < n:
-                    i += 1
-                    full_val_lines.append(lines[i].rstrip("\r\n"))
-
-                first_line = full_val_lines[0]
-                eq = first_line.find("=")
-                if eq != -1:
-                    k = first_line[:eq].strip()
-                    sections[current_sec]["values"][k] = full_val_lines
-                i += 1
-            else:
-                header.append(line.rstrip("\r\n"))
-                i += 1
-
-        return header, sections
-
-    def rebase_reg(old_base_p, new_base_p, upper_p):
-        _, old_base = parse_reg(old_base_p)
-        new_header, new_base = parse_reg(new_base_p)
-        _, upper = parse_reg(upper_p)
-
-        added_sections = {}
-        modified_keys = {}
-
-        for sec, data in upper.items():
-            if sec not in old_base:
-                added_sections[sec] = data
-            else:
-                old_vals = old_base[sec]["values"]
-                for k, val_lines in data["values"].items():
-                    if k not in old_vals or old_vals[k] != val_lines:
-                        modified_keys.setdefault(sec, {})[k] = val_lines
-
-        for sec, keys in modified_keys.items():
-            if sec in new_base:
-                new_base[sec]["values"].update(keys)
-            else:
-                added_sections[sec] = {"raw_header": sec, "values": keys}
-
-        new_base.update(added_sections)
-
-        with open(upper_p, "w", encoding="utf-8") as f:
-            f.write("\n".join(new_header) + "\n")
-            for sec, data in new_base.items():
-                f.write("\n" + data["raw_header"] + "\n")
-                for val_lines in data["values"].values():
-                    f.write("\n".join(val_lines) + "\n")
-
-    def parse_ini(path):
-        sections = {}
-        current_sec = "DEFAULT"
-        sections[current_sec] = {"raw_header": "", "lines": []}
-        if not path or not os.path.exists(path):
-            return sections
-
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped.startswith("[") and stripped.endswith("]"):
-                    current_sec = stripped
-                    sections[current_sec] = {"raw_header": line.rstrip("\r\n"), "lines": []}
-                else:
-                    sections[current_sec]["lines"].append(line.rstrip("\r\n"))
-        return sections
-
-    def rebase_ini(old_base_p, new_base_p, upper_p):
-        old_base = parse_ini(old_base_p)
-        new_base = parse_ini(new_base_p)
-        upper = parse_ini(upper_p)
-
-        for sec, data in upper.items():
-            if sec not in new_base:
-                new_base[sec] = data
-            else:
-                old_sec_lines = set(l.strip() for l in old_base.get(sec, {}).get("lines", []))
-                new_sec_lines = set(l.strip() for l in new_base[sec]["lines"])
-
-                for line in data["lines"]:
-                    s_line = line.strip()
-                    if not s_line or s_line.startswith(";"):
-                        continue
-                    if s_line not in old_sec_lines and s_line not in new_sec_lines:
-                        new_base[sec]["lines"].append(line)
-
-        with open(upper_p, "w", encoding="utf-8") as f:
-            for sec, data in new_base.items():
-                if data["raw_header"]:
-                    f.write(data["raw_header"] + "\n")
-                for l in data["lines"]:
-                    f.write(l + "\n")
-
-    def main():
-        parser = argparse.ArgumentParser(description="Rebase Wine prefix upper layer against new Proton default prefix")
-        parser.add_argument("--old-base", default="", help="Path to old Proton base prefix")
-        parser.add_argument("--new-base", required=True, help="Path to new Proton base prefix")
-        parser.add_argument("--upper", required=True, help="Path to upper directory")
-        parser.add_argument("--home", default=os.environ.get("HOME", ""), help="User home directory")
-        args = parser.parse_args()
-
-        upper_dir = os.path.abspath(args.upper)
-        new_base_dir = os.path.abspath(args.new_base)
-        old_base_dir = os.path.abspath(args.old_base) if args.old_base else ""
-        home_dir = args.home
-
-        if not os.path.exists(upper_dir):
-            return
-
-        # 1. 3-way merge on config files found in new_base
-        for root, dirs, files in os.walk(new_base_dir):
-            for f in files:
-                full_new = os.path.join(root, f)
-                rel = os.path.relpath(full_new, new_base_dir)
-                full_upper = os.path.join(upper_dir, rel)
-
-                if not os.path.exists(full_upper) or os.path.islink(full_upper):
-                    continue
-
-                full_old = os.path.join(old_base_dir, rel) if old_base_dir else ""
-                ext = os.path.splitext(f)[1].lower()
-
-                if ext == ".reg":
-                    rebase_reg(full_old, full_new, full_upper)
-                elif ext in (".ini", ".cfg", ".conf"):
-                    rebase_ini(full_old, full_new, full_upper)
-
-        # 2. Remove duplicate/obsolete Proton runtime binaries from upper/drive_c/windows
-        # so they resolve cleanly from lowerdir (new_base) without shadowing or bloat
-        upper_win = os.path.join(upper_dir, "drive_c", "windows")
-        if os.path.exists(upper_win):
-            for root, dirs, files in os.walk(upper_win):
-                for f in files:
-                    full_upper = os.path.join(root, f)
-                    rel = os.path.relpath(full_upper, upper_dir)
-                    full_old = os.path.join(old_base_dir, rel) if old_base_dir else ""
-                    full_new = os.path.join(new_base_dir, rel)
-                    if (full_old and os.path.exists(full_old)) or os.path.exists(full_new):
-                        try:
-                            os.remove(full_upper)
-                        except OSError:
-                            pass
-            for root, dirs, files in os.walk(upper_win, topdown=False):
-                if not os.listdir(root):
-                    try:
-                        os.rmdir(root)
-                    except OSError:
-                        pass
-
-        # 3. Synchronize config_info with host paths
-        new_config_info = os.path.join(new_base_dir, "config_info")
-        if os.path.exists(new_config_info):
-            with open(new_config_info, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            if home_dir:
-                content = content.replace("@UMU_USER_HOME@", home_dir)
-                content = re.sub(r"/build/[^/]+_home", home_dir, content)
-            lines = content.split("\n")
-            if len(lines) >= 9:
-                lines[8] = "1.0"
-            content = "\n".join(lines)
-            with open(os.path.join(upper_dir, "config_info"), "w", encoding="utf-8") as f:
-                f.write(content)
-
-        # 4. Set .update-timestamp to 1 matching EROFS normalized timestamps
-        with open(os.path.join(upper_dir, ".update-timestamp"), "w") as f:
-            f.write("1")
-
-        # 5. Set version
-        new_ver_file = os.path.join(new_base_dir, "version")
-        if os.path.exists(new_ver_file):
-            with open(new_ver_file, "r") as f:
-                ver = f.read().strip()
-            with open(os.path.join(upper_dir, "version"), "w") as f:
-                f.write(ver + "\n")
-
-        # 6. Remove transient Proton state files
-        for meta in ("tracked_files", "pfx.lock"):
-            p = os.path.join(upper_dir, meta)
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
-
-    if __name__ == "__main__":
-        main()
-  '';
-
-  cleanup-desktop-with-umu = pkgs.writeShellScriptBin "cleanup-desktop-with-umu" ''
-    PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:$PATH"
-    ICON_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/icons/umu"
-    DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-    CACHE_ICON_DIR="$HOME/.cache/umu/icons"
-
-    for d_file in "$DESKTOP_DIR"/umu-*.desktop; do
-      [[ -f "$d_file" ]] || continue
-
-      actual_exe=$(grep '^X-UMU-Actual-Exe=' "$d_file" | head -n 1 | cut -d= -f2-)
-      if [[ -z "$actual_exe" ]]; then
-        actual_exe=$(grep '^Exec=' "$d_file" | sed -n 's/^.*umu-run-wrapper "\([^"]*\)".*/\1/p')
-      fi
-
-      game_name=$(grep '^Name=' "$d_file" | head -n 1 | cut -d= -f2-)
-      icon_path=$(grep '^Icon=' "$d_file" | head -n 1 | cut -d= -f2)
-
-      if [[ -n "$actual_exe" && ! -f "$actual_exe" ]]; then
-        if [[ "$game_name" != *" (Inactive)"* ]]; then
-          clean_name="$game_name"
-          inactive_name="$game_name (Inactive)"
-          sed -i "s/^Name=.*/Name=$inactive_name/" "$d_file"
-          sed -i "s|^Exec=.*|Exec=fix-umu-path \"$d_file\"|" "$d_file"
-          ${pkgs.libnotify}/bin/notify-send -u normal -i "$icon_path" "Shortcut Inactive" "Executable missing for $clean_name. Double-click shortcut to set new path."
-        fi
-      elif [[ -n "$actual_exe" && -f "$actual_exe" ]]; then
-        if [[ "$game_name" == *" (Inactive)"* ]]; then
-          clean_name="''${game_name% (Inactive)}"
-          sed -i "s/^Name=.*/Name=$clean_name/" "$d_file"
-
-          args=$(grep '^X-UMU-Raw-Args=' "$d_file" | head -n 1 | cut -d= -f2-)
-          prefix=$(grep '^X-UMU-Prefix-Name=' "$d_file" | head -n 1 | cut -d= -f2-)
-          gpu=$(grep '^X-UMU-GPU-Select=' "$d_file" | head -n 1 | cut -d= -f2-)
-          steam=$(grep '^X-UMU-Steam-Integration=' "$d_file" | head -n 1 | cut -d= -f2-)
-          overlay=$(grep '^X-UMU-Steam-Overlay=' "$d_file" | head -n 1 | cut -d= -f2-)
-          proton=$(grep '^X-UMU-Proton-Type=' "$d_file" | head -n 1 | cut -d= -f2-)
-          vpn=$(grep '^X-UMU-VPN=' "$d_file" | head -n 1 | cut -d= -f2-)
-          gameid=$(grep '^X-UMU-Game-ID=' "$d_file" | head -n 1 | cut -d= -f2-)
-
-          ENV_BASE="env GAMEID=$gameid USE_GAMEMODE=1 USE_MANGOHUD=1 PROTON_ENABLE_WAYLAND=1 UMU_PREFIX_NAME=$prefix UMU_PROTON_TYPE=\"$proton\" USE_STEAM_INTEGRATION=$steam USE_STEAM_OVERLAY=$overlay USE_VPN=$vpn UMU_GPU_SELECT=\"$gpu\""
-
-          if [[ "$args" == *"%command%"* ]]; then
-            prefix_args="''${args%%\%command\%*}"
-            suffix_args="''${args#*\%command\%}"
-            EXEC_CMD="$ENV_BASE $prefix_args umu-run-wrapper \"$actual_exe\" $suffix_args"
-          else
-            EXEC_CMD="$ENV_BASE umu-run-wrapper \"$actual_exe\" $args"
-          fi
-
-          sed -i "s|^Exec=.*|Exec=$EXEC_CMD|" "$d_file"
-          ${pkgs.libnotify}/bin/notify-send -u normal -i "$icon_path" "Shortcut Reactivated" "Restored executable for $clean_name"
-        fi
-      fi
-    done
-
-    for i_file in "$ICON_DIR"/*; do
-      [[ -e "$i_file" ]] || continue
-      base=$(basename "$i_file" .png)
-
-      if ! grep -rqF "$i_file" "$DESKTOP_DIR" && [[ ! -f "$DESKTOP_DIR/$base.desktop" && ! -f "$DESKTOP_DIR/$base-umu.desktop" ]]; then
-        ${pkgs.libnotify}/bin/notify-send -u normal -i "$i_file" "Cleanup" "Removing stale icon $(basename "$i_file")"
-        rm "$i_file"
-      fi
-    done
-  '';
-
-  scan-umu-for-lnk = pkgs.writeShellScriptBin "scan-umu-for-lnk" ''
-    if [[ -z "$WINEPREFIX" ]]; then
-      prefix_name=''${UMU_PREFIX_NAME:-default}
-      export WINEPREFIX=$HOME/.umu/$prefix_name
-    fi
-
-    cleanup-desktop-with-umu
-
-    pids=()
-    MAX_JOBS=16
-
-    throttle_jobs() {
-      local temp_pids=()
-      for pid in "''${pids[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-          temp_pids+=("$pid")
-        fi
-      done
-      pids=("''${temp_pids[@]}")
-      while [[ ''${#pids[@]} -ge $MAX_JOBS ]]; do
-        sleep 0.05
-        temp_pids=()
-        for pid in "''${pids[@]}"; do
-          if kill -0 "$pid" 2>/dev/null; then
-            temp_pids+=("$pid")
-          fi
-        done
-        pids=("''${temp_pids[@]}")
-      done
-    }
-
-    # Resolve search dirs (works both when prefix is merged and offline in upper/)
-    SEARCH_DIRS=()
-    users_dir="$WINEPREFIX/drive_c/users"
-    [[ ! -d "$users_dir" && -d "$WINEPREFIX/upper/drive_c/users" ]] && users_dir="$WINEPREFIX/upper/drive_c/users"
-
-    if [[ -d "$users_dir" ]]; then
-      while IFS= read -r -d "" d; do
-        [[ -d "$d/Desktop" ]] && SEARCH_DIRS+=("$d/Desktop")
-        [[ -d "$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs" ]] && SEARCH_DIRS+=("$d/AppData/Roaming/Microsoft/Windows/Start Menu/Programs")
-      done < <(find "$users_dir" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
-    fi
-
-    pdata_dir="$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs"
-    [[ ! -d "$pdata_dir" && -d "$WINEPREFIX/upper/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs" ]] && pdata_dir="$WINEPREFIX/upper/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs"
-    [[ -d "$pdata_dir" ]] && SEARCH_DIRS+=("$pdata_dir")
-
-    if [[ ''${#SEARCH_DIRS[@]} -eq 0 ]]; then
-      exit 0
-    fi
-
-    DESKTOP_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-
-    while IFS= read -r -d "" lnk; do
-      if grep -Fq "X-UMU-Lnk-Path=$lnk" "$DESKTOP_DIR"/umu-*.desktop 2>/dev/null; then
-        continue
-      fi
-
-      throttle_jobs
-
-      (
-        metadata=$(${pkgs.exiftool}/bin/exiftool -f -p '$LocalBasePath|$CommandLineArguments' "$lnk" 2>/dev/null)
-        IFS='|' read -r win_path args <<< "$metadata"
-
-        win_path=$(echo "$win_path" | tr -d '\r')
-        args=$(echo "$args" | tr -d '\r')
-
-        if [[ "$win_path" == "-" || -z "$win_path" ]]; then
-          rm -f "$lnk"
-          exit 0
-        fi
-
-        if [[ "$args" == "-" ]]; then
-          args=""
-        fi
-
-        norm_p=$(echo "$win_path" | tr '\\' '/')
-        drive=""
-        path_no_drive=""
-
-        if [[ "$norm_p" =~ ^[a-zA-Z]: ]]; then
-          drive=$(echo "$norm_p" | cut -d: -f1 | tr '[:upper:]' '[:lower:]')
-          path_no_drive=$(echo "$norm_p" | sed 's/^[a-zA-Z]://')
-        else
-          path_no_drive="$norm_p"
-        fi
-
-        if [[ -n "$path_no_drive" && "$path_no_drive" != /* ]]; then
-          path_no_drive="/$path_no_drive"
-        fi
-
-        actual_exe=""
-
-        if [[ -n "$drive" && -d "$WINEPREFIX/dosdevices/$drive:" ]]; then
-          cand=$(realpath -m "$WINEPREFIX/dosdevices/$drive:$path_no_drive" 2>/dev/null)
-          if [[ -f "$cand" ]]; then
-            actual_exe="$cand"
-          fi
-        fi
-
-        if [[ -z "$actual_exe" && -n "$path_no_drive" && -f "$path_no_drive" ]]; then
-          actual_exe="$path_no_drive"
-        fi
-
-        if [[ -z "$actual_exe" && -n "$path_no_drive" ]]; then
-          for check_cand in "$WINEPREFIX/upper/drive_c$path_no_drive" "$WINEPREFIX/drive_c$path_no_drive"; do
-            if [[ -f "$check_cand" ]]; then
-              actual_exe="$check_cand"
-              break
-            fi
-          done
-        fi
-
-        if [[ -n "$actual_exe" && -f "$actual_exe" ]]; then
-          create-desktop-with-umu "$actual_exe" "$lnk" "$args"
-        fi
-      ) &
-      pids+=("$!")
-    done < <(find "''${SEARCH_DIRS[@]}" -type f \( -name "*.lnk" -o -name "*.LNK" \) -print0 2>/dev/null)
-
-    wait
-  '';
-
+  # ---------------------------------------------------------------------------
+  # Helper Tools & Scripts
+  # ---------------------------------------------------------------------------
   create-desktop-with-umu = pkgs.writeShellScriptBin "create-desktop-with-umu" ''
     PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:$PATH"
     ICON_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/icons/umu"
@@ -485,7 +466,7 @@ let
     env_mangohud=''${USE_MANGOHUD:-1}
     env_wayland=''${PROTON_ENABLE_WAYLAND:-1}
     env_prefix_name=''${UMU_PREFIX_NAME:-default}
-    env_proton_type=''${UMU_PROTON_TYPE:-"${defaultProton.name}"}
+    env_proton_type=''${UMU_PROTON_TYPE:-"${defaultProton.displayName}"}
     env_gpu_select=''${UMU_GPU_SELECT:-Автоматически}
     env_steam=''${USE_STEAM_INTEGRATION:-0}
     env_overlay=''${USE_STEAM_OVERLAY:-0}
@@ -533,11 +514,7 @@ let
         if [[ ! -f "$ICON_SPEC" ]]; then
           WORK_DIR=$(mktemp -d)
 
-          if [[ -n "$lnk" && -f "$lnk" ]]; then
-            ICON_SRC_WIN=$(${pkgs.exiftool}/bin/exiftool -s3 -IconFileName "$lnk" | tr -d '\r')
-          else
-            ICON_SRC_WIN=""
-          fi            
+          ICON_SRC_WIN=""
 
           if [[ -n "$ICON_SRC_WIN" ]]; then
             norm_icon=$(echo "$ICON_SRC_WIN" | tr '\\' '/')
@@ -569,21 +546,21 @@ let
           else
             ICON_SOURCE="$actual_exe"
           fi
-          
+
           if [[ "$ICON_SOURCE" == *.ico || "$ICON_SOURCE" == *.ICO ]]; then
             cp "$ICON_SOURCE" "$WORK_DIR/icon.ico" 2>/dev/null
           else
             ${pkgs.icoutils}/bin/wrestool -x -t 14 "$ICON_SOURCE" > "$WORK_DIR/icon.ico" 2>/dev/null
-            
+
             if [[ ! -s "$WORK_DIR/icon.ico" ]]; then
                 ${pkgs.icoutils}/bin/wrestool -x -t 14 "$actual_exe" > "$WORK_DIR/icon.ico" 2>/dev/null
             fi
           fi
-          
+
           if [[ -s "$WORK_DIR/icon.ico" ]]; then
             ${pkgs.imagemagick}/bin/magick "$WORK_DIR/icon.ico" "$WORK_DIR/icon.png"
             BIGGEST_PNG=$(ls -S "$WORK_DIR"/*.png 2>/dev/null | head -n 1)
-            
+
             if [[ -n "$BIGGEST_PNG" ]]; then
               cp "$BIGGEST_PNG" "$ICON_DIR/$ICON_FILE"
               ICON_SPEC="$ICON_DIR/$ICON_FILE"
@@ -593,7 +570,7 @@ let
           else
             ICON_SPEC="wine"
           fi
-          
+
           rm -rf "$WORK_DIR"
         fi
       fi
@@ -609,25 +586,25 @@ let
       fi
 
       cat <<EOF > "$DESKTOP_FILE"
-    [Desktop Entry]
-    Name=$LNK_DISPLAY_NAME
-    Exec=$EXEC_CMD
-    Icon=$ICON_SPEC
-    Type=Application
-    Categories=Game;
-    Path=$(dirname "$actual_exe")
-    Terminal=false
-    X-UMU-Lnk-Path=$lnk
-    X-UMU-Raw-Args=$args
-    X-UMU-Actual-Exe=$actual_exe
-    X-UMU-Prefix-Name=$env_prefix_name
-    X-UMU-GPU-Select=$env_gpu_select
-    X-UMU-Steam-Integration=$env_steam
-    X-UMU-Steam-Overlay=$env_overlay
-    X-UMU-Proton-Type=$env_proton_type
-    X-UMU-VPN=$env_vpn
-    X-UMU-Game-ID=$env_gameid
-    EOF
+[Desktop Entry]
+Name=$LNK_DISPLAY_NAME
+Exec=$EXEC_CMD
+Icon=$ICON_SPEC
+Type=Application
+Categories=Game;
+Path=$(dirname "$actual_exe")
+Terminal=false
+X-UMU-Lnk-Path=$lnk
+X-UMU-Raw-Args=$args
+X-UMU-Actual-Exe=$actual_exe
+X-UMU-Prefix-Name=$env_prefix_name
+X-UMU-GPU-Select=$env_gpu_select
+X-UMU-Steam-Integration=$env_steam
+X-UMU-Steam-Overlay=$env_overlay
+X-UMU-Proton-Type=$env_proton_type
+X-UMU-VPN=$env_vpn
+X-UMU-Game-ID=$env_gameid
+EOF
 
       chmod +x "$DESKTOP_FILE"
 
@@ -667,35 +644,29 @@ let
 
     ${pkgs.libnotify}/bin/notify-send "Starting UMU" "Launching $prefix_name"
 
-    # 4. Resolve Proton version
-    if [[ -z "$(printenv PROTONPATH)" ]]; then
-      case "$UMU_PROTON_TYPE" in
-        ${protonCaseBranches}
-        *)
-          export PROTONPATH="$HOME/.local/share/umu/proton/proton-umu-10"
-          ;;
-      esac
-    fi
-
-    # 5. Ensure runtime EROFS is mounted via hardened systemd service (zero root, zero SUID)
+    # 4. Resolve Proton version dynamically
     ORIG_UID=$(id -u)
     SECURE_MOUNT="/run/umu/$ORIG_UID"
     MOUNT_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/umu"
 
+    if [[ -z "$(printenv PROTONPATH)" ]]; then
+      case "$UMU_PROTON_TYPE" in
+        ${protonCaseBranches}
+        *)
+          export PROTONPATH="$SECURE_MOUNT/proton/${defaultProtonCode}"
+          ;;
+      esac
+    fi
+
+    # 5. Ensure runtime EROFS is mounted via hardened systemd service
     if ! mountpoint -q "$SECURE_MOUNT"; then
-      systemctl start "umu-mount@$ORIG_UID.service"
-      t=30
-      while ! mountpoint -q "$SECURE_MOUNT"; do
-        sleep 0.05
-        if ((--t <= 0)); then
-          ${pkgs.libnotify}/bin/notify-send "Closed" "Timeout. Mount failed."
-          exit 1
-        fi
-      done
+      if ! systemctl start "umu-mount@$ORIG_UID.service" || ! mountpoint -q "$SECURE_MOUNT"; then
+        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU runtime mount failed."
+        exit 1
+      fi
     fi
 
     # Ensure mount target directory exists on host as a regular directory (NOT a symlink)
-    # This ensures pressure-vessel/bwrap can bind-mount it cleanly inside run_overlay_app
     if [[ -L "$MOUNT_DIR" ]]; then
       rm -f "$MOUNT_DIR"
     fi
@@ -705,7 +676,6 @@ let
     PROTON_NAME=$(basename "$PROTONPATH")
     BASE_PFX="$SECURE_MOUNT/base_prefixes/$PROTON_NAME"
     if [[ ! -d "$BASE_PFX" ]]; then
-      # Fallback if base_prefixes is not in runtime
       BASE_PFX="$SECURE_MOUNT/proton/$PROTON_NAME/files/share/default_pfx"
       [[ -d "$BASE_PFX" ]] || BASE_PFX="$SECURE_MOUNT/proton/$PROTON_NAME/dist/share/default_pfx"
     fi
@@ -722,13 +692,13 @@ let
       [[ -d "$OLD_BASE" ]] || OLD_BASE="$SECURE_MOUNT/proton/$OLD_PROTON_NAME/files/share/default_pfx"
       [[ -d "$OLD_BASE" ]] || OLD_BASE="$SECURE_MOUNT/proton/$OLD_PROTON_NAME/dist/share/default_pfx"
 
-      ${umu-rebase-pfx}/bin/umu-rebase-pfx \
+      umu-rebase-pfx \
         --old-base "$OLD_BASE" \
         --new-base "$BASE_PFX" \
         --upper "$PREFIX_DIR/upper" \
         --home "$HOME"
     elif [[ ! -f "$PREFIX_DIR/upper/config_info" || ! -f "$PREFIX_DIR/upper/.update-timestamp" ]]; then
-      ${umu-rebase-pfx}/bin/umu-rebase-pfx \
+      umu-rebase-pfx \
         --new-base "$BASE_PFX" \
         --upper "$PREFIX_DIR/upper" \
         --home "$HOME"
@@ -872,11 +842,14 @@ in
       dataFile = {
         "umu-ui/games_appid.json".source = "${inputs.steam-app-id-list}/data/games_appid.json";
         "umu-ui/proton_versions.json".text = builtins.toJSON (
-          map (v: {
-            inherit (v) name;
-            default = v.default or false;
-          }) protonVersions
+          lib.mapAttrsToList (codeName: p: {
+            name = p.displayName;
+            code = codeName;
+            default = p.default or false;
+          }) protons
         );
+        # Link the EROFS runtime image to standard location
+        "umu/runtime.img".source = "${runtime}";
       };
       mimeApps.defaultApplications = {
         "application/vnd.microsoft.portable-executable" = "run-exe.desktop";
@@ -931,16 +904,12 @@ in
 
     home.packages = [
       pkgs.pciutils
-      pkgs.exiftool
       pkgs.icoutils
       pkgs.imagemagick
       pkgs.libnotify
       pkgs.winetricks
       pkgs.protontricks
       pkgs.xdg-utils
-      umu-rebase-pfx
-      cleanup-desktop-with-umu
-      scan-umu-for-lnk
       create-desktop-with-umu
       umu-run-wrapper
     ];
