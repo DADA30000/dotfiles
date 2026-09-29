@@ -715,12 +715,30 @@ let
     MERGED_PFX="$RUNTIME_ROOT/umu-pfx/$prefix_name"
     mkdir -p "$MERGED_PFX"
 
-    cleanup_overlay() {
-      unshare -r umount -l "$MERGED_PFX" 2>/dev/null || umount -l "$MERGED_PFX" 2>/dev/null || true
-      rmdir "$MERGED_PFX" 2>/dev/null || true
-      unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
+    cleanup_all() {
+      local exit_code=$?
+      trap - EXIT INT TERM
+
+      if [[ -n "''${SOCKET_PATH:-}" ]]; then
+        pkill -f "rust-bridge.*$SOCKET_PATH" 2>/dev/null || true
+        rm -rf "$SOCKET_DIR" 2>/dev/null || true
+      fi
+
+      if [[ -n "''${MERGED_PFX:-}" ]]; then
+        unshare -r umount -l "$MERGED_PFX" 2>/dev/null || umount -l "$MERGED_PFX" 2>/dev/null || true
+        rmdir "$MERGED_PFX" 2>/dev/null || true
+      fi
+      if [[ -n "''${PREFIX_DIR:-}" ]]; then
+        unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
+      fi
+
+      if [[ $exit_code -eq 0 ]]; then
+        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited ($prefix_name)"
+      else
+        ${pkgs.libnotify}/bin/notify-send -u critical "Closed (Error $exit_code)" "UMU exited with error ($prefix_name)"
+      fi
     }
-    trap cleanup_overlay EXIT INT TERM
+    trap cleanup_all EXIT INT TERM
 
     # 10. Hardware and GPU settings
     if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
@@ -804,13 +822,8 @@ let
        export SOCKET_DIR=$(mktemp -d /tmp/umu-vpn-XXXXXX)
        export SOCKET_PATH="$SOCKET_DIR/steam_pass"
 
+       # Start background bridge; cleanup_all handles shutdown on exit
        rust-bridge -r pass --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" &
-
-       cleanup_vpn() {
-         pkill -f "rust-bridge.*$SOCKET_PATH" 2>/dev/null || true
-         rm -rf "$SOCKET_DIR"
-       }
-       trap cleanup_vpn EXIT INT TERM
 
        export _VPN_LD_PRELOAD="$LD_PRELOAD"
        export _VPN_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
@@ -825,8 +838,6 @@ let
     else
       run_overlay_app "''${CMD[@]}"
     fi
-
-    ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited ($prefix_name)"
   '';
 
   cfg = config.umu;
