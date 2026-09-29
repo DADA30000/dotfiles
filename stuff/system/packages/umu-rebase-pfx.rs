@@ -268,10 +268,16 @@ fn collect_files(dir: &Path, results: &mut Vec<PathBuf>) {
         return;
     };
     for entry in entries.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if ft.is_symlink() {
+            continue;
+        }
         let path = entry.path();
-        if path.is_dir() {
+        if ft.is_dir() {
             collect_files(&path, results);
-        } else if path.is_file() {
+        } else if ft.is_file() {
             results.push(path);
         }
     }
@@ -282,8 +288,14 @@ fn remove_empty_dirs(dir: &Path) {
         return;
     };
     for entry in entries.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if ft.is_symlink() {
+            continue;
+        }
         let path = entry.path();
-        if path.is_dir() {
+        if ft.is_dir() {
             remove_empty_dirs(&path);
             let _ = fs::remove_dir(&path);
         }

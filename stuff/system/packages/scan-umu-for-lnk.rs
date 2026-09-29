@@ -261,10 +261,16 @@ fn scan_dir_for_lnks(dir: &Path, results: &mut Vec<PathBuf>) {
         return;
     };
     for entry in entries.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if ft.is_symlink() {
+            continue;
+        }
         let path = entry.path();
-        if path.is_dir() {
+        if ft.is_dir() {
             scan_dir_for_lnks(&path, results);
-        } else if path.is_file() {
+        } else if ft.is_file() {
             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                 if ext.eq_ignore_ascii_case("lnk") {
                     results.push(path);

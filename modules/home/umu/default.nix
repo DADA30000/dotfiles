@@ -616,6 +616,34 @@ let
     # 1. Resolve Prefix Storage Directory
     prefix_name="''${UMU_PREFIX_NAME:-default}"
     PREFIX_DIR="$HOME/.umu/$prefix_name"
+    ORIG_UID=$(id -u)
+    RUNTIME_ROOT="''${XDG_RUNTIME_DIR:-/run/user/$ORIG_UID}"
+    MERGED_PFX="$RUNTIME_ROOT/umu-pfx/$prefix_name"
+
+    cleanup_all() {
+      local exit_code=$?
+      trap - EXIT INT TERM
+
+      if [[ -n "''${SOCKET_PATH:-}" ]]; then
+        pkill -f "rust-bridge.*$SOCKET_PATH" 2>/dev/null || true
+        rm -rf "$SOCKET_DIR" 2>/dev/null || true
+      fi
+
+      if [[ -n "''${MERGED_PFX:-}" ]]; then
+        unshare -r umount -l "$MERGED_PFX" 2>/dev/null || umount -l "$MERGED_PFX" 2>/dev/null || true
+        rmdir "$MERGED_PFX" 2>/dev/null || true
+      fi
+      if [[ -n "''${PREFIX_DIR:-}" ]]; then
+        unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
+      fi
+
+      if [[ $exit_code -eq 0 ]]; then
+        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited ($prefix_name)"
+      else
+        ${pkgs.libnotify}/bin/notify-send -u critical "Closed (Error $exit_code)" "UMU exited with error ($prefix_name)"
+      fi
+    }
+    trap cleanup_all EXIT INT TERM
 
     # 2. Check if Prefix is already running (GUI Dialog via rust-helpers)
     if command -v manage-running-prefix >/dev/null 2>&1; then
@@ -711,34 +739,7 @@ let
 
     # 9. Setup runtime merged mountpoint in RAM
     ORIG_GID=$(id -g)
-    RUNTIME_ROOT="''${XDG_RUNTIME_DIR:-/run/user/$ORIG_UID}"
-    MERGED_PFX="$RUNTIME_ROOT/umu-pfx/$prefix_name"
     mkdir -p "$MERGED_PFX"
-
-    cleanup_all() {
-      local exit_code=$?
-      trap - EXIT INT TERM
-
-      if [[ -n "''${SOCKET_PATH:-}" ]]; then
-        pkill -f "rust-bridge.*$SOCKET_PATH" 2>/dev/null || true
-        rm -rf "$SOCKET_DIR" 2>/dev/null || true
-      fi
-
-      if [[ -n "''${MERGED_PFX:-}" ]]; then
-        unshare -r umount -l "$MERGED_PFX" 2>/dev/null || umount -l "$MERGED_PFX" 2>/dev/null || true
-        rmdir "$MERGED_PFX" 2>/dev/null || true
-      fi
-      if [[ -n "''${PREFIX_DIR:-}" ]]; then
-        unshare -r rm -rf "$PREFIX_DIR/.work" 2>/dev/null || rm -rf "$PREFIX_DIR/.work" 2>/dev/null || true
-      fi
-
-      if [[ $exit_code -eq 0 ]]; then
-        ${pkgs.libnotify}/bin/notify-send "Closed" "UMU exited ($prefix_name)"
-      else
-        ${pkgs.libnotify}/bin/notify-send -u critical "Closed (Error $exit_code)" "UMU exited with error ($prefix_name)"
-      fi
-    }
-    trap cleanup_all EXIT INT TERM
 
     # 10. Hardware and GPU settings
     if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
