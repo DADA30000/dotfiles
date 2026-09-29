@@ -192,9 +192,19 @@ vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 			vim.o.laststatus = 0
 			vim.o.cmdheight = 0
 
+			local function exit_term_insert()
+				if vim.fn.mode() == "t" then
+					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), "nx", false)
+				end
+			end
+
+			if vim.b.is_pager or vim.bo.filetype == "man" then
+				exit_term_insert()
+			end
+
 			local saved_view = vim.w[win].saved_term_view
 			if saved_view then
-				pcall(vim.cmd, "stopinsert")
+				exit_term_insert()
 				pcall(vim.fn.winrestview, saved_view)
 			elseif
 				vim.bo.buftype == "terminal"
