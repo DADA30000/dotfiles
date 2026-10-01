@@ -234,14 +234,14 @@ full)
 
   save_state 2
 
-  # ------------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------------
   # STEP 2: Fetch SteamRT4
   # ------------------------------------------------------------------------------
   if [[ $CURRENT_STATE -le 2 ]]; then
     echo "Fetching steamrt4 version and hash..."
     STEAMRT4_VERSION="$(wget -q https://repo.steampowered.com/steamrt4/images/latest-public-stable.txt -O -)"
-    STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/$STEAMRT4_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash to-sri --type sha256)"
-    echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/modules/home/umu/steamrt4.json
+    STEAMRT4_HASH="$(wget -q https://repo.steampowered.com/steamrt4/images/"$STEAMRT4_VERSION"/SHA256SUMS -O - | grep SteamLinuxRuntime_4.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+    echo "{ \"version\": \"$STEAMRT4_VERSION\", \"hash\": \"$STEAMRT4_HASH\" }" | sudo tee /etc/nixos/stuff/home/umu/steamrt4.json
     echo "Finished fetching steamrt4"
 
     save_state 3
@@ -253,8 +253,8 @@ full)
   if [[ $CURRENT_STATE -le 3 ]]; then
     echo "Fetching steamrt3 version and hash..."
     STEAMRT3_VERSION="$(wget -q https://repo.steampowered.com/steamrt3/images/latest-public-stable.txt -O -)"
-    STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/$STEAMRT3_VERSION/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash to-sri --type sha256)"
-    echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/modules/home/umu/steamrt3.json
+    STEAMRT3_HASH="$(wget -q https://repo.steampowered.com/steamrt3/images/"$STEAMRT3_VERSION"/SHA256SUMS -O - | grep SteamLinuxRuntime_sniper.tar.xz | awk '{print $1}' | xargs nix hash convert --hash-algo sha256 --to sri)"
+    echo "{ \"version\": \"$STEAMRT3_VERSION\", \"hash\": \"$STEAMRT3_HASH\" }" | sudo tee /etc/nixos/stuff/home/umu/steamrt3.json
     echo "Finished fetching steamrt3"
 
     save_state 4

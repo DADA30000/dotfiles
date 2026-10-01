@@ -163,8 +163,12 @@ let
         );
         stage2_inside = writeDash "stage2_inside" ''
           ${additional_inside_commands}
-          ${lib.optionalString (x11 == "sandboxed") "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
-          ${lib.optionalString (network == "singbox") "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
+          ${lib.optionalString (
+            x11 == "sandboxed"
+          ) "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
+          ${lib.optionalString (
+            network == "singbox"
+          ) "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
           env SANDBOX_ROLE=executor ${executor_script} "$@" &
           exit 0
         '';
@@ -503,7 +507,7 @@ let
                           (concat (sloth.env "XDG_DATA_HOME") "/icons")
                           (concat (sloth.env "XDG_DATA_HOME") "/themes")
                         ]
-                        ++ (lib.optionals (gpu) [
+                        ++ (lib.optionals gpu [
                           "/run/opengl-driver"
                           "/run/opengl-driver-32"
                           "/sys/class/drm"
@@ -739,20 +743,28 @@ in
 {
   options.sandboxing.enable = lib.mkEnableOption "app sandboxing using nixpak";
   config = {
-    _module.args.mkSandbox = mkSandbox;
+    _module.args = {
+      inherit staticBwrap;
+      mkSandbox = mkSandbox;
+    };
   }
   // lib.optionalAttrs (options ? home.file) {
     home.packages = [ staticBwrap ];
     home.file.".not-a-sandbox".text = "not a sandbox";
-    xdg.configFile = lib.mapAttrs' (path: conf:
-      lib.nameValuePair path {
-        source = (pkgs.formats.json { }).generate (baseNameOf path) conf;
-      }
-    ) {
-      "pipewire/pipewire.conf.d/99-restricted-socket.conf" = pipewireRestrictedSocketConfig;
-      "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf" = pipewirePulseRestrictedSocketConfig;
-      "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" = wireplumberRestrictedPermissionsConfig;
-    };
+    xdg.configFile =
+      lib.mapAttrs'
+        (
+          path: conf:
+          lib.nameValuePair path {
+            source = (pkgs.formats.json { }).generate (baseNameOf path) conf;
+          }
+        )
+        {
+          "pipewire/pipewire.conf.d/99-restricted-socket.conf" = pipewireRestrictedSocketConfig;
+          "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf" = pipewirePulseRestrictedSocketConfig;
+          "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" =
+            wireplumberRestrictedPermissionsConfig;
+        };
   }
   // lib.optionalAttrs (options ? environment.etc) {
     environment.systemPackages = [ staticBwrap ];

@@ -4,6 +4,7 @@
   inputs,
   osConfig,
   mkSandbox,
+  staticBwrap,
   ...
 }:
 let
@@ -424,12 +425,33 @@ let
   );
 
   nhPkg = pkgs.nh.override {
-    nix-output-monitor = nixOutputMonitorPkg;
+    nix-output-monitor = nixOutputMonitorSandbox;
   };
 
-  nixOutputMonitorPkg = pkgs.nix-output-monitor.overrideAttrs (prev: {
-    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom.patch ];
-  });
+  nixOutputMonitorSandbox = pkgs.runCommand "nom-sandboxed" { } ''
+    mkdir -p "$out/bin" "$out/libexec"
+    cp -L "${
+      inputs.nom-rs.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom-rs.patch ];
+      })
+    }/bin/nom" "$out/libexec/nom"
+
+    substitute "${pkgs.writeShellScript "nom-bwrap-runner" ''
+      STATE_DIR="$XDG_STATE_HOME/nix-output-monitor"
+      mkdir -p "$STATE_DIR" 2>/dev/null || true
+      exec ${staticBwrap}/bin/bwrap \
+        --unshare-all \
+        --ro-bind /nix/store /nix/store \
+        --dev /dev \
+        --tmpfs /tmp \
+        --bind "$STATE_DIR" "$STATE_DIR" \
+        --chdir /tmp \
+        @NOM_BIN@ "$@"
+    ''}" "$out/bin/nom" \
+      --replace-fail "@NOM_BIN@" "$out/libexec/nom"
+
+    chmod +x "$out/bin/nom"
+  '';
 
   nixAlienPkg = inputs.nix-alien.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
     python3 = pkgs.python3.override {
@@ -564,6 +586,7 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
+      pkgs.mindustry
       pkgs.dash
       pkgs.openrgb-with-all-plugins
       pkgs.stress-ng
@@ -763,7 +786,6 @@ in
       nhPkg
       app2unitPkg
       pythonPkg
-      nixOutputMonitorPkg
       nixAlienPkg
       nixSearchPkg
       heliumPkg
@@ -772,6 +794,7 @@ in
       gtkshutdownPkg
       anicliRuPkg
 
+      nixOutputMonitorSandbox
       sounduxSandbox
       rustdeskSandbox
       prismLauncherSandbox

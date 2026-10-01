@@ -467,6 +467,7 @@ in
           "xpinstall.signatures.required" = false;
           "browser.tabs.allow_transparent_browser" = true;
           "browser.tabs.unloadOnLowMemory" = true;
+          "zen.mediacontrols.enabled" = false;
           "zen.widget.linux.transparency" = true;
           "zen.welcome-screen.seen" = true;
           "zen.view.use-single-toolbar" = false;

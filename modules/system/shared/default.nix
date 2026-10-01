@@ -385,6 +385,11 @@ in
 
   systemd = {
 
+    slices.user.sliceConfig = {
+      CPUWeight = 500;
+      IOWeight = 500;
+    };
+
     tmpfiles.rules = [
       "d /var/lib/AccountsService/users 0755 root root -"
     ]
@@ -414,21 +419,21 @@ in
         DefaultIOAccounting = true;
       };
       slices = {
-        session-graphical.sliceConfig = {
-          CPUWeight = 500;
-          IOWeight = 500;
-        };
         session.sliceConfig = {
-          CPUWeight = 500;
-          IOWeight = 500;
+          CPUWeight = 10000;
+          IOWeight = 10000;
+        };
+        session-graphical.sliceConfig = {
+          CPUWeight = 1000;
+          IOWeight = 1000;
         };
         app-graphical.sliceConfig = {
-          CPUWeight = 300;
-          IOWeight = 300;
+          CPUWeight = 500;
+          IOWeight = 500;
         };
         app.sliceConfig = {
-          CPUWeight = 200;
-          IOWeight = 200;
+          CPUWeight = 100;
+          IOWeight = 100;
         };
         background-graphical.sliceConfig = {
           CPUWeight = 50;
@@ -443,13 +448,6 @@ in
         dbus-broker.serviceConfig = {
           Type = "notify";
           ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
-        };
-        "wayland-wm@hyprland" = {
-          overrideStrategy = "asDropin";
-          serviceConfig = {
-            CPUWeight = 1000;
-            IOWeight = 1000;
-          };
         };
         cgroup-executioner = {
           description = "Automatically terminate any application scope that hits TasksMax";

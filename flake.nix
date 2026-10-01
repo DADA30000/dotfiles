@@ -97,6 +97,10 @@
       url = "github:LOSEARDES77/Bibata-Cursor-hyprcursor";
       flake = false;
     };
+    nom-rs = {
+      url = "github:mastershifuishere77/nom-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     rust-helpers = {
       url = "github:DADA30000/rust-helpers";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -118,7 +122,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     lanzaboote = {
-      url = "github:nix-community/lanzaboote/v1.1.0";
+      url = "github:nix-community/lanzaboote/v1.2.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     split-monitor-workspaces = {

@@ -29,28 +29,32 @@ let
     sourceRoot = "source";
   });
 
-  oo7-server = (pkgs.oo7-server.override {
-    inherit oo7;
-    useWrappedDaemon = false;
-  }).overrideAttrs (old: {
-    src = inputs.oo7;
-    inherit cargoDeps;
-    sourceRoot = "source/server";
-    cargoRoot = "..";
-  });
+  oo7-server =
+    (pkgs.oo7-server.override {
+      inherit oo7;
+      useWrappedDaemon = false;
+    }).overrideAttrs
+      (old: {
+        src = inputs.oo7;
+        inherit cargoDeps;
+        sourceRoot = "source/server";
+        cargoRoot = "..";
+      });
 
-  oo7-portal = (pkgs.oo7-portal.override {
-    inherit oo7;
-  }).overrideAttrs (old: {
-    src = inputs.oo7;
-    inherit cargoDeps;
-    sourceRoot = "source/portal";
-    cargoRoot = "..";
-    postInstall = (old.postInstall or "") + ''
-      substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
-        --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
-    '';
-  });
+  oo7-portal =
+    (pkgs.oo7-portal.override {
+      inherit oo7;
+    }).overrideAttrs
+      (old: {
+        src = inputs.oo7;
+        inherit cargoDeps;
+        sourceRoot = "source/portal";
+        cargoRoot = "..";
+        postInstall = (old.postInstall or "") + ''
+          substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
+            --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
+        '';
+      });
 
   plugin-loader =
     pkg:
@@ -824,7 +828,10 @@ in
         enable = true;
         config.common.default = "*";
         config.hyprland = {
-          default = [ "hyprland" "gtk" ];
+          default = [
+            "hyprland"
+            "gtk"
+          ];
           "org.freedesktop.impl.portal.Secret" = [ "oo7-portal" ];
         };
         extraPortals = [
@@ -838,35 +845,33 @@ in
       oo7
     ];
 
-    systemd.user.services.oo7-daemon = {
-      Unit = {
-        Description = "Secret service (oo7 implementation)";
-        PartOf = [ "graphical-session.target" ];
+    systemd.user.services = {
+      noctalia.Service.Slice = "session-graphical.slice";
+      oo7-daemon = {
+        Unit = {
+          Description = "Secret service (oo7 implementation)";
+          PartOf = [ "graphical-session.target" ];
+        };
+        Service = {
+          ExecStart = "${oo7-server}/libexec/oo7-daemon";
+          Restart = "on-failure";
+          SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
+          BusName = "org.freedesktop.secrets";
+        };
       };
-      Service = {
-        ExecStart = "${oo7-server}/libexec/oo7-daemon";
-        Restart = "on-failure";
-        SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
-        BusName = "org.freedesktop.secrets";
-      };
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
-    };
 
-    systemd.user.services.oo7-portal = {
-      Unit = {
-        Description = "Secret portal service (oo7 implementation)";
-        PartOf = [ "graphical-session.target" ];
-        After = [ "graphical-session.target" ];
-      };
-      Service = {
-        Type = "dbus";
-        BusName = "org.freedesktop.impl.portal.desktop.oo7";
-        ExecStart = "${oo7-portal}/libexec/oo7-portal";
-      };
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
+      oo7-portal = {
+        Install.WantedBy = [ "graphical-session.target" ];
+        Unit = {
+          Description = "Secret portal service (oo7 implementation)";
+          PartOf = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          Type = "dbus";
+          BusName = "org.freedesktop.impl.portal.desktop.oo7";
+          ExecStart = "${oo7-portal}/libexec/oo7-portal";
+        };
       };
     };
 

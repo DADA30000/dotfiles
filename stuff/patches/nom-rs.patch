@@ -1,0 +1,943 @@
+From f6536c24a092a3e6cd50e78c96221f750f5d2d08 Mon Sep 17 00:00:00 2001
+From: DADA30000 <vadimhack.ru@gmail.com>
+Date: Thu, 1 Oct 2026 23:14:17 +0300
+Subject: [PATCH] feat: improve tree branch ordering, builtin fetcher support,
+ and flicker-free rendering
+
+- Add monotonic sequential event timestamps to preserve transfer arrival order in SortKey
+- Propagate child summaries upward when creating parent links in lookup_derivation
+- Add name-based tiebreaking for deterministic derivation ordering
+- Support builtin fetchers (builtin:fetchurl, CA drvs): fallback to name for pname, recover outputs from env
+- Display live transfer progress (file_transfer_progress) on running builds
+- Fix terminal flickering with in-place line overwriting (\x1b[K)
+- Display active downloads when forest_roots is empty
+- Retain maximum expected download size on HTTP 206 retries
+- Capture errors and traces across all verbosity levels while suppressing Talkative/Chatty debug logs
+---
+ src/engine.rs            | 226 ++++++++++++++++++++++++++++++---------
+ src/parser/derivation.rs |  16 ++-
+ src/render/mod.rs        | 145 ++++++++++++++++++++++++-
+ src/sorting.rs           |  32 +++---
+ src/state.rs             |   2 +
+ src/terminal.rs          | 138 ++++++++++++------------
+ tests/unit_tests.rs      |  92 +++++++++++++++-
+ 7 files changed, 507 insertions(+), 144 deletions(-)
+
+diff --git a/src/engine.rs b/src/engine.rs
+index ff16144..c3573e0 100644
+--- a/src/engine.rs
++++ b/src/engine.rs
+@@ -100,15 +100,25 @@ pub fn monitor_stream<R: Read + Send + 'static>(
+     let mut pending_log_lines: Vec<String> = Vec::new();
+     let mut last_draw = Instant::now();
+     let mut last_rendered_sec: u64 = 0;
++    let mut last_event_now = 0.0f64;
++    let mut next_now = || -> f64 {
++        let raw = start_instant.elapsed().as_secs_f64();
++        if raw <= last_event_now {
++            last_event_now += 1e-9;
++        } else {
++            last_event_now = raw;
++        }
++        last_event_now
++    };
+ 
+     'main_loop: loop {
+         select! {
+             recv(input_rx) -> event => {
+-                let now = start_instant.elapsed().as_secs_f64();
+                 let mut current_event = event;
+                 let batch_start = Instant::now();
+                 let mut batch_count = 0;
+                 loop {
++                    let now = next_now();
+                     match current_event {
+                         Ok(InputEvent::Json(json_msg)) => {
+                             let changed = process_json_message(&mut state, json_msg, &watcher, &mut pending_log_lines, now, &reports_writer);
+@@ -155,12 +165,13 @@ pub fn monitor_stream<R: Read + Send + 'static>(
+                 }
+             }
+             recv(watcher.event_receiver) -> finished_build => {
+-                let now = start_instant.elapsed().as_secs_f64();
++                let now = next_now();
+                 if let Ok((host, drv_id)) = finished_build {
+                     finish_build_by_drv_id(&mut state, &host, drv_id, now, &reports_writer);
+                     dirty = true;
+                 }
+                 while let Ok((host, drv_id)) = watcher.event_receiver.try_recv() {
++                    let now = next_now();
+                     finish_build_by_drv_id(&mut state, &host, drv_id, now, &reports_writer);
+                     dirty = true;
+                 }
+@@ -257,12 +268,42 @@ fn process_json_message(
+ 
+     match msg {
+         NixJsonMessage::Message(action) => {
+-            if (action.level as u64) <= 3 && (action.level as u64) > 0 {
+-                // Info message, pass through
++            let stripped = crate::parser::old_style::strip_ansi_codes(&action.message);
++            let trimmed = stripped.trim();
++            if trimmed.starts_with("error:") {
++                let err_core = trimmed;
++                if !state.nix_errors.iter().any(|e| {
++                    crate::parser::old_style::strip_ansi_codes(e).trim() == err_core
++                }) {
++                    state.nix_errors.push(action.message.clone());
++                }
++                logs.push(action.message.clone());
++                if let Some((NixOldStyleMessage::Failed(drv, fail_type), _)) =
++                    parse_old_style_chunk(&format!("{}\n", stripped))
++                {
++                    let drv_id = lookup_derivation(state, &drv);
++                    mark_failed_build(state, drv_id, fail_type, now);
++                }
++                return true;
++            } else if trimmed.starts_with("trace:") {
++                if !state.nix_traces.iter().any(|t| {
++                    crate::parser::old_style::strip_ansi_codes(t).trim() == trimmed
++                }) {
++                    state.nix_traces.push(action.message.clone());
++                }
++                logs.push(action.message.clone());
++                return true;
++            } else if action.message.starts_with("evaluating file '") {
++                if let Some(suffix) = action.message.strip_prefix("evaluating file '") {
++                    let file_name = suffix.trim_end_matches('\'').to_string();
++                    state.evaluation_state.count += 1;
++                    state.evaluation_state.last_file_name = Some(file_name);
++                    state.evaluation_state.at = now;
++                    return true;
++                }
++            } else if (action.level as u64) <= 3 && (action.level as u64) > 0 {
+                 logs.push(action.message.clone());
+ 
+-                // Check for indented store object in plan
+-                let trimmed = action.message.trim();
+                 if trimmed.starts_with("/nix/store/") {
+                     if let Some(drv) = Derivation::parse(trimmed) {
+                         let drv_id = lookup_derivation(state, &drv);
+@@ -278,38 +319,6 @@ fn process_json_message(
+                         return true;
+                     }
+                 }
+-            } else if (action.level as u64) == 0 {
+-                // Error message
+-                let stripped = crate::parser::old_style::strip_ansi_codes(&action.message);
+-                if stripped.starts_with("error:") {
+-                    let err_core = stripped.trim();
+-                    if !state.nix_errors.iter().any(|e| e.contains(err_core)) {
+-                        state.nix_errors.push(action.message.clone());
+-                        logs.push(action.message.clone());
+-                    }
+-                    // Attempt old-style parse to catch builder failure
+-                    if let Some((NixOldStyleMessage::Failed(drv, fail_type), _)) =
+-                        parse_old_style_chunk(&format!("{}\n", stripped))
+-                    {
+-                        let drv_id = lookup_derivation(state, &drv);
+-                        mark_failed_build(state, drv_id, fail_type, now);
+-                    }
+-                    return true;
+-                } else if stripped.starts_with("trace:") {
+-                    if !state.nix_traces.iter().any(|t| t.contains(&*stripped)) {
+-                        state.nix_traces.push(action.message.clone());
+-                        logs.push(action.message.clone());
+-                    }
+-                    return true;
+-                }
+-            } else if action.message.starts_with("evaluating file '") {
+-                if let Some(suffix) = action.message.strip_prefix("evaluating file '") {
+-                    let file_name = suffix.trim_end_matches('\'').to_string();
+-                    state.evaluation_state.count += 1;
+-                    state.evaluation_state.last_file_name = Some(file_name);
+-                    state.evaluation_state.at = now;
+-                    return true;
+-                }
+             }
+             false
+         }
+@@ -389,13 +398,46 @@ fn process_json_message(
+             }
+             crate::parser::json::ActivityResult::Progress(progress) => {
+                 let mut changed = false;
++
++                // Find store path associated with this download activity to maintain its known total size
++                let copy_path_opt = state
++                    .activity_parents
++                    .get(&action.id)
++                    .and_then(|p_id| state.activities.get(p_id))
++                    .or_else(|| state.activities.get(&action.id))
++                    .and_then(|act| match &act.activity {
++                        Activity::CopyPath { path, .. } => Some(path.clone()),
++                        _ => None,
++                    });
++
++                let known_max = if let Some(path) = copy_path_opt {
++                    let path_id = state.get_store_path_id(&path);
++                    let entry = state
++                        .max_download_sizes
++                        .entry(path_id)
++                        .or_insert(progress.expected);
++                    *entry = (*entry).max(progress.expected);
++                    *entry
++                } else {
++                    progress.expected
++                };
++
+                 if let Some(act) = state.activities.get_mut(&action.id) {
+-                    act.progress = Some(progress.clone());
++                    let prev_expected = act.progress.as_ref().map_or(0, |p| p.expected);
++                    let mut p = progress.clone();
++                    p.expected = p.expected.max(prev_expected).max(known_max);
++                    act.progress = Some(p);
+                     changed = true;
+                 }
+                 if let Some(&parent_id) = state.activity_parents.get(&action.id) {
+                     if let Some(parent_act) = state.activities.get_mut(&parent_id) {
+-                        parent_act.file_transfer_progress = Some(progress);
++                        let prev_expected = parent_act
++                            .file_transfer_progress
++                            .as_ref()
++                            .map_or(0, |p| p.expected);
++                        let mut p = progress;
++                        p.expected = p.expected.max(prev_expected).max(known_max);
++                        parent_act.file_transfer_progress = Some(p);
+                         changed = true;
+                     }
+                 }
+@@ -426,6 +468,7 @@ fn process_json_message(
+                         false
+                     }
+                 }
++                Activity::FileTransfer(_) => true,
+                 _ => false,
+             };
+ 
+@@ -481,10 +524,32 @@ fn process_json_message(
+             false
+         }
+         NixJsonMessage::Plain(raw) => {
++            let stripped = crate::parser::old_style::strip_ansi_codes(&raw);
++            let trimmed = stripped.trim();
++            if trimmed.starts_with("error:") {
++                let err_core = trimmed;
++                if !state.nix_errors.iter().any(|e| {
++                    crate::parser::old_style::strip_ansi_codes(e).trim() == err_core
++                }) {
++                    state.nix_errors.push(raw.clone());
++                }
++                if let Some((NixOldStyleMessage::Failed(drv, fail_type), _)) =
++                    parse_old_style_chunk(&format!("{}\n", stripped))
++                {
++                    let drv_id = lookup_derivation(state, &drv);
++                    mark_failed_build(state, drv_id, fail_type, now);
++                }
++            } else if trimmed.starts_with("trace:")
++                && !state.nix_traces.iter().any(|t| {
++                    crate::parser::old_style::strip_ansi_codes(t).trim() == trimmed
++                })
++            {
++                state.nix_traces.push(raw.clone());
++            }
+             if !raw.starts_with("debug: nixos_rebuild.") {
+                 logs.push(raw);
+             }
+-            false
++            true
+         }
+         NixJsonMessage::ParseError(err) => {
+             logs.push(format!("nom-rs parse error: {}", err));
+@@ -582,6 +647,21 @@ fn process_old_style_message(
+         let stripped = crate::parser::old_style::strip_ansi_codes(&raw_line);
+         let trimmed = stripped.trim();
+ 
++        if trimmed.starts_with("error:") {
++            let err_core = trimmed;
++            if !state.nix_errors.iter().any(|e| {
++                crate::parser::old_style::strip_ansi_codes(e).trim() == err_core
++            }) {
++                state.nix_errors.push(raw_line.clone());
++            }
++        } else if trimmed.starts_with("trace:")
++            && !state.nix_traces.iter().any(|t| {
++                crate::parser::old_style::strip_ansi_codes(t).trim() == trimmed
++            })
++        {
++            state.nix_traces.push(raw_line.clone());
++        }
++
+         if let Some(idx) = trimmed.find("> ") {
+             let prefix = &trimmed[..idx];
+             let body = &trimmed[idx + 2..];
+@@ -619,7 +699,7 @@ fn process_old_style_message(
+                             .curl_progress
+                             .get_or_insert_with(CurlProgress::new_fallback);
+                         d_cp.done_bytes = snap.done_bytes;
+-                        d_cp.total_bytes = snap.total_bytes;
++                        d_cp.total_bytes = d_cp.total_bytes.max(snap.total_bytes);
+                     }
+                     logs.push(raw_line);
+                     return true;
+@@ -716,33 +796,75 @@ pub fn lookup_derivation(state: &mut NomState, drv: &Derivation) -> DerivationId
+         }
+ 
+         let mut input_derivations = Vec::with_capacity(parsed.input_drvs.len());
++        let mut children_needing_propagation = Vec::new();
+         for (dep_drv, dep_outputs) in parsed.input_drvs {
+             let dep_id = lookup_derivation(state, &dep_drv);
+             let dep_mut = state.get_derivation_mut(dep_id);
+             let was_first_parent = dep_mut.derivation_parents.is_empty();
+-            dep_mut.derivation_parents.insert(drv_id);
++            let is_new_link = dep_mut.derivation_parents.insert(drv_id);
+             if was_first_parent && dep_mut.is_root {
+                 dep_mut.is_root = false;
+                 if let Some(pos) = state.forest_roots.iter().position(|&r| r == dep_id) {
+                     state.forest_roots.swap_remove(pos);
+                 }
+             }
++            // If this is a newly created parent link and the child has a
++            // non-empty summary (status changes already happened), we need
++            // to propagate the child's summary upward into the new parent
++            // chain so that sort keys reflect the full subtree.
++            if is_new_link {
++                let dep = state.get_derivation(dep_id);
++                if !dep.dependency_summary.is_empty()
++                    || !matches!(dep.build_status, BuildStatus::Unknown)
++                {
++                    children_needing_propagation.push(dep_id);
++                }
++            }
+             input_derivations.push(InputDerivation {
+                 derivation: dep_id,
+                 outputs: dep_outputs.into_iter().collect(),
+             });
+         }
++        // Propagate pre-existing child summaries up the new parent chain.
++        for child_id in children_needing_propagation {
++            let child_summary = state.get_derivation(child_id).dependency_summary.clone();
++            let child_status = state.get_derivation(child_id).build_status.clone();
++            // Merge child's own build status into drv_id's summary
++            if !matches!(child_status, BuildStatus::Unknown) {
++                NomState::update_summary_for_derivation_opt(
++                    &mut state.get_derivation_mut(drv_id).dependency_summary,
++                    &BuildStatus::Unknown,
++                    &child_status,
++                    child_id,
++                    false,
++                );
++            }
++            // Merge child's dependency_summary into drv_id's summary
++            state.get_derivation_mut(drv_id).dependency_summary.merge(&child_summary);
++        }
++        input_derivations.sort_by(|a, b| {
++            state.get_derivation(a.derivation).name.cmp(&state.get_derivation(b.derivation).name)
++        });
+ 
+-        let drv_mut = state.get_derivation_mut(drv_id);
+-        drv_mut.outputs = output_map;
+-        drv_mut.input_sources = input_sources;
+-        drv_mut.input_derivations = input_derivations;
+-        drv_mut.cached = true;
+-        drv_mut.platform = Some(parsed.platform);
+-        drv_mut.pname = parsed.pname;
++        let is_root_needed = {
++            let drv_mut = state.get_derivation_mut(drv_id);
++            drv_mut.outputs = output_map;
++            drv_mut.input_sources = input_sources;
++            drv_mut.input_derivations = input_derivations;
++            drv_mut.cached = true;
++            drv_mut.platform = Some(parsed.platform);
++            drv_mut.pname = parsed.pname;
++
++            if drv_mut.derivation_parents.is_empty() && !drv_mut.is_root {
++                drv_mut.is_root = true;
++                true
++            } else {
++                false
++            }
++        };
++        state.touched_ids.insert(drv_id.0 as u32);
+ 
+-        if drv_mut.derivation_parents.is_empty() && !drv_mut.is_root {
+-            drv_mut.is_root = true;
++        if is_root_needed {
+             state.forest_roots.push(drv_id);
+         }
+         return drv_id;
+diff --git a/src/parser/derivation.rs b/src/parser/derivation.rs
+index a1a3f5d..c64fe05 100644
+--- a/src/parser/derivation.rs
++++ b/src/parser/derivation.rs
+@@ -269,8 +269,9 @@ pub fn parse_derivation_content(content: &str) -> Result<ParsedDerivation, Deriv
+     lexer.expect(b']')?;
+     lexer.expect(b',')?;
+ 
+-    // 7. env: [ ("key", "val"), ... ] (only extract pname, skip all other values)
++    // 7. env: [ ("key", "val"), ... ] (extract pname or fallback to name, and recover output store paths if empty in outputs)
+     let mut pname = None;
++    let mut fallback_name = None;
+     lexer.expect(b'[')?;
+     if lexer.peek() != Some(b']') {
+         loop {
+@@ -279,6 +280,15 @@ pub fn parse_derivation_content(content: &str) -> Result<ParsedDerivation, Deriv
+             lexer.expect(b',')?;
+             if key == "pname" {
+                 pname = Some(lexer.parse_string()?);
++            } else if key == "name" {
++                fallback_name = Some(lexer.parse_string()?);
++            } else if (key == "out" || key.starts_with("out"))
++                && !outputs.contains_key(&OutputName::parse(&key))
++            {
++                let val = lexer.parse_string()?;
++                if let Some(sp) = StorePath::parse(&val) {
++                    outputs.insert(OutputName::parse(&key), sp);
++                }
+             } else {
+                 lexer.skip_string()?;
+             }
+@@ -294,6 +304,10 @@ pub fn parse_derivation_content(content: &str) -> Result<ParsedDerivation, Deriv
+     lexer.expect(b']')?;
+     lexer.expect(b')')?;
+ 
++    if pname.is_none() {
++        pname = fallback_name;
++    }
++
+     Ok(ParsedDerivation {
+         outputs,
+         input_drvs,
+diff --git a/src/render/mod.rs b/src/render/mod.rs
+index f7ce98c..fba9819 100644
+--- a/src/render/mod.rs
++++ b/src/render/mod.rs
+@@ -123,6 +123,15 @@ pub fn render_state_to_text(state: &NomState, config: Config, now: f64) -> Strin
+             max_tree_height,
+             now,
+         ));
++    } else if !state.full_summary.running_downloads.is_empty()
++        || !state.full_summary.running_uploads.is_empty()
++    {
++        sections.push(render_active_transfers(
++            state,
++            term_width.saturating_sub(2),
++            max_tree_height,
++            now,
++        ));
+     }
+ 
+     // 4. Summary table section
+@@ -287,6 +296,115 @@ fn render_builds(state: &NomState, _max_width: usize, max_height: usize, now: f6
+     )
+ }
+ 
++fn render_active_transfers(
++    state: &NomState,
++    _max_width: usize,
++    max_height: usize,
++    now: f64,
++) -> String {
++    let host_abbrevs = compute_host_abbrevs(state);
++    let mut rows: Vec<String> = Vec::new();
++
++    // 1. Running downloads
++    for (&path_id, dl) in &state.full_summary.running_downloads {
++        let sp = state.get_store_path(path_id);
++        let path_name = &sp.name.name;
++
++        let mut parts = Vec::new();
++        parts.push(format!(
++            "{}{}{} {} {}{}",
++            BOLD, YELLOW, DOWN, RUNNING, path_name, RESET
++        ));
++
++        let host_name = dl.host.hostname_only();
++        let disambiguated = host_abbrevs
++            .get(host_name)
++            .map(|s| s.as_str())
++            .unwrap_or(host_name);
++        parts.push(format!("{}from {}{}", MAGENTA, disambiguated, RESET));
++
++        if now - dl.start > 1.0 {
++            parts.push(format!(
++                "{} {}",
++                CLOCK,
++                format_duration(now - dl.start)
++            ));
++        }
++
++        if let Some(act_id) = dl.activity_id {
++            if let Some(act) = state.activities.get(&act_id) {
++                if let Some(p) = act.file_transfer_progress.as_ref().or(act.progress.as_ref()) {
++                    if p.expected > 0 {
++                        parts.push(format!(
++                            "{}{} {}/{}{}",
++                            GREEN,
++                            DOWN,
++                            print_bytes(p.done),
++                            print_bytes(p.expected),
++                            RESET
++                        ));
++                    }
++                }
++            }
++        }
++
++        rows.push(parts.join(" "));
++        if rows.len() >= max_height {
++            break;
++        }
++    }
++
++    // 2. Running uploads
++    if rows.len() < max_height {
++        for (&path_id, ul) in &state.full_summary.running_uploads {
++            let sp = state.get_store_path(path_id);
++            let path_name = &sp.name.name;
++
++            let mut parts = Vec::new();
++            parts.push(format!(
++                "{}{}{} {} {}{}",
++                BOLD, YELLOW, UP, RUNNING, path_name, RESET
++            ));
++
++            let host_name = ul.host.hostname_only();
++            let disambiguated = host_abbrevs
++                .get(host_name)
++                .map(|s| s.as_str())
++                .unwrap_or(host_name);
++            parts.push(format!("{}to {}{}", MAGENTA, disambiguated, RESET));
++
++            if now - ul.start > 1.0 {
++                parts.push(format!(
++                    "{} {}",
++                    CLOCK,
++                    format_duration(now - ul.start)
++                ));
++            }
++
++            rows.push(parts.join(" "));
++            if rows.len() >= max_height {
++                break;
++            }
++        }
++    }
++
++    if rows.is_empty() {
++        return String::new();
++    }
++
++    let header = format!(" {}Downloads{}:", BOLD, RESET);
++    let mut lines = Vec::with_capacity(rows.len() + 1);
++    lines.push(header);
++    lines.extend(rows);
++
++    prepend_lines(
++        HORIZONTAL,
++        &format!("{} ", VERTICAL),
++        &format!("{} ", VERTICAL),
++        &lines,
++    )
++}
++
+ #[derive(Clone, Copy, PartialEq, Eq)]
+ enum TreeLocation {
+     Root,
+@@ -705,7 +823,32 @@ fn format_derivation_row(
+                     }
+                 }
+ 
+-                if let Some(cp) = curl_progress {
++                let file_transfer_progress = bi
++                    .activity_id
++                    .and_then(|id| state.activities.get(&id))
++                    .and_then(|act| act.file_transfer_progress.as_ref().or(act.progress.as_ref()));
++
++                if let Some(p) = file_transfer_progress {
++                    if p.expected > 0 {
++                        progress_val = Some(p.done as f64 / p.expected as f64);
++                        parts.push(format!(
++                            "{}{} {}/{}{}",
++                            GREEN,
++                            DOWN,
++                            print_bytes(p.done),
++                            print_bytes(p.expected),
++                            RESET
++                        ));
++                    } else if p.done > 0 {
++                        parts.push(format!(
++                            "{}{} {}{}",
++                            GREEN,
++                            DOWN,
++                            print_bytes(p.done),
++                            RESET
++                        ));
++                    }
++                } else if let Some(cp) = curl_progress {
+                     if cp.total_bytes > 0 {
+                         progress_val = Some(cp.done_bytes as f64 / cp.total_bytes as f64);
+                         parts.push(format!(
+diff --git a/src/sorting.rs b/src/sorting.rs
+index e4094d1..a1e6873 100644
+--- a/src/sorting.rs
++++ b/src/sorting.rs
+@@ -253,26 +253,22 @@ pub fn calculate_sort_key(state: &NomState, drv_id: DerivationId) -> SortKey {
+ pub fn sort_deps_of_set(state: &mut NomState, touched: &RoaringBitmap) {
+     for raw_id in touched.iter() {
+         let drv_id = DerivationId(raw_id as usize);
+-        let num_inputs = state.derivation_infos[drv_id.0].input_derivations.len();
+-        if num_inputs <= 1 {
++        if drv_id.0 >= state.derivation_infos.len() {
+             continue;
+         }
+-
+-        if num_inputs == 2 {
+-            let d0 = state.derivation_infos[drv_id.0].input_derivations[0].derivation;
+-            let d1 = state.derivation_infos[drv_id.0].input_derivations[1].derivation;
+-            let k0 = calculate_sort_key(state, d0);
+-            let k1 = calculate_sort_key(state, d1);
+-            if k0 > k1 {
+-                state.derivation_infos[drv_id.0]
+-                    .input_derivations
+-                    .swap(0, 1);
+-            }
++        let num_inputs = state.derivation_infos[drv_id.0].input_derivations.len();
++        if num_inputs <= 1 {
+             continue;
+         }
+ 
+         let mut deps = std::mem::take(&mut state.derivation_infos[drv_id.0].input_derivations);
+-        deps.sort_by_cached_key(|input| calculate_sort_key(state, input.derivation));
++        deps.sort_by(|a, b| {
++            calculate_sort_key(state, a.derivation)
++                .cmp(&calculate_sort_key(state, b.derivation))
++                .then_with(|| {
++                    state.get_derivation(a.derivation).name.cmp(&state.get_derivation(b.derivation).name)
++                })
++        });
+         state.derivation_infos[drv_id.0].input_derivations = deps;
+     }
+ }
+@@ -283,7 +279,13 @@ pub fn maintain_nom_state(state: &mut NomState, now: f64) {
+         sort_deps_of_set(state, &touched);
+ 
+         let mut roots = std::mem::take(&mut state.forest_roots);
+-        roots.sort_by_cached_key(|&r| calculate_sort_key(state, r));
++        roots.sort_by(|a, b| {
++            calculate_sort_key(state, *a)
++                .cmp(&calculate_sort_key(state, *b))
++                .then_with(|| {
++                    state.get_derivation(*a).name.cmp(&state.get_derivation(*b).name)
++                })
++        });
+         state.forest_roots = roots;
+     }
+ 
+diff --git a/src/state.rs b/src/state.rs
+index b1f0997..5b433fa 100644
+--- a/src/state.rs
++++ b/src/state.rs
+@@ -287,6 +287,7 @@ pub struct NomState {
+     pub activities: FxHashMap<u64, ActivityStatus>,
+     pub activity_parents: FxHashMap<u64, u64>,
+     pub planned_download_bytes: Option<usize>,
++    pub max_download_sizes: FxHashMap<StorePathId, usize>,
+     pub nix_errors: Vec<String>,
+     pub nix_traces: Vec<String>,
+     pub build_platform: Option<String>,
+@@ -313,6 +314,7 @@ impl NomState {
+             activities: FxHashMap::default(),
+             activity_parents: FxHashMap::default(),
+             planned_download_bytes: None,
++            max_download_sizes: FxHashMap::default(),
+             nix_errors: Vec::new(),
+             nix_traces: Vec::new(),
+             build_platform,
+diff --git a/src/terminal.rs b/src/terminal.rs
+index 33cb819..2025c61 100644
+--- a/src/terminal.rs
++++ b/src/terminal.rs
+@@ -1,8 +1,6 @@
+-use crate::render::table::display_width;
+ use std::io::{self, Write};
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::Arc;
+-use terminal_size::{terminal_size, Width};
+ 
+ pub const START_ATOMIC_UPDATE: &str = "\x1b[?2026h";
+ pub const END_ATOMIC_UPDATE: &str = "\x1b[?2026l";
+@@ -40,96 +38,92 @@ impl TerminalRenderer {
+         }
+     }
+ 
+-    pub fn draw(&mut self, nix_output_lines: &[String], nom_output: &str, pad: bool) {
++    pub fn draw(&mut self, nix_output_lines: &[String], nom_output: &str, _pad: bool) {
+         self.finished = false;
+         let mut stderr = io::stderr().lock();
+-        let nix_lines_count = nix_output_lines.len();
+-        let reflow_correction: usize = if nix_lines_count == 0 {
+-            0
+-        } else {
+-            let term_width = if let Some((Width(w), _)) = terminal_size() {
+-                if w > 0 {
+-                    w as usize
+-                } else {
+-                    80
+-                }
+-            } else {
+-                80
+-            };
+-            nix_output_lines
+-                .iter()
+-                .map(|l| display_width(l) / term_width)
+-                .sum()
+-        };
+-
+-        let is_empty = nom_output.trim().is_empty();
+-        let nom_lines_count = if is_empty {
+-            0
+-        } else {
+-            nom_output.lines().count()
+-        };
+-
+-        let lines_to_pad = if pad && nom_lines_count > 0 {
+-            self.last_printed_line_count
+-                .saturating_sub(reflow_correction + nix_lines_count + nom_lines_count)
+-        } else {
+-            0
+-        };
+ 
+         self.buffer.clear();
+         let _ = self.buffer.write_all(START_ATOMIC_UPDATE.as_bytes());
+ 
+-        // Clear previous output from screen:
+-        if self.last_printed_line_count == 1 {
+-            let _ = self.buffer.write_all(CURSOR_TO_COL_0.as_bytes());
+-        }
+-        if self.last_printed_line_count > 0 {
+-            let _ = self.buffer.write_all(CLEAR_LINE.as_bytes());
+-        }
++        if !nix_output_lines.is_empty() {
++            // New log lines arrived!
++            // First, erase the previous widget from screen:
++            if self.last_printed_line_count > 1 {
++                for _ in 1..self.last_printed_line_count {
++                    let _ = self.buffer.write_all(CURSOR_PREV_LINE_1.as_bytes());
++                }
++            }
++            if self.last_printed_line_count > 0 {
++                let _ = self.buffer.write_all(CURSOR_TO_COL_0.as_bytes());
++                let _ = self.buffer.write_all(b"\x1b[J"); // clear from cursor to bottom of screen
++            }
+ 
+-        for _ in 1..self.last_printed_line_count {
+-            let _ = self.buffer.write_all(CURSOR_PREV_LINE_1.as_bytes());
+-            let _ = self.buffer.write_all(CLEAR_LINE.as_bytes());
+-        }
++            // Print the new log lines directly:
++            for line in nix_output_lines {
++                let trimmed = line.trim_end_matches('\r');
++                let _ = self.buffer.write_all(trimmed.as_bytes());
++                let _ = self.buffer.write_all(b"\x1b[0m\n");
++            }
+ 
+-        let all_lines = nix_output_lines
+-            .iter()
+-            .map(|l| l.trim_end_matches('\r'))
+-            .chain(std::iter::repeat_n("", lines_to_pad))
+-            .chain(if is_empty {
+-                "".lines()
++            // Now draw the new nom_output below the log lines:
++            let lines: Vec<&str> = if nom_output.trim().is_empty() {
++                Vec::new()
+             } else {
+-                nom_output.lines()
+-            });
+-
+-        for (idx, line) in all_lines.enumerate() {
+-            if idx == 0 {
+-                // Stay in line
+-            } else if idx + reflow_correction < self.last_printed_line_count {
+-                // Within previously printed area: move down to next line without scrolling!
+-                let _ = self.buffer.write_all(CURSOR_NEXT_LINE_1.as_bytes());
++                nom_output.lines().collect()
++            };
++            for (idx, line) in lines.iter().enumerate() {
++                if idx > 0 {
++                    let _ = self.buffer.write_all(b"\n");
++                    let _ = self.buffer.write_all(CURSOR_TO_COL_0.as_bytes());
++                }
++                let _ = self.buffer.write_all(line.as_bytes());
++                let _ = self.buffer.write_all(b"\x1b[K");
++            }
++            self.last_printed_line_count = lines.len();
++        } else {
++            // Normal frame: redraw widget in place without blanking!
++            let lines: Vec<&str> = if nom_output.trim().is_empty() {
++                Vec::new()
+             } else {
+-                // Exceeded previously printed area: need a newline
+-                let _ = self.buffer.write_all(b"\n");
++                nom_output.lines().collect()
++            };
++            let new_count = lines.len();
++
++            if self.last_printed_line_count > 1 {
++                for _ in 1..self.last_printed_line_count {
++                    let _ = self.buffer.write_all(CURSOR_PREV_LINE_1.as_bytes());
++                }
++            }
++            if self.last_printed_line_count > 0 {
+                 let _ = self.buffer.write_all(CURSOR_TO_COL_0.as_bytes());
+             }
+-            let _ = self.buffer.write_all(line.as_bytes());
+-            if idx < nix_lines_count && !nix_output_lines.is_empty() {
+-                let _ = self.buffer.write_all(b"\x1b[0m");
++
++            for (idx, line) in lines.iter().enumerate() {
++                if idx > 0 {
++                    let _ = self.buffer.write_all(CURSOR_NEXT_LINE_1.as_bytes());
++                }
++                let _ = self.buffer.write_all(line.as_bytes());
++                let _ = self.buffer.write_all(b"\x1b[K"); // clear to end of line
+             }
+-        }
+ 
+-        if nom_lines_count == 0 && nix_lines_count > 0 {
+-            let _ = self.buffer.write_all(b"\n");
+-            let _ = self.buffer.write_all(CURSOR_TO_COL_0.as_bytes());
++            // If new output has fewer lines, clear the remaining old lines below:
++            if self.last_printed_line_count > new_count {
++                for _ in new_count..self.last_printed_line_count {
++                    let _ = self.buffer.write_all(CURSOR_NEXT_LINE_1.as_bytes());
++                    let _ = self.buffer.write_all(CLEAR_LINE.as_bytes());
++                }
++                for _ in new_count..self.last_printed_line_count {
++                    let _ = self.buffer.write_all(CURSOR_PREV_LINE_1.as_bytes());
++                }
++            }
++
++            self.last_printed_line_count = new_count;
+         }
+ 
+         let _ = self.buffer.write_all(END_ATOMIC_UPDATE.as_bytes());
+ 
+         let _ = stderr.write_all(&self.buffer);
+         let _ = stderr.flush();
+-
+-        self.last_printed_line_count = nom_lines_count + lines_to_pad;
+     }
+ 
+     pub fn finish(&mut self) {
+diff --git a/tests/unit_tests.rs b/tests/unit_tests.rs
+index 9cd7fe1..64a961c 100644
+--- a/tests/unit_tests.rs
++++ b/tests/unit_tests.rs
+@@ -951,12 +951,12 @@ fn test_localhost_presence_and_order_before_builds() {
+         "Table must display cache.nixos.org"
+     );
+ 
+-    // localhost must appear BEFORE cache.nixos.org
++    // localhost must appear BEFORE cache.nixos.org in the host table
+     let pos_localhost = rendered.find("localhost").unwrap();
+-    let pos_cache = rendered.find("cache.nixos.org").unwrap();
++    let pos_cache = rendered.rfind("cache.nixos.org").unwrap();
+     assert!(
+         pos_localhost < pos_cache,
+-        "localhost (pos {}) must appear before cache.nixos.org (pos {})",
++        "localhost (pos {}) must appear before cache.nixos.org (pos {}) in table",
+         pos_localhost,
+         pos_cache
+     );
+@@ -1700,4 +1700,90 @@ fn test_env_parse_nom_options() {
+     }
+ }
+ 
++#[test]
++fn test_download_expected_size_retained_on_retry() {
++    use nix_output_monitor::engine::monitor_stream;
++    use nix_output_monitor::render::Config;
++    use std::io::Cursor;
++
++    let json_stream = r#"@nix {"action":"start","id":10,"level":4,"parent":0,"text":"copying path '/nix/store/894zv7pm5ggbdysrfgl6mj91a8x8qzc4-linux-firmware' from 'https://cache.nixos.org'","type":100,"fields":["/nix/store/894zv7pm5ggbdysrfgl6mj91a8x8qzc4-linux-firmware","https://cache.nixos.org",""]}
++@nix {"action":"start","id":11,"level":4,"parent":10,"text":"fetching nar","type":101,"fields":["https://cache.nixos.org/nar/123.nar.zst"]}
++@nix {"action":"result","id":11,"type":105,"fields":[186000000,804000000,0,0]}
++@nix {"action":"msg","level":1,"msg":"warning: unable to download 'https://cache.nixos.org/nar/123.nar.zst': HTTP error 200; retrying from offset 186000000"}
++@nix {"action":"result","id":11,"type":105,"fields":[0,618000000,0,0]}
++"#;
++
++    let config = Config::default();
++    let state = monitor_stream(Cursor::new(json_stream.as_bytes()), true, config);
++
++    let parent_act = state.activities.get(&10).expect("parent activity must exist");
++    let prog = parent_act
++        .file_transfer_progress
++        .as_ref()
++        .expect("must have file_transfer_progress");
++
++    assert_eq!(
++        prog.expected, 804000000,
++        "Expected download size must NOT drop to remaining chunk (618MB) on retry"
++    );
++}
++
++#[test]
++fn test_errors_captured_into_nix_errors_from_plain_and_json() {
++    use nix_output_monitor::engine::monitor_stream;
++    use nix_output_monitor::render::{render_state_to_text, Config};
++    use std::io::Cursor;
++
++    let input_stream = "error: unable to download 'https://cache.nixos.org/nar/1.nar.zst': HTTP error 206 (curl error: Failed sending data to the peer)\n@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"error: unable to download 'https://cache.nixos.org/nar/2.nar.zst': HTTP error 206\"}\n";
++
++    let config = Config::default();
++    let state = monitor_stream(Cursor::new(input_stream.as_bytes()), true, config);
++
++    assert_eq!(state.nix_errors.len(), 2, "Both plain and JSON errors must be captured in nix_errors");
++    let rendered = render_state_to_text(&state, config, 1.0);
++    assert!(rendered.contains("2 Errors:"), "Rendered output must display '2 Errors:':\n{}", rendered);
++}
++
++#[test]
++fn test_parse_builtin_fetcher_derivation() {
++    use nix_output_monitor::parser::derivation::parse_derivation_content;
++    use nix_output_monitor::types::OutputName;
++
++    let drv_content = r#"Derive([("out","/nix/store/anjj2gxcivlzcpz0idsvz202i2vnxyn9-libxcrypt-4.5.2.tar.xz","sha256","71513a31c01a428bccd5367a32fd95f115d6dac50fb5b60c779d5c7942aec071")],[],[],"builtin","builtin:fetchurl",[],[("builder","builtin:fetchurl"),("executable",""),("impureEnvVars","http_proxy https_proxy ftp_proxy all_proxy no_proxy"),("name","libxcrypt-4.5.2.tar.xz"),("out","/nix/store/anjj2gxcivlzcpz0idsvz202i2vnxyn9-libxcrypt-4.5.2.tar.xz"),("outputHash","sha256-cVE6McAaQovM1TZ6Mv2V8RXW2sUPtbYMd51ceUKuwHE="),("outputHashAlgo",""),("outputHashMode","flat"),("preferLocalBuild","1"),("system","builtin"),("unpack",""),("url","https://github.com/besser82/libxcrypt/releases/download/v4.5.2/libxcrypt-4.5.2.tar.xz"),("urls","https://github.com/besser82/libxcrypt/releases/download/v4.5.2/libxcrypt-4.5.2.tar.xz")])"#;
++
++    let parsed = parse_derivation_content(drv_content).expect("Must parse builtin:fetchurl derivation");
++    assert_eq!(parsed.platform, "builtin");
++    assert_eq!(parsed.pname, Some("libxcrypt-4.5.2.tar.xz".to_string()));
++    assert!(parsed.outputs.contains_key(&OutputName::parse("out")));
++
++    // Test CA derivation with empty string in outputs table recovered from env
++    let ca_content = r#"Derive([("out","","","")],[],[],"builtin","builtin:fetchurl",[],[("builder","builtin:fetchurl"),("name","test-ca"),("out","/nix/store/iz25ayazkdr0gsy0qqfd923vbpam90kd-test-ca"),("outputHashAlgo","sha256"),("outputHashMode","flat"),("system","builtin")])"#;
++    let parsed_ca = parse_derivation_content(ca_content).expect("Must parse CA derivation with empty output");
++    assert_eq!(parsed_ca.pname, Some("test-ca".to_string()));
++    assert!(parsed_ca.outputs.contains_key(&OutputName::parse("out")), "Output must be recovered from env when empty in outputs table");
++}
++
++#[test]
++fn test_builtin_fetcher_build_displays_transfer_progress() {
++    use nix_output_monitor::engine::monitor_stream;
++    use nix_output_monitor::render::{render_state_to_text, Config};
++    use std::io::Cursor;
++
++    let stream = r#"@nix {"action":"start","id":100,"level":0,"parent":0,"text":"building '/nix/store/55d91flpk4776srkw66wdx69wll7b5zr-libxcrypt-4.5.2.tar.xz.drv'","type":105,"fields":["/nix/store/55d91flpk4776srkw66wdx69wll7b5zr-libxcrypt-4.5.2.tar.xz.drv","localhost"]}
++@nix {"action":"start","id":101,"level":4,"parent":100,"text":"fetching 'https://github.com/besser82/libxcrypt/releases/download/v4.5.2/libxcrypt-4.5.2.tar.xz'","type":101,"fields":["https://github.com/besser82/libxcrypt/releases/download/v4.5.2/libxcrypt-4.5.2.tar.xz"]}
++@nix {"action":"result","id":101,"type":105,"fields":[524288,1048576,0,0]}
++"#;
++
++    let config = Config::default();
++    let state = monitor_stream(Cursor::new(stream.as_bytes()), true, config);
++    let rendered = render_state_to_text(&state, config, 2.0);
++    assert!(
++        rendered.contains("512.0 KiB/1.0 MiB"),
++        "Rendered output must show file transfer progress on builtin fetcher build: {}",
++        rendered
++    );
++}
++
++
++
+ 
+-- 
+2.55.0
+
