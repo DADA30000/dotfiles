@@ -251,6 +251,38 @@ let
       background-color: var(--nebula-color-glass) !important;
       backdrop-filter: none !important;
     }
+
+    /* Only apply when compact mode (on-hover mode) is active */
+    :root[zen-compact-mode='true'] #navigator-toolbox {
+      background: transparent !important;
+      background-color: transparent !important;
+      box-shadow: none !important;
+    }
+
+    /* In compact mode, keep the sidebar card solid so it stays solid while opening, open, and sliding away */
+    :root[zen-compact-mode='true'] .zen-toolbar-background,
+    :root[zen-compact-mode='true'] #titlebar > .zen-browser-generic-background {
+      background-color: #161618 !important;
+      backdrop-filter: none !important;
+      border-radius: 13px !important;
+    }
+
+    /* Expand the floating titlebar card to full sidebar width when hovered or animating */
+    :root[zen-compact-mode='true'] #navigator-toolbox:is(
+      [zen-has-hover], [zen-user-show], [animate='true'],
+      [zen-has-empty-tab], [flash-popup],
+      [has-popup-menu], [movingtab],
+      [zen-compact-mode-active]
+    ) #titlebar {
+      max-width: var(--zen-sidebar-width) !important;
+      width: var(--zen-sidebar-width) !important;
+      min-width: var(--zen-sidebar-width) !important;
+    }
+
+    /* Hide the "Space" workspace indicator */
+    .zen-current-workspace-indicator {
+      display: none !important;
+    }
   '';
 
   combined_chrome = pkgs.stdenv.mkDerivation {
@@ -289,6 +321,7 @@ let
         --replace-fail "scale: 1.7;" "scale: 1.5;"
 
       echo '${transparency_patch}' >> $out/sine-mods/Nebula/userChrome.css
+      ln -s $out/sine-mods/Nebula/userChrome.css $out/userChrome.css
     '';
   };
   zen-package =
@@ -312,7 +345,7 @@ in
       "bookmarks.html".source = ../../../stuff/home/zen/bookmarks.html;
       ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
       "zen/default/zen-keyboard-shortcuts.json".source = shortcuts;
-      "zen/default/xulstore.json".source = xulstore_json;
+      #"zen/default/xulstore.json".source = xulstore_json;
       "zen/default/chrome" = {
         source = combined_chrome;
         recursive = true;
@@ -454,6 +487,7 @@ in
           nebula-workspace-style = 1;
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
+          "mousewheel.with_control.action" = 5;
           "network.dns.preferIPv6" = true;
           "browser.aboutConfig.showWarning" = false;
           "browser.tabs.fadeOutUnloadedTabs" = true;
@@ -471,6 +505,7 @@ in
           "zen.widget.linux.transparency" = true;
           "zen.welcome-screen.seen" = true;
           "zen.view.use-single-toolbar" = false;
+          "zen.view.sidebar-expanded" = true;
           "zen.view.compact.enable-at-startup" = true;
         };
         extensions = {

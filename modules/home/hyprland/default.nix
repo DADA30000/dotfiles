@@ -727,11 +727,6 @@ in
           ++ mkPluginPermissionEntries plugins;
           layer_rule = [
             {
-              no_anim = true;
-              blur = false;
-              match.namespace = "selection";
-            }
-            {
               blur = true;
               blur_popups = true;
               match.namespace = ".*";
@@ -740,6 +735,11 @@ in
               no_anim = true;
               ignore_alpha = 0;
               match.namespace = "^noctalia-.*$";
+            }
+            {
+              no_anim = true;
+              blur = false;
+              match.namespace = "selection";
             }
           ];
           on = [
