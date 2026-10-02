@@ -164,30 +164,18 @@ in
       settings =
         let
           mod = "SUPER";
-          make-bind-exec-obj = keys: exec: args: {
-            _args = [
-              keys
-              (lib.generators.mkLuaInline "hl.dsp.exec_cmd [[${exec}]]")
-            ]
-            ++ args;
-          };
-          bind-exec =
-            list:
-            map (
-              pair: make-bind-exec-obj (builtins.elemAt pair 0) (builtins.elemAt pair 1) (lib.lists.drop 2 pair)
-            ) list;
-          make-bind-obj = keys: exec: args: {
-            _args = [
-              keys
-              (lib.generators.mkLuaInline exec)
-            ]
-            ++ args;
-          };
-          bind =
-            list:
-            map (
-              pair: make-bind-obj (builtins.elemAt pair 0) (builtins.elemAt pair 1) (lib.lists.drop 2 pair)
-            ) list;
+          mkBind =
+            transform:
+            map (pair: {
+              _args = [
+                (builtins.elemAt pair 0)
+                (lib.generators.mkLuaInline (transform (builtins.elemAt pair 1)))
+              ]
+              ++ (lib.lists.drop 2 pair);
+            });
+
+          bind = mkBind (cmd: cmd);
+          bind-exec = mkBind (cmd: "hl.dsp.exec_raw [[${cmd}]]");
         in
         {
           monitor = [
@@ -425,73 +413,14 @@ in
             binds.scroll_event_delay = 60;
           };
           bind =
-            let
-              kill-cgroup = pkgs.writeShellScript "hypr-kill-cgroup" ''
-                set -euo pipefail
-
-                POS=$(slurp -p)
-                X="''${POS%%,*}"
-                Y="''${POS#*,}"
-
-                ACTIVE_WS=$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]')
-
-                CLIENT_INFO=$(hyprctl clients -j | jq -r --argjson x "$X" --argjson y "$Y" --argjson active_ws "$ACTIVE_WS" '
-                  .[] | select(.workspace.id as $w | $active_ws | contains([$w])) |
-                  select(.at[0] <= $x and $x <= (.at[0] + .size[0]) and
-                         .at[1] <= $y and $y <= (.at[1] + .size[1])) |
-                  {pid: .pid, class: .class}
-                ' | head -n 1)
-
-                PID=$(echo "$CLIENT_INFO" | jq -r '.pid // empty')
-                WM_CLASS=$(echo "$CLIENT_INFO" | jq -r '.class // "Window"')
-
-                if [[ -z "$PID" || "$PID" == "null" || "$PID" == "0" ]]; then
-                  notify-send -u low "Cgroup Killer" "No window found at position"
-                  exit 1
-                fi
-
-                UNIT=$(ps -o unit= -p "$PID" | tr -d ' ')
-                PROTECTED_PATTERN="^(hyprland|wayland-wm.*|dbus.*|init\.scope|user@.*|systemd-.*)$"
-                KILLED=0
-
-                if [[ -n "$UNIT" && "$UNIT" =~ \.(service|scope)$ ]] && ! [[ "$UNIT" =~ $PROTECTED_PATTERN ]]; then
-                  if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
-                    systemctl --user stop "$UNIT"
-                    notify-send -u normal "Cgroup Killer" "Stopped unit: $UNIT ($WM_CLASS)"
-                    KILLED=1
-                  elif systemctl is-active --quiet "$UNIT" 2>/dev/null; then
-                    systemctl stop "$UNIT"
-                    notify-send -u normal "Cgroup Killer" "Stopped system unit: $UNIT ($WM_CLASS)"
-                    KILLED=1
-                  fi
-                fi
-              '';
-              save-replay = pkgs.writers.writeDash "save-replay" ''
-                MON_NAME=$(hyprctl activeworkspace -j | ${pkgs.jq}/bin/jq -r '.monitor')
-                pkill -SIGUSR1 -f "gpu-screen-recorder.*-w $MON_NAME.*" && \
-                notify-send 'GPU-Screen-Recorder' "Повтор с $MON_NAME успешно сохранён"
-              '';
-            in
             bind-exec [
               [
-                "code:122"
-                "noctalia msg volume-down"
-              ]
-              [
-                "code:123"
-                "noctalia msg volume-up"
+                "${mod} + M"
+                "noctalia msg panel-toggle session"
               ]
               [
                 "code:121"
                 "noctalia msg volume-mute"
-              ]
-              [
-                "code:232"
-                "noctalia msg brightness-down"
-              ]
-              [
-                "code:233"
-                "noctalia msg brightness-up"
               ]
               [
                 "Print"
@@ -506,12 +435,12 @@ in
                 "noctalia msg screenshot-fullscreen"
               ]
               [
-                "${mod} + CTRL + Q"
-                "app2unit -- kitty"
+                "${mod} + B"
+                "app2unit -- uuctl"
               ]
               [
                 "${mod} + CTRL + R"
-                "app2unit -- ${save-replay}"
+                "app2unit -- save-replay"
               ]
               [
                 "${mod} + CTRL + U"
@@ -522,44 +451,58 @@ in
                 "noctalia msg panel-toggle clipboard"
               ]
               [
-                "${mod} + ALT + mouse_up"
-                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 1}') } })\""
-              ]
-              [
-                "${mod} + ALT + mouse_down"
-                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 2) {print $2 - 1} else {print 1}}') } })\""
-              ]
-              [
-                "${mod} + CTRL + mouse_up"
-                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{print $2 + 100}') } })\""
-              ]
-              [
-                "${mod} + CTRL + mouse_down"
-                "hyprctl eval \"hl.config({ cursor = { zoom_factor = $(hyprctl getoption cursor:zoom_factor | grep float | awk '{if ($2 >= 101) {print $2 - 100} else {print 1}}') } })\""
-              ]
-              [
-                "${mod} + CTRL + C"
-                "hyprctl kill"
-              ]
-              [
-                "${mod} + ALT + CTRL + C"
-                "${kill-cgroup}"
-              ]
-              [
-                "${mod} + I"
-                "app2unit -- toggle-restriction"
-              ]
-              [
-                "${mod} + F2"
-                "app2unit -- sheesh.sh"
-              ]
-              [
                 "${mod} + H"
                 "noctalia msg bar-toggle"
               ]
               [
                 "${mod} + L"
                 "noctalia msg session lock"
+              ]
+              [
+                "${mod} + CTRL + C"
+                "hyprctl kill"
+              ]
+              [
+                "${mod} + SHIFT + CTRL + C"
+                "hypr-kill-cgroup"
+              ]
+              [
+                "code:232"
+                "noctalia msg brightness-down"
+                { repeating = true; }
+              ]
+              [
+                "code:233"
+                "noctalia msg brightness-up"
+                { repeating = true; }
+              ]
+              [
+                "code:122"
+                "noctalia msg volume-down"
+                { repeating = true; }
+              ]
+              [
+                "code:123"
+                "noctalia msg volume-up"
+                { repeating = true; }
+              ]
+              [
+                "${mod} + CTRL + ${mod}_L "
+                "noctalia-run"
+                { release = true; }
+              ]
+              [
+                "${mod} + ${mod}_L"
+                "noctalia msg panel-toggle launcher"
+                { release = true; }
+              ]
+              [
+                "${mod} + CTRL + Q"
+                "app2unit -- kitty"
+              ]
+              [
+                "${mod} + F2"
+                "app2unit -- sheesh.sh"
               ]
               [
                 "${mod} + Q"
@@ -570,19 +513,27 @@ in
                 "app2unit -- zen-twilight"
               ]
               [
-                "${mod} + B"
-                "uuctl"
-              ]
-              [
-                "${mod} + M"
-                "noctalia msg panel-toggle session"
-              ]
-              [
                 "${mod} + E"
                 "app2unit -- nautilus -w"
               ]
             ]
             ++ bind [
+              [
+                "${mod} + ALT + mouse_up"
+                "function() hl.config({ cursor = { zoom_factor = (hl.get_config('cursor:zoom_factor') or 1) + 1 } }) end"
+              ]
+              [
+                "${mod} + ALT + mouse_down"
+                "function() hl.config({ cursor = { zoom_factor = math.max(1, (hl.get_config('cursor:zoom_factor') or 1) - 1) } }) end"
+              ]
+              [
+                "${mod} + CTRL + mouse_up"
+                "function() hl.config({ cursor = { zoom_factor = (hl.get_config('cursor:zoom_factor') or 1) + 100 } }) end"
+              ]
+              [
+                "${mod} + CTRL + mouse_down"
+                "function() hl.config({ cursor = { zoom_factor = math.max(1, (hl.get_config('cursor:zoom_factor') or 1) - 100) } }) end"
+              ]
               [
                 "ALT + R"
                 "hl.dsp.submap 'passthrough'"
@@ -724,16 +675,6 @@ in
                 "smw.workspace 'e-1'"
               ]
               [
-                "${mod} + CTRL + ${mod}_L "
-                "hl.dsp.exec_raw [[noctalia-run]]"
-                { release = true; }
-              ]
-              [
-                "${mod} + ${mod}_L"
-                "hl.dsp.exec_raw [[noctalia msg panel-toggle launcher]]"
-                { release = true; }
-              ]
-              [
                 "${mod} + mouse:272"
                 "hl.dsp.window.drag()"
                 { mouse = true; }
@@ -786,19 +727,18 @@ in
           ++ mkPluginPermissionEntries plugins;
           layer_rule = [
             {
-              blur = true;
-              match.namespace = ".*";
+              no_anim = true;
+              blur = false;
+              match.namespace = "selection";
             }
             {
+              blur = true;
               blur_popups = true;
               match.namespace = ".*";
             }
             {
-              ignore_alpha = 0;
-              match.namespace = "^noctalia-.*$";
-            }
-            {
               no_anim = true;
+              ignore_alpha = 0;
               match.namespace = "^noctalia-.*$";
             }
           ];
@@ -1074,6 +1014,7 @@ in
           notification = {
             position = "top_left";
             background_opacity = 0.25;
+            show_app_name = false;
           };
 
           bar.default = {

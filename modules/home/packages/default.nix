@@ -431,9 +431,7 @@ let
   nixOutputMonitorSandbox = pkgs.runCommand "nom-sandboxed" { } ''
     mkdir -p "$out/bin" "$out/libexec"
     cp -L "${
-      inputs.nom-rs.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nom-rs.patch ];
-      })
+      inputs.nom-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
     }/bin/nom" "$out/libexec/nom"
 
     substitute "${pkgs.writeShellScript "nom-bwrap-runner" ''

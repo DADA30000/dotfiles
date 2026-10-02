@@ -137,7 +137,7 @@ index ff9cf9a..845e842 100644
    spec.accordion = group.accordion;
    spec.accordionDirection = group.accordionDirection;
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index bad0c24..52d75fc 100644
+index bad0c24..578d99f 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
 @@ -40,6 +40,10 @@ struct BarCapsuleGroupStyle {
@@ -185,24 +185,6 @@ index bad0c24..52d75fc 100644
      bool borders = true;                   // outline on floating panel surfaces
      bool shadow = true;                    // cast the global [shell.shadow] from panel surfaces
      bool listItemBackground = false;       // filled rounded background behind launcher/clipboard list items
-@@ -1144,7 +1161,7 @@ struct ShellConfig {
-   bool buttonBorders = true;
-   bool inputBorders = true;
-   bool popupBorders = true;
--  bool popupShadows = true;
-+  bool popupShadows = false;
-   bool cardBorders = true;
-   std::string fontFamily = "sans-serif";
-   std::string lang; // empty = auto-detect from $LC_ALL/$LC_MESSAGES/$LANG
-@@ -1168,7 +1185,7 @@ struct ShellConfig {
-   std::string avatarPath;
-   bool settingsShowAdvanced = true;
-   bool settingsExpandAllGroups = false;
--  bool settingsWindowTranslucent = false;
-+  bool settingsWindowTranslucent = true;
-   bool showLocation = true;
-   bool appIconColorize = false;
-   std::optional<ColorSpec> appIconColor;
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
 index ef45b41..9ffb05e 100644
 --- a/src/config/schema/config_schema.cpp
@@ -1289,7 +1271,7 @@ index 539bd68..181efac 100644
  
      auto header = ui::row(
 diff --git a/src/shell/control_center/tabs/monitor_tab.cpp b/src/shell/control_center/tabs/monitor_tab.cpp
-index cb0c4b1..7b83520 100644
+index cb0c4b1..b348625 100644
 --- a/src/shell/control_center/tabs/monitor_tab.cpp
 +++ b/src/shell/control_center/tabs/monitor_tab.cpp
 @@ -1,18 +1,26 @@
@@ -1319,114 +1301,76 @@ index cb0c4b1..7b83520 100644
  
  using namespace control_center;
  
-@@ -22,6 +30,106 @@ namespace {
+@@ -22,6 +30,68 @@ namespace {
    constexpr auto kBrightnessCommitInterval = std::chrono::milliseconds(16);
    constexpr auto kBrightnessStateHoldoff = std::chrono::milliseconds(180);
  
-+  std::string generateCvtModeline(int hdisplay, int vdisplay, float vrefresh) {
++  std::string runHyprctl(const std::vector<std::string>& args) {
++    auto r = process::runSync(args);
++    if (r.exitCode != 0 || r.out.empty()) {
++      auto fullArgs = args;
++      fullArgs[0] = "/run/current-system/sw/bin/" + fullArgs[0];
++      r = process::runSync(fullArgs);
++    }
++    return r.exitCode == 0 ? r.out : std::string{};
++  }
++
++  std::string generateCvtModeline(int h, int v, float hz) {
 +    int vsync = 10;
-+    if (!(vdisplay % 3) && ((vdisplay * 4 / 3) == hdisplay))
-+      vsync = 4;
-+    else if (!(vdisplay % 9) && ((vdisplay * 16 / 9) == hdisplay))
-+      vsync = 5;
-+    else if (!(vdisplay % 10) && ((vdisplay * 16 / 10) == hdisplay))
-+      vsync = 6;
-+    else if (!(vdisplay % 4) && ((vdisplay * 5 / 4) == hdisplay))
-+      vsync = 7;
-+    else if (!(vdisplay % 9) && ((vdisplay * 15 / 9) == hdisplay))
-+      vsync = 7;
++    if (v % 3 == 0 && v * 4 / 3 == h) vsync = 4;
++    else if (v % 9 == 0 && (v * 16 / 9 == h || v * 15 / 9 == h)) vsync = (v * 16 / 9 == h ? 5 : 7);
++    else if (v % 10 == 0 && v * 16 / 10 == h) vsync = 6;
++    else if (v % 4 == 0 && v * 5 / 4 == h) vsync = 7;
 +
-+    double hperiod = (1000000.0 / vrefresh - 550.0) / (vdisplay + 3);
-+    int vsync_and_back_porch = std::max(static_cast<int>(550.0 / hperiod) + 1, vsync + 6);
-+    int vtotal = vdisplay + vsync_and_back_porch + 3;
-+
-+    double c_prime = (40.0 - 20.0) * 128.0 / 256.0 + 20.0;
-+    double m_prime = 600.0 * 128.0 / 256.0;
-+    double hblank_pct = std::max(20.0, c_prime - m_prime * hperiod / 1000.0);
-+
-+    int hblank = static_cast<int>(hdisplay * hblank_pct / (100.0 - hblank_pct));
-+    hblank -= hblank % 16;
-+    int htotal = hdisplay + hblank;
-+    int hsync_end = hdisplay + hblank / 2;
-+    int hsync_w = (htotal * 8) / 100;
-+    hsync_w -= hsync_w % 8;
-+    int hsync_start = hsync_end - hsync_w;
-+
-+    int vsync_start = vdisplay + 3;
-+    int vsync_end = vsync_start + vsync;
-+
-+    int dot_clock = static_cast<int>(htotal * 1000.0 / hperiod);
-+    dot_clock -= dot_clock % 250;
-+    double pclk = dot_clock / 1000.0;
++    double hperiod = (1000000.0 / hz - 550.0) / (v + 3);
++    int vsync_bp = std::max(static_cast<int>(550.0 / hperiod) + 1, vsync + 6);
++    double hblank_pct = std::max(20.0, 30.0 - 300.0 * hperiod / 1000.0);
++    int hblank = (static_cast<int>(h * hblank_pct / (100.0 - hblank_pct)) / 16) * 16;
++    int htotal = h + hblank;
++    int hsync_end = h + hblank / 2;
++    int hsync_w = ((htotal * 8) / 100 / 8) * 8;
++    int pclk_khz = (static_cast<int>(htotal * 1000.0 / hperiod) / 250) * 250;
 +
 +    return std::format(
 +        "modeline {:.2F} {} {} {} {} {} {} {} {} -hsync +vsync",
-+        pclk, hdisplay, hsync_start, hsync_end, htotal,
-+        vdisplay, vsync_start, vsync_end, vtotal
++        pclk_khz / 1000.0, h, hsync_end - hsync_w, hsync_end, htotal,
++        v, v + 3, v + 3 + vsync, v + vsync_bp + 3
 +    );
 +  }
 +
-+  void applyMonitorMode(const std::string& displayId, const std::string& w, const std::string& h, const std::string& hz) {
-+    std::thread([displayId, w, h, hz]() {
-+      auto res = process::runSync(std::vector<std::string>{"hyprctl", "monitors", "-j"});
-+      if (res.exitCode != 0 || res.out.empty()) {
-+        res = process::runSync(std::vector<std::string>{"/run/current-system/sw/bin/hyprctl", "monitors", "-j"});
-+      }
-+      if (res.exitCode == 0 && !res.out.empty()) {
-+        try {
-+          auto arr = nlohmann::json::parse(res.out);
-+          for (const auto& m : arr) {
-+            const std::string mName = m.value("name", "");
-+            if (mName == displayId || displayId.contains(mName) || mName.contains(displayId)) {
-+              int x = m.value("x", 0);
-+              int y = m.value("y", 0);
-+              double scale = m.value("scale", 1.6);
-+              int wVal = std::stoi(w);
-+              int hVal = std::stoi(h);
-+              double hzVal = std::stod(hz);
-+
-+              double maxNativeHz = 0.0;
-+              int nativeW = 0;
-+              int nativeH = 0;
-+              if (m.contains("availableModes") && m["availableModes"].is_array() && !m["availableModes"].empty()) {
-+                std::string firstMode = m["availableModes"][0].get<std::string>();
-+                auto xPos = firstMode.find('x');
-+                auto atPos = firstMode.find('@');
-+                auto hzPos = firstMode.find("Hz");
-+                if (xPos != std::string::npos && atPos != std::string::npos && hzPos != std::string::npos) {
-+                  nativeW = std::stoi(firstMode.substr(0, xPos));
-+                  nativeH = std::stoi(firstMode.substr(xPos + 1, atPos - xPos - 1));
-+                  maxNativeHz = std::stod(firstMode.substr(atPos + 1, hzPos - atPos - 1));
-+                }
-+              }
-+
-+              std::string modeStr;
-+              if (nativeW > 0 && wVal == nativeW && hVal == nativeH && std::abs(hzVal - maxNativeHz) < 0.5) {
-+                modeStr = "preferred";
-+              } else {
-+                modeStr = generateCvtModeline(wVal, hVal, static_cast<float>(hzVal));
-+              }
-+
-+              std::string lua = std::format(
-+                  "return hl.monitor({{ output = '{}', mode = '{}', position = '{}x{}', scale = {}, bitdepth = 10 }})",
-+                  mName, modeStr, x, y, scale
-+              );
-+              auto evalRes = process::runSync(std::vector<std::string>{"hyprctl", "eval", lua});
-+              if (evalRes.exitCode != 0) {
-+                process::runSync(std::vector<std::string>{"/run/current-system/sw/bin/hyprctl", "eval", lua});
-+              }
-+              break;
++  void applyMonitorMode(const std::string& id, const std::string& w, const std::string& h, const std::string& hz) {
++    std::thread([id, w, h, hz]() {
++      auto out = runHyprctl({"hyprctl", "monitors", "-j"});
++      if (out.empty()) return;
++      try {
++        for (const auto& m : nlohmann::json::parse(out)) {
++          const std::string name = m.value("name", "");
++          if (name != id && !id.contains(name) && !name.contains(id)) continue;
++          int wVal = std::stoi(w), hVal = std::stoi(h);
++          double hzVal = std::stod(hz);
++          std::string mode = generateCvtModeline(wVal, hVal, static_cast<float>(hzVal));
++          if (m.contains("availableModes") && m["availableModes"].is_array() && !m["availableModes"].empty()) {
++            std::string pref = m["availableModes"][0].get<std::string>();
++            if (pref.starts_with(std::format("{}x{}@{:.2F}", wVal, hVal, hzVal)) ||
++                pref.starts_with(std::format("{}x{}@{:.0F}", wVal, hVal, hzVal))) {
++              mode = "preferred";
 +            }
 +          }
-+        } catch (...) {}
-+      }
++          std::string lua = std::format(
++              "return hl.monitor({{ output = '{}', mode = '{}', position = '{}x{}', scale = {}, bitdepth = 10 }})",
++              name, mode, m.value("x", 0), m.value("y", 0), m.value("scale", 1.6)
++          );
++          runHyprctl({"hyprctl", "eval", lua});
++          break;
++        }
++      } catch (...) {}
 +    }).detach();
 +  }
 +
    std::string buildDisplayListKey(const std::vector<BrightnessDisplay>& displays) {
      std::string key;
      for (const auto& d : displays) {
-@@ -32,6 +140,48 @@ namespace {
+@@ -32,6 +102,39 @@ namespace {
      return key;
    }
  
@@ -1434,40 +1378,31 @@ index cb0c4b1..7b83520 100644
 +  static std::mutex s_hzMutex;
 +  static std::chrono::steady_clock::time_point s_lastHzQuery{};
 +
-+  void refreshCachedHzAsync() {
++  double getCachedMonitorHz(const std::string& displayId) {
 +    const auto now = std::chrono::steady_clock::now();
++    bool shouldQuery = false;
 +    {
-+      std::lock_guard<std::mutex> lock(s_hzMutex);
-+      if (now - s_lastHzQuery < std::chrono::seconds(5)) {
-+        return;
++      std::lock_guard<std::mutex> lk(s_hzMutex);
++      if (now - s_lastHzQuery >= std::chrono::seconds(5)) {
++        s_lastHzQuery = now;
++        shouldQuery = true;
 +      }
-+      s_lastHzQuery = now;
 +    }
-+    std::thread([]() {
-+      auto res = process::runSync(std::vector<std::string>{"hyprctl", "monitors", "-j"});
-+      if (res.exitCode != 0 || res.out.empty()) {
-+        res = process::runSync(std::vector<std::string>{"/run/current-system/sw/bin/hyprctl", "monitors", "-j"});
-+      }
-+      if (res.exitCode == 0 && !res.out.empty()) {
++    if (shouldQuery) {
++      std::thread([]() {
++        auto out = runHyprctl({"hyprctl", "monitors", "-j"});
++        if (out.empty()) return;
 +        try {
-+          auto arr = nlohmann::json::parse(res.out);
-+          std::lock_guard<std::mutex> lock(s_hzMutex);
-+          for (const auto& m : arr) {
-+            const std::string mName = m.value("name", "");
-+            s_cachedHz[mName] = m.value("refreshRate", 0.0);
++          std::lock_guard<std::mutex> lk(s_hzMutex);
++          for (const auto& m : nlohmann::json::parse(out)) {
++            s_cachedHz[m.value("name", "")] = m.value("refreshRate", 0.0);
 +          }
 +        } catch (...) {}
-+      }
-+    }).detach();
-+  }
-+
-+  double getCachedMonitorHz(const std::string& displayId) {
-+    refreshCachedHzAsync();
-+    std::lock_guard<std::mutex> lock(s_hzMutex);
++      }).detach();
++    }
++    std::lock_guard<std::mutex> lk(s_hzMutex);
 +    for (const auto& [k, v] : s_cachedHz) {
-+      if (k == displayId || displayId.contains(k) || k.contains(displayId)) {
-+        return v;
-+      }
++      if (k == displayId || displayId.contains(k) || k.contains(displayId)) return v;
 +    }
 +    return 0.0;
 +  }
@@ -1475,7 +1410,7 @@ index cb0c4b1..7b83520 100644
    std::string formatDisplayInfo(const BrightnessDisplay& display) {
      // Show the native hardware resolution; the fractionally-scaled logical size confuses
      // users who expect the panel's real pixel count. The scale is surfaced separately below.
-@@ -44,17 +194,23 @@ namespace {
+@@ -44,17 +147,23 @@ namespace {
        resolutionText = std::to_string(width) + "x" + std::to_string(height);
      }
  
@@ -1501,84 +1436,42 @@ index cb0c4b1..7b83520 100644
    }
  
    std::string formatBrightnessValue(const BrightnessDisplay& display, float brightness) {
-@@ -413,6 +569,85 @@ void MonitorTab::rebuildCards(Renderer& /*renderer*/) {
+@@ -413,6 +522,43 @@ void MonitorTab::rebuildCards(Renderer& /*renderer*/) {
  
      card->addChild(std::move(sliderRow));
  
 +    const int curW = display.physicalWidth > 0 ? display.physicalWidth : (display.logicalWidth > 0 ? display.logicalWidth : 1920);
 +    const int curH = display.physicalHeight > 0 ? display.physicalHeight : (display.logicalHeight > 0 ? display.logicalHeight : 1080);
 +    const double curHz = getCachedMonitorHz(display.id);
-+    const std::string defaultW = std::to_string(curW);
-+    const std::string defaultH = std::to_string(curH);
-+    const std::string defaultHz = curHz > 0.0 ? std::format("{:.0F}", std::round(curHz)) : "60";
++    const std::string defW = std::to_string(curW), defH = std::to_string(curH);
++    const std::string defHz = curHz > 0.0 ? std::format("{:.0F}", std::round(curHz)) : "60";
 +
-+    struct ModeState {
-+      std::string w;
-+      std::string h;
-+      std::string hz;
++    struct ModeState { std::string w, h, hz; };
++    auto st = std::make_shared<ModeState>(ModeState{defW, defH, defHz});
++    auto makeInp = [&](const std::string& val, float w, auto setter) {
++      return ui::input({
++          .value = val, .placeholder = val, .fontSize = Style::fontSizeCaption * 0.9F * scale,
++          .horizontalPadding = Style::spaceXs * 0.5F * scale, .minLayoutWidth = (w - 4.0F) * scale,
++          .surfaceOpacity = panelCardOpacity(), .width = w * scale, .onChange = setter,
++      });
 +    };
-+    auto modeState = std::make_shared<ModeState>(ModeState{defaultW, defaultH, defaultHz});
++
 +    auto modeRow = ui::row(
 +        {.align = FlexAlign::Center, .gap = Style::spaceXs * scale, .fillWidth = true},
 +        ui::row(
 +            {.align = FlexAlign::Center, .gap = Style::spaceXs * scale, .flexGrow = 1.0F},
-+            ui::label({
-+                .text = "Режим:",
-+                .fontSize = Style::fontSizeCaption * scale,
-+                .fontWeight = FontWeight::Bold,
-+                .color = colorSpecFromRole(ColorRole::OnSurface),
-+            }),
-+            ui::input({
-+                .value = defaultW,
-+                .placeholder = defaultW,
-+                .fontSize = Style::fontSizeCaption * 0.9F * scale,
-+                .horizontalPadding = Style::spaceXs * 0.5F * scale,
-+                .minLayoutWidth = 48.0F * scale,
-+                .surfaceOpacity = panelCardOpacity(),
-+                .width = 52.0F * scale,
-+                .onChange = [modeState](const std::string& val) { modeState->w = val; },
-+            }),
-+            ui::label({
-+                .text = "x",
-+                .fontSize = Style::fontSizeCaption * scale,
-+                .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-+            }),
-+            ui::input({
-+                .value = defaultH,
-+                .placeholder = defaultH,
-+                .fontSize = Style::fontSizeCaption * 0.9F * scale,
-+                .horizontalPadding = Style::spaceXs * 0.5F * scale,
-+                .minLayoutWidth = 48.0F * scale,
-+                .surfaceOpacity = panelCardOpacity(),
-+                .width = 52.0F * scale,
-+                .onChange = [modeState](const std::string& val) { modeState->h = val; },
-+            }),
-+            ui::label({
-+                .text = "@",
-+                .fontSize = Style::fontSizeCaption * scale,
-+                .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-+            }),
-+            ui::input({
-+                .value = defaultHz,
-+                .placeholder = defaultHz,
-+                .fontSize = Style::fontSizeCaption * 0.9F * scale,
-+                .horizontalPadding = Style::spaceXs * 0.5F * scale,
-+                .minLayoutWidth = 36.0F * scale,
-+                .surfaceOpacity = panelCardOpacity(),
-+                .width = 40.0F * scale,
-+                .onChange = [modeState](const std::string& val) { modeState->hz = val; },
-+            })
++            ui::label({.text = "Режим:", .fontSize = Style::fontSizeCaption * scale, .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface)}),
++            makeInp(defW, 52.0F, [st](const std::string& v) { st->w = v; }),
++            ui::label({.text = "x", .fontSize = Style::fontSizeCaption * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)}),
++            makeInp(defH, 52.0F, [st](const std::string& v) { st->h = v; }),
++            ui::label({.text = "@", .fontSize = Style::fontSizeCaption * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)}),
++            makeInp(defHz, 40.0F, [st](const std::string& v) { st->hz = v; })
 +        ),
 +        ui::button({
-+            .text = "Применить",
-+            .variant = ButtonVariant::Primary,
-+            .paddingV = Style::spaceXs * 0.8F * scale,
-+            .paddingH = Style::spaceMd * scale,
-+            .radius = 999.0F,
-+            .onClick = [displayId = display.id, modeState]() {
-+              if (modeState != nullptr && !modeState->w.empty() && !modeState->h.empty() && !modeState->hz.empty()) {
-+                applyMonitorMode(displayId, modeState->w, modeState->h, modeState->hz);
-+              }
++            .text = "Применить", .variant = ButtonVariant::Primary,
++            .paddingV = Style::spaceXs * 0.8F * scale, .paddingH = Style::spaceMd * scale, .radius = 999.0F,
++            .onClick = [id = display.id, st]() {
++              if (st && !st->w.empty() && !st->h.empty() && !st->hz.empty()) applyMonitorMode(id, st->w, st->h, st->hz);
 +            },
 +        })
 +    );
@@ -1628,7 +1521,7 @@ index 99a7480..a7809ca 100644
          setBorder(colorSpecFromRole(ColorRole::Hover), Style::borderWidth);
        } else {
 diff --git a/src/shell/control_center/tabs/power_tab.cpp b/src/shell/control_center/tabs/power_tab.cpp
-index b18b3e7..b31f3c3 100644
+index b18b3e7..2551d05 100644
 --- a/src/shell/control_center/tabs/power_tab.cpp
 +++ b/src/shell/control_center/tabs/power_tab.cpp
 @@ -1,21 +1,37 @@
@@ -1669,7 +1562,7 @@ index b18b3e7..b31f3c3 100644
  
  using namespace control_center;
  
-@@ -60,6 +76,234 @@ namespace {
+@@ -60,6 +76,212 @@ namespace {
      return state.configuredStart == state.effectiveStart && state.configuredEnd == state.effectiveEnd;
    }
  
@@ -1784,13 +1677,12 @@ index b18b3e7..b31f3c3 100644
 +  }
 +
 +  RyzenLimits getRecordedMaxLimits() {
-+    std::lock_guard<std::mutex> lock(s_ryzenMutex);
++    std::lock_guard<std::mutex> lk(s_ryzenMutex);
 +    if (!s_maxLimitsLoaded) {
 +      s_maxLimitsLoaded = true;
-+      auto saved = FileUtils::readSmallTextFile(ryzenMaxLimitFilePath());
-+      if (saved.has_value()) {
-+        std::istringstream iss(*saved);
-+        (void)(iss >> s_recordedMaxLimits.stapm >> s_recordedMaxLimits.fast >> s_recordedMaxLimits.slow);
++      if (auto s = FileUtils::readSmallTextFile(ryzenMaxLimitFilePath())) {
++        std::istringstream iss(*s);
++        iss >> s_recordedMaxLimits.stapm >> s_recordedMaxLimits.fast >> s_recordedMaxLimits.slow;
 +      }
 +    }
 +    return s_recordedMaxLimits;
@@ -1798,26 +1690,18 @@ index b18b3e7..b31f3c3 100644
 +
 +  void recordMaxLimits(const RyzenLimits& lim) {
 +    if (!lim.valid()) return;
-+    std::lock_guard<std::mutex> lock(s_ryzenMutex);
-+    if (!s_maxLimitsLoaded) {
-+      s_maxLimitsLoaded = true;
-+      auto saved = FileUtils::readSmallTextFile(ryzenMaxLimitFilePath());
-+      if (saved.has_value()) {
-+        std::istringstream iss(*saved);
-+        (void)(iss >> s_recordedMaxLimits.stapm >> s_recordedMaxLimits.fast >> s_recordedMaxLimits.slow);
-+      }
-+    }
-+    bool changed = false;
-+    if (lim.stapm > s_recordedMaxLimits.stapm) { s_recordedMaxLimits.stapm = lim.stapm; changed = true; }
-+    if (lim.fast > s_recordedMaxLimits.fast) { s_recordedMaxLimits.fast = lim.fast; changed = true; }
-+    if (lim.slow > s_recordedMaxLimits.slow) { s_recordedMaxLimits.slow = lim.slow; changed = true; }
-+    if (changed) {
-+      s_maxLimitsLoaded = true;
++    auto cur = getRecordedMaxLimits();
++    bool chg = false;
++    if (lim.stapm > cur.stapm) { cur.stapm = lim.stapm; chg = true; }
++    if (lim.fast > cur.fast) { cur.fast = lim.fast; chg = true; }
++    if (lim.slow > cur.slow) { cur.slow = lim.slow; chg = true; }
++    if (chg) {
++      std::lock_guard<std::mutex> lk(s_ryzenMutex);
++      s_recordedMaxLimits = cur;
 +      std::error_code ec;
 +      std::filesystem::create_directories(std::filesystem::path(ryzenMaxLimitFilePath()).parent_path(), ec);
-+      std::ofstream f(ryzenMaxLimitFilePath());
-+      if (f.is_open()) {
-+        f << s_recordedMaxLimits.stapm << " " << s_recordedMaxLimits.fast << " " << s_recordedMaxLimits.slow << "\n";
++      if (std::ofstream f(ryzenMaxLimitFilePath()); f.is_open()) {
++        f << cur.stapm << " " << cur.fast << " " << cur.slow << "\n";
 +      }
 +    }
 +  }
@@ -1827,38 +1711,25 @@ index b18b3e7..b31f3c3 100644
 +    auto res = sendDaemonCommand("ryzen get");
 +    if (!res.empty() && res != "unknown" && res != "error") {
 +      std::istringstream iss(res);
-+      if (iss >> lim.stapm >> lim.fast >> lim.slow && lim.valid()) {
-+        return lim;
-+      }
++      if (iss >> lim.stapm >> lim.fast >> lim.slow && lim.valid()) return lim;
 +    }
-+
 +    auto out = process::runSync("ryzenadj -i");
 +    if (out.exitCode == 0 && !out.out.empty()) {
-+      auto parseCol = [](const std::string& line) -> std::optional<double> {
-+        auto b1 = line.find('|');
-+        if (b1 == std::string::npos) return std::nullopt;
-+        auto b2 = line.find('|', b1 + 1);
-+        if (b2 == std::string::npos) return std::nullopt;
-+        auto b3 = line.find('|', b2 + 1);
-+        if (b3 == std::string::npos) return std::nullopt;
-+        try { return std::stod(StringUtils::trim(line.substr(b2 + 1, b3 - b2 - 1))); } catch (...) {}
-+        return std::nullopt;
-+      };
-+
 +      std::istringstream stream(out.out);
 +      std::string line;
 +      while (std::getline(stream, line)) {
-+        if (line.find("STAPM LIMIT") != std::string::npos) {
-+          if (auto v = parseCol(line)) lim.stapm = *v;
-+        } else if (line.find("PPT LIMIT FAST") != std::string::npos) {
-+          if (auto v = parseCol(line)) lim.fast = *v;
-+        } else if (line.find("PPT LIMIT SLOW") != std::string::npos) {
-+          if (auto v = parseCol(line)) lim.slow = *v;
-+        }
++        auto parseVal = [&](std::string_view key, double& dst) {
++          if (line.find(key) == std::string::npos) return;
++          auto b1 = line.find('|'), b2 = line.find('|', b1 + 1), b3 = line.find('|', b2 + 1);
++          if (b2 != std::string::npos && b3 != std::string::npos) {
++            try { dst = std::stod(StringUtils::trim(line.substr(b2 + 1, b3 - b2 - 1))); } catch (...) {}
++          }
++        };
++        parseVal("STAPM LIMIT", lim.stapm);
++        parseVal("PPT LIMIT FAST", lim.fast);
++        parseVal("PPT LIMIT SLOW", lim.slow);
 +      }
-+      if (lim.valid()) {
-+        return lim;
-+      }
++      if (lim.valid()) return lim;
 +    }
 +    return std::nullopt;
 +  }
@@ -1904,7 +1775,7 @@ index b18b3e7..b31f3c3 100644
  } // namespace
  
  PowerTab::ChargeLimitMode PowerTab::classifyChargeLimit(const UPowerChargeLimitState& state) noexcept {
-@@ -139,6 +383,8 @@ std::unique_ptr<Flex> PowerTab::create() {
+@@ -139,6 +361,8 @@ std::unique_ptr<Flex> PowerTab::create() {
    content->setAlign(FlexAlign::Stretch);
    content->setGap(Style::spaceMd * scale);
  
@@ -1913,7 +1784,7 @@ index b18b3e7..b31f3c3 100644
    buildStatusCard(*content, scale);
    buildProfilesCard(*content, scale);
    buildChargingCard(*content, scale);
-@@ -327,6 +573,220 @@ void PowerTab::buildProfilesCard(Flex& root, float scale) {
+@@ -327,6 +551,126 @@ void PowerTab::buildProfilesCard(Flex& root, float scale) {
    root.addChild(std::move(card));
  }
  
@@ -1921,220 +1792,126 @@ index b18b3e7..b31f3c3 100644
 +  const bool hasNv = noctalia::system::NvidiaGpuService::instance().status().present;
 +  const bool hasFan = hasAorusFan();
 +  const bool hasRyzen = hasRyzenAdj();
-+
-+  if (!hasNv && !hasFan && !hasRyzen) {
-+    return;
-+  }
++  if (!hasNv && !hasFan && !hasRyzen) return;
 +
 +  auto card = ui::column({
-+      .configure = [scale, opacity = panelCardOpacity()](Flex& section) {
-+        applySectionCardStyle(section, scale, opacity);
-+      },
++      .configure = [scale, opacity = panelCardOpacity()](Flex& section) { applySectionCardStyle(section, scale, opacity); },
 +  });
 +  m_hardwareCard = card.get();
-+
 +  card->addChild(makeCardHeaderRow("Аппаратное питание", scale));
 +
-+  // 1. Block NVIDIA GPU (only if NVIDIA GPU is present)
++  auto makeRow = [&](std::string_view label, std::unique_ptr<Node> ctrl) {
++    auto r = ui::row({.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale});
++    r->addChild(ui::label({
++        .text = std::string(label), .fontSize = Style::fontSizeBody * scale,
++        .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface), .flexGrow = 1.0F
++    }));
++    r->addChild(std::move(ctrl));
++    return r;
++  };
++
 +  if (hasNv) {
-+    auto nvRow = ui::row(
-+        {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+        ui::label({
-+            .text = "Блокировка NVIDIA GPU",
-+            .fontSize = Style::fontSizeBody * scale,
-+            .fontWeight = FontWeight::Bold,
-+            .color = colorSpecFromRole(ColorRole::OnSurface),
-+            .flexGrow = 1.0F,
-+        }),
-+        ui::toggle({
-+            .out = &m_nvBlindfoldToggle,
-+            .checkedImmediate = isNvBlocked(),
-+            .toggleSize = ToggleSize::Medium,
-+            .scale = scale,
-+            .onChange = [](bool checked) {
-+              sendDaemonCommand(checked ? "nv block" : "nv unblock");
-+            },
-+        })
-+    );
-+    card->addChild(std::move(nvRow));
++    card->addChild(makeRow("Блокировка NVIDIA GPU", ui::toggle({
++        .out = &m_nvBlindfoldToggle, .checkedImmediate = isNvBlocked(),
++        .toggleSize = ToggleSize::Medium, .scale = scale,
++        .onChange = [](bool checked) { sendDaemonCommand(checked ? "nv block" : "nv unblock"); },
++    })));
 +  }
 +
-+  // 2. Fan Control (only if Aorus laptop driver is present)
 +  if (hasFan) {
-+    std::vector<ui::SegmentedOption> fanOptions;
-+    fanOptions.push_back({.label = "Quiet", .glyph = "wind"});
-+    fanOptions.push_back({.label = "Auto", .glyph = "wind"});
-+    fanOptions.push_back({.label = "Max", .glyph = "wind"});
 +    const std::string curFan = getFanMode();
-+    std::size_t curFanIdx = (curFan == "max") ? 2 : (curFan == "quiet" ? 0 : 1);
-+
-+    auto fanRow = ui::row(
-+        {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+        ui::label({
-+            .text = "Режим вентиляторов",
-+            .fontSize = Style::fontSizeBody * scale,
-+            .fontWeight = FontWeight::Bold,
-+            .color = colorSpecFromRole(ColorRole::OnSurface),
-+            .flexGrow = 1.0F,
-+        }),
-+        ui::segmented({
-+            .out = &m_fanModeSegmented,
-+            .options = std::move(fanOptions),
-+            .fontSize = Style::fontSizeCaption,
-+            .scale = scale,
-+            .surfaceOpacity = panelCardOpacity(),
-+            .surfaceRole = ColorRole::Surface,
-+            .equalSegmentWidths = true,
-+            .onChange = [](std::size_t index) {
-+              const char* mode = (index == 2) ? "max" : (index == 0 ? "quiet" : "auto");
-+              sendDaemonCommand(std::format("fan {}", mode));
-+            },
-+        })
-+    );
-+    if (m_fanModeSegmented != nullptr) {
-+      m_fanModeSegmented->setSelectedIndex(curFanIdx);
-+    }
-+    card->addChild(std::move(fanRow));
++    std::vector<ui::SegmentedOption> fanOpts = {{.label = "Quiet", .glyph = "wind"}, {.label = "Auto", .glyph = "wind"}, {.label = "Max", .glyph = "wind"}};
++    auto fanSeg = ui::segmented({
++        .out = &m_fanModeSegmented,
++        .options = std::move(fanOpts),
++        .fontSize = Style::fontSizeCaption, .scale = scale, .surfaceOpacity = panelCardOpacity(),
++        .surfaceRole = ColorRole::Surface, .equalSegmentWidths = true,
++        .onChange = [](std::size_t idx) {
++          sendDaemonCommand(std::format("fan {}", idx == 2 ? "max" : (idx == 0 ? "quiet" : "auto")));
++        },
++    });
++    if (m_fanModeSegmented) m_fanModeSegmented->setSelectedIndex(curFan == "max" ? 2 : (curFan == "quiet" ? 0 : 1));
++    card->addChild(makeRow("Режим вентиляторов", std::move(fanSeg)));
 +  }
 +
-+  // 3. AMD CPU Limit Unlock (RyzenAdj) (only if AMD Ryzen CPU and SMU driver are present)
 +  if (hasRyzen) {
 +    m_ryzenUnlocked = checkRyzenUnlocked();
-+    auto ryzenRow = ui::row(
-+        {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+        ui::label({
-+            .text = "Лимиты мощности AMD CPU",
-+            .fontSize = Style::fontSizeBody * scale,
-+            .fontWeight = FontWeight::Bold,
-+            .color = colorSpecFromRole(ColorRole::OnSurface),
-+            .flexGrow = 1.0F,
-+        }),
-+        ui::button({
-+            .out = &m_ryzenadjButton,
-+            .text = m_ryzenUnlocked ? "Лимиты сняты" : "Снять лимиты",
-+            .variant = m_ryzenUnlocked ? ButtonVariant::Ghost : ButtonVariant::Primary,
-+            .padding = Style::spaceSm * scale,
-+            .radius = Style::scaledRadiusSm(scale),
-+            .onClick = [this]() {
-+              static std::atomic<bool> s_unlocking{false};
-+              if (s_unlocking.exchange(true)) return;
-+              if (m_ryzenadjButton != nullptr) {
-+                m_ryzenadjButton->setText("Снятие лимитов...");
++    card->addChild(makeRow("Лимиты мощности AMD CPU", ui::button({
++        .out = &m_ryzenadjButton,
++        .text = m_ryzenUnlocked ? "Лимиты сняты" : "Снять лимиты",
++        .variant = m_ryzenUnlocked ? ButtonVariant::Ghost : ButtonVariant::Primary,
++        .padding = Style::spaceSm * scale, .radius = Style::scaledRadiusSm(scale),
++        .onClick = [this]() {
++          static std::atomic<bool> s_unlocking{false};
++          if (s_unlocking.exchange(true)) return;
++          if (m_ryzenadjButton) m_ryzenadjButton->setText("Снятие лимитов...");
++          std::thread([this]() {
++            sendDaemonCommand("ryzen max");
++            std::this_thread::sleep_for(std::chrono::milliseconds(300));
++            if (auto newLim = queryCurrentRyzenLimits()) recordMaxLimits(*newLim);
++            bool unlocked = checkRyzenUnlocked();
++            DeferredCall::callLater([this, unlocked]() {
++              s_unlocking = false;
++              if (m_ryzenadjButton) {
++                m_ryzenUnlocked = unlocked;
++                m_ryzenadjButton->setText(unlocked ? "Лимиты сняты" : "Снять лимиты");
++                m_ryzenadjButton->setVariant(unlocked ? ButtonVariant::Ghost : ButtonVariant::Primary);
++                PanelManager::instance().requestRedraw();
 +              }
-+              std::thread([this]() {
-+                sendDaemonCommand("ryzen max");
-+                std::this_thread::sleep_for(std::chrono::milliseconds(300));
-+                auto newLim = queryCurrentRyzenLimits();
-+                if (newLim.has_value()) {
-+                  recordMaxLimits(*newLim);
-+                }
-+                bool unlocked = checkRyzenUnlocked();
-+                DeferredCall::callLater([this, unlocked]() {
-+                  s_unlocking = false;
-+                  if (m_ryzenadjButton != nullptr) {
-+                    m_ryzenUnlocked = unlocked;
-+                    m_ryzenadjButton->setText(unlocked ? "Лимиты сняты" : "Снять лимиты");
-+                    m_ryzenadjButton->setVariant(unlocked ? ButtonVariant::Ghost : ButtonVariant::Primary);
-+                    PanelManager::instance().requestRedraw();
-+                  }
-+                });
-+              }).detach();
-+            },
-+        })
-+    );
-+    card->addChild(std::move(ryzenRow));
++            });
++          }).detach();
++        },
++    })));
 +  }
-+
 +  root.addChild(std::move(card));
 +}
 +
 +void PowerTab::buildPowersaveCard(Flex& root, float scale) {
 +  auto card = ui::column({
-+      .configure = [scale, opacity = panelCardOpacity()](Flex& section) {
-+        applySectionCardStyle(section, scale, opacity);
-+      },
++      .configure = [scale, opacity = panelCardOpacity()](Flex& section) { applySectionCardStyle(section, scale, opacity); },
 +  });
 +  m_powersaveCard = card.get();
-+
 +  card->addChild(makeCardHeaderRow("Интерфейс", scale));
 +
-+  // 1. Hyprland Animations
-+  auto animRow = ui::row(
-+      {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+      ui::label({
-+          .text = "Анимации Hyprland",
-+          .fontSize = Style::fontSizeBody * scale,
-+          .fontWeight = FontWeight::Bold,
-+          .color = colorSpecFromRole(ColorRole::OnSurface),
-+          .flexGrow = 1.0F,
-+      }),
-+      ui::toggle({
-+          .out = &m_hyprAnimToggle,
-+          .checkedImmediate = getHyprAnimations(),
-+          .toggleSize = ToggleSize::Medium,
-+          .scale = scale,
-+          .onChange = [](bool checked) {
-+            (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ animations = {{ enabled = {} }} }}'", checked ? 1 : 0));
-+          },
-+      })
-+  );
-+  card->addChild(std::move(animRow));
++  auto makeRow = [&](std::string_view label, std::unique_ptr<Node> ctrl) {
++    auto r = ui::row({.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale});
++    r->addChild(ui::label({
++        .text = std::string(label), .fontSize = Style::fontSizeBody * scale,
++        .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface), .flexGrow = 1.0F
++    }));
++    r->addChild(std::move(ctrl));
++    return r;
++  };
 +
-+  // 2. Hyprland Decorations (Blur & Rounding)
-+  auto decorRow = ui::row(
-+      {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+      ui::label({
-+          .text = "Декорации Hyprland",
-+          .fontSize = Style::fontSizeBody * scale,
-+          .fontWeight = FontWeight::Bold,
-+          .color = colorSpecFromRole(ColorRole::OnSurface),
-+          .flexGrow = 1.0F,
-+      }),
-+      ui::toggle({
-+          .out = &m_hyprDecorToggle,
-+          .checkedImmediate = getHyprDecorations(),
-+          .toggleSize = ToggleSize::Medium,
-+          .scale = scale,
-+          .onChange = [](bool checked) {
-+            (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ decoration = {{ blur = {{ enabled = {} }}, rounding = {} }} }}'", checked ? "true" : "false", checked ? 10 : 0));
-+          },
-+      })
-+  );
-+  card->addChild(std::move(decorRow));
++  card->addChild(makeRow("Анимации Hyprland", ui::toggle({
++      .out = &m_hyprAnimToggle, .checkedImmediate = getHyprAnimations(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) { (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ animations = {{ enabled = {} }} }}'", chk ? 1 : 0)); },
++  })));
 +
-+  // 3. Force Opaque Windows (force_rgbx)
-+  auto opaqueRow = ui::row(
-+      {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+      ui::label({
-+          .text = "Принудительная непрозрачность",
-+          .fontSize = Style::fontSizeBody * scale,
-+          .fontWeight = FontWeight::Bold,
-+          .color = colorSpecFromRole(ColorRole::OnSurface),
-+          .flexGrow = 1.0F,
-+      }),
-+      ui::toggle({
-+          .out = &m_forceOpaqueToggle,
-+          .checkedImmediate = getHyprForceRgbx(),
-+          .toggleSize = ToggleSize::Medium,
-+          .scale = scale,
-+          .onChange = [](bool checked) {
-+            (void)process::runAsync(std::format(
-+                "hyprctl eval 'hl.window_rule({{ name = \"force-rgbx-toggle\", match = {{ class = \".*\" }}, force_rgbx = {} }}); hl_force_rgbx = {}'",
-+                checked ? "true" : "false",
-+                checked ? "true" : "false"
-+            ));
-+          },
-+      })
-+  );
-+  card->addChild(std::move(opaqueRow));
++  card->addChild(makeRow("Декорации Hyprland", ui::toggle({
++      .out = &m_hyprDecorToggle, .checkedImmediate = getHyprDecorations(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) { (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ decoration = {{ blur = {{ enabled = {} }}, rounding = {} }} }}'", chk ? "true" : "false", chk ? 10 : 0)); },
++  })));
 +
++  card->addChild(makeRow("Принудительная непрозрачность", ui::toggle({
++      .out = &m_forceOpaqueToggle, .checkedImmediate = getHyprForceRgbx(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) {
++        (void)process::runAsync(std::format(
++            "hyprctl eval 'hl.window_rule({{ name = \"force-rgbx-toggle\", match = {{ class = \".*\" }}, force_rgbx = {} }}); hl_force_rgbx = {}'",
++            chk ? "true" : "false", chk ? "true" : "false"
++        ));
++      },
++  })));
 +  root.addChild(std::move(card));
 +}
 +
  void PowerTab::buildHealthCard(Flex& root, float scale) {
    if (m_upower == nullptr) {
      return;
-@@ -395,6 +855,24 @@ void PowerTab::buildPeripheralsCard(Flex& root, float scale) {
+@@ -395,6 +739,24 @@ void PowerTab::buildPeripheralsCard(Flex& root, float scale) {
    root.addChild(std::move(card));
  }
  
@@ -2159,7 +1936,7 @@ index b18b3e7..b31f3c3 100644
  void PowerTab::onClose() {
    m_root = nullptr;
    m_statusCard = nullptr;
-@@ -415,6 +893,14 @@ void PowerTab::onClose() {
+@@ -415,6 +777,14 @@ void PowerTab::onClose() {
    m_inhibitedRow = nullptr;
    m_inhibitedLabel = nullptr;
    m_healthCard = nullptr;
@@ -2174,7 +1951,7 @@ index b18b3e7..b31f3c3 100644
    m_healthLabel = nullptr;
    m_healthBar = nullptr;
    m_peripheralsCard = nullptr;
-@@ -439,6 +925,14 @@ void PowerTab::doUpdate(Renderer& /*renderer*/) {
+@@ -439,6 +809,14 @@ void PowerTab::doUpdate(Renderer& /*renderer*/) {
    syncPowerProfiles();
    syncBatteryHealth();
    rebuildPeripherals();
@@ -2242,7 +2019,7 @@ index 0d8e000..486e9fa 100644
    Flex* m_peripheralsCard = nullptr;
    Flex* m_peripheralsList = nullptr;
 diff --git a/src/shell/control_center/tabs/system_tab.cpp b/src/shell/control_center/tabs/system_tab.cpp
-index 0cdd282..56f7a16 100644
+index 0cdd282..610491a 100644
 --- a/src/shell/control_center/tabs/system_tab.cpp
 +++ b/src/shell/control_center/tabs/system_tab.cpp
 @@ -5,10 +5,13 @@
@@ -2270,7 +2047,7 @@ index 0cdd282..56f7a16 100644
    // Graph cards run tighter than the default section card so the plot fills more of the card,
    // but the title gets a touch more breathing room above it.
    constexpr float kGraphCardPadTop = Style::spaceSm;
-@@ -280,11 +287,59 @@ std::unique_ptr<Flex> SystemTab::create() {
+@@ -280,11 +287,37 @@ std::unique_ptr<Flex> SystemTab::create() {
        auto card = ui::column({
            .out = &m_gpuCard,
            .flexGrow = 1.0F,
@@ -2281,49 +2058,27 @@ index 0cdd282..56f7a16 100644
  
 -      makeHeaderRow(*card, i18n::tr("control-center.system.titles.gpu"), sc);
 +      if (hasSecondaryGpu()) {
-+        auto selectGpu = [this](int gpuIndex) {
-+          if (m_selectedGpu == gpuIndex) {
-+            return;
-+          }
-+          m_selectedGpu = gpuIndex;
-+          if (m_gpu0TabButton) {
-+            m_gpu0TabButton->setVariant(m_selectedGpu == 0 ? ButtonVariant::Primary : ButtonVariant::Ghost);
-+          }
-+          if (m_gpu1TabButton) {
-+            m_gpu1TabButton->setVariant(m_selectedGpu == 1 ? ButtonVariant::Primary : ButtonVariant::Ghost);
-+          }
++        auto selectGpu = [this](int idx) {
++          if (m_selectedGpu == idx) return;
++          m_selectedGpu = idx;
++          if (m_gpu0TabButton) m_gpu0TabButton->setVariant(m_selectedGpu == 0 ? ButtonVariant::Primary : ButtonVariant::Ghost);
++          if (m_gpu1TabButton) m_gpu1TabButton->setVariant(m_selectedGpu == 1 ? ButtonVariant::Primary : ButtonVariant::Ghost);
 +          applyGpuGraphSeries();
 +          syncLabels();
 +          PanelManager::instance().requestRedraw();
 +        };
 +
-+        auto switcher = ui::row({
-+            .align = FlexAlign::Center,
-+            .gap = Style::spaceXs * sc,
-+            .flexGrow = 0.0F,
-+        });
-+        switcher->addChild(ui::button({
-+            .out = &m_gpu0TabButton,
-+            .text = "GPU 0",
-+            .fontSize = Style::fontSizeCaption * sc,
-+            .variant = (m_selectedGpu == 0) ? ButtonVariant::Primary : ButtonVariant::Ghost,
-+            .minHeight = 22.0F * sc,
-+            .paddingV = 2.0F * sc,
-+            .paddingH = Style::spaceSm * sc,
-+            .radius = 15.0F * sc,
-+            .onClick = [selectGpu]() { selectGpu(0); },
-+        }));
-+        switcher->addChild(ui::button({
-+            .out = &m_gpu1TabButton,
-+            .text = "GPU 1",
-+            .fontSize = Style::fontSizeCaption * sc,
-+            .variant = (m_selectedGpu == 1) ? ButtonVariant::Primary : ButtonVariant::Ghost,
-+            .minHeight = 22.0F * sc,
-+            .paddingV = 2.0F * sc,
-+            .paddingH = Style::spaceSm * sc,
-+            .radius = 15.0F * sc,
-+            .onClick = [selectGpu]() { selectGpu(1); },
-+        }));
++        auto makeTab = [&](Button** out, const char* text, int idx) {
++          return ui::button({
++              .out = out, .text = text, .fontSize = Style::fontSizeCaption * sc,
++              .variant = (m_selectedGpu == idx) ? ButtonVariant::Primary : ButtonVariant::Ghost,
++              .minHeight = 22.0F * sc, .paddingV = 2.0F * sc, .paddingH = Style::spaceSm * sc,
++              .radius = 15.0F * sc, .onClick = [selectGpu, idx]() { selectGpu(idx); },
++          });
++        };
++        auto switcher = ui::row({.align = FlexAlign::Center, .gap = Style::spaceXs * sc, .flexGrow = 0.0F});
++        switcher->addChild(makeTab(&m_gpu0TabButton, "GPU 0", 0));
++        switcher->addChild(makeTab(&m_gpu1TabButton, "GPU 1", 1));
 +        card->addChild(std::move(switcher));
 +      } else {
 +        makeHeaderRow(*card, "GPU", sc);
@@ -2332,7 +2087,7 @@ index 0cdd282..56f7a16 100644
        m_gpuGraph = addGraph(*card);
        auto* legend = makeLegendRow(*card, sc);
        m_gpuLegend = legend;
-@@ -298,6 +353,15 @@ std::unique_ptr<Flex> SystemTab::create() {
+@@ -298,6 +331,15 @@ std::unique_ptr<Flex> SystemTab::create() {
        m_gpuTempLabel = makeValueLabel(*m_gpuTempGroup, sc);
        m_gpuTempGroup->setVisible(false);
  
@@ -2348,7 +2103,7 @@ index 0cdd282..56f7a16 100644
        row->addChild(std::move(card));
      }
  
-@@ -350,6 +414,8 @@ std::unique_ptr<Flex> SystemTab::create() {
+@@ -350,6 +392,8 @@ std::unique_ptr<Flex> SystemTab::create() {
      m_swapLabel = addResourceRow(
          *resourcesCard, "arrows-exchange", i18n::tr("control-center.system.labels.swap"), sc, &m_swapRow
      );
@@ -2357,7 +2112,7 @@ index 0cdd282..56f7a16 100644
  
      // Up to four physical disks, discovered automatically (root first). Usage refreshes in doUpdate.
      m_diskMountPoints = physicalDiskMountPoints();
-@@ -467,6 +533,13 @@ void SystemTab::onClose() {
+@@ -467,6 +511,13 @@ void SystemTab::onClose() {
      l = nullptr;
    m_swapRow = nullptr;
    m_swapLabel = nullptr;
@@ -2371,7 +2126,7 @@ index 0cdd282..56f7a16 100644
    m_diskLabels.clear();
    m_diskMountPoints.clear();
    m_graphInitialized = false;
-@@ -488,15 +561,15 @@ void SystemTab::onFrameTick(float deltaMs) {
+@@ -488,15 +539,15 @@ void SystemTab::onFrameTick(float deltaMs) {
      return;
    }
  
@@ -2391,7 +2146,7 @@ index 0cdd282..56f7a16 100644
    m_scrollProgress = scrollProgressForSample(m_lastSampleAt);
  
    if (m_cpuGraph != nullptr) {
-@@ -651,6 +724,83 @@ void SystemTab::doUpdate(Renderer& renderer) {
+@@ -651,6 +702,83 @@ void SystemTab::doUpdate(Renderer& renderer) {
    syncLabels();
  }
  
@@ -2475,7 +2230,7 @@ index 0cdd282..56f7a16 100644
  void SystemTab::updateGraphs(Renderer& renderer) {
    if (m_monitor == nullptr || !m_monitor->isRunning()) {
      return;
-@@ -702,42 +852,8 @@ void SystemTab::updateGraphs(Renderer& renderer) {
+@@ -702,42 +830,8 @@ void SystemTab::updateGraphs(Renderer& renderer) {
  
    // GPU: usage (primary) + VRAM (secondary) + temperature (tertiary)
    if (m_gpuGraph != nullptr) {
@@ -2519,7 +2274,7 @@ index 0cdd282..56f7a16 100644
    }
  
    // Network
-@@ -832,25 +948,72 @@ void SystemTab::syncLabels() {
+@@ -832,25 +926,50 @@ void SystemTab::syncLabels() {
        m_cpuTempLabel->setText("--");
      }
    }
@@ -2568,48 +2323,26 @@ index 0cdd282..56f7a16 100644
 +    }
 +  } else {
 +    // GPU 1 (NVIDIA)
-+    if (nv.suspended) {
-+      if (m_gpuStatusLabel != nullptr) {
-+        m_gpuStatusLabel->setText("D3cold");
-+        m_gpuStatusLabel->setVisible(true);
-+      }
-+      if (m_gpuUsageGroup != nullptr) m_gpuUsageGroup->setVisible(false);
-+      if (m_gpuVramGroup != nullptr) m_gpuVramGroup->setVisible(false);
-+      if (m_gpuTempGroup != nullptr) m_gpuTempGroup->setVisible(false);
-+    } else if (nv.blocked) {
-+      if (m_gpuStatusLabel != nullptr) {
-+        m_gpuStatusLabel->setText(std::format("blocked (usage: {})", nv.runtimeUsage));
-+        m_gpuStatusLabel->setVisible(true);
-+      }
-+      if (m_gpuUsageGroup != nullptr) m_gpuUsageGroup->setVisible(false);
-+      if (m_gpuVramGroup != nullptr) m_gpuVramGroup->setVisible(false);
-+      if (m_gpuTempGroup != nullptr) m_gpuTempGroup->setVisible(false);
-+    } else {
-+      if (m_gpuStatusLabel != nullptr) {
-+        m_gpuStatusLabel->setVisible(false);
-+      }
-+      if (m_gpuUsageGroup != nullptr) {
-+        m_gpuUsageGroup->setVisible(true);
-+        if (m_gpuUsageLabel != nullptr) {
-+          m_gpuUsageLabel->setText(std::format("{:.0F}%", nv.usagePct));
-+        }
-+      }
-+      if (m_gpuVramGroup != nullptr) {
-+        m_gpuVramGroup->setVisible(true);
-+        if (m_gpuVramLabel != nullptr) {
-+          m_gpuVramLabel->setText(std::format("{:.1F} GiB", nv.vramUsedMib / 1024.0));
-+        }
-+      }
-+      if (m_gpuTempGroup != nullptr) {
-+        m_gpuTempGroup->setVisible(true);
-+        if (m_gpuTempLabel != nullptr) {
-+          m_gpuTempLabel->setText(std::format("{:.0F}°C", nv.tempC));
-+        }
-+      }
++    const bool sleeping = nv.suspended || nv.blocked;
++    if (m_gpuStatusLabel) {
++      m_gpuStatusLabel->setText(nv.suspended ? "D3cold" : std::format("blocked (usage: {})", nv.runtimeUsage));
++      m_gpuStatusLabel->setVisible(sleeping);
++    }
++    if (m_gpuUsageGroup) {
++      m_gpuUsageGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuUsageLabel) m_gpuUsageLabel->setText(std::format("{:.0F}%", nv.usagePct));
++    }
++    if (m_gpuVramGroup) {
++      m_gpuVramGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuVramLabel) m_gpuVramLabel->setText(std::format("{:.1F} GiB", nv.vramUsedMib / 1024.0));
++    }
++    if (m_gpuTempGroup) {
++      m_gpuTempGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuTempLabel) m_gpuTempLabel->setText(std::format("{:.0F}°C", nv.tempC));
      }
    }
    if (m_ramLabel != nullptr) {
-@@ -907,6 +1070,33 @@ void SystemTab::syncLabels() {
+@@ -907,6 +1026,33 @@ void SystemTab::syncLabels() {
        m_swapLabel->setText(FormatUnits::formatBinaryMibUsageAsGib(stats.swapUsedMb, stats.swapTotalMb));
      }
    }
@@ -2687,10 +2420,10 @@ index 6e13938..bf256f2 100644
  };
 diff --git a/src/shell/control_center/tabs/vpn_tab.cpp b/src/shell/control_center/tabs/vpn_tab.cpp
 new file mode 100644
-index 0000000..5a1dd8a
+index 0000000..ae408fc
 --- /dev/null
 +++ b/src/shell/control_center/tabs/vpn_tab.cpp
-@@ -0,0 +1,376 @@
+@@ -0,0 +1,267 @@
 +#include "shell/control_center/tabs/vpn_tab.h"
 +
 +#include "core/deferred_call.h"
@@ -2715,15 +2448,13 @@ index 0000000..5a1dd8a
 +namespace {
 +
 +  std::string apiGet(const std::string& path) {
-+    auto res = process::runSync(std::vector<std::string>{
-+        "curl", "-s", "--max-time", "6", std::format("http://127.0.0.1:9090{}", path)
-+    });
++    auto res = process::runSync(std::vector<std::string>{"curl", "-s", "--max-time", "6", "http://127.0.0.1:9090" + path});
 +    return res.exitCode == 0 ? res.out : std::string{};
 +  }
 +
 +  bool apiPut(const std::string& path, const std::string& jsonPayload) {
 +    auto res = process::runSync(std::vector<std::string>{
-+        "curl", "-s", "--max-time", "2", "-X", "PUT", std::format("http://127.0.0.1:9090{}", path),
++        "curl", "-s", "--max-time", "2", "-X", "PUT", "http://127.0.0.1:9090" + path,
 +        "-H", "Content-Type: application/json", "-d", jsonPayload
 +    });
 +    return res.exitCode == 0;
@@ -2735,20 +2466,11 @@ index 0000000..5a1dd8a
 +
 +std::unique_ptr<Flex> VpnTab::create() {
 +  const float scale = contentScale();
-+
-+  auto tab = ui::column({
-+      .out = &m_root,
-+      .align = FlexAlign::Stretch,
-+      .gap = Style::spaceMd * scale,
-+  });
++  auto tab = ui::column({.out = &m_root, .align = FlexAlign::Stretch, .gap = Style::spaceMd * scale});
 +
 +  auto scroll = ui::scrollView({
-+      .scrollbarVisible = true,
-+      .flexGrow = 1.0F,
-+      .configure = [](ScrollView& scrollView) {
-+        scrollView.clearFill();
-+        scrollView.clearBorder();
-+      },
++      .scrollbarVisible = true, .flexGrow = 1.0F,
++      .configure = [](ScrollView& s) { s.clearFill(); s.clearBorder(); },
 +  });
 +
 +  auto* content = scroll->content();
@@ -2758,98 +2480,53 @@ index 0000000..5a1dd8a
 +
 +  // 1. Status Card
 +  auto statusCard = ui::column({
-+      .configure = [scale, opacity = panelCardOpacity()](Flex& section) {
-+        applySectionCardStyle(section, scale, opacity);
-+      },
++      .configure = [scale, opacity = panelCardOpacity()](Flex& s) { applySectionCardStyle(s, scale, opacity); },
 +  });
 +  m_statusCard = statusCard.get();
 +
-+  auto activeRow = ui::row(
++  statusCard->addChild(ui::row(
 +      {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
-+      ui::glyph({
-+          .glyph = "shield-check",
-+          .glyphSize = Style::fontSizeTitle * scale,
-+          .color = colorSpecFromRole(ColorRole::Primary),
-+      }),
++      ui::glyph({.glyph = "shield-check", .glyphSize = Style::fontSizeTitle * scale, .color = colorSpecFromRole(ColorRole::Primary)}),
++      ui::label({.text = "Активный узел:", .fontSize = Style::fontSizeBody * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)}),
 +      ui::label({
-+          .text = "Активный узел:",
-+          .fontSize = Style::fontSizeBody * scale,
-+          .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-+      }),
-+      ui::label({
-+          .out = &m_activeProxyLabel,
-+          .text = "Загрузка...",
-+          .fontSize = Style::fontSizeBody * scale,
-+          .fontWeight = FontWeight::Bold,
-+          .color = colorSpecFromRole(ColorRole::Primary),
-+          .flexGrow = 1.0F,
++          .out = &m_activeProxyLabel, .text = "Загрузка...", .fontSize = Style::fontSizeBody * scale,
++          .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::Primary), .flexGrow = 1.0F
 +      })
-+  );
-+  statusCard->addChild(std::move(activeRow));
++  ));
 +
-+  // Route unmatched traffic (final-toggle)
-+  auto routeRow = ui::row(
++  statusCard->addChild(ui::row(
 +      {.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale},
 +      ui::column(
 +          {.align = FlexAlign::Stretch, .flexGrow = 1.0F},
-+          ui::label({
-+              .text = "Весь остальной трафик",
-+              .fontSize = Style::fontSizeBody * scale,
-+              .fontWeight = FontWeight::Bold,
-+              .color = colorSpecFromRole(ColorRole::OnSurface),
-+          }),
-+          ui::label({
-+              .out = &m_finalStateLabel,
-+              .text = "Режим: proxy",
-+              .fontSize = Style::fontSizeCaption * scale,
-+              .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-+          })
++          ui::label({.text = "Весь остальной трафик", .fontSize = Style::fontSizeBody * scale, .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface)}),
++          ui::label({.out = &m_finalStateLabel, .text = "Режим: proxy", .fontSize = Style::fontSizeCaption * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)})
 +      ),
 +      ui::toggle({
-+          .out = &m_finalToggle,
-+          .checkedImmediate = true,
-+          .toggleSize = ToggleSize::Medium,
-+          .scale = scale,
-+          .onChange = [this](bool checked) { setFinalRoute(checked); },
++          .out = &m_finalToggle, .checkedImmediate = true, .toggleSize = ToggleSize::Medium, .scale = scale,
++          .onChange = [this](bool chk) { setFinalRoute(chk); },
 +      })
-+  );
-+  statusCard->addChild(std::move(routeRow));
++  ));
 +  content->addChild(std::move(statusCard));
 +
 +  // 2. Nodes Card
 +  auto nodesCard = ui::column({
-+      .configure = [scale, opacity = panelCardOpacity()](Flex& section) {
-+        applySectionCardStyle(section, scale, opacity);
-+      },
++      .configure = [scale, opacity = panelCardOpacity()](Flex& s) { applySectionCardStyle(s, scale, opacity); },
 +  });
 +  m_nodesCard = nodesCard.get();
++  nodesCard->addChild(ui::column({.out = &m_nodesList, .align = FlexAlign::Stretch, .gap = Style::spaceSm * scale}));
 +
-+  auto nodesList = ui::column({
-+      .out = &m_nodesList,
-+      .align = FlexAlign::Stretch,
-+      .gap = Style::spaceSm * scale,
-+  });
-+  nodesCard->addChild(std::move(nodesList));
-+
-+  auto testBtnRow = ui::row(
++  nodesCard->addChild(ui::row(
 +      {.align = FlexAlign::Center, .justify = FlexJustify::End},
 +      ui::button({
-+          .out = &m_testButton,
-+          .text = i18n::tr("control-center.vpn.ping"),
-+          .variant = ButtonVariant::Default,
-+          .paddingV = Style::spaceXs * 0.8F * scale,
-+          .paddingH = Style::spaceMd * scale,
-+          .radius = 999.0F,
++          .out = &m_testButton, .text = i18n::tr("control-center.vpn.ping"), .variant = ButtonVariant::Default,
++          .paddingV = Style::spaceXs * 0.8F * scale, .paddingH = Style::spaceMd * scale, .radius = 999.0F,
 +          .onClick = [this]() { testAllLatencies(); },
 +      })
-+  );
-+  nodesCard->addChild(std::move(testBtnRow));
++  ));
 +  content->addChild(std::move(nodesCard));
 +
 +  m_root->addChild(std::move(scroll));
-+
 +  fetchProxies();
-+
 +  return tab;
 +}
 +
@@ -2865,20 +2542,17 @@ index 0000000..5a1dd8a
 +}
 +
 +void VpnTab::doLayout(Renderer& renderer, float contentWidth, float bodyHeight) {
-+  if (m_root == nullptr) {
-+    return;
++  if (m_root) {
++    m_root->setSize(contentWidth, bodyHeight);
++    m_root->layout(renderer);
 +  }
-+  m_root->setSize(contentWidth, bodyHeight);
-+  m_root->layout(renderer);
 +}
 +
 +void VpnTab::doUpdate(Renderer& renderer) {
 +  if (m_needsRebuild) {
 +    m_needsRebuild = false;
 +    rebuildNodeList();
-+    if (m_root != nullptr) {
-+      m_root->layout(renderer);
-+    }
++    if (m_root) m_root->layout(renderer);
 +  }
 +}
 +
@@ -2886,7 +2560,6 @@ index 0000000..5a1dd8a
 +  std::thread([this]() {
 +    const std::string proxyJson = apiGet("/proxies/proxy");
 +    const std::string finalJson = apiGet("/proxies/final-toggle");
-+
 +    std::string active;
 +    std::vector<ProxyNode> nodes;
 +    std::string finalMode = "direct";
@@ -2898,18 +2571,11 @@ index 0000000..5a1dd8a
 +        if (root.contains("all") && root["all"].is_array()) {
 +          for (const auto& item : root["all"]) {
 +            std::string name = item.get<std::string>();
-+            nodes.push_back(ProxyNode{
-+                .name = name,
-+                .active = (name == active),
-+                .delayMs = -1,
-+            });
++            nodes.push_back(ProxyNode{.name = name, .active = (name == active), .delayMs = -1});
 +          }
 +        }
 +      }
-+      if (!finalJson.empty()) {
-+        auto root = nlohmann::json::parse(finalJson);
-+        finalMode = root.value("now", "direct");
-+      }
++      if (!finalJson.empty()) finalMode = nlohmann::json::parse(finalJson).value("now", "direct");
 +    } catch (...) {}
 +
 +    DeferredCall::callLater([this, active = std::move(active), finalMode = std::move(finalMode), nodes = std::move(nodes)]() mutable {
@@ -2925,13 +2591,10 @@ index 0000000..5a1dd8a
 +
 +void VpnTab::selectProxy(const std::string& name) {
 +  std::thread([this, name]() {
-+    const std::string payload = std::format("{{\"name\": \"{}\"}}", name);
-+    if (apiPut("/proxies/proxy", payload)) {
++    if (apiPut("/proxies/proxy", std::format("{{\"name\": \"{}\"}}", name))) {
 +      DeferredCall::callLater([this, name]() {
 +        m_activeProxy = name;
-+        for (auto& node : m_nodes) {
-+          node.active = (node.name == name);
-+        }
++        for (auto& n : m_nodes) n.active = (n.name == name);
 +        rebuildNodeList();
 +        PanelManager::instance().refresh();
 +      });
@@ -2942,8 +2605,7 @@ index 0000000..5a1dd8a
 +void VpnTab::setFinalRoute(bool toProxy) {
 +  std::thread([this, toProxy]() {
 +    const std::string target = toProxy ? "proxy" : "direct";
-+    const std::string payload = std::format("{{\"name\": \"{}\"}}", target);
-+    if (apiPut("/proxies/final-toggle", payload)) {
++    if (apiPut("/proxies/final-toggle", std::format("{{\"name\": \"{}\"}}", target))) {
 +      DeferredCall::callLater([this, target]() {
 +        m_finalMode = target;
 +        rebuildNodeList();
@@ -2955,40 +2617,30 @@ index 0000000..5a1dd8a
 +}
 +
 +void VpnTab::testAllLatencies() {
-+  if (m_testButton != nullptr) {
++  if (m_testButton) {
 +    m_testButton->setText("Тестирование...");
 +    m_testButton->setHitTestVisible(false);
 +  }
++  std::vector<std::string> names;
++  names.reserve(m_nodes.size());
++  for (const auto& n : m_nodes) names.push_back(n.name);
 +
-+  std::vector<std::string> nodeNames;
-+  nodeNames.reserve(m_nodes.size());
-+  for (const auto& node : m_nodes) {
-+    nodeNames.push_back(node.name);
-+  }
-+
-+  std::thread([this, names = std::move(nodeNames)]() {
++  std::thread([this, names = std::move(names)]() {
 +    std::unordered_map<std::string, int> delays;
 +    for (const auto& name : names) {
-+      const std::string path = std::format("/proxies/{}/delay?timeout=2500&url=http://www.gstatic.com/generate_204", name);
-+      const std::string out = apiGet(path);
++      const std::string out = apiGet(std::format("/proxies/{}/delay?timeout=2500&url=http://www.gstatic.com/generate_204", name));
 +      int delay = -1;
 +      try {
-+        if (!out.empty()) {
-+          auto root = nlohmann::json::parse(out);
-+          delay = root.value("delay", -1);
-+        }
++        if (!out.empty()) delay = nlohmann::json::parse(out).value("delay", -1);
 +      } catch (...) {}
 +      delays[name] = delay;
 +    }
 +    DeferredCall::callLater([this, delays = std::move(delays)]() {
-+      for (auto& node : m_nodes) {
-+        auto it = delays.find(node.name);
-+        if (it != delays.end()) {
-+          node.delayMs = it->second;
-+        }
++      for (auto& n : m_nodes) {
++        if (auto it = delays.find(n.name); it != delays.end()) n.delayMs = it->second;
 +      }
 +      rebuildNodeList();
-+      if (m_testButton != nullptr) {
++      if (m_testButton) {
 +        m_testButton->setText(i18n::tr("control-center.vpn.ping"));
 +        m_testButton->setHitTestVisible(true);
 +      }
@@ -2999,32 +2651,20 @@ index 0000000..5a1dd8a
 +
 +void VpnTab::rebuildNodeList() {
 +  const float scale = contentScale();
-+
-+  if (m_activeProxyLabel != nullptr) {
-+    m_activeProxyLabel->setText(m_activeProxy.empty() ? "--" : m_activeProxy);
-+  }
-+
-+  if (m_finalToggle != nullptr) {
-+    m_finalToggle->setCheckedImmediate(m_finalMode == "proxy");
-+  }
-+  if (m_finalStateLabel != nullptr) {
-+    m_finalStateLabel->setText(m_finalMode == "proxy" ? "Режим: proxy (через VPN)" : "Режим: direct (напрямую)");
-+  }
-+
-+  if (m_nodesList == nullptr) {
-+    return;
-+  }
++  if (m_activeProxyLabel) m_activeProxyLabel->setText(m_activeProxy.empty() ? "--" : m_activeProxy);
++  if (m_finalToggle) m_finalToggle->setCheckedImmediate(m_finalMode == "proxy");
++  if (m_finalStateLabel) m_finalStateLabel->setText(m_finalMode == "proxy" ? "Режим: proxy (через VPN)" : "Режим: direct (напрямую)");
++  if (!m_nodesList) return;
 +
 +  while (!m_nodesList->children().empty()) {
 +    m_nodesList->removeChild(m_nodesList->children().front().get());
 +  }
 +
 +  for (const auto& node : m_nodes) {
-+    const bool isActive = (node.name == m_activeProxy);
++    const bool act = (node.name == m_activeProxy);
 +    auto row = ui::button({
-+        .variant = isActive ? ButtonVariant::Primary : ButtonVariant::Default,
-+        .paddingV = Style::spaceSm * scale,
-+        .paddingH = Style::spaceMd * scale,
++        .variant = act ? ButtonVariant::Primary : ButtonVariant::Default,
++        .paddingV = Style::spaceSm * scale, .paddingH = Style::spaceMd * scale,
 +        .radius = Style::scaledRadiusMd(scale),
 +        .onClick = [this, name = node.name]() { selectProxy(name); },
 +    });
@@ -3033,37 +2673,21 @@ index 0000000..5a1dd8a
 +    row->setGap(Style::spaceSm * scale);
 +    row->setMinHeight(Style::controlHeightSm * scale);
 +
-+    row->addChild(
-+        ui::glyph({
-+            .glyph = isActive ? "shield-check" : "shield-lock",
-+            .glyphSize = Style::baseGlyphSize * scale,
-+            .color = colorSpecFromRole(isActive ? ColorRole::OnPrimary : ColorRole::OnSurface),
-+        })
-+    );
-+
-+    row->addChild(
-+        ui::label({
-+            .text = node.name,
-+            .fontSize = Style::fontSizeBody * scale,
-+            .fontWeight = isActive ? FontWeight::Bold : FontWeight::Normal,
-+            .color = colorSpecFromRole(isActive ? ColorRole::OnPrimary : ColorRole::OnSurface),
-+            .flexGrow = 1.0F,
-+        })
-+    );
-+
-+    std::string delayText = "--";
-+    if (node.delayMs > 0) {
-+      delayText = std::format("{} ms", node.delayMs);
-+    }
-+    row->addChild(
-+        ui::label({
-+            .text = delayText,
-+            .fontSize = Style::fontSizeCaption * scale,
-+            .fontWeight = FontWeight::Medium,
-+            .color = colorSpecFromRole(isActive ? ColorRole::OnPrimary : ColorRole::Tertiary),
-+        })
-+    );
-+
++    row->addChild(ui::glyph({
++        .glyph = act ? "shield-check" : "shield-lock", .glyphSize = Style::baseGlyphSize * scale,
++        .color = colorSpecFromRole(act ? ColorRole::OnPrimary : ColorRole::OnSurface),
++    }));
++    row->addChild(ui::label({
++        .text = node.name, .fontSize = Style::fontSizeBody * scale,
++        .fontWeight = act ? FontWeight::Bold : FontWeight::Normal,
++        .color = colorSpecFromRole(act ? ColorRole::OnPrimary : ColorRole::OnSurface),
++        .flexGrow = 1.0F,
++    }));
++    row->addChild(ui::label({
++        .text = node.delayMs > 0 ? std::format("{} ms", node.delayMs) : "--",
++        .fontSize = Style::fontSizeCaption * scale, .fontWeight = FontWeight::Medium,
++        .color = colorSpecFromRole(act ? ColorRole::OnPrimary : ColorRole::Tertiary),
++    }));
 +    m_nodesList->addChild(std::move(row));
 +  }
 +}
@@ -3311,27 +2935,6 @@ index 4281d27..a51d743 100644
      bool centerPasswordText = false;
      bool showLoginButton = true;
      bool showCapsLock = true;
-diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
-index 3689629..1ac2fe8 100644
---- a/src/shell/notification/notification_toast.cpp
-+++ b/src/shell/notification/notification_toast.cpp
-@@ -311,14 +311,8 @@ namespace {
-     );
-   }
- 
--  bool shouldShowNotificationAppName(const ConfigService* config, std::string_view appName) {
--    if (StringUtils::isBlank(appName)) {
--      return false;
--    }
--    if (config != nullptr && !config->config().notification.showAppName) {
--      return false;
--    }
--    return true;
-+  bool shouldShowNotificationAppName(const ConfigService* /*config*/, std::string_view /*appName*/) {
-+    return false;
-   }
- 
-   bool shouldShowNotificationActions(const ConfigService* config) {
 diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
 index ff7a2c1..ad49c13 100644
 --- a/src/shell/panel/panel_manager.cpp
@@ -3466,10 +3069,10 @@ index 014fc3b..62085cb 100644
    m_thumbHost->setFill(frameBg);
 diff --git a/src/system/nvidia_status.h b/src/system/nvidia_status.h
 new file mode 100644
-index 0000000..a0a507a
+index 0000000..ac9c0cf
 --- /dev/null
 +++ b/src/system/nvidia_status.h
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,172 @@
 +#pragma once
 +
 +#include "util/file_utils.h"
@@ -3483,45 +3086,35 @@ index 0000000..a0a507a
 +#include <mutex>
 +#include <string>
 +#include <thread>
-+#include <vector>
 +
 +namespace noctalia::system {
 +
 +struct NvidiaGpuStatus {
-+  bool present = false;
-+  bool suspended = false;
-+  bool blocked = false;
++  bool present = false, suspended = false, blocked = false;
 +  std::string runtimeUsage = "0";
-+  double usagePct = 0.0;
-+  double vramUsedMib = 0.0;
-+  double vramTotalMib = 0.0;
-+  double tempC = 0.0;
++  double usagePct = 0.0, vramUsedMib = 0.0, vramTotalMib = 0.0, tempC = 0.0;
 +
 +  [[nodiscard]] std::string formatSummary() const {
 +    if (!present) return {};
 +    if (suspended) return "D3cold";
 +    if (blocked) return std::format("blocked (usage: {})", runtimeUsage);
-+    const double usedGib = vramUsedMib / 1024.0;
-+    const double totalGib = vramTotalMib / 1024.0;
-+    return std::format("{:.0F}% · {:.1F}/{:.1F} GiB", usagePct, usedGib, totalGib);
++    return std::format("{:.0F}% · {:.1F}/{:.1F} GiB", usagePct, vramUsedMib / 1024.0, vramTotalMib / 1024.0);
 +  }
 +};
 +
 +class NvidiaGpuService {
 +public:
 +  static NvidiaGpuService& instance() {
-+    static NvidiaGpuService s_instance;
-+    return s_instance;
++    static NvidiaGpuService s;
++    return s;
 +  }
 +
 +  [[nodiscard]] static bool isNvBlocked() {
 +    std::error_code ec;
-+    for (const auto& entry : std::filesystem::directory_iterator("/dev", ec)) {
-+      if (entry.path().filename().string().starts_with("nvidia")) {
-+        auto perms = entry.status(ec).permissions();
-+        if ((perms & std::filesystem::perms::all) == std::filesystem::perms::none) {
-+          return true;
-+        }
++    for (const auto& e : std::filesystem::directory_iterator("/dev", ec)) {
++      if (e.path().filename().string().starts_with("nvidia") &&
++          (e.status(ec).permissions() & std::filesystem::perms::all) == std::filesystem::perms::none) {
++        return true;
 +      }
 +    }
 +    return false;
@@ -3529,215 +3122,125 @@ index 0000000..a0a507a
 +
 +  NvidiaGpuStatus status() {
 +    refreshAsync();
-+    std::lock_guard<std::mutex> lock(m_mutex);
-+    return m_cachedStatus;
++    std::lock_guard<std::mutex> lk(m_mutex);
++    return m_cached;
 +  }
 +
 +  void refreshAsync() {
 +    const auto now = std::chrono::steady_clock::now();
 +    {
-+      std::lock_guard<std::mutex> lock(m_mutex);
-+      if (now - m_lastQuery < std::chrono::milliseconds(900)) {
-+        return;
-+      }
++      std::lock_guard<std::mutex> lk(m_mutex);
++      if (now - m_lastQuery < std::chrono::milliseconds(900)) return;
 +      m_lastQuery = now;
 +    }
-+    if (m_queryRunning.exchange(true)) {
-+      return;
-+    }
-+
++    if (m_running.exchange(true)) return;
 +    std::thread([this]() {
 +      queryBackground();
-+      m_queryRunning = false;
++      m_running = false;
 +    }).detach();
 +  }
 +
 +private:
 +  NvidiaGpuService() = default;
 +  ~NvidiaGpuService() {
-+    while (m_queryRunning.load()) {
-+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-+    }
++    while (m_running.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
 +    closeNvml();
 +  }
 +
 +  std::string findPciDev() {
-+    if (!m_cachedPciDev.empty()) {
-+      return m_cachedPciDev;
-+    }
++    if (!m_pciDev.empty()) return m_pciDev;
 +    std::error_code ec;
-+    for (const auto& dev : std::filesystem::directory_iterator("/sys/bus/pci/devices", ec)) {
-+      auto vendor = FileUtils::readSmallTextFile(dev.path() / "vendor");
-+      if (vendor.has_value() && StringUtils::trim(*vendor) == "0x10de") {
-+        m_cachedPciDev = dev.path().string();
-+        break;
-+      }
++    for (const auto& d : std::filesystem::directory_iterator("/sys/bus/pci/devices", ec)) {
++      auto v = FileUtils::readSmallTextFile(d.path() / "vendor");
++      if (v && StringUtils::trim(*v) == "0x10de") return m_pciDev = d.path().string();
 +    }
-+    return m_cachedPciDev;
++    return {};
 +  }
 +
 +  void queryBackground() {
-+    const std::string pciDev = findPciDev();
-+    if (pciDev.empty()) {
-+      std::lock_guard<std::mutex> lock(m_mutex);
-+      m_cachedStatus.present = false;
++    const std::string dev = findPciDev();
++    if (dev.empty()) {
++      std::lock_guard<std::mutex> lk(m_mutex);
++      m_cached.present = false;
 +      return;
 +    }
-+
 +    NvidiaGpuStatus st{.present = true};
-+
-+    const auto statusText = FileUtils::readSmallTextFile(pciDev + "/power/runtime_status");
-+    const std::string runtimeStatus = statusText.has_value() ? StringUtils::trim(*statusText) : "suspended";
-+
-+    if (runtimeStatus == "suspended") {
++    auto rStat = FileUtils::readSmallTextFile(dev + "/power/runtime_status");
++    if (rStat && StringUtils::trim(*rStat) == "suspended") {
 +      st.suspended = true;
-+      std::lock_guard<std::mutex> lock(m_mutex);
-+      m_cachedStatus = st;
-+      return;
-+    }
-+
-+    const bool blocked = isNvBlocked();
-+    if (blocked) {
++    } else if (isNvBlocked()) {
 +      st.blocked = true;
-+      const auto usageText = FileUtils::readSmallTextFile(pciDev + "/power/runtime_usage");
-+      st.runtimeUsage = usageText.has_value() ? StringUtils::trim(*usageText) : "0";
-+      std::lock_guard<std::mutex> lock(m_mutex);
-+      m_cachedStatus = st;
-+      return;
++      auto u = FileUtils::readSmallTextFile(dev + "/power/runtime_usage");
++      st.runtimeUsage = u ? StringUtils::trim(*u) : "0";
++    } else {
++      queryNvml(st);
 +    }
-+
-+    double u = 0.0;
-+    double vUsed = 0.0;
-+    double vTot = 0.0;
-+    double tC = 0.0;
-+    if (queryNvml(u, vUsed, vTot, tC)) {
-+      st.usagePct = u;
-+      st.vramUsedMib = vUsed;
-+      st.vramTotalMib = vTot;
-+      st.tempC = tC;
-+    }
-+
-+    std::lock_guard<std::mutex> lock(m_mutex);
-+    m_cachedStatus = st;
++    std::lock_guard<std::mutex> lk(m_mutex);
++    m_cached = st;
 +  }
 +
-+  using NvmlDevice = void*;
-+  struct NvmlUtilization {
-+    unsigned int gpu;
-+    unsigned int memory;
-+  };
-+  struct NvmlMemory {
-+    unsigned long long total;
-+    unsigned long long free;
-+    unsigned long long used;
-+  };
-+
-+  using InitFn = int (*)();
-+  using ShutdownFn = int (*)();
-+  using GetCountFn = int (*)(unsigned int*);
-+  using GetHandleFn = int (*)(unsigned int, NvmlDevice*);
-+  using GetUtilizationFn = int (*)(NvmlDevice, NvmlUtilization*);
-+  using GetTempFn = int (*)(NvmlDevice, int, unsigned int*);
-+  using GetMemFn = int (*)(NvmlDevice, NvmlMemory*);
-+
-+  void* m_nvmlLib = nullptr;
-+  InitFn m_nvmlInit = nullptr;
-+  ShutdownFn m_nvmlShutdown = nullptr;
-+  GetCountFn m_nvmlGetCount = nullptr;
-+  GetHandleFn m_nvmlGetHandle = nullptr;
-+  GetUtilizationFn m_nvmlGetUtilization = nullptr;
-+  GetTempFn m_nvmlGetTemp = nullptr;
-+  GetMemFn m_nvmlGetMem = nullptr;
-+  NvmlDevice m_nvmlDevice = nullptr;
-+  bool m_nvmlReady = false;
++  using NvDev = void*;
++  struct NvUtil { unsigned int gpu, memory; };
++  struct NvMem { unsigned long long total, free, used; };
++  void* m_lib = nullptr;
++  NvDev m_dev = nullptr;
++  int (*m_init)() = nullptr;
++  int (*m_shutdown)() = nullptr;
++  int (*m_getHandle)(unsigned int, NvDev*) = nullptr;
++  int (*m_getUtil)(NvDev, NvUtil*) = nullptr;
++  int (*m_getTemp)(NvDev, int, unsigned int*) = nullptr;
++  int (*m_getMem)(NvDev, NvMem*) = nullptr;
 +
 +  bool ensureNvml() {
-+    if (m_nvmlReady && m_nvmlDevice != nullptr) {
-+      return true;
++    if (m_dev) return true;
++    if (!m_lib) {
++      m_lib = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
++      if (!m_lib) m_lib = dlopen("/run/opengl-driver/lib/libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
++      if (!m_lib) return false;
 +    }
-+    if (m_nvmlLib == nullptr) {
-+      m_nvmlLib = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
-+      if (m_nvmlLib == nullptr) {
-+        m_nvmlLib = dlopen("/run/opengl-driver/lib/libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
-+      }
-+      if (m_nvmlLib == nullptr) {
-+        return false;
-+      }
-+    }
-+
-+    m_nvmlInit = reinterpret_cast<InitFn>(dlsym(m_nvmlLib, "nvmlInit_v2"));
-+    if (m_nvmlInit == nullptr) m_nvmlInit = reinterpret_cast<InitFn>(dlsym(m_nvmlLib, "nvmlInit"));
-+    m_nvmlShutdown = reinterpret_cast<ShutdownFn>(dlsym(m_nvmlLib, "nvmlShutdown"));
-+    m_nvmlGetCount = reinterpret_cast<GetCountFn>(dlsym(m_nvmlLib, "nvmlDeviceGetCount_v2"));
-+    if (m_nvmlGetCount == nullptr) m_nvmlGetCount = reinterpret_cast<GetCountFn>(dlsym(m_nvmlLib, "nvmlDeviceGetCount"));
-+    m_nvmlGetHandle = reinterpret_cast<GetHandleFn>(dlsym(m_nvmlLib, "nvmlDeviceGetHandleByIndex_v2"));
-+    if (m_nvmlGetHandle == nullptr) m_nvmlGetHandle = reinterpret_cast<GetHandleFn>(dlsym(m_nvmlLib, "nvmlDeviceGetHandleByIndex"));
-+    m_nvmlGetUtilization = reinterpret_cast<GetUtilizationFn>(dlsym(m_nvmlLib, "nvmlDeviceGetUtilizationRates"));
-+    m_nvmlGetTemp = reinterpret_cast<GetTempFn>(dlsym(m_nvmlLib, "nvmlDeviceGetTemperature"));
-+    m_nvmlGetMem = reinterpret_cast<GetMemFn>(dlsym(m_nvmlLib, "nvmlDeviceGetMemoryInfo"));
-+
-+    if (m_nvmlInit == nullptr || m_nvmlGetHandle == nullptr || m_nvmlGetMem == nullptr) {
++    m_init = (int(*)())dlsym(m_lib, "nvmlInit_v2");
++    if (!m_init) m_init = (int(*)())dlsym(m_lib, "nvmlInit");
++    m_shutdown = (int(*)())dlsym(m_lib, "nvmlShutdown");
++    m_getHandle = (int(*)(unsigned int, NvDev*))dlsym(m_lib, "nvmlDeviceGetHandleByIndex_v2");
++    if (!m_getHandle) m_getHandle = (int(*)(unsigned int, NvDev*))dlsym(m_lib, "nvmlDeviceGetHandleByIndex");
++    m_getUtil = (int(*)(NvDev, NvUtil*))dlsym(m_lib, "nvmlDeviceGetUtilizationRates");
++    m_getTemp = (int(*)(NvDev, int, unsigned int*))dlsym(m_lib, "nvmlDeviceGetTemperature");
++    m_getMem = (int(*)(NvDev, NvMem*))dlsym(m_lib, "nvmlDeviceGetMemoryInfo");
++    if (!m_init || !m_getHandle || !m_getMem || m_init() != 0 || m_getHandle(0, &m_dev) != 0 || !m_dev) {
 +      return false;
 +    }
-+
-+    if (m_nvmlInit() != 0) {
-+      return false;
-+    }
-+
-+    if (m_nvmlGetHandle(0, &m_nvmlDevice) != 0 || m_nvmlDevice == nullptr) {
-+      return false;
-+    }
-+
-+    m_nvmlReady = true;
 +    return true;
 +  }
 +
 +  void closeNvml() {
-+    if (m_nvmlShutdown != nullptr) {
-+      m_nvmlShutdown();
-+    }
-+    if (m_nvmlLib != nullptr) {
-+      dlclose(m_nvmlLib);
-+      m_nvmlLib = nullptr;
-+    }
-+    m_nvmlReady = false;
-+    m_nvmlDevice = nullptr;
++    if (m_shutdown) m_shutdown();
++    if (m_lib) { dlclose(m_lib); m_lib = nullptr; }
++    m_dev = nullptr;
 +  }
 +
-+  bool queryNvml(double& usagePct, double& vramUsedMib, double& vramTotalMib, double& tempC) {
-+    if (!ensureNvml()) {
-+      return false;
++  void queryNvml(NvidiaGpuStatus& st) {
++    if (!ensureNvml()) return;
++    if (m_getUtil) {
++      NvUtil u{};
++      if (m_getUtil(m_dev, &u) == 0 && u.gpu <= 100) st.usagePct = static_cast<double>(u.gpu);
 +    }
-+
-+    if (m_nvmlGetUtilization != nullptr) {
-+      NvmlUtilization u{};
-+      if (m_nvmlGetUtilization(m_nvmlDevice, &u) == 0 && u.gpu <= 100) {
-+        usagePct = static_cast<double>(u.gpu);
-+      }
-+    }
-+
-+    if (m_nvmlGetTemp != nullptr) {
++    if (m_getTemp) {
 +      unsigned int t = 0;
-+      if (m_nvmlGetTemp(m_nvmlDevice, 0, &t) == 0) {
-+        tempC = static_cast<double>(t);
++      if (m_getTemp(m_dev, 0, &t) == 0) st.tempC = static_cast<double>(t);
++    }
++    if (m_getMem) {
++      NvMem m{};
++      if (m_getMem(m_dev, &m) == 0 && m.total > 0) {
++        st.vramUsedMib = static_cast<double>(m.used) / (1024.0 * 1024.0);
++        st.vramTotalMib = static_cast<double>(m.total) / (1024.0 * 1024.0);
 +      }
 +    }
-+
-+    if (m_nvmlGetMem != nullptr) {
-+      NvmlMemory m{};
-+      if (m_nvmlGetMem(m_nvmlDevice, &m) == 0 && m.total > 0) {
-+        vramUsedMib = static_cast<double>(m.used) / (1024.0 * 1024.0);
-+        vramTotalMib = static_cast<double>(m.total) / (1024.0 * 1024.0);
-+      }
-+    }
-+
-+    return true;
 +  }
 +
-+  std::string m_cachedPciDev;
-+  NvidiaGpuStatus m_cachedStatus{};
++  std::string m_pciDev;
++  NvidiaGpuStatus m_cached{};
 +  std::mutex m_mutex;
-+  std::atomic<bool> m_queryRunning{false};
++  std::atomic<bool> m_running{false};
 +  std::chrono::steady_clock::time_point m_lastQuery{};
 +};
 +
@@ -4165,10 +3668,10 @@ index 8f76a59..1a052cc 100644
      box->setPosition(geometry.contentX(), geometry.contentY());
      box->setFrameSize(geometry.contentWidth, geometry.contentHeight);
 diff --git a/src/ui/style.cpp b/src/ui/style.cpp
-index 0e7dc7b..fee00f9 100644
+index 0e7dc7b..d4984a6 100644
 --- a/src/ui/style.cpp
 +++ b/src/ui/style.cpp
-@@ -5,11 +5,12 @@
+@@ -5,6 +5,7 @@
  namespace {
  
    float g_cornerRadiusScale = 1.0F;
@@ -4176,12 +3679,6 @@ index 0e7dc7b..fee00f9 100644
    bool g_buttonBordersEnabled = true;
    bool g_inputBordersEnabled = true;
    bool g_popupBordersEnabled = true;
-   bool g_rtl = false;
--  bool g_popupShadowsEnabled = true;
-+  bool g_popupShadowsEnabled = false;
-   bool g_cardBordersEnabled = true;
- 
- } // namespace
 @@ -20,6 +21,10 @@ namespace Style {
  
    void setCornerRadiusScale(float scale) noexcept { g_cornerRadiusScale = std::clamp(scale, 0.0F, 2.0F); }
