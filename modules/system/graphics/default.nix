@@ -52,6 +52,15 @@ in
           NVreg_EnableS0ixPowerManagement = 1;
           NVreg_DynamicPowerManagementVideoMemoryThreshold = 0;
         };
+        prime = {
+          # Dummy values
+          intelBusId = "PCI:254:0:0";
+          nvidiaBusId = "PCI:255:0:0";
+          offload = {
+            enable = true;
+            enableOffloadCmd = true;
+          };
+        };
         powerManagement = {
           enable = true;
           finegrained = true;

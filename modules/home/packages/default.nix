@@ -586,6 +586,9 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
+      pkgs.qdiskinfo
+      pkgs.blender
+      pkgs.krita
       pkgs.mindustry
       pkgs.dash
       pkgs.openrgb-with-all-plugins
