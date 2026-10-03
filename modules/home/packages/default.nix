@@ -584,6 +584,7 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
+      pkgs.gpu-screen-recorder-gtk
       pkgs.qdiskinfo
       pkgs.blender
       pkgs.krita

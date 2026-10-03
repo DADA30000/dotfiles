@@ -18,11 +18,17 @@ let
   sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
     log.level = "error";
     route = {
-      auto_detect_interface = true;
       final = "direct";
       rules = [
         {
           action = "sniff";
+        }
+        {
+          inbound = [
+            "dns-in"
+            "dns-in6"
+          ];
+          outbound = "direct";
         }
         {
           port = [ 53 ];
@@ -32,11 +38,8 @@ let
           ip_cidr = [
             "127.0.0.0/8"
             "::1/128"
-            "192.168.0.0/16"
-            "fe80::/10"
-            "fd00::/8"
           ];
-          outbound = "direct";
+          outbound = "real-direct";
         }
       ]
       ++ (lib.optionals (osConfig ? sing-box.processes_to_proxy) [
@@ -48,6 +51,18 @@ let
     };
     inbounds = [
       {
+        type = "direct";
+        tag = "dns-in";
+        listen = "127.0.0.1";
+        listen_port = 53;
+      }
+      {
+        type = "direct";
+        tag = "dns-in6";
+        listen = "::1";
+        listen_port = 53;
+      }
+      {
         type = "tun";
         tag = "tun-in";
         interface_name = "tun-sb";
@@ -57,6 +72,7 @@ let
         ];
         auto_route = true;
         strict_route = true;
+        auto_redirect = true;
         stack = "system";
         mtu = 1480;
       }
@@ -71,8 +87,16 @@ let
         packet_encoding = "xudp";
       }
       {
-        type = "direct";
+        type = "vless";
         tag = "direct";
+        server = "127.0.0.1";
+        server_port = 2121;
+        uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+        packet_encoding = "xudp";
+      }
+      {
+        tag = "real-direct";
+        type = "direct";
       }
     ];
   };
@@ -168,7 +192,7 @@ let
           ) "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
           ${lib.optionalString (
             network == "singbox"
-          ) "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:1919 -d"}
+          ) "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:[1919,2121] -d"}
           env SANDBOX_ROLE=executor ${executor_script} "$@" &
           exit 0
         '';
@@ -267,7 +291,7 @@ let
               ${additional_outside_commands}
 
               ${lib.optionalString (network == "singbox") ''
-                rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:1919 &
+                rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:[1919,2121] &
               ''}
 
               ${lib.optionalString (wayland == "sandboxed") ''
@@ -382,7 +406,7 @@ let
                     flatpak.appId = appId;
 
                     pasta = {
-                      enable = network == "sandboxed" || network == "singbox";
+                      enable = network == "sandboxed";
                       mode = "isolate";
                     };
 
@@ -392,7 +416,7 @@ let
 
                       bindEntireStore = true;
 
-                      network = network != "off";
+                      network = network != "off" && network != "singbox";
 
                       env =
                         { }
@@ -416,6 +440,8 @@ let
                         "CAP_SETFCAP"
                         "--cap-add"
                         "CAP_NET_RAW"
+                        "--cap-add"
+                        "CAP_NET_BIND_SERVICE"
                       ];
 
                       sockets = {
@@ -515,6 +541,7 @@ let
                           "/sys/bus/pci"
                         ])
                         ++ (lib.optionals (x11 == "passthrough") [ "/tmp/.X11-unix" ])
+                        ++ (lib.optionals (network == "singbox") [ "/etc/resolv.conf" ])
                         ++ (lib.optionals portals_for_files [ (concat (sloth.env "XDG_CONFIG_HOME") "/mimeapps.list") ])
                         ++ (lib.optionals (wayland == "passthrough") [
                           (sloth.concat [

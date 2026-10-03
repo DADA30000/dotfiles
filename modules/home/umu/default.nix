@@ -744,6 +744,8 @@ let
     # 10. Hardware and GPU settings
     if [[ "$USE_STEAM_INTEGRATION" == "1" ]]; then
       export WINEDLLOVERRIDES="steamclient64,SteamFix64,steam_api64,OnlineFix64,SteamOverlay64=n,b;$WINEDLLOVERRIDES"
+    else
+      export WINEDLLOVERRIDES="steamclient,steamclient64=d;$WINEDLLOVERRIDES"
     fi
 
     unset ALSOFT_DRIVERS

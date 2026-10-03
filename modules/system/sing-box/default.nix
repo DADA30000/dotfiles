@@ -42,6 +42,10 @@ let
       rules = [
         { action = "sniff"; }
         {
+          inbound = [ "direct-in" ];
+          outbound = "final-toggle";
+        }
+        {
           inbound = [ "vless-in" ];
           outbound = "proxy";
         }
@@ -149,6 +153,18 @@ let
       final = "final-toggle";
     };
     inbounds = [
+      {
+        type = "vless";
+        tag = "direct-in";
+        listen = "127.0.0.1";
+        listen_port = 2121;
+        users = [
+          {
+            uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+            name = "sandbox-user";
+          }
+        ];
+      }
       {
         type = "vless";
         tag = "vless-in";
