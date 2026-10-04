@@ -20,25 +20,29 @@ const FSCONFIG_SET_FLAG: u32 = 0;
 const FSCONFIG_SET_STRING: u32 = 1;
 const FSCONFIG_SET_FD: u32 = 5;
 const FSCONFIG_CMD_CREATE: u32 = 6;
+
 const FSMOUNT_CLOEXEC: u32 = 0x0000_0001;
-
-// mount_setattr flags and attributes
-const MOUNT_ATTR_RDONLY: u32 = 0x0000_0001;
-const MOUNT_ATTR_NOSUID: u32 = 0x0000_0002;
-const MOUNT_ATTR_NODEV: u32 = 0x0000_0004;
+const MOUNT_ATTR_RDONLY: u64 = 0x0000_0001;
+const MOUNT_ATTR_NOSUID: u64 = 0x0000_0002;
+const MOUNT_ATTR_NODEV: u64 = 0x0000_0004;
 const MOUNT_ATTR_IDMAP: u64 = 0x0010_0000;
-const AT_RECURSIVE: i32 = 0x8000;
 
-// move_mount flags
 const MOVE_MOUNT_F_EMPTY_PATH: u32 = 0x0000_0004;
+const AT_EMPTY_PATH: u32 = 0x1000;
+const AT_RECURSIVE: u32 = 0x8000;
 const AT_FDCWD: i32 = -100;
-const AT_EMPTY_PATH: i32 = 0x1000;
+
+// Mount flags
+const MS_NOSUID: u64 = 2;
+const MS_NODEV: u64 = 4;
+const MNT_DETACH: i32 = 2;
 
 // Open flags
 const O_RDONLY: i32 = 0;
 const O_RDWR: i32 = 2;
-const O_CLOEXEC: i32 = 0x80000;
-const O_NOFOLLOW: i32 = 0x20000;
+const O_DIRECTORY: i32 = 0o200_000;
+const O_CLOEXEC: i32 = 0o2_000_000;
+const O_PATH: i32 = 0o10_000_000;
 
 // Loop device ioctls
 const LOOP_CTL_GET_FREE: u64 = 0x4C82;
@@ -46,12 +50,14 @@ const LOOP_CONFIGURE: u64 = 0x4C0A;
 const LO_FLAGS_READ_ONLY: u32 = 1;
 const LO_FLAGS_AUTOCLEAR: u32 = 4;
 
-// EROFS magic
-const EROFS_SUPER_MAGIC_V1: u32 = 0xE0F5_E1E2;
+const CLONE_NEWUSER: i32 = 0x1000_0000;
+const SIGKILL: i32 = 9;
+
+// EROFS superblock magic at offset 1024
+const EROFS_SUPER_MAGIC: u32 = 0xE0F5_E1E2;
 const EROFS_SUPER_OFFSET: u64 = 1024;
 
-// Clone flags
-const CLONE_NEWUSER: i32 = 0x1000_0000;
+const EBUSY: i32 = 16;
 
 #[repr(C)]
 struct CloneMountAttr {
@@ -83,7 +89,7 @@ struct LoopConfig {
     fd: u32,
     block_size: u32,
     info: LoopInfo64,
-    __reserved: [u64; 8],
+    reserved: [u64; 8],
 }
 
 #[repr(C)]
@@ -97,35 +103,34 @@ struct Passwd {
     shell: *mut i8,
 }
 
-#[derive(Clone, Copy)]
-struct IdMap {
-    container_id: u32,
-    host_id: u32,
-}
-
 unsafe extern "C" {
     fn syscall(number: i64, ...) -> i64;
-    fn open(pathname: *const i8, flags: i32, ...) -> i32;
-    fn close(fd: i32) -> i32;
+    fn mount(
+        special: *const i8,
+        dir: *const i8,
+        fstype: *const i8,
+        flags: u64,
+        data: *const i8,
+    ) -> i32;
+    fn umount2(special: *const i8, flags: i32) -> i32;
     fn ioctl(fd: i32, request: u64, ...) -> i32;
-    fn pread(fd: i32, buf: *mut u8, count: usize, offset: i64) -> isize;
-    fn getpwuid(uid: u32) -> *mut Passwd;
-    fn pipe(pipefd: *mut i32) -> i32;
-    fn fork() -> i32;
-    fn unshare(flags: i32) -> i32;
-    fn read(fd: i32, buf: *mut u8, count: usize) -> isize;
-    fn write(fd: i32, buf: *const u8, count: usize) -> isize;
-    fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
-    fn umount2(target: *const i8, flags: i32) -> i32;
+    fn open(path: *const i8, flags: i32, ...) -> i32;
+    fn close(fd: i32) -> i32;
+    fn mkdtemp(template: *mut i8) -> *mut i8;
     fn rmdir(path: *const i8) -> i32;
-    fn pause();
+    fn mkdir(path: *const i8, mode: u32) -> i32;
+    fn chown(path: *const i8, owner: u32, group: u32) -> i32;
+    fn fork() -> i32;
+    fn pipe(pipefd: *mut i32) -> i32;
+    fn unshare(flags: i32) -> i32;
+    fn pause() -> i32;
     fn kill(pid: i32, sig: i32) -> i32;
-}
-
-const MNT_DETACH: i32 = 2;
-
-const fn libc_ebusy() -> i32 {
-    16
+    fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
+    fn read(fd: i32, buf: *mut u8, count: usize) -> isize;
+    fn pread(fd: i32, buf: *mut u8, count: usize, offset: i64) -> isize;
+    fn write(fd: i32, buf: *const u8, count: usize) -> isize;
+    fn getpwuid(uid: u32) -> *mut Passwd;
+    fn exit(status: i32) -> !;
 }
 
 struct Fd(i32);
@@ -142,37 +147,33 @@ impl Fd {
 
 impl Drop for Fd {
     fn drop(&mut self) {
-        unsafe { close(self.0) };
+        if self.0 >= 0 {
+            unsafe { close(self.0) };
+        }
     }
 }
 
-fn write_id_map(pid: i32, map_file: &str, in_id: u32, out_id: u32) -> Result<(), io::Error> {
-    let path = format!("/proc/{pid}/{map_file}");
-    let mut map = String::new();
-
-    let _ = writeln!(map, "{in_id} {out_id} 1");
-
-    if in_id == 0 {
-        if out_id > 1 {
-            let count = out_id - 1;
-            let _ = writeln!(map, "1 1 {count}");
-        }
-        if out_id < 4_294_967_294 {
-            let start = out_id + 1;
-            let count = 4_294_967_294 - out_id;
-            let _ = writeln!(map, "{start} {start} {count}");
-        }
+fn write_id_map(pid: i32, file: &str, inside_id: u32, outside_id: u32) -> Result<(), io::Error> {
+    let path = format!("/proc/{pid}/{file}");
+    let (min_id, max_id) = if inside_id > outside_id {
+        (outside_id, inside_id)
     } else {
-        let mut max_id = in_id;
-        if out_id > max_id {
-            max_id = out_id;
-        }
+        (inside_id, outside_id)
+    };
+    let mut map = String::with_capacity(256);
 
-        if in_id > 0 {
-            let count = in_id;
-            let _ = writeln!(map, "0 0 {count}");
+    if min_id == max_id {
+        map.push_str("0 0 4294967294\n");
+    } else {
+        if min_id > 0 {
+            let _ = writeln!(map, "0 0 {min_id}");
         }
-
+        let _ = writeln!(map, "{min_id} {max_id} 1");
+        if max_id > min_id + 1 {
+            let count = max_id - min_id - 1;
+            let _ = writeln!(map, "{} {} {count}", min_id + 1, min_id + 1);
+        }
+        let _ = writeln!(map, "{max_id} {min_id} 1");
         if max_id < 4_294_967_293 {
             let next = max_id + 1;
             let count = 4_294_967_294 - max_id;
@@ -183,7 +184,14 @@ fn write_id_map(pid: i32, map_file: &str, in_id: u32, out_id: u32) -> Result<(),
     fs::write(&path, map)
 }
 
-fn create_userns(uid_map: IdMap, gid_map: IdMap) -> Result<Fd, io::Error> {
+struct UidGidMap {
+    ns_uid: u32,
+    host_uid: u32,
+    ns_gid: u32,
+    host_gid: u32,
+}
+
+fn create_userns(map: &UidGidMap) -> Result<Fd, io::Error> {
     let mut pipefd = [0i32; 2];
     if unsafe { pipe(pipefd.as_mut_ptr()) } < 0 {
         return Err(io::Error::last_os_error());
@@ -199,140 +207,215 @@ fn create_userns(uid_map: IdMap, gid_map: IdMap) -> Result<Fd, io::Error> {
     }
 
     if pid == 0 {
-        unsafe { close(pipefd[1]) };
-
-        if unsafe { unshare(CLONE_NEWUSER) } < 0 {
-            std::process::exit(1);
-        }
-
-        let mut b = 0u8;
-        let _ = unsafe { read(pipefd[0], &raw mut b, 1) };
-        unsafe { close(pipefd[0]) };
-
-        if b == 1 {
-            unsafe { pause() };
-        }
-        std::process::exit(0);
-    }
-
-    unsafe { close(pipefd[0]) };
-
-    let setgroups_path = format!("/proc/{pid}/setgroups");
-    let _ = fs::write(setgroups_path, "deny");
-
-    if let Err(e) = write_id_map(pid, "uid_map", uid_map.container_id, uid_map.host_id) {
         unsafe {
-            kill(pid, 9);
+            close(pipefd[0]);
+            if unshare(CLONE_NEWUSER) != 0 || write(pipefd[1], b"1".as_ptr(), 1) != 1 {
+                exit(1);
+            }
             close(pipefd[1]);
-            waitpid(pid, std::ptr::null_mut(), 0);
+            pause();
+            exit(0);
         }
-        return Err(e);
     }
 
-    if let Err(e) = write_id_map(pid, "gid_map", gid_map.container_id, gid_map.host_id) {
-        unsafe {
-            kill(pid, 9);
-            close(pipefd[1]);
-            waitpid(pid, std::ptr::null_mut(), 0);
-        }
-        return Err(e);
-    }
-
-    let b = 1u8;
-    unsafe { write(pipefd[1], &raw const b, 1) };
     unsafe { close(pipefd[1]) };
 
-    let userns_path = format!("/proc/{pid}/ns/user");
-    let c_path =
-        CString::new(userns_path).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-    let userns_fd = Fd::new(unsafe { open(c_path.as_ptr(), O_RDONLY | O_CLOEXEC) })
-        .ok_or_else(io::Error::last_os_error)?;
+    let mut sync_byte = [0u8; 1];
+    let n = unsafe { read(pipefd[0], sync_byte.as_mut_ptr(), 1) };
+    unsafe { close(pipefd[0]) };
 
-    unsafe { kill(pid, 9) };
-    unsafe { waitpid(pid, std::ptr::null_mut(), 0) };
-
-    Ok(userns_fd)
-}
-
-fn validate_erofs_magic(fd: &Fd) -> Result<(), io::Error> {
-    let mut buf = [0u8; 4];
-    let n = unsafe {
-        pread(
-            fd.raw(),
-            buf.as_mut_ptr(),
-            4,
-            EROFS_SUPER_OFFSET.cast_signed(),
-        )
-    };
-    if n != 4 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Failed to read EROFS superblock",
-        ));
+    if n <= 0 {
+        unsafe {
+            kill(pid, SIGKILL);
+            waitpid(pid, std::ptr::null_mut(), 0);
+        }
+        return Err(io::Error::other("userns child sync failed"));
     }
 
-    let magic = u32::from_le_bytes(buf);
-    if magic != EROFS_SUPER_MAGIC_V1 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Invalid EROFS magic: expected {EROFS_SUPER_MAGIC_V1:#X}, got {magic:#X}"),
-        ));
+    if let Err(e) = write_id_map(pid, "uid_map", map.ns_uid, map.host_uid) {
+        unsafe {
+            kill(pid, SIGKILL);
+            waitpid(pid, std::ptr::null_mut(), 0);
+        }
+        return Err(e);
     }
 
-    Ok(())
-}
+    let setgroups_path = format!("/proc/{pid}/setgroups");
+    let _ = fs::write(setgroups_path, b"deny\n");
 
-fn resolve_user_home(uid: u32) -> Result<PathBuf, io::Error> {
-    let pw = unsafe { getpwuid(uid) };
-    if pw.is_null() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("User UID {uid} not found in passwd database"),
-        ));
+    if let Err(e) = write_id_map(pid, "gid_map", map.ns_gid, map.host_gid) {
+        unsafe {
+            kill(pid, SIGKILL);
+            waitpid(pid, std::ptr::null_mut(), 0);
+        }
+        return Err(e);
     }
-    let raw_home_cstr = unsafe { CStr::from_ptr((*pw).dir) };
-    let home_str = raw_home_cstr
-        .to_str()
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(PathBuf::from(home_str))
-}
 
-fn sanitize_and_open_image(img_path: &Path, uid: u32) -> Result<Fd, io::Error> {
-    let real_path = fs::canonicalize(img_path)?;
-    let c_img_path = CString::new(real_path.to_string_lossy().as_bytes())
+    let ns_path = CString::new(format!("/proc/{pid}/ns/user"))
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let userns_raw = unsafe { open(ns_path.as_ptr(), O_RDONLY | O_CLOEXEC) };
 
-    let img_fd = Fd::new(unsafe { open(c_img_path.as_ptr(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC) })
+    unsafe {
+        kill(pid, SIGKILL);
+        waitpid(pid, std::ptr::null_mut(), 0);
+    }
+
+    Fd::new(userns_raw).ok_or_else(io::Error::last_os_error)
+}
+
+fn sanitize_and_open_image(path: &Path, target_uid: u32) -> Result<Fd, io::Error> {
+    let c_path = CString::new(path.to_str().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "Invalid unicode in image path")
+    })?)
+    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+    let img_fd = Fd::new(unsafe { open(c_path.as_ptr(), O_RDONLY | O_CLOEXEC) })
         .ok_or_else(io::Error::last_os_error)?;
 
-    let meta = fs::metadata(&real_path)?;
+    // Stat the open file descriptor via /proc/self/fd to prevent TOCTOU symlink races
+    let metadata = fs::metadata(format!("/proc/self/fd/{}", img_fd.raw()))?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Runtime image is not a regular file",
+        ));
+    }
 
-    let img_uid = meta.uid();
-    if img_uid != 0 && img_uid != uid {
+    let owner_uid = metadata.uid();
+    if owner_uid != 0 && owner_uid != target_uid {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             format!(
-                "Runtime image ownership invalid: owned by UID {img_uid}, must be root (0) or user ({uid})"
+                "Image owner UID {owner_uid} does not match root (0) or target user ({target_uid})"
             ),
         ));
     }
 
-    if meta.mode() & 0o022 != 0 {
+    if metadata.mode() & 0o002 != 0 {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "Runtime image is group- or world-writable, refusing to mount",
+            "Runtime image must not be world-writable",
         ));
     }
 
-    validate_erofs_magic(&img_fd)?;
+    // Validate EROFS superblock magic at offset 1024
+    let mut magic_buf = [0u8; 4];
+    let Ok(offset) = i64::try_from(EROFS_SUPER_OFFSET) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "EROFS offset overflow",
+        ));
+    };
+    let n = unsafe { pread(img_fd.raw(), magic_buf.as_mut_ptr(), 4, offset) };
+    if n != 4 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Failed to read EROFS superblock",
+        ));
+    }
+
+    let magic = u32::from_le_bytes(magic_buf);
+    if magic != EROFS_SUPER_MAGIC {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid EROFS magic: expected 0x{EROFS_SUPER_MAGIC:08X}, got 0x{magic:08X}"),
+        ));
+    }
+
     Ok(img_fd)
 }
 
-fn try_direct_fsopen(img_fd: &Fd) -> Result<Fd, io::Error> {
+fn resolve_default_image_path(uid: u32) -> Result<PathBuf, io::Error> {
+    let pw = unsafe { getpwuid(uid) };
+    if pw.is_null() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("User with UID {uid} not found"),
+        ));
+    }
+
+    let home_dir_cstr = unsafe { CStr::from_ptr((*pw).dir) };
+    let home_dir = home_dir_cstr.to_str().map_err(|e| {
+        io::Error::new(io::ErrorKind::InvalidData, format!("Invalid home dir: {e}"))
+    })?;
+
+    let p = PathBuf::from(home_dir).join(".local/share/umu/runtime.img");
+    if p.exists() {
+        fs::canonicalize(p)
+    } else {
+        Ok(p)
+    }
+}
+
+fn unmount_target(uid: u32) -> Result<(), io::Error> {
+    let target = format!("/run/umu/{uid}");
+    let c_target =
+        CString::new(target.clone()).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+    let ret = unsafe { umount2(c_target.as_ptr(), MNT_DETACH) };
+    if ret != 0 {
+        let err = io::Error::last_os_error();
+        let raw = err.raw_os_error();
+        if raw != Some(2) && raw != Some(22) {
+            return Err(err);
+        }
+    }
+    unsafe { rmdir(c_target.as_ptr()) };
+    println!("Successfully unmounted {target}");
+    Ok(())
+}
+
+struct StagingGuard<'a> {
+    upper: &'a CStr,
+    tmp: &'a CStr,
+    active: bool,
+}
+
+impl Drop for StagingGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            unsafe {
+                umount2(self.tmp.as_ptr(), MNT_DETACH);
+                umount2(self.upper.as_ptr(), MNT_DETACH);
+                rmdir(self.tmp.as_ptr());
+                rmdir(self.upper.as_ptr());
+            }
+        }
+    }
+}
+
+fn mount_erofs_tree(img_fd: &Fd) -> Result<Fd, io::Error> {
     let c_erofs = CString::new("erofs").unwrap();
     let c_source = CString::new("source").unwrap();
     let c_ro = CString::new("ro").unwrap();
 
+    let fs_fd = match try_fsopen_direct(&c_erofs, &c_ro, &c_source, img_fd) {
+        Ok(fd) => fd,
+        Err(_) => setup_loop_erofs(&c_erofs, &c_ro, &c_source, img_fd)?,
+    };
+
+    let tree_fd_raw = unsafe {
+        syscall(
+            SYS_FSMOUNT,
+            fs_fd.raw(),
+            FSMOUNT_CLOEXEC,
+            MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV,
+        )
+    };
+    drop(fs_fd);
+
+    let Ok(fd_i32) = i32::try_from(tree_fd_raw) else {
+        return Err(io::Error::last_os_error());
+    };
+    Fd::new(fd_i32).ok_or_else(io::Error::last_os_error)
+}
+
+fn try_fsopen_direct(
+    c_erofs: &CStr,
+    c_ro: &CStr,
+    c_source: &CStr,
+    img_fd: &Fd,
+) -> Result<Fd, io::Error> {
     let fs_fd_raw = unsafe { syscall(SYS_FSOPEN, c_erofs.as_ptr(), FSOPEN_CLOEXEC) };
     let Ok(fd_i32) = i32::try_from(fs_fd_raw) else {
         return Err(io::Error::last_os_error());
@@ -377,11 +460,12 @@ fn try_direct_fsopen(img_fd: &Fd) -> Result<Fd, io::Error> {
     Ok(fs_fd)
 }
 
-fn setup_loop_erofs(img_fd: &Fd) -> Result<Fd, io::Error> {
-    let c_erofs = CString::new("erofs").unwrap();
-    let c_source = CString::new("source").unwrap();
-    let c_ro = CString::new("ro").unwrap();
-
+fn setup_loop_erofs(
+    c_erofs: &CStr,
+    c_ro: &CStr,
+    c_source: &CStr,
+    img_fd: &Fd,
+) -> Result<Fd, io::Error> {
     let c_loop_ctl = CString::new("/dev/loop-control").unwrap();
     let loop_ctl = Fd::new(unsafe { open(c_loop_ctl.as_ptr(), O_RDWR | O_CLOEXEC) })
         .ok_or_else(io::Error::last_os_error)?;
@@ -397,15 +481,11 @@ fn setup_loop_erofs(img_fd: &Fd) -> Result<Fd, io::Error> {
     let loop_fd = Fd::new(unsafe { open(c_loop_name.as_ptr(), O_RDONLY | O_CLOEXEC) })
         .ok_or_else(io::Error::last_os_error)?;
 
-    let Ok(u_fd) = u32::try_from(img_fd.raw()) else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid img_fd",
-        ));
-    };
+    let img_fd_u32 = u32::try_from(img_fd.raw())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid img_fd"))?;
 
     let mut config: LoopConfig = unsafe { std::mem::zeroed() };
-    config.fd = u_fd;
+    config.fd = img_fd_u32;
     config.info.flags = LO_FLAGS_AUTOCLEAR | LO_FLAGS_READ_ONLY;
 
     if unsafe { ioctl(loop_fd.raw(), LOOP_CONFIGURE, &raw const config) } < 0 {
@@ -458,7 +538,7 @@ fn setup_loop_erofs(img_fd: &Fd) -> Result<Fd, io::Error> {
             break;
         }
         let err = io::Error::last_os_error();
-        if err.raw_os_error() != Some(libc_ebusy()) || retries == 0 {
+        if err.raw_os_error() != Some(EBUSY) || retries == 0 {
             return Err(err);
         }
         retries -= 1;
@@ -468,39 +548,16 @@ fn setup_loop_erofs(img_fd: &Fd) -> Result<Fd, io::Error> {
     Ok(fs_fd)
 }
 
-fn create_tree_fd(fs_fd: &Fd) -> Result<Fd, io::Error> {
-    let tree_fd_raw = unsafe {
-        syscall(
-            SYS_FSMOUNT,
-            fs_fd.raw(),
-            FSMOUNT_CLOEXEC,
-            MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV,
-        )
-    };
-    let Ok(fd_i32) = i32::try_from(tree_fd_raw) else {
-        return Err(io::Error::last_os_error());
-    };
-    Fd::new(fd_i32).ok_or_else(io::Error::last_os_error)
-}
-
 fn apply_idmap(tree_fd: &Fd, uid: u32, gid: u32) -> Result<(), io::Error> {
-    let userns = create_userns(
-        IdMap {
-            container_id: 0,
-            host_id: uid,
-        },
-        IdMap {
-            container_id: 0,
-            host_id: gid,
-        },
-    )?;
+    let userns = create_userns(&UidGidMap {
+        ns_uid: 0,
+        host_uid: uid,
+        ns_gid: 0,
+        host_gid: gid,
+    })?;
 
-    let Ok(userns_u64) = u64::try_from(userns.raw()) else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid userns fd",
-        ));
-    };
+    let userns_u64 = u64::try_from(userns.raw())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid userns fd"))?;
 
     let attr = CloneMountAttr {
         attr_set: MOUNT_ATTR_IDMAP,
@@ -515,7 +572,7 @@ fn apply_idmap(tree_fd: &Fd, uid: u32, gid: u32) -> Result<(), io::Error> {
             SYS_MOUNT_SETATTR,
             tree_fd.raw(),
             c_empty.as_ptr(),
-            (AT_EMPTY_PATH | AT_RECURSIVE).cast_unsigned(),
+            AT_EMPTY_PATH | AT_RECURSIVE,
             &raw const attr,
             std::mem::size_of::<CloneMountAttr>(),
         )
@@ -527,57 +584,116 @@ fn apply_idmap(tree_fd: &Fd, uid: u32, gid: u32) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn unmount_target(uid: u32) -> Result<(), io::Error> {
-    let target = format!("/run/umu/{uid}");
-    let c_target =
-        CString::new(target.clone()).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+fn prepare_staging(uid: u32, gid: u32) -> Result<(Vec<u8>, Vec<u8>, Fd, Fd), io::Error> {
+    let mut upper_tmp_bytes = b"/run/umu/.up-XXXXXX\0".to_vec();
+    let mut tmp_path_bytes = b"/run/umu/.tmp-XXXXXX\0".to_vec();
 
-    let ret = unsafe { umount2(c_target.as_ptr(), MNT_DETACH) };
-    if ret != 0 {
-        let err = io::Error::last_os_error();
-        // Ignore ENOENT (2) or EINVAL (22 - not a mount point)
-        let raw = err.raw_os_error();
-        if raw != Some(2) && raw != Some(22) {
-            return Err(err);
-        }
+    if unsafe { mkdtemp(upper_tmp_bytes.as_mut_ptr().cast()).is_null() } {
+        return Err(io::Error::last_os_error());
     }
-    let _ = unsafe { rmdir(c_target.as_ptr()) };
-    println!("Successfully unmounted {target}");
-    Ok(())
+    if unsafe { mkdtemp(tmp_path_bytes.as_mut_ptr().cast()).is_null() } {
+        unsafe { rmdir(upper_tmp_bytes.as_ptr().cast()) };
+        return Err(io::Error::last_os_error());
+    }
+
+    let upper_tmp_cstr = unsafe { CStr::from_ptr(upper_tmp_bytes.as_ptr().cast()) };
+
+    // Mount tmpfs for upper/workdir
+    let mount_opts = CString::new(format!("mode=0700,uid={uid},gid={gid}"))
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let c_tmpfs = CString::new("tmpfs").unwrap();
+    if unsafe {
+        mount(
+            c_tmpfs.as_ptr(),
+            upper_tmp_cstr.as_ptr(),
+            c_tmpfs.as_ptr(),
+            MS_NODEV | MS_NOSUID,
+            mount_opts.as_ptr(),
+        )
+    } != 0
+    {
+        unsafe {
+            rmdir(tmp_path_bytes.as_ptr().cast());
+            rmdir(upper_tmp_bytes.as_ptr().cast());
+        }
+        return Err(io::Error::last_os_error());
+    }
+
+    let upper_str = upper_tmp_cstr
+        .to_str()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let upper_path = format!("{upper_str}/upper");
+    let work_path = format!("{upper_str}/work");
+    let c_upper =
+        CString::new(upper_path).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let c_work =
+        CString::new(work_path).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+    unsafe {
+        mkdir(c_upper.as_ptr(), 0o700);
+        chown(c_upper.as_ptr(), uid, gid);
+        mkdir(c_work.as_ptr(), 0o700);
+        chown(c_work.as_ptr(), uid, gid);
+    }
+
+    let upper_fd = Fd::new(unsafe { open(c_upper.as_ptr(), O_PATH | O_DIRECTORY | O_CLOEXEC) })
+        .ok_or_else(io::Error::last_os_error)?;
+    let work_fd = Fd::new(unsafe { open(c_work.as_ptr(), O_PATH | O_DIRECTORY | O_CLOEXEC) })
+        .ok_or_else(io::Error::last_os_error)?;
+
+    Ok((upper_tmp_bytes, tmp_path_bytes, upper_fd, work_fd))
 }
 
 fn mount_runtime(uid: u32, img_path: &Path) -> Result<(), io::Error> {
     let pw = unsafe { getpwuid(uid) };
     let gid = if pw.is_null() {
-        100
+        uid
     } else {
         unsafe { (*pw).gid }
     };
 
-    let target_dir = PathBuf::from(format!("/run/umu/{uid}"));
-    let target_dir_str = target_dir.to_string_lossy();
-    let c_target = CString::new(target_dir_str.as_bytes())
+    let target_dir = format!("/run/umu/{uid}");
+    let c_target_dir = CString::new(target_dir.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-    // Detach any previous stale mount on target before mounting
+    // Detach any previous stale mount on target
     unsafe {
-        umount2(c_target.as_ptr(), MNT_DETACH);
+        let check_fd = open(c_target_dir.as_ptr(), O_PATH | O_DIRECTORY | O_CLOEXEC);
+        if check_fd >= 0 {
+            close(check_fd);
+            umount2(c_target_dir.as_ptr(), MNT_DETACH);
+        }
     }
 
-    fs::create_dir_all(&target_dir)?;
+    let c_base = CString::new("/run/umu").unwrap();
+    unsafe {
+        mkdir(c_base.as_ptr(), 0o755);
+        mkdir(c_target_dir.as_ptr(), 0o700);
+        chown(c_target_dir.as_ptr(), uid, gid);
+    }
 
-    let img_fd = sanitize_and_open_image(img_path, uid)?;
+    let target_fd =
+        Fd::new(unsafe { open(c_target_dir.as_ptr(), O_PATH | O_DIRECTORY | O_CLOEXEC) })
+            .ok_or_else(io::Error::last_os_error)?;
 
-    let fs_fd = match try_direct_fsopen(&img_fd) {
-        Ok(fd) => fd,
-        Err(_) => setup_loop_erofs(&img_fd)?,
+    let (upper_tmp_bytes, tmp_path_bytes, upper_fd, work_fd) = prepare_staging(uid, gid)?;
+
+    let upper_tmp_cstr = unsafe { CStr::from_ptr(upper_tmp_bytes.as_ptr().cast()) };
+    let tmp_path_cstr = unsafe { CStr::from_ptr(tmp_path_bytes.as_ptr().cast()) };
+
+    let mut guard = StagingGuard {
+        upper: upper_tmp_cstr,
+        tmp: tmp_path_cstr,
+        active: true,
     };
 
-    let tree_fd = create_tree_fd(&fs_fd)?;
-    drop(fs_fd);
+    let img_fd = sanitize_and_open_image(img_path, uid)?;
+    let tree_fd = mount_erofs_tree(&img_fd)?;
 
+    // ID-map: EROFS content (uid 0) -> target user
     apply_idmap(&tree_fd, uid, gid)?;
 
+    // Move EROFS tree to staging tmp path
     let c_empty = CString::new("").unwrap();
     if unsafe {
         syscall(
@@ -585,39 +701,71 @@ fn mount_runtime(uid: u32, img_path: &Path) -> Result<(), io::Error> {
             tree_fd.raw(),
             c_empty.as_ptr(),
             AT_FDCWD,
-            c_target.as_ptr(),
+            tmp_path_cstr.as_ptr(),
             MOVE_MOUNT_F_EMPTY_PATH,
         )
-    } < 0
+    } != 0
     {
         return Err(io::Error::last_os_error());
     }
+    drop(tree_fd);
 
-    println!("Runtime mounted successfully for UID {uid} at {target_dir_str}");
+    // Mount overlayfs: EROFS lowerdir + tmpfs upper/workdir
+    let tmp_str = tmp_path_cstr
+        .to_str()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let opts = CString::new(format!(
+        "lowerdir={tmp_str},upperdir=/proc/self/fd/{},workdir=/proc/self/fd/{},index=on,metacopy=on,redirect_dir=on",
+        upper_fd.raw(),
+        work_fd.raw()
+    ))
+    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+    let target_proc = CString::new(format!("/proc/self/fd/{}", target_fd.raw()))
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let c_overlay = CString::new("overlay").unwrap();
+
+    let ret = unsafe {
+        mount(
+            c_overlay.as_ptr(),
+            target_proc.as_ptr(),
+            c_overlay.as_ptr(),
+            MS_NOSUID | MS_NODEV,
+            opts.as_ptr(),
+        )
+    };
+    if ret != 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    // Ephemeral detach: unlink temporary lower & upper mounts from VFS namespace
+    unsafe {
+        umount2(tmp_path_cstr.as_ptr(), MNT_DETACH);
+        umount2(upper_tmp_cstr.as_ptr(), MNT_DETACH);
+        rmdir(tmp_path_cstr.as_ptr());
+        rmdir(upper_tmp_cstr.as_ptr());
+    }
+
+    guard.active = false;
+
+    println!("Successfully mounted UMU runtime overlay at {target_dir}");
     Ok(())
-}
-
-fn print_usage(prog_name: &str) {
-    eprintln!("Usage: {prog_name} [-u] <UID> [path/to/runtime.img]");
-    eprintln!("Secure mount helper for UMU read-only EROFS runtime image with ID mapping.");
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let prog_name = args.first().map_or("mount-umu", String::as_str);
-
     if args.len() < 2 {
-        print_usage(prog_name);
+        eprintln!("Usage: mount-umu [-u] <uid> [img_path]");
         std::process::exit(1);
     }
 
     if args[1] == "-u" || args[1] == "--unmount" {
         if args.len() < 3 {
-            eprintln!("Usage: {prog_name} -u <UID>");
+            eprintln!("Usage: mount-umu -u <uid>");
             std::process::exit(1);
         }
         let Ok(uid) = args[2].parse::<u32>() else {
-            eprintln!("Error: Invalid UID '{}'", args[2]);
+            eprintln!("Invalid UID: {}", args[2]);
             std::process::exit(1);
         };
         if let Err(e) = unmount_target(uid) {
@@ -628,29 +776,29 @@ fn main() {
     }
 
     let Ok(uid) = args[1].parse::<u32>() else {
-        eprintln!("Error: Invalid UID '{}'", args[1]);
+        eprintln!("Invalid UID: {}", args[1]);
         std::process::exit(1);
     };
 
     let img_path = if args.len() >= 3 {
         PathBuf::from(&args[2])
     } else {
-        match resolve_user_home(uid) {
-            Ok(home) => home.join(".local/share/umu/runtime.img"),
+        match resolve_default_image_path(uid) {
+            Ok(p) => p,
             Err(e) => {
-                eprintln!("Error: Could not resolve home directory for UID {uid}: {e}");
+                eprintln!("Could not determine default image path: {e}");
                 std::process::exit(1);
             }
         }
     };
 
     if !img_path.exists() {
-        eprintln!("Error: Image not found at {}", img_path.display());
+        eprintln!("Image file does not exist: {}", img_path.display());
         std::process::exit(1);
     }
 
     if let Err(e) = mount_runtime(uid, &img_path) {
-        eprintln!("Error mounting runtime image for UID {uid}: {e}");
+        eprintln!("Failed to mount UMU runtime overlay: {e}");
         std::process::exit(1);
     }
 }

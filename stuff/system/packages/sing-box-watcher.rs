@@ -32,21 +32,13 @@ struct PollFd {
     revents: i16,
 }
 
-#[repr(C)]
-struct Sigaction {
-    handler: usize,
-    flags: u64,
-    restorer: usize,
-    mask: [u64; 16],
-}
-
 unsafe extern "C" {
     fn socket(domain: i32, sock_type: i32, protocol: i32) -> i32;
     fn bind(sockfd: i32, addr: *const SockAddrNl, addrlen: u32) -> i32;
     fn poll(fds: *mut PollFd, nfds: u64, timeout: i32) -> i32;
     fn recv(sockfd: i32, buf: *mut u8, len: usize, flags: i32) -> isize;
     fn close(fd: i32) -> i32;
-    fn sigaction(signum: i32, act: *const Sigaction, oldact: *mut Sigaction) -> i32;
+    fn signal(signum: i32, handler: extern "C" fn(i32)) -> usize;
 }
 
 extern "C" fn sig_handler(_sig: i32) {
@@ -54,15 +46,9 @@ extern "C" fn sig_handler(_sig: i32) {
 }
 
 fn init_signals() {
-    let sa = Sigaction {
-        handler: sig_handler as *const () as usize,
-        flags: 0,
-        restorer: 0,
-        mask: [0; 16],
-    };
     unsafe {
-        sigaction(SIGTERM, &raw const sa, std::ptr::null_mut());
-        sigaction(SIGINT, &raw const sa, std::ptr::null_mut());
+        signal(SIGTERM, sig_handler);
+        signal(SIGINT, sig_handler);
     }
 }
 
