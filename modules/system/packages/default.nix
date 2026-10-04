@@ -139,15 +139,58 @@ let
         name = pname;
         dontUnpack = true;
 
-        nativeBuildInputs = [ pkgs.pkgsStatic.rustc ];
+        nativeBuildInputs = [
+          pkgs.pkgsStatic.rustc
+          pkgs.clippy
+          pkgs.rustfmt
+        ];
 
         buildPhase = ''
+          echo "Checking formatting with rustfmt (${pname})..."
+          rustfmt --edition 2024 --check ${path}
+
+          echo "Running exhaustive clippy-driver hardening analysis (${pname})..."
+          clippy-driver --edition 2024 \
+            -D warnings \
+            -W clippy::all \
+            -W clippy::correctness \
+            -W clippy::suspicious \
+            -W clippy::complexity \
+            -W clippy::perf \
+            -W clippy::style \
+            -W clippy::pedantic \
+            -W clippy::nursery \
+            -W clippy::clone_on_ref_ptr \
+            -W clippy::dbg_macro \
+            -W clippy::todo \
+            -W clippy::unimplemented \
+            -W clippy::rc_buffer \
+            -W clippy::mutex_atomic \
+            -W clippy::mem_forget \
+            -W clippy::manual_assert \
+            -W rust-2024-compatibility \
+            -W future-incompatible \
+            -W nonstandard-style \
+            ${path} --emit=metadata -o lint_check.rmeta
+          rm -f lint_check.rmeta
+
+          echo "Compiling hardened, high-performance static binary with rustc (${pname})..."
           rustc --edition 2024 \
             --target x86_64-unknown-linux-musl \
             -D warnings \
+            -D dead-code \
+            -D unused-imports \
             -C target-feature=+crt-static \
             -C linker=$CC \
-            -C opt-level=s \
+            -C relocation-model=pic \
+            -C overflow-checks=on \
+            -C link-arg=-pie \
+            -C link-arg=-Wl,-z,relro,-z,now \
+            -C link-arg=-Wl,-z,noexecstack \
+            -C link-arg=-Wl,-z,separate-code \
+            -C link-arg=-Wl,--gc-sections \
+            -C link-arg=-Wl,--as-needed \
+            -C opt-level=3 \
             -C lto=fat \
             -C codegen-units=1 \
             -C panic=abort \

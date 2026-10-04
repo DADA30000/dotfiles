@@ -1,12 +1,3 @@
-#![allow(
-    clippy::too_many_lines,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::cast_possible_wrap,
-    clippy::struct_field_names
-)]
-
 use std::fs;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,10 +19,10 @@ const SIGTERM: i32 = 15;
 
 #[repr(C)]
 struct SockAddrNl {
-    nl_family: u16,
-    nl_pad: u16,
-    nl_pid: u32,
-    nl_groups: u32,
+    family: u16,
+    pad: u16,
+    pid: u32,
+    groups: u32,
 }
 
 #[repr(C)]
@@ -43,10 +34,10 @@ struct PollFd {
 
 #[repr(C)]
 struct Sigaction {
-    sa_handler: usize,
-    sa_flags: u64,
-    sa_restorer: usize,
-    sa_mask: [u64; 16],
+    handler: usize,
+    flags: u64,
+    restorer: usize,
+    mask: [u64; 16],
 }
 
 unsafe extern "C" {
@@ -62,6 +53,53 @@ extern "C" fn sig_handler(_sig: i32) {
     RUNNING.store(false, Ordering::Relaxed);
 }
 
+fn init_signals() {
+    let sa = Sigaction {
+        handler: sig_handler as *const () as usize,
+        flags: 0,
+        restorer: 0,
+        mask: [0; 16],
+    };
+    unsafe {
+        sigaction(SIGTERM, &raw const sa, std::ptr::null_mut());
+        sigaction(SIGINT, &raw const sa, std::ptr::null_mut());
+    }
+}
+
+fn init_netlink_socket() -> i32 {
+    let nl_fd = unsafe {
+        socket(
+            AF_NETLINK,
+            SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,
+            NETLINK_ROUTE,
+        )
+    };
+    if nl_fd < 0 {
+        eprintln!("Failed to open netlink socket");
+        std::process::exit(1);
+    }
+
+    let Ok(sockaddr_len) = u32::try_from(size_of::<SockAddrNl>()) else {
+        unsafe { close(nl_fd) };
+        std::process::exit(1);
+    };
+
+    let sa_nl = SockAddrNl {
+        family: u16::try_from(AF_NETLINK).unwrap_or(0),
+        pad: 0,
+        pid: 0,
+        groups: RTMGRP_LINK,
+    };
+
+    if unsafe { bind(nl_fd, &raw const sa_nl, sockaddr_len) } < 0 {
+        eprintln!("Failed to bind netlink socket");
+        unsafe { close(nl_fd) };
+        std::process::exit(1);
+    }
+
+    nl_fd
+}
+
 fn run_systemctl(action: &str) {
     let _ = Command::new("systemctl")
         .args([action, "sing-box-init.service"])
@@ -75,7 +113,6 @@ fn has_physical_carrier() -> bool {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        // Ignore virtual network devices (tun0, lo, veth, etc.)
         if !path.join("device").exists() {
             continue;
         }
@@ -102,43 +139,29 @@ fn drain_netlink(fd: i32) {
     while unsafe { recv(fd, buf.as_mut_ptr(), buf.len(), MSG_DONTWAIT) } > 0 {}
 }
 
-fn main() {
-    let sa = Sigaction {
-        sa_handler: sig_handler as *const () as usize,
-        sa_flags: 0,
-        sa_restorer: 0,
-        sa_mask: [0; 16],
-    };
-    unsafe {
-        sigaction(SIGTERM, &raw const sa, std::ptr::null_mut());
-        sigaction(SIGINT, &raw const sa, std::ptr::null_mut());
+fn debounce_link_events(nl_fd: i32) {
+    let mut remaining_ms = 1500i32;
+    while remaining_ms > 0 && RUNNING.load(Ordering::Relaxed) {
+        let start = Instant::now();
+        let mut debounce_pfd = PollFd {
+            fd: nl_fd,
+            events: POLLIN,
+            revents: 0,
+        };
+        let d_ret = unsafe { poll(&raw mut debounce_pfd, 1, remaining_ms) };
+        if d_ret > 0 && (debounce_pfd.revents & POLLIN != 0) {
+            drain_netlink(nl_fd);
+            remaining_ms = 1500;
+        } else {
+            let Ok(elapsed) = i32::try_from(start.elapsed().as_millis()) else {
+                break;
+            };
+            remaining_ms = remaining_ms.saturating_sub(elapsed);
+        }
     }
+}
 
-    let nl_fd = unsafe {
-        socket(
-            AF_NETLINK,
-            SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK,
-            NETLINK_ROUTE,
-        )
-    };
-    if nl_fd < 0 {
-        eprintln!("Failed to open netlink socket");
-        std::process::exit(1);
-    }
-
-    let sa_nl = SockAddrNl {
-        nl_family: AF_NETLINK as u16,
-        nl_pad: 0,
-        nl_pid: 0,
-        nl_groups: RTMGRP_LINK,
-    };
-
-    if unsafe { bind(nl_fd, &raw const sa_nl, size_of::<SockAddrNl>() as u32) } < 0 {
-        eprintln!("Failed to bind netlink socket");
-        unsafe { close(nl_fd) };
-        std::process::exit(1);
-    }
-
+fn run_watcher_loop(nl_fd: i32) {
     let mut last_state: Option<bool> = None;
 
     while RUNNING.load(Ordering::Relaxed) {
@@ -164,28 +187,15 @@ fn main() {
         let ret = unsafe { poll(&raw mut pfd, 1, -1) };
         if ret > 0 && (pfd.revents & POLLIN != 0) {
             drain_netlink(nl_fd);
-
-            // Debounce 1.5s to absorb link flapping / DHCP negotiation
-            let mut remaining_ms = 1500;
-            while remaining_ms > 0 && RUNNING.load(Ordering::Relaxed) {
-                let start = Instant::now();
-                let mut debounce_pfd = PollFd {
-                    fd: nl_fd,
-                    events: POLLIN,
-                    revents: 0,
-                };
-                let d_ret = unsafe { poll(&raw mut debounce_pfd, 1, remaining_ms) };
-                if d_ret > 0 && (debounce_pfd.revents & POLLIN != 0) {
-                    drain_netlink(nl_fd);
-                    remaining_ms = 1500; // Reset debounce timer on new events
-                } else {
-                    let elapsed = start.elapsed().as_millis() as i32;
-                    remaining_ms = remaining_ms.saturating_sub(elapsed);
-                }
-            }
+            debounce_link_events(nl_fd);
         }
     }
+}
 
+fn main() {
+    init_signals();
+    let nl_fd = init_netlink_socket();
+    run_watcher_loop(nl_fd);
     unsafe {
         close(nl_fd);
     }

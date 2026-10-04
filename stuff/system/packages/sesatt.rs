@@ -1,26 +1,6 @@
-#![allow(
-    clippy::struct_field_names,
-    clippy::too_many_lines,
-    clippy::uninlined_format_args,
-    clippy::needless_pass_by_value,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::unnecessary_wraps,
-    clippy::borrow_as_ptr,
-    clippy::ptr_as_ptr,
-    clippy::redundant_else,
-    clippy::if_not_else,
-    clippy::assigning_clones,
-    clippy::manual_let_else,
-    clippy::trivially_copy_pass_by_ref,
-    clippy::format_push_string,
-    clippy::unnecessary_debug_formatting,
-    clippy::option_if_let_else,
-    clippy::collapsible_if
-)]
-
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::Shutdown;
@@ -41,41 +21,41 @@ type CVoid = std::ffi::c_void;
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
 struct Termios {
-    c_iflag: u32,
-    c_oflag: u32,
-    c_cflag: u32,
-    c_lflag: u32,
-    c_line: u8,
-    c_cc: [u8; 32],
-    c_ispeed: u32,
-    c_ospeed: u32,
+    iflag: u32,
+    oflag: u32,
+    cflag: u32,
+    lflag: u32,
+    line: u8,
+    cc: [u8; 32],
+    ispeed: u32,
+    ospeed: u32,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 struct Winsize {
-    ws_row: u16,
-    ws_col: u16,
-    ws_xpixel: u16,
-    ws_ypixel: u16,
+    row: u16,
+    col: u16,
+    xpixel: u16,
+    ypixel: u16,
 }
 
 impl Winsize {
     fn to_bytes(self) -> [u8; 8] {
         let mut b = [0u8; 8];
-        b[0..2].copy_from_slice(&self.ws_row.to_ne_bytes());
-        b[2..4].copy_from_slice(&self.ws_col.to_ne_bytes());
-        b[4..6].copy_from_slice(&self.ws_xpixel.to_ne_bytes());
-        b[6..8].copy_from_slice(&self.ws_ypixel.to_ne_bytes());
+        b[0..2].copy_from_slice(&self.row.to_ne_bytes());
+        b[2..4].copy_from_slice(&self.col.to_ne_bytes());
+        b[4..6].copy_from_slice(&self.xpixel.to_ne_bytes());
+        b[6..8].copy_from_slice(&self.ypixel.to_ne_bytes());
         b
     }
 
     const fn from_bytes(b: [u8; 8]) -> Self {
         Self {
-            ws_row: u16::from_ne_bytes([b[0], b[1]]),
-            ws_col: u16::from_ne_bytes([b[2], b[3]]),
-            ws_xpixel: u16::from_ne_bytes([b[4], b[5]]),
-            ws_ypixel: u16::from_ne_bytes([b[6], b[7]]),
+            row: u16::from_ne_bytes([b[0], b[1]]),
+            col: u16::from_ne_bytes([b[2], b[3]]),
+            xpixel: u16::from_ne_bytes([b[4], b[5]]),
+            ypixel: u16::from_ne_bytes([b[6], b[7]]),
         }
     }
 }
@@ -124,7 +104,7 @@ extern "C" fn sigwinch_handler(_: CInt) {
 fn ffi_get_terminal_size() -> io::Result<Winsize> {
     let mut ws = Winsize::default();
     let res = unsafe { ioctl(0, TIOCGWINSZ, &raw mut ws) };
-    if res == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
+    if res == 0 && ws.col > 0 && ws.row > 0 {
         Ok(ws)
     } else {
         Err(io::Error::other("Failed to query terminal dimensions"))
@@ -198,14 +178,13 @@ fn get_sandbox_command_pipe(app_id: &str) -> Option<PathBuf> {
     let parent_pid_file = app_dir.join("parent_pid");
     let cmd_pipe = app_dir.join("runtime").join("command_pipe");
 
-    if parent_pid_file.exists() && cmd_pipe.exists() {
-        if let Ok(pid_str) = fs::read_to_string(&parent_pid_file) {
-            if let Ok(pid) = pid_str.trim().parse::<i32>() {
-                if Path::new(&format!("/proc/{}", pid)).exists() {
-                    return Some(cmd_pipe);
-                }
-            }
-        }
+    if parent_pid_file.exists()
+        && cmd_pipe.exists()
+        && let Ok(pid_str) = fs::read_to_string(&parent_pid_file)
+        && let Ok(pid) = pid_str.trim().parse::<i32>()
+        && Path::new(&format!("/proc/{pid}")).exists()
+    {
+        return Some(cmd_pipe);
     }
     None
 }
@@ -249,8 +228,8 @@ fn connect_with_retry(sock_path: &Path, retries: u32, delay: Duration) -> io::Re
 }
 
 fn has_active_scope(session: &str) -> bool {
-    let pattern1 = format!("app-sesatt-{}-*.scope", session);
-    let pattern2 = format!("app-*sesatt*{}-*.scope", session);
+    let pattern1 = format!("app-sesatt-{session}-*.scope");
+    let pattern2 = format!("app-*sesatt*{session}-*.scope");
 
     if let Ok(output) = Command::new("systemctl")
         .args([
@@ -270,27 +249,26 @@ fn has_active_scope(session: &str) -> bool {
     }
 }
 
-fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-
-    // Internal daemon launcher
+fn handle_internal_daemon(args: &[String]) -> bool {
     if args.len() >= 4 && args[1] == "--daemon" {
         let session = &args[2];
         validate_session_name(session);
-        let cmd_args = args[3..].to_vec();
+        let cmd_args = &args[3..];
         let sock_path = get_sock_path(session);
         let log_path = get_log_path(session);
         let ws = ffi_get_terminal_size().unwrap_or(Winsize {
-            ws_row: 24,
-            ws_col: 80,
-            ws_xpixel: 0,
-            ws_ypixel: 0,
+            row: 24,
+            col: 80,
+            xpixel: 0,
+            ypixel: 0,
         });
-        run_daemon_server(session, sock_path, log_path, cmd_args, ws);
-        return Ok(());
+        run_daemon_server(session, sock_path, &log_path, cmd_args, ws);
+        return true;
     }
+    false
+}
 
-    // Query active NVIM socket from sesatt daemon
+fn handle_get_nvim(args: &[String]) -> bool {
     if args.len() >= 3 && args[1] == "--get-nvim" {
         let session = &args[2];
         validate_session_name(session);
@@ -301,41 +279,45 @@ fn main() -> io::Result<()> {
             let _ = (&mut stream).take(4096).read_to_end(&mut buf);
             if !buf.is_empty() {
                 let nvim_str = String::from_utf8_lossy(&buf);
-                print!("{}", nvim_str);
+                print!("{nvim_str}");
             }
         }
-        return Ok(());
+        return true;
     }
+    false
+}
 
-    // Helper editor launcher for git/SUDO_EDITOR/VISUAL
+fn handle_editor_mode(args: &[String]) {
     if !args.is_empty()
         && (args[0].ends_with("sesatt-editor") || (args.len() >= 2 && args[1] == "--editor"))
     {
-        let editor_args: Vec<String> = if args.len() >= 2 && args[1] == "--editor" {
-            args[2..].to_vec()
+        let editor_args: &[String] = if args.len() >= 2 && args[1] == "--editor" {
+            &args[2..]
         } else {
-            args[1..].to_vec()
+            &args[1..]
         };
 
         let target_nvim = if env::var("INSIDE_SESATT").as_deref() == Ok("1") {
-            if let Ok(session) = env::var("SESATT_SESSION") {
-                validate_session_name(&session);
-                let sock_path = get_sock_path(&session);
-                if let Ok(mut stream) = UnixStream::connect(&sock_path) {
-                    let _ = stream.write_all(&[0x03]);
-                    let mut buf = Vec::new();
-                    let _ = (&mut stream).take(4096).read_to_end(&mut buf);
-                    if !buf.is_empty() {
-                        String::from_utf8_lossy(&buf).to_string()
-                    } else {
-                        env::var("NVIM").unwrap_or_default()
-                    }
-                } else {
-                    env::var("NVIM").unwrap_or_default()
-                }
-            } else {
-                env::var("NVIM").unwrap_or_default()
-            }
+            env::var("SESATT_SESSION").map_or_else(
+                |_| env::var("NVIM").unwrap_or_default(),
+                |session| {
+                    validate_session_name(&session);
+                    let sock_path = get_sock_path(&session);
+                    UnixStream::connect(&sock_path).map_or_else(
+                        |_| env::var("NVIM").unwrap_or_default(),
+                        |mut stream| {
+                            let _ = stream.write_all(&[0x03]);
+                            let mut buf = Vec::new();
+                            let _ = (&mut stream).take(4096).read_to_end(&mut buf);
+                            if buf.is_empty() {
+                                env::var("NVIM").unwrap_or_default()
+                            } else {
+                                String::from_utf8_lossy(&buf).to_string()
+                            }
+                        },
+                    )
+                },
+            )
         } else {
             env::var("NVIM").unwrap_or_default()
         };
@@ -349,13 +331,100 @@ fn main() -> io::Result<()> {
             c.arg("+setlocal bufhidden=wipe");
             c
         };
-        for a in &editor_args {
+        for a in editor_args {
             cmd.arg(a);
         }
         let err = cmd.exec();
         eprintln!("Error launching editor: {err}");
         std::process::exit(1);
     }
+}
+
+fn forward_to_sandbox(
+    session: &str,
+    args: &[String],
+    session_idx: usize,
+    cmd_pipe: &Path,
+    detach_mode: bool,
+    sock_path: &Path,
+    log_path: &Path,
+) -> io::Result<()> {
+    const SKIP_VARS: &[&str] = &[
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "XDG_RUNTIME_DIR",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
+        "XDG_CACHE_HOME",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "WAYLAND_DISPLAY",
+        "DISPLAY",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "APP_ID",
+        "SANDBOX_ROLE",
+        "_",
+        "PWD",
+        "OLDPWD",
+        "SHLVL",
+    ];
+    let mut exports = String::new();
+    for (k, v) in env::vars() {
+        if !SKIP_VARS.contains(&k.as_str()) {
+            let esc = v.replace('\'', "'\\''");
+            let _ = write!(exports, "export {k}='{esc}'; ");
+        }
+    }
+
+    let cmd_args_str = if args.len() > session_idx + 1 {
+        args[session_idx + 1..]
+            .iter()
+            .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        "/run/current-system/sw/bin/zsh".to_string()
+    };
+
+    let payload = format!("{exports}sesatt -d '{session}' {cmd_args_str}");
+
+    let mut pipe = match OpenOptions::new().write(true).open(cmd_pipe) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error opening sandbox command pipe: {e}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(e) = writeln!(pipe, "{payload}") {
+        eprintln!("Error sending launch command to sandbox: {e}");
+        std::process::exit(1);
+    }
+    let _ = pipe.flush();
+
+    if detach_mode {
+        println!("Started session '{session}' in sandbox in detached mode.");
+        return Ok(());
+    }
+
+    attach_session(sock_path, log_path)
+}
+
+fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if handle_internal_daemon(&args) {
+        return Ok(());
+    }
+
+    if handle_get_nvim(&args) {
+        return Ok(());
+    }
+
+    handle_editor_mode(&args);
 
     if args.len() < 2 {
         print_help();
@@ -407,7 +476,7 @@ fn main() -> io::Result<()> {
     if sock_path.exists() {
         if UnixStream::connect(&sock_path).is_ok() {
             if detach_mode {
-                println!("Session '{}' already exists and is active.", session);
+                println!("Session '{session}' already exists and is active.");
                 return Ok(());
             }
             return attach_session(&sock_path, &log_path);
@@ -416,68 +485,15 @@ fn main() -> io::Result<()> {
     }
 
     if let Some(cmd_pipe) = get_sandbox_command_pipe(session) {
-        const SKIP_VARS: &[&str] = &[
-            "PATH",
-            "HOME",
-            "USER",
-            "LOGNAME",
-            "SHELL",
-            "XDG_RUNTIME_DIR",
-            "XDG_CONFIG_HOME",
-            "XDG_DATA_HOME",
-            "XDG_STATE_HOME",
-            "XDG_CACHE_HOME",
-            "DBUS_SESSION_BUS_ADDRESS",
-            "WAYLAND_DISPLAY",
-            "DISPLAY",
-            "LD_LIBRARY_PATH",
-            "LD_PRELOAD",
-            "APP_ID",
-            "SANDBOX_ROLE",
-            "_",
-            "PWD",
-            "OLDPWD",
-            "SHLVL",
-        ];
-        let mut exports = String::new();
-        for (k, v) in env::vars() {
-            if !SKIP_VARS.contains(&k.as_str()) {
-                let esc = v.replace('\'', "'\\''");
-                exports.push_str(&format!("export {}='{}'; ", k, esc));
-            }
-        }
-
-        let cmd_args_str = if args.len() > session_idx + 1 {
-            args[session_idx + 1..]
-                .iter()
-                .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
-                .collect::<Vec<_>>()
-                .join(" ")
-        } else {
-            "/run/current-system/sw/bin/zsh".to_string()
-        };
-
-        let payload = format!("{}sesatt -d '{}' {}", exports, session, cmd_args_str);
-
-        let mut pipe = match OpenOptions::new().write(true).open(&cmd_pipe) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("Error opening sandbox command pipe: {}", e);
-                std::process::exit(1);
-            }
-        };
-        if let Err(e) = writeln!(pipe, "{}", payload) {
-            eprintln!("Error sending launch command to sandbox: {}", e);
-            std::process::exit(1);
-        }
-        let _ = pipe.flush();
-
-        if detach_mode {
-            println!("Started session '{}' in sandbox in detached mode.", session);
-            return Ok(());
-        }
-
-        return attach_session(&sock_path, &log_path);
+        return forward_to_sandbox(
+            session,
+            &args,
+            session_idx,
+            &cmd_pipe,
+            detach_mode,
+            &sock_path,
+            &log_path,
+        );
     }
 
     if log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
@@ -498,10 +514,10 @@ fn main() -> io::Result<()> {
         }
     };
 
-    spawn_daemon(session, &cmd_args)?;
+    spawn_daemon(session, &cmd_args);
 
     if detach_mode {
-        println!("Started session '{}' in detached mode.", session);
+        println!("Started session '{session}' in detached mode.");
         return Ok(());
     }
 
@@ -535,12 +551,12 @@ fn get_all_sessions() -> Vec<(String, bool)> {
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    let sock_path = path.join("sesatt.sock");
-                    let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
-                    sessions_map.insert(name.to_string(), is_active);
-                }
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|s| s.to_str())
+            {
+                let sock_path = path.join("sesatt.sock");
+                let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
+                sessions_map.insert(name.to_string(), is_active);
             }
         }
     }
@@ -549,15 +565,13 @@ fn get_all_sessions() -> Vec<(String, bool)> {
     if let Ok(entries) = fs::read_dir(&nixpak_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    if get_sandbox_command_pipe(name).is_some() {
-                        let sock_path = dir.join(name).join("sesatt.sock");
-                        let is_active =
-                            sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
-                        sessions_map.entry(name.to_string()).or_insert(is_active);
-                    }
-                }
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|s| s.to_str())
+                && get_sandbox_command_pipe(name).is_some()
+            {
+                let sock_path = dir.join(name).join("sesatt.sock");
+                let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
+                sessions_map.entry(name.to_string()).or_insert(is_active);
             }
         }
     }
@@ -574,11 +588,11 @@ fn list_sessions() {
 
     for (name, is_active) in sessions {
         if is_active {
-            println!("• {} (active)", name);
+            println!("• {name} (active)");
         } else if get_sandbox_command_pipe(&name).is_some() {
-            println!("• {} (sandbox, on-demand)", name);
+            println!("• {name} (sandbox, on-demand)");
         } else {
-            println!("• {} (dead)", name);
+            println!("• {name} (dead)");
         }
     }
 }
@@ -591,7 +605,7 @@ fn clean_dead_sessions() {
         if !is_active && get_sandbox_command_pipe(&name).is_none() {
             let session_dir = get_session_dir(&name);
             let _ = fs::remove_dir_all(&session_dir);
-            println!("Cleaned dead session '{}'.", name);
+            println!("Cleaned dead session '{name}'.");
             cleaned_count += 1;
         }
     }
@@ -609,12 +623,12 @@ fn kill_session(session: &str) {
     let scope_active = has_active_scope(session);
 
     if !dir_exists && !scope_active {
-        eprintln!("Error: Session '{}' does not exist.", session);
+        eprintln!("Error: Session '{session}' does not exist.");
         std::process::exit(1);
     }
 
-    let pattern1 = format!("app-sesatt-{}-*.scope", session);
-    let pattern2 = format!("app-*sesatt*{}-*.scope", session);
+    let pattern1 = format!("app-sesatt-{session}-*.scope");
+    let pattern2 = format!("app-*sesatt*{session}-*.scope");
 
     let _ = Command::new("systemctl")
         .args(["--user", "stop", &pattern1, &pattern2])
@@ -622,10 +636,10 @@ fn kill_session(session: &str) {
         .status();
 
     let _ = fs::remove_dir_all(&session_dir);
-    println!("Session '{}' terminated.", session);
+    println!("Session '{session}' terminated.");
 }
 
-fn send_resize_pkt(stream: &mut UnixStream, ws: &Winsize) -> io::Result<()> {
+fn send_resize_pkt(stream: &mut UnixStream, ws: Winsize) -> io::Result<()> {
     let mut pkt = Vec::with_capacity(9);
     pkt.push(0x01);
     pkt.extend_from_slice(&ws.to_bytes());
@@ -633,16 +647,16 @@ fn send_resize_pkt(stream: &mut UnixStream, ws: &Winsize) -> io::Result<()> {
 }
 
 fn send_nvim_pkt(stream: &mut UnixStream) -> io::Result<()> {
-    if let Ok(nvim) = env::var("NVIM") {
-        if !nvim.is_empty() {
-            let bytes = nvim.as_bytes();
-            let len = (bytes.len().min(u16::MAX as usize)) as u16;
-            let mut pkt = Vec::with_capacity(3 + len as usize);
-            pkt.push(0x02);
-            pkt.extend_from_slice(&len.to_be_bytes());
-            pkt.extend_from_slice(&bytes[..len as usize]);
-            return stream.write_all(&pkt);
-        }
+    if let Ok(nvim) = env::var("NVIM")
+        && !nvim.is_empty()
+    {
+        let bytes = nvim.as_bytes();
+        let len = u16::try_from(bytes.len().min(usize::from(u16::MAX))).unwrap_or(0);
+        let mut pkt = Vec::with_capacity(3 + usize::from(len));
+        pkt.push(0x02);
+        pkt.extend_from_slice(&len.to_be_bytes());
+        pkt.extend_from_slice(&bytes[..len as usize]);
+        return stream.write_all(&pkt);
     }
     Ok(())
 }
@@ -654,13 +668,13 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
             if log_path.exists() {
                 let _ = dump_scrollback(log_path);
             }
-            eprintln!("\nError: Could not connect to session socket: {}", e);
+            eprintln!("\nError: Could not connect to session socket: {e}");
             std::process::exit(1);
         }
     };
 
     let ws = ffi_get_terminal_size()?;
-    send_resize_pkt(&mut stream, &ws)?;
+    send_resize_pkt(&mut stream, ws)?;
     send_nvim_pkt(&mut stream)?;
 
     let mut stream_stdin = stream.try_clone()?;
@@ -676,14 +690,13 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
         let mut last_ws = ws;
         loop {
             thread::sleep(Duration::from_millis(100));
-            if WINCH_RECEIVED.swap(false, Ordering::SeqCst) {
-                if let Ok(cur_ws) = ffi_get_terminal_size() {
-                    if cur_ws != last_ws {
-                        last_ws = cur_ws;
-                        if send_resize_pkt(&mut stream_winch, &cur_ws).is_err() {
-                            break;
-                        }
-                    }
+            if WINCH_RECEIVED.swap(false, Ordering::SeqCst)
+                && let Ok(cur_ws) = ffi_get_terminal_size()
+                && cur_ws != last_ws
+            {
+                last_ws = cur_ws;
+                if send_resize_pkt(&mut stream_winch, cur_ws).is_err() {
+                    break;
                 }
             }
         }
@@ -705,7 +718,9 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
                 std::process::exit(0);
             }
 
-            let len = chunk.len() as u16;
+            let Ok(len) = u16::try_from(chunk.len()) else {
+                continue;
+            };
             let mut pkt = Vec::with_capacity(3 + chunk.len());
             pkt.push(0x00);
             pkt.extend_from_slice(&len.to_be_bytes());
@@ -762,21 +777,20 @@ fn get_tail_bytes(path: &Path, max_bytes: u64, max_lines: usize) -> io::Result<V
 }
 
 fn dump_scrollback(log_path: &Path) -> io::Result<()> {
-    if log_path.exists() {
-        if let Ok(bytes) = get_tail_bytes(log_path, 256 * 1024, 3000) {
-            if !bytes.is_empty() {
-                io::stdout().write_all(&bytes)?;
-                io::stdout().flush()?;
-            }
-        }
+    if log_path.exists()
+        && let Ok(bytes) = get_tail_bytes(log_path, 256 * 1024, 3000)
+        && !bytes.is_empty()
+    {
+        io::stdout().write_all(&bytes)?;
+        io::stdout().flush()?;
     }
     Ok(())
 }
 
-fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
+fn spawn_daemon(session: &str, cmd_args: &[String]) {
     let session_dir = get_session_dir(session);
     if let Err(e) = fs::create_dir_all(&session_dir) {
-        eprintln!("Error: Failed to create session directory: {}", e);
+        eprintln!("Error: Failed to create session directory: {e}");
         std::process::exit(1);
     }
 
@@ -789,7 +803,7 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
     let exe = match env::current_exe() {
         Ok(path) => path,
         Err(e) => {
-            eprintln!("Error: Failed to resolve current executable path: {}", e);
+            eprintln!("Error: Failed to resolve current executable path: {e}");
             std::process::exit(1);
         }
     };
@@ -805,7 +819,7 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
     let mut app = if app2unit_works {
         let mut cmd = Command::new("app2unit");
         cmd.arg("-x");
-        cmd.arg("-a").arg(format!("sesatt-{}", session));
+        cmd.arg("-a").arg(format!("sesatt-{session}"));
         cmd.arg("--");
         cmd.arg(&exe);
         cmd
@@ -820,18 +834,115 @@ fn spawn_daemon(session: &str, cmd_args: &[String]) -> io::Result<()> {
     }
 
     if let Err(e) = app.spawn() {
-        eprintln!("Error: Failed to spawn daemon process: {}", e);
+        eprintln!("Error: Failed to spawn daemon process: {e}");
         std::process::exit(1);
     }
+}
 
-    Ok(())
+fn handle_daemon_client(
+    mut s: UnixStream,
+    master_fd: CInt,
+    clients: &Arc<Mutex<Vec<UnixStream>>>,
+    latest_nvim: &Arc<Mutex<String>>,
+    log_path: &Path,
+) {
+    let mut tag = [0u8; 1];
+    if s.read_exact(&mut tag).is_err() {
+        return;
+    }
+
+    if tag[0] == 0x03 {
+        if let Ok(guard) = latest_nvim.lock() {
+            let _ = s.write_all(guard.as_bytes());
+            let _ = s.flush();
+        }
+        let _ = s.shutdown(Shutdown::Both);
+        return;
+    }
+
+    if let Ok(bytes) = get_tail_bytes(log_path, 256 * 1024, 3000)
+        && !bytes.is_empty()
+    {
+        let _ = s.write_all(&bytes);
+        let _ = s.flush();
+    }
+
+    let Ok(s_clone) = s.try_clone() else {
+        return;
+    };
+
+    if let Ok(mut guard) = clients.lock() {
+        guard.push(s_clone);
+    }
+
+    let mut my_nvim = String::new();
+    let mut current_tag = tag[0];
+    loop {
+        match current_tag {
+            0x00 => {
+                let mut len_buf = [0u8; 2];
+                if s.read_exact(&mut len_buf).is_err() {
+                    break;
+                }
+                let len = usize::from(u16::from_be_bytes(len_buf));
+                let mut data_buf = vec![0u8; len];
+                if s.read_exact(&mut data_buf).is_err() {
+                    break;
+                }
+
+                if !my_nvim.is_empty()
+                    && let Ok(mut guard) = latest_nvim.lock()
+                {
+                    (*guard).clone_from(&my_nvim);
+                }
+
+                unsafe {
+                    write(master_fd, data_buf.as_ptr().cast::<CVoid>(), len);
+                }
+            }
+            0x01 => {
+                let mut ws_buf = [0u8; 8];
+                if s.read_exact(&mut ws_buf).is_err() {
+                    break;
+                }
+                let client_ws = Winsize::from_bytes(ws_buf);
+                unsafe {
+                    ioctl(master_fd, TIOCSWINSZ, &raw const client_ws);
+                }
+            }
+            0x02 => {
+                let mut len_buf = [0u8; 2];
+                if s.read_exact(&mut len_buf).is_err() {
+                    break;
+                }
+                let len = usize::from(u16::from_be_bytes(len_buf));
+                let mut str_buf = vec![0u8; len];
+                if s.read_exact(&mut str_buf).is_err() {
+                    break;
+                }
+                if let Ok(nvim_str) = String::from_utf8(str_buf) {
+                    my_nvim.clone_from(&nvim_str);
+                    if let Ok(mut guard) = latest_nvim.lock() {
+                        *guard = nvim_str;
+                    }
+                }
+            }
+            _ => break,
+        }
+
+        let mut next_tag = [0u8; 1];
+        if s.read_exact(&mut next_tag).is_err() {
+            break;
+        }
+        current_tag = next_tag[0];
+    }
 }
 
 fn run_daemon_server(
     session: &str,
     sock_path: PathBuf,
-    log_path: PathBuf,
-    cmd_args: Vec<String>,
+    log_path: &Path,
+    cmd_args: &[String],
     ws: Winsize,
 ) {
     ffi_daemonize_server();
@@ -841,7 +952,7 @@ fn run_daemon_server(
         OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&log_path)
+            .open(log_path)
             .expect("Failed to open log file"),
     );
 
@@ -849,11 +960,11 @@ fn run_daemon_server(
     let mut slave_fd: CInt = 0;
     unsafe {
         openpty(
-            &mut master_fd,
-            &mut slave_fd,
+            &raw mut master_fd,
+            &raw mut slave_fd,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            &ws,
+            &raw const ws,
         );
     }
 
@@ -876,7 +987,7 @@ fn run_daemon_server(
         child_cmd.env("SESATT_SESSION", session);
 
         let err = child_cmd.exec();
-        eprintln!("Error executing command: {}", err);
+        eprintln!("Error executing command: {err}");
         unsafe {
             _exit(1);
         }
@@ -889,117 +1000,34 @@ fn run_daemon_server(
     let clients: Arc<Mutex<Vec<UnixStream>>> = Arc::new(Mutex::new(Vec::new()));
     let latest_nvim: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
 
-    let clients_clone = clients.clone();
+    let clients_clone = Arc::clone(&clients);
+    let log_path_buf = log_path.to_path_buf();
 
     thread::spawn(move || {
-        for mut s in listener.incoming().flatten() {
-            let latest_nvim_inner = latest_nvim.clone();
-            let clients_inner = clients_clone.clone();
-            let log_path_inner = log_path.clone();
+        for s in listener.incoming().flatten() {
+            let latest_nvim_inner = Arc::clone(&latest_nvim);
+            let clients_inner = Arc::clone(&clients_clone);
+            let log_path_inner = log_path_buf.clone();
 
             thread::spawn(move || {
-                let mut tag = [0u8; 1];
-                if s.read_exact(&mut tag).is_err() {
-                    return;
-                }
-
-                if tag[0] == 0x03 {
-                    if let Ok(guard) = latest_nvim_inner.lock() {
-                        let _ = s.write_all(guard.as_bytes());
-                        let _ = s.flush();
-                    }
-                    let _ = s.shutdown(Shutdown::Both);
-                    return;
-                }
-
-                if let Ok(bytes) = get_tail_bytes(&log_path_inner, 256 * 1024, 3000) {
-                    if !bytes.is_empty() {
-                        let _ = s.write_all(&bytes);
-                        let _ = s.flush();
-                    }
-                }
-
-                let s_clone = match s.try_clone() {
-                    Ok(c) => c,
-                    Err(_) => return,
-                };
-
-                if let Ok(mut guard) = clients_inner.lock() {
-                    guard.push(s_clone);
-                }
-
-                let mut my_nvim = String::new();
-                let mut current_tag = tag[0];
-                loop {
-                    match current_tag {
-                        0x00 => {
-                            let mut len_buf = [0u8; 2];
-                            if s.read_exact(&mut len_buf).is_err() {
-                                break;
-                            }
-                            let len = u16::from_be_bytes(len_buf) as usize;
-                            let mut data_buf = vec![0u8; len];
-                            if s.read_exact(&mut data_buf).is_err() {
-                                break;
-                            }
-
-                            if !my_nvim.is_empty() {
-                                if let Ok(mut guard) = latest_nvim_inner.lock() {
-                                    *guard = my_nvim.clone();
-                                }
-                            }
-
-                            unsafe {
-                                write(master_fd, data_buf.as_ptr() as *const CVoid, len);
-                            }
-                        }
-                        0x01 => {
-                            let mut ws_buf = [0u8; 8];
-                            if s.read_exact(&mut ws_buf).is_err() {
-                                break;
-                            }
-                            let client_ws = Winsize::from_bytes(ws_buf);
-                            unsafe {
-                                ioctl(master_fd, TIOCSWINSZ, &raw const client_ws);
-                            }
-                        }
-                        0x02 => {
-                            let mut len_buf = [0u8; 2];
-                            if s.read_exact(&mut len_buf).is_err() {
-                                break;
-                            }
-                            let len = u16::from_be_bytes(len_buf) as usize;
-                            let mut str_buf = vec![0u8; len];
-                            if s.read_exact(&mut str_buf).is_err() {
-                                break;
-                            }
-                            if let Ok(nvim_str) = String::from_utf8(str_buf) {
-                                my_nvim = nvim_str.clone();
-                                if let Ok(mut guard) = latest_nvim_inner.lock() {
-                                    *guard = nvim_str;
-                                }
-                            }
-                        }
-                        _ => break,
-                    }
-
-                    let mut next_tag = [0u8; 1];
-                    if s.read_exact(&mut next_tag).is_err() {
-                        break;
-                    }
-                    current_tag = next_tag[0];
-                }
+                handle_daemon_client(
+                    s,
+                    master_fd,
+                    &clients_inner,
+                    &latest_nvim_inner,
+                    &log_path_inner,
+                );
             });
         }
     });
 
     let mut buf = [0u8; 4096];
     loop {
-        let n = unsafe { read(master_fd, buf.as_mut_ptr() as *mut CVoid, 4096) };
+        let n = unsafe { read(master_fd, buf.as_mut_ptr().cast::<CVoid>(), 4096) };
         if n <= 0 {
             break;
         }
-        let chunk = &buf[..n as usize];
+        let chunk = &buf[..n.cast_unsigned()];
 
         let _ = (&*log_file).write_all(chunk);
 

@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::verbose_bit_mask, clippy::collapsible_if)]
 
 use std::fs::{self, Permissions};
 use std::io::{BufRead, BufReader, Write};
@@ -43,10 +42,10 @@ fn has_nv() -> bool {
     if let Ok(entries) = fs::read_dir("/sys/bus/pci/devices") {
         for entry in entries.flatten() {
             let vendor_path = entry.path().join("vendor");
-            if let Ok(vendor) = fs::read_to_string(vendor_path) {
-                if vendor.trim().eq_ignore_ascii_case("0x10de") {
-                    return true;
-                }
+            if let Ok(vendor) = fs::read_to_string(vendor_path)
+                && vendor.trim().eq_ignore_ascii_case("0x10de")
+            {
+                return true;
             }
         }
     }
@@ -58,10 +57,8 @@ fn set_nv_blocked(block: bool) -> Result<&'static str, &'static str> {
     let mut matched = false;
     if let Ok(entries) = fs::read_dir("/dev") {
         for entry in entries.flatten() {
-            if let Ok(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    continue;
-                }
+            if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
+                continue;
             }
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
@@ -86,12 +83,11 @@ fn get_nv_status() -> &'static str {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if name_str.starts_with("nvidia") {
-                if let Ok(metadata) = entry.metadata() {
-                    if (metadata.permissions().mode() & 0o777) == 0 {
-                        return "blocked";
-                    }
-                }
+            if name_str.starts_with("nvidia")
+                && let Ok(metadata) = entry.metadata()
+                && metadata.permissions().mode().trailing_zeros() >= 9
+            {
+                return "blocked";
             }
         }
     }
@@ -126,33 +122,33 @@ fn set_ryzen_max() -> Result<&'static str, &'static str> {
 
 fn get_ryzen_limits() -> String {
     let output = Command::new("ryzenadj").arg("-i").output();
-    if let Ok(out) = output {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
-            let mut stapm = None;
-            let mut fast = None;
-            let mut slow = None;
-            for line in text.lines() {
-                if line.contains("STAPM LIMIT") {
-                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
-                    if parts.len() >= 3 {
-                        stapm = parts[2].parse::<f64>().ok();
-                    }
-                } else if line.contains("PPT LIMIT FAST") {
-                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
-                    if parts.len() >= 3 {
-                        fast = parts[2].parse::<f64>().ok();
-                    }
-                } else if line.contains("PPT LIMIT SLOW") {
-                    let parts: Vec<&str> = line.split('|').map(str::trim).collect();
-                    if parts.len() >= 3 {
-                        slow = parts[2].parse::<f64>().ok();
-                    }
+    if let Ok(out) = output
+        && out.status.success()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        let mut stapm = None;
+        let mut fast = None;
+        let mut slow = None;
+        for line in text.lines() {
+            if line.contains("STAPM LIMIT") {
+                let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+                if parts.len() >= 3 {
+                    stapm = parts[2].parse::<f64>().ok();
+                }
+            } else if line.contains("PPT LIMIT FAST") {
+                let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+                if parts.len() >= 3 {
+                    fast = parts[2].parse::<f64>().ok();
+                }
+            } else if line.contains("PPT LIMIT SLOW") {
+                let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+                if parts.len() >= 3 {
+                    slow = parts[2].parse::<f64>().ok();
                 }
             }
-            if let (Some(s), Some(f), Some(sl)) = (stapm, fast, slow) {
-                return format!("{s:.3} {f:.3} {sl:.3}");
-            }
+        }
+        if let (Some(s), Some(f), Some(sl)) = (stapm, fast, slow) {
+            return format!("{s:.3} {f:.3} {sl:.3}");
         }
     }
     "unknown".to_string()

@@ -1,11 +1,3 @@
-#![allow(
-    clippy::too_many_lines,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::cast_possible_wrap
-)]
-
 use std::collections::HashSet;
 use std::{env, fs, process::Command};
 
@@ -45,9 +37,12 @@ impl Epoll {
     }
 
     fn add(&self, fd: i32) -> bool {
+        let Ok(data) = u64::try_from(fd) else {
+            return false;
+        };
         let mut ev = EpollEvent {
             events: EPOLLIN,
-            data: fd as u64,
+            data,
         };
         unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
     }
@@ -60,12 +55,15 @@ impl Epoll {
     }
 
     fn wait(&self, events: &mut [EpollEvent]) -> Result<usize, i32> {
-        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), events.len() as i32, -1) };
+        let Ok(len) = i32::try_from(events.len()) else {
+            return Err(0);
+        };
+        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), len, -1) };
         if n < 0 {
             let err = std::io::Error::last_os_error();
             Err(err.raw_os_error().unwrap_or(0))
         } else {
-            Ok(n as usize)
+            usize::try_from(n).map_err(|_| 0)
         }
     }
 }
@@ -80,7 +78,8 @@ fn pidfd_open(pid: i32) -> Option<i32> {
     if pid <= 0 {
         return None;
     }
-    let fd = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) as i32 };
+    let res = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) };
+    let fd = i32::try_from(res).ok()?;
     if fd >= 0 { Some(fd) } else { None }
 }
 
@@ -88,20 +87,16 @@ fn create_signalfd() -> Option<i32> {
     // Block SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) via raw Linux syscall
     let mask: u64 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 14);
     unsafe {
-        syscall(
-            SYS_RT_SIGPROCMASK,
-            SIG_BLOCK,
-            &raw const mask as i64,
-            0i64,
-            8i64,
-        );
-        let sfd = syscall(
+        let mask_ptr = (&raw const mask as usize).cast_signed();
+        syscall(SYS_RT_SIGPROCMASK, SIG_BLOCK, mask_ptr, 0i64, 8i64);
+        let sfd = i32::try_from(syscall(
             SYS_SIGNALFD4,
             -1i64,
-            &raw const mask as i64,
+            mask_ptr,
             8i64,
             SFD_CLOEXEC | SFD_NONBLOCK,
-        ) as i32;
+        ))
+        .ok()?;
         if sfd >= 0 { Some(sfd) } else { None }
     }
 }
@@ -203,7 +198,9 @@ fn main() {
 
         let mut terminate = false;
         for event in events.iter().take(n) {
-            let fd = event.data as i32;
+            let Ok(fd) = i32::try_from(event.data) else {
+                continue;
+            };
             if fd == sfd || fd == runner_fd {
                 terminate = true;
                 break;

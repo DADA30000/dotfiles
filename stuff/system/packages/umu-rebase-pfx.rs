@@ -1,9 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    clippy::too_many_lines,
-    clippy::collapsible_if,
-    clippy::manual_is_ascii_check
-)]
 
 use std::collections::BTreeMap;
 use std::env;
@@ -221,12 +216,12 @@ fn rebase_ini(old_base_p: &Path, new_base_p: &Path, upper_p: &Path) {
                     let mut replaced = false;
                     for target in &mut new_sec.lines {
                         let t_trim = target.trim();
-                        if let Some(t_eq) = t_trim.find('=') {
-                            if t_trim[..t_eq].trim().eq_ignore_ascii_case(key) {
-                                target.clone_from(&line);
-                                replaced = true;
-                                break;
-                            }
+                        if let Some(t_eq) = t_trim.find('=')
+                            && t_trim[..t_eq].trim().eq_ignore_ascii_case(key)
+                        {
+                            target.clone_from(&line);
+                            replaced = true;
+                            break;
                         }
                     }
                     if !replaced {
@@ -301,29 +296,33 @@ fn remove_empty_dirs(dir: &Path) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Main Delta Rebase Engine
-// ---------------------------------------------------------------------------
-fn main() {
+struct CliArgs {
+    old_base: Option<PathBuf>,
+    new_base: PathBuf,
+    upper: PathBuf,
+    home: String,
+}
+
+fn parse_cli_args() -> CliArgs {
     let args: Vec<String> = env::args().collect();
-    let mut old_base = String::new();
-    let mut new_base = String::new();
-    let mut upper = String::new();
+    let mut old_base = None;
+    let mut new_base = None;
+    let mut upper = None;
     let mut home = env::var("HOME").unwrap_or_default();
 
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
             "--old-base" if i + 1 < args.len() => {
-                old_base.clone_from(&args[i + 1]);
+                old_base = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
             "--new-base" if i + 1 < args.len() => {
-                new_base.clone_from(&args[i + 1]);
+                new_base = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
             "--upper" if i + 1 < args.len() => {
-                upper.clone_from(&args[i + 1]);
+                upper = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
             "--home" if i + 1 < args.len() => {
@@ -335,24 +334,83 @@ fn main() {
         i += 1;
     }
 
-    if new_base.is_empty() || upper.is_empty() {
+    let (Some(new_base_dir), Some(upper_dir)) = (new_base, upper) else {
         eprintln!(
             "Usage: umu-rebase-pfx --new-base <dir> --upper <dir> [--old-base <dir>] [--home <dir>]"
         );
         std::process::exit(1);
-    }
-
-    let upper_dir = PathBuf::from(&upper);
-    let new_base_dir = PathBuf::from(&new_base);
-    let old_base_dir = if old_base.is_empty() {
-        None
-    } else {
-        Some(PathBuf::from(&old_base))
     };
 
-    if !upper_dir.exists() {
+    CliArgs {
+        old_base,
+        new_base: new_base_dir,
+        upper: upper_dir,
+        home,
+    }
+}
+
+fn sync_proton_metadata(new_base_dir: &Path, upper_dir: &Path, home: &str) {
+    let new_config_info = new_base_dir.join("config_info");
+    if new_config_info.exists()
+        && let Ok(mut content) = fs::read_to_string(&new_config_info)
+    {
+        let proton_root = new_base_dir.parent().and_then(Path::parent).map_or_else(
+            || PathBuf::from(home).join(".local/share/umu/proton"),
+            |p| p.join("proton"),
+        );
+        let proton_root_str = proton_root.to_string_lossy();
+
+        content = content.replace("@UMU_USER_HOME@/.local/share/umu/proton", &proton_root_str);
+        if !home.is_empty() {
+            content = content.replace(&format!("{home}/.local/share/umu/proton"), &proton_root_str);
+            content = content.replace("@UMU_USER_HOME@", home);
+            if let Some(pos) = content.find("/build/")
+                && let Some(end) = content[pos..].find("_home")
+            {
+                let target = &content[pos..pos + end + 5];
+                content = content.replace(target, home);
+            }
+        }
+        let mut lines: Vec<&str> = content.lines().collect();
+        for i in 0..lines.len() {
+            if lines[i].ends_with("/default_pfx/") && i + 1 < lines.len() {
+                lines[i + 1] = "1.0";
+            }
+        }
+        let _ = fs::write(upper_dir.join("config_info"), lines.join("\n"));
+    }
+
+    let _ = fs::write(upper_dir.join(".update-timestamp"), "1");
+
+    let new_ver_file = new_base_dir.join("version");
+    if new_ver_file.exists()
+        && let Ok(ver) = fs::read_to_string(&new_ver_file)
+    {
+        let _ = fs::write(upper_dir.join("version"), format!("{}\n", ver.trim()));
+    }
+
+    for meta in ["tracked_files", "pfx.lock"] {
+        let p = upper_dir.join(meta);
+        if p.exists() {
+            let _ = fs::remove_file(p);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Main Delta Rebase Engine
+// ---------------------------------------------------------------------------
+fn main() {
+    let cfg = parse_cli_args();
+
+    if !cfg.upper.exists() {
         return;
     }
+
+    let upper_dir = cfg.upper;
+    let new_base_dir = cfg.new_base;
+    let old_base_dir = cfg.old_base;
+    let home = cfg.home;
 
     // 1. 3-way merge on configuration files found in new_base
     let mut base_files = Vec::new();
@@ -413,55 +471,5 @@ fn main() {
         remove_empty_dirs(&upper_win);
     }
 
-    // 3. Synchronize config_info with host paths
-    let new_config_info = new_base_dir.join("config_info");
-    if new_config_info.exists() {
-        if let Ok(mut content) = fs::read_to_string(&new_config_info) {
-            let proton_root = new_base_dir.parent().and_then(Path::parent).map_or_else(
-                || PathBuf::from(&home).join(".local/share/umu/proton"),
-                |p| p.join("proton"),
-            );
-            let proton_root_str = proton_root.to_string_lossy();
-
-            content = content.replace("@UMU_USER_HOME@/.local/share/umu/proton", &proton_root_str);
-            if !home.is_empty() {
-                content =
-                    content.replace(&format!("{home}/.local/share/umu/proton"), &proton_root_str);
-                content = content.replace("@UMU_USER_HOME@", &home);
-                // Also replace any lingering build home references
-                if let Some(pos) = content.find("/build/") {
-                    if let Some(end) = content[pos..].find("_home") {
-                        let target = &content[pos..pos + end + 5];
-                        content = content.replace(target, &home);
-                    }
-                }
-            }
-            let mut lines: Vec<&str> = content.lines().collect();
-            for i in 0..lines.len() {
-                if lines[i].ends_with("/default_pfx/") && i + 1 < lines.len() {
-                    lines[i + 1] = "1.0";
-                }
-            }
-            let _ = fs::write(upper_dir.join("config_info"), lines.join("\n"));
-        }
-    }
-
-    // 4. Set .update-timestamp to 1 matching EROFS normalized timestamps
-    let _ = fs::write(upper_dir.join(".update-timestamp"), "1");
-
-    // 5. Set version
-    let new_ver_file = new_base_dir.join("version");
-    if new_ver_file.exists() {
-        if let Ok(ver) = fs::read_to_string(&new_ver_file) {
-            let _ = fs::write(upper_dir.join("version"), format!("{}\n", ver.trim()));
-        }
-    }
-
-    // 6. Remove transient Proton state files
-    for meta in ["tracked_files", "pfx.lock"] {
-        let p = upper_dir.join(meta);
-        if p.exists() {
-            let _ = fs::remove_file(p);
-        }
-    }
+    sync_proton_metadata(&new_base_dir, &upper_dir, &home);
 }

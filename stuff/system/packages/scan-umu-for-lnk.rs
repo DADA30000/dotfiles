@@ -1,9 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    clippy::too_many_lines,
-    clippy::collapsible_if,
-    clippy::manual_is_ascii_check
-)]
 
 use std::collections::HashSet;
 use std::env;
@@ -146,12 +141,12 @@ fn resolve_case_insensitive(base: &Path, rel: &str) -> Option<PathBuf> {
         let mut found = false;
         if let Ok(entries) = fs::read_dir(&cur) {
             for entry in entries.flatten() {
-                if let Ok(name) = entry.file_name().into_string() {
-                    if name.eq_ignore_ascii_case(component) {
-                        cur = entry.path();
-                        found = true;
-                        break;
-                    }
+                if let Ok(name) = entry.file_name().into_string()
+                    && name.eq_ignore_ascii_case(component)
+                {
+                    cur = entry.path();
+                    found = true;
+                    break;
                 }
             }
         }
@@ -232,18 +227,17 @@ fn collect_existing_lnk_paths(desktop_dir: &Path) -> HashSet<String> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_file() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.starts_with("umu-") && name.ends_with(".desktop") {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        for line in content.lines() {
-                            if let Some(lnk) = line.strip_prefix("X-UMU-Lnk-Path=") {
-                                let trimmed = lnk.trim();
-                                if !trimmed.is_empty() {
-                                    set.insert(trimmed.to_string());
-                                }
-                            }
-                        }
+        if path.is_file()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name.starts_with("umu-")
+            && name.ends_with(".desktop")
+            && let Ok(content) = fs::read_to_string(&path)
+        {
+            for line in content.lines() {
+                if let Some(lnk) = line.strip_prefix("X-UMU-Lnk-Path=") {
+                    let trimmed = lnk.trim();
+                    if !trimmed.is_empty() {
+                        set.insert(trimmed.to_string());
                     }
                 }
             }
@@ -267,12 +261,11 @@ fn scan_dir_for_lnks(dir: &Path, results: &mut Vec<PathBuf>) {
         let path = entry.path();
         if ft.is_dir() {
             scan_dir_for_lnks(&path, results);
-        } else if ft.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if ext.eq_ignore_ascii_case("lnk") {
-                    results.push(path);
-                }
-            }
+        } else if ft.is_file()
+            && let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && ext.eq_ignore_ascii_case("lnk")
+        {
+            results.push(path);
         }
     }
 }

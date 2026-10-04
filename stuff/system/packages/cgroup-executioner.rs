@@ -1,11 +1,3 @@
-#![allow(
-    clippy::too_many_lines,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::cast_possible_wrap
-)]
-
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
@@ -29,7 +21,7 @@ const IN_CLOEXEC: i32 = 0x80000;
 
 const EPOLL_CTL_ADD: i32 = 1;
 const EPOLLIN: u32 = 1;
-const MAX_EVENTS: usize = 64;
+const MAX_EVENTS: i32 = 64;
 
 #[repr(C)]
 struct SigsetT {
@@ -213,9 +205,62 @@ impl CgroupWatcher {
             }
         }
     }
+
+    fn process_events(&mut self, buf: &[u8], len: usize) {
+        let mut offset = 0usize;
+        let event_header_size = size_of::<InotifyEvent>();
+
+        while offset + event_header_size <= len {
+            let in_ev =
+                unsafe { std::ptr::read_unaligned(buf[offset..].as_ptr().cast::<InotifyEvent>()) };
+            let Ok(name_len) = usize::try_from(in_ev.len) else {
+                break;
+            };
+            let next_offset = offset + event_header_size + name_len;
+
+            if in_ev.mask & IN_IGNORED != 0 {
+                self.remove_watch(in_ev.wd);
+                offset = next_offset;
+                continue;
+            }
+
+            let (is_events_file, path, scope_name) = if let Some(node) = self.watches.get(&in_ev.wd)
+            {
+                (
+                    node.is_events_file,
+                    node.path.clone(),
+                    node.scope_name.clone(),
+                )
+            } else {
+                offset = next_offset;
+                continue;
+            };
+
+            if is_events_file && (in_ev.mask & IN_MODIFY != 0) {
+                if let Some(scope) = scope_name {
+                    self.check_and_kill(in_ev.wd, &path, &scope);
+                }
+            } else if !is_events_file && (in_ev.mask & IN_CREATE != 0) && name_len > 0 {
+                let name_bytes =
+                    &buf[offset + event_header_size..offset + event_header_size + name_len];
+                let c_str = name_bytes
+                    .iter()
+                    .position(|&b| b == 0)
+                    .map_or(name_bytes, |pos| &name_bytes[..pos]);
+                if let Ok(name_str) = std::str::from_utf8(c_str) {
+                    let new_path = path.join(name_str);
+                    if new_path.is_dir() {
+                        self.watch_path_recursive(&new_path);
+                    }
+                }
+            }
+
+            offset = next_offset;
+        }
+    }
 }
 
-fn main() {
+fn init_signalfd() -> i32 {
     let mut mask = SigsetT { __val: [0; 16] };
     unsafe {
         sigemptyset(&raw mut mask);
@@ -225,77 +270,83 @@ fn main() {
             eprintln!("Failed to block signals");
             std::process::exit(1);
         }
+        let sfd = signalfd(-1, &raw const mask, SFD_NONBLOCK | SFD_CLOEXEC);
+        if sfd < 0 {
+            eprintln!("Failed to create signalfd");
+            std::process::exit(1);
+        }
+        sfd
     }
+}
 
-    let sfd = unsafe { signalfd(-1, &raw const mask, SFD_NONBLOCK | SFD_CLOEXEC) };
-    if sfd < 0 {
-        eprintln!("Failed to create signalfd");
-        std::process::exit(1);
-    }
-
+fn resolve_cgroup_root() -> PathBuf {
     let args: Vec<String> = std::env::args().collect();
-    let cgroup_root = if args.len() > 1 {
+    if args.len() > 1 {
         PathBuf::from(&args[1])
     } else {
         let uid = unsafe { getuid() };
         PathBuf::from(format!(
             "/sys/fs/cgroup/user.slice/user-{uid}.slice/user@{uid}.service"
         ))
-    };
-
-    eprintln!(
-        "Cgroup Executioner active (Inotify + signalfd). Root: {}",
-        cgroup_root.display()
-    );
-
-    let inotify_fd = unsafe { inotify_init1(IN_CLOEXEC | IN_NONBLOCK) };
-    if inotify_fd < 0 {
-        eprintln!("Failed to initialize inotify");
-        unsafe { close(sfd) };
-        std::process::exit(1);
     }
+}
 
+fn setup_epoll(sfd: i32, inotify_fd: i32) -> i32 {
     let epfd = unsafe { epoll_create1(0) };
     if epfd < 0 {
         eprintln!("Failed to initialize epoll");
-        unsafe {
-            close(inotify_fd);
-            close(sfd);
-        }
         std::process::exit(1);
     }
 
+    let Ok(sfd_u64) = u64::try_from(sfd) else {
+        eprintln!("Invalid sfd");
+        std::process::exit(1);
+    };
     let mut ev_sig = EpollEvent {
         events: EPOLLIN,
-        data: sfd as u64,
+        data: sfd_u64,
     };
     unsafe {
         epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &raw mut ev_sig);
     }
 
+    let Ok(ino_u64) = u64::try_from(inotify_fd) else {
+        eprintln!("Invalid inotify_fd");
+        std::process::exit(1);
+    };
     let mut ev_ino = EpollEvent {
         events: EPOLLIN,
-        data: inotify_fd as u64,
+        data: ino_u64,
     };
     unsafe {
         epoll_ctl(epfd, EPOLL_CTL_ADD, inotify_fd, &raw mut ev_ino);
     }
 
-    let mut watcher = CgroupWatcher::new(inotify_fd);
-    watcher.watch_path_recursive(&cgroup_root);
+    epfd
+}
 
-    let mut events = [EpollEvent { events: 0, data: 0 }; MAX_EVENTS];
+fn run_event_loop(epfd: i32, sfd: i32, inotify_fd: i32, mut watcher: CgroupWatcher) {
+    let mut events = [EpollEvent { events: 0, data: 0 }; 64];
     let mut aligned_buf = AlignedBuffer { data: [0u8; 8192] };
-    let mut running = true;
+    let Ok(siginfo_size) = isize::try_from(size_of::<SignalfdSiginfo>()) else {
+        return;
+    };
 
-    while running {
-        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), MAX_EVENTS as i32, -1) };
+    loop {
+        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), MAX_EVENTS, -1) };
         if n < 0 {
             continue;
         }
 
-        for event in events.iter().take(n as usize) {
-            let fd = event.data as i32;
+        let Ok(n_events) = usize::try_from(n) else {
+            continue;
+        };
+
+        for event in events.iter().take(n_events) {
+            let Ok(fd) = i32::try_from(event.data) else {
+                continue;
+            };
+
             if fd == sfd {
                 let mut fdsi = std::mem::MaybeUninit::<SignalfdSiginfo>::uninit();
                 let s = unsafe {
@@ -305,9 +356,8 @@ fn main() {
                         size_of::<SignalfdSiginfo>(),
                     )
                 };
-                if s == size_of::<SignalfdSiginfo>() as isize {
-                    running = false;
-                    break;
+                if s == siginfo_size {
+                    return;
                 }
             } else if fd == inotify_fd {
                 loop {
@@ -322,62 +372,37 @@ fn main() {
                         break;
                     }
 
-                    let mut offset = 0usize;
-                    let total = len as usize;
-                    let event_header_size = size_of::<InotifyEvent>();
-
-                    while offset + event_header_size <= total {
-                        let in_ev = unsafe {
-                            std::ptr::read_unaligned(
-                                aligned_buf.data[offset..].as_ptr().cast::<InotifyEvent>(),
-                            )
-                        };
-                        let name_len = in_ev.len as usize;
-                        let next_offset = offset + event_header_size + name_len;
-
-                        if in_ev.mask & IN_IGNORED != 0 {
-                            watcher.remove_watch(in_ev.wd);
-                            offset = next_offset;
-                            continue;
-                        }
-
-                        let (is_events_file, path, scope_name) =
-                            if let Some(node) = watcher.watches.get(&in_ev.wd) {
-                                (
-                                    node.is_events_file,
-                                    node.path.clone(),
-                                    node.scope_name.clone(),
-                                )
-                            } else {
-                                offset = next_offset;
-                                continue;
-                            };
-
-                        if is_events_file && (in_ev.mask & IN_MODIFY != 0) {
-                            if let Some(scope) = scope_name {
-                                watcher.check_and_kill(in_ev.wd, &path, &scope);
-                            }
-                        } else if !is_events_file && (in_ev.mask & IN_CREATE != 0) && name_len > 0 {
-                            let name_bytes = &aligned_buf.data
-                                [offset + event_header_size..offset + event_header_size + name_len];
-                            let c_str = name_bytes
-                                .iter()
-                                .position(|&b| b == 0)
-                                .map_or(name_bytes, |pos| &name_bytes[..pos]);
-                            if let Ok(name_str) = std::str::from_utf8(c_str) {
-                                let new_path = path.join(name_str);
-                                if new_path.is_dir() {
-                                    watcher.watch_path_recursive(&new_path);
-                                }
-                            }
-                        }
-
-                        offset = next_offset;
+                    if let Ok(u_len) = usize::try_from(len) {
+                        watcher.process_events(&aligned_buf.data, u_len);
                     }
                 }
             }
         }
     }
+}
+
+fn main() {
+    let sfd = init_signalfd();
+    let cgroup_root = resolve_cgroup_root();
+
+    eprintln!(
+        "Cgroup Executioner active (Inotify + signalfd). Root: {}",
+        cgroup_root.display()
+    );
+
+    let inotify_fd = unsafe { inotify_init1(IN_CLOEXEC | IN_NONBLOCK) };
+    if inotify_fd < 0 {
+        eprintln!("Failed to initialize inotify");
+        unsafe { close(sfd) };
+        std::process::exit(1);
+    }
+
+    let epfd = setup_epoll(sfd, inotify_fd);
+
+    let mut watcher = CgroupWatcher::new(inotify_fd);
+    watcher.watch_path_recursive(&cgroup_root);
+
+    run_event_loop(epfd, sfd, inotify_fd, watcher);
 
     unsafe {
         close(epfd);
