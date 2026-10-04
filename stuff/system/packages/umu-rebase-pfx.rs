@@ -437,8 +437,10 @@ fn main() {
                 }
             }
             let mut lines: Vec<&str> = content.lines().collect();
-            if lines.len() >= 9 {
-                lines[8] = "1.0";
+            for i in 0..lines.len() {
+                if lines[i].ends_with("/default_pfx/") && i + 1 < lines.len() {
+                    lines[i + 1] = "1.0";
+                }
             }
             let _ = fs::write(upper_dir.join("config_info"), lines.join("\n"));
         }
