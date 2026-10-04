@@ -417,7 +417,16 @@ fn main() {
     let new_config_info = new_base_dir.join("config_info");
     if new_config_info.exists() {
         if let Ok(mut content) = fs::read_to_string(&new_config_info) {
+            let proton_root = new_base_dir.parent().and_then(Path::parent).map_or_else(
+                || PathBuf::from(&home).join(".local/share/umu/proton"),
+                |p| p.join("proton"),
+            );
+            let proton_root_str = proton_root.to_string_lossy();
+
+            content = content.replace("@UMU_USER_HOME@/.local/share/umu/proton", &proton_root_str);
             if !home.is_empty() {
+                content =
+                    content.replace(&format!("{home}/.local/share/umu/proton"), &proton_root_str);
                 content = content.replace("@UMU_USER_HOME@", &home);
                 // Also replace any lingering build home references
                 if let Some(pos) = content.find("/build/") {

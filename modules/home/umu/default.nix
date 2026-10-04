@@ -707,7 +707,7 @@ let
     fi
 
     # 7. Migrate/Rebase Upper Layer if Proton Version Changed
-    CURRENT_PROTON_VER=$(cat "$SECURE_MOUNT/proton/$PROTON_NAME/version" 2>/dev/null || echo "unknown")
+    CURRENT_PROTON_VER=$(cat "$BASE_PFX/version" 2>/dev/null || cat "$SECURE_MOUNT/proton/$PROTON_NAME/version" 2>/dev/null || echo "unknown")
     LAST_PROTON_VER=$(cat "$PREFIX_DIR/upper/.last_proton" 2>/dev/null || echo "")
     LAST_PROTON_PATH=$(cat "$PREFIX_DIR/upper/.last_proton_path" 2>/dev/null || echo "")
 
@@ -728,6 +728,12 @@ let
         --new-base "$BASE_PFX" \
         --upper "$PREFIX_DIR/upper" \
         --home "$HOME"
+    fi
+
+    # Ensure config_info matches runtime PROTONPATH so Proton never detects false version changes
+    if [[ -f "$PREFIX_DIR/upper/config_info" ]]; then
+      sed -i "s|$HOME/.local/share/umu/proton|$SECURE_MOUNT/proton|g" "$PREFIX_DIR/upper/config_info"
+      sed -i "s|@UMU_USER_HOME@/.local/share/umu/proton|$SECURE_MOUNT/proton|g" "$PREFIX_DIR/upper/config_info"
     fi
 
     echo "$CURRENT_PROTON_VER" > "$PREFIX_DIR/upper/.last_proton"
