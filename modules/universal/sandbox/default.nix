@@ -13,7 +13,9 @@ let
 
   mkNixPak = inputs.nixpak.lib.nixpak {
     inherit (pkgs) lib;
-    inherit pkgs;
+    pkgs = pkgs // {
+      xdg-dbus-proxy = pkgs.pkgsStatic.xdg-dbus-proxy;
+    };
   };
   sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
     log.level = "error";
@@ -107,18 +109,23 @@ let
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
     src = pkgs.lib.cleanSource "${inputs.way-secure}";
   };
-  sing-box-lite = pkgs.sing-box.overrideAttrs (prev: {
-    ldflags = (prev.ldflags or [ ]) ++ [
-      "-s"
-      "-w"
-    ];
-    tags = [
-      "with_inbound_tun"
-      "with_outbound_vless"
-      "with_outbound_direct"
-      "with_local_interceptor"
-    ];
-  });
+  sing-box-lite =
+    (pkgs.sing-box.override {
+      withNaiveOutbound = false;
+      withStaticCronet = false;
+    }).overrideAttrs
+      (prev: {
+        ldflags = (prev.ldflags or [ ]) ++ [
+          "-s"
+          "-w"
+        ];
+        tags = [
+          "with_inbound_tun"
+          "with_outbound_vless"
+          "with_outbound_direct"
+          "with_local_interceptor"
+        ];
+      });
   portal-xdg-open = pkgs.writeShellScriptBin "xdg-open" ''
     exec ${pkgs.systemd}/bin/busctl --user call \
       org.freedesktop.portal.Desktop \
@@ -177,7 +184,7 @@ let
           if (network == "singbox") then
             ''
               ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@" &
-              exec ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run
+              exec env GOMEMLIMIT=12MiB GOGC=25 GODEBUG=madvdontneed=1 ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run
             ''
           else
             ''
