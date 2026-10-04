@@ -26,4 +26,4 @@ ip rule add to 10.200.0.0/24 lookup main priority 2
 ip -6 rule add to fd00:200::/126 lookup main priority 2 2>/dev/null || true
 
 mkdir -p /etc/netns/vpn_wrapper
-echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf
+echo "nameserver 10.200.0.1" >/etc/netns/vpn_wrapper/resolv.conf

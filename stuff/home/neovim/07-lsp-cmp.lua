@@ -71,7 +71,11 @@ conform.setup({
 	},
 	formatters = {
 		rustfmt = {
-			command = (_G.NIX and _G.NIX.rust_toolchain and vim.fn.executable(_G.NIX.rust_toolchain .. "/bin/rustfmt") == 1)
+			command = (
+				_G.NIX
+				and _G.NIX.rust_toolchain
+				and vim.fn.executable(_G.NIX.rust_toolchain .. "/bin/rustfmt") == 1
+			)
 					and (_G.NIX.rust_toolchain .. "/bin/rustfmt")
 				or "rustfmt",
 		},

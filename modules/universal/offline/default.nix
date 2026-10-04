@@ -43,13 +43,13 @@ let
 
   finalInputsList = lib.flatten (
     lib.mapAttrsToList (
-      name: group:
+      _: group:
       if (lib.length group) == 1 then
         group
       else
         lib.imap0 (idx: item: {
           name = "${item.name}-${toString idx}";
-          path = item.path;
+          inherit (item) path;
         }) group
     ) groupedByName
   );

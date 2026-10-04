@@ -3,7 +3,7 @@ DIR=$(%{{{pkgs.coreutils}}}/bin/dirname "$0")
 # Direct pass-through for CLI info/build flags (crucial for Nix build sandboxes)
 for arg in "$@"; do
   case "$arg" in
-    --version|--help|--headless|--embed|-v|-u|-i|-c|--cmd|-s|-S|-p|-o|-n|-R|-M)
+    --version | --help | --headless | --embed | -v | -u | -i | -c | --cmd | -s | -S | -p | -o | -n | -R | -M)
       exec "$DIR/nvim-raw" "$@"
       ;;
   esac
@@ -37,7 +37,7 @@ send_stdin_stream_rpc() {
   # Check CLI arguments
   for arg in "$@"; do
     case "$arg" in
-      +G|+G*|-e|--pager-end)
+      +G | +G* | -e | --pager-end)
         JUMP_BOTTOM="v:true"
         ;;
     esac
@@ -57,7 +57,7 @@ send_stdin_stream_rpc() {
   (
     umask 077
     TMPFILE=$(%{{{pkgs.coreutils}}}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-    %{{{pkgs.coreutils}}}/bin/cat > "$TMPFILE"
+    %{{{pkgs.coreutils}}}/bin/cat >"$TMPFILE"
 
     if [[ -s "$TMPFILE" ]]; then
       local func
@@ -91,7 +91,7 @@ if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
     shift
     if [ ! -t 0 ]; then
       TMPFILE=$(%{{{pkgs.coreutils}}}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-      %{{{pkgs.coreutils}}}/bin/cat > "$TMPFILE"
+      %{{{pkgs.coreutils}}}/bin/cat >"$TMPFILE"
       ACTION_JSON="{\"type\":\"man_stdin\",\"tmpfile\":\"$TMPFILE\",\"jump_bottom\":false}"
     elif [[ -n "$1" ]]; then
       if [[ -f "$1" ]]; then
@@ -106,11 +106,11 @@ if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
     fi
   elif [ ! -t 0 ]; then
     TMPFILE=$(%{{{pkgs.coreutils}}}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-    %{{{pkgs.coreutils}}}/bin/cat > "$TMPFILE"
+    %{{{pkgs.coreutils}}}/bin/cat >"$TMPFILE"
     JUMP_BOTTOM="false"
     for arg in "$@"; do
       case "$arg" in
-        +G|+G*|-e|--pager-end)
+        +G | +G* | -e | --pager-end)
           JUMP_BOTTOM="true"
           ;;
       esac

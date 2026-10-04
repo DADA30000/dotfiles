@@ -65,12 +65,10 @@ in
 
   config = lib.mkIf cfg.enable {
     # boot.kernelParams = [ "amd_iommu=off" ];
-    environment.systemPackages =
-      [ ]
-      ++ (lib.optionals cfg.heavy.enable [
-        pkgs.alpaca
-        ik_llama-cpp
-      ]);
+    environment.systemPackages = lib.optionals cfg.heavy.enable [
+      pkgs.alpaca
+      ik_llama-cpp
+    ];
     hardware.amd-npu = {
       enableNPU = true;
       enable = true;

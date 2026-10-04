@@ -222,7 +222,7 @@ let
     let
       overriddenSteam = pkgs.steam.override {
         privateTmp = false;
-        extraPkgs = pkgs: steamExtraPackages;
+        extraPkgs = _: steamExtraPackages;
       };
 
       sandboxed = mkSandbox rec {
@@ -295,8 +295,8 @@ let
     in
     sandboxed
     // {
-      override = attrs: (sandboxed.override attrs) // { run = overriddenSteam.run; };
-      run = overriddenSteam.run;
+      override = attrs: (sandboxed.override attrs) // { inherit (overriddenSteam) run; };
+      inherit (overriddenSteam) run;
     };
 
   # ---------------------------------------------------------------------------
@@ -453,8 +453,8 @@ let
 
   nixAlienPkg = inputs.nix-alien.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
     python3 = pkgs.python3.override {
-      packageOverrides = pyFinal: pyPrev: {
-        dpcontracts = pyPrev.dpcontracts.overridePythonAttrs (oldAttrs: {
+      packageOverrides = _: pyPrev: {
+        dpcontracts = pyPrev.dpcontracts.overridePythonAttrs (_: {
           doCheck = false;
         });
       };
@@ -518,7 +518,7 @@ let
   };
 
   ventoyFullGtkPkg = pkgs.ventoy-full-gtk.overrideAttrs (
-    finalAttrs: prevAttrs: {
+    _: prevAttrs: {
       postInstall = (prevAttrs.postInstall or "") + ''
         GUI_BIN="$(echo "$out"/share/ventoy/tool/*/Ventoy2Disk.gtk3)"
         cat << EOF > "$out/bin/ventoy-gui"

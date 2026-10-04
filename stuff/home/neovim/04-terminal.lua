@@ -385,7 +385,12 @@ vim.api.nvim_create_autocmd("TermOpen", {
 			vim.keymap.set({ "n", "v", "t" }, event, standard_events[i], { buffer = bufnr, silent = true })
 		end
 
-		vim.keymap.set("n", "!nos", ":Hh<CR>", { buffer = bufnr, desc = "Open nos terminal", noremap = true, silent = true })
+		vim.keymap.set(
+			"n",
+			"!nos",
+			":Hh<CR>",
+			{ buffer = bufnr, desc = "Open nos terminal", noremap = true, silent = true }
+		)
 	end,
 })
 
@@ -423,7 +428,10 @@ vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
 			if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == bufnr then
 				local view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
 				local win_h = vim.api.nvim_win_get_height(win)
-				local is_at_bottom = (view.topline >= line_count - win_h or (win == vim.api.nvim_get_current_win() and vim.fn.mode() == "t"))
+				local is_at_bottom = (
+					view.topline >= line_count - win_h
+					or (win == vim.api.nvim_get_current_win() and vim.fn.mode() == "t")
+				)
 				win_views[win] = { view = view, is_at_bottom = is_at_bottom, win_h = win_h }
 			end
 		end

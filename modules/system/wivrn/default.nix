@@ -41,7 +41,7 @@ let
     xrizer = xrizer_multilib;
     opencomposite = opencomposite_multilib;
   };
-  wivrn_i686 = pkgs.pkgsi686Linux.callPackage (pkg_wivrn.override) {
+  wivrn_i686 = pkgs.pkgsi686Linux.callPackage pkg_wivrn.override {
     clientLibOnly = true;
     git = (pkgs.pkgsi686Linux.git.override { withManual = false; }).overrideAttrs {
       doCheck = false;

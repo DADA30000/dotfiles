@@ -226,12 +226,10 @@
   };
 
   outputs =
-    {
-      ...
-    }@inputs:
+    inputs:
     let
       # Needed for offline installation, so that I could access config.system.build.toplevel without causing infinite recursion
-      iso-wrapper = (
+      iso-wrapper =
         prev_system:
         let
           system = prev_system // {
@@ -267,8 +265,7 @@
               "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             ];
           }
-        )
-      );
+        );
 
       listFiles =
         paths:

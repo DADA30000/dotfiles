@@ -6,7 +6,7 @@ if ! POINT=$(slurp -p -b '#00000000' -f "%x %y" 2>/dev/null); then
   exit 0
 fi
 
-read -r X Y <<< "$POINT"
+read -r X Y <<<"$POINT"
 if [[ -z "${X:-}" || -z "${Y:-}" ]]; then
   exit 0
 fi
@@ -49,12 +49,12 @@ if [[ -z "$PID" || "$PID" == "0" ]]; then
 fi
 
 # 4. Resolve user systemd unit by walking /proc/$PID/cgroup backwards
-CGROUP=$(cut -d: -f3 < "/proc/$PID/cgroup" 2>/dev/null || true)
+CGROUP=$(cut -d: -f3 <"/proc/$PID/cgroup" 2>/dev/null || true)
 UNIT=""
 
 if [[ -n "$CGROUP" ]]; then
-  IFS='/' read -ra PARTS <<< "$CGROUP"
-  for (( i=${#PARTS[@]}-1; i>=0; i-- )); do
+  IFS='/' read -ra PARTS <<<"$CGROUP"
+  for ((i = ${#PARTS[@]} - 1; i >= 0; i--)); do
     PART="${PARTS[i]}"
     if [[ "$PART" =~ \.(service|scope)$ ]] && ! [[ "$PART" =~ ^(user@[0-9]+|init|systemd-.*|wayland-wm.*|hyprland.*|noctalia.*|dbus.*|pipewire.*|wireplumber.*|xdg-desktop-portal.*)\. ]]; then
       UNIT="$PART"

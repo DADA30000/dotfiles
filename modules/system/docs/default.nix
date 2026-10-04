@@ -75,7 +75,7 @@ let
     in
     pkgs.buildPackages.nixosOptionsDoc (
       {
-        options = evaled.options;
+        inherit (evaled) options;
         transformOptions =
           opt:
           opt

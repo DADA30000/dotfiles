@@ -31,7 +31,7 @@ let
 
       systemdServices = lib.listToAttrs (
         map (x: {
-          name = x.name;
+          inherit (x) name;
           value = {
             wantedBy = lib.mkForce [ ];
           };
@@ -40,7 +40,7 @@ let
 
       systemdUserServices = lib.listToAttrs (
         map (x: {
-          name = x.name;
+          inherit (x) name;
           value = {
             wantedBy = lib.mkForce [ ];
           };
@@ -86,7 +86,7 @@ let
         {
           systemd.user.services = lib.listToAttrs (
             map (x: {
-              name = x.name;
+              inherit (x) name;
               value = {
                 Install.WantedBy = lib.mkForce [ ];
               };

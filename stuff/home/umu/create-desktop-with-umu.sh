@@ -96,10 +96,10 @@ if [[ -f "$actual_exe" ]]; then
       if [[ "$ICON_SOURCE" == *.ico || "$ICON_SOURCE" == *.ICO ]]; then
         cp "$ICON_SOURCE" "$WORK_DIR/icon.ico" 2>/dev/null
       else
-        %{{{pkgs.icoutils}}}/bin/wrestool -x -t 14 "$ICON_SOURCE" > "$WORK_DIR/icon.ico" 2>/dev/null
+        %{{{pkgs.icoutils}}}/bin/wrestool -x -t 14 "$ICON_SOURCE" >"$WORK_DIR/icon.ico" 2>/dev/null
 
         if [[ ! -s "$WORK_DIR/icon.ico" ]]; then
-            %{{{pkgs.icoutils}}}/bin/wrestool -x -t 14 "$actual_exe" > "$WORK_DIR/icon.ico" 2>/dev/null
+          %{{{pkgs.icoutils}}}/bin/wrestool -x -t 14 "$actual_exe" >"$WORK_DIR/icon.ico" 2>/dev/null
         fi
       fi
 
@@ -131,7 +131,7 @@ if [[ -f "$actual_exe" ]]; then
     EXEC_CMD="$ENV_BASE umu-run-wrapper \"$actual_exe\" $args"
   fi
 
-  cat <<EOF > "$DESKTOP_FILE"
+  cat <<EOF >"$DESKTOP_FILE"
 [Desktop Entry]
 Name=$LNK_DISPLAY_NAME
 Exec=$EXEC_CMD

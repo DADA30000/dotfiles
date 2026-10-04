@@ -407,12 +407,7 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 				return
 			end
 			local cmd = vim.fn.getcmdline():match("^%s*(.-)%s*$")
-			quit_allowed_modified = (
-				cmd == "q!" or
-				cmd:match("^wq") ~= nil or
-				cmd == "x" or
-				cmd == "x!"
-			)
+			quit_allowed_modified = (cmd == "q!" or cmd:match("^wq") ~= nil or cmd == "x" or cmd == "x!")
 		end,
 	})
 

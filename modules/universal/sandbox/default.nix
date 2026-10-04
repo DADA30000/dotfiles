@@ -454,8 +454,7 @@ let
                       bind = {
 
                         dev =
-                          [ ]
-                          ++ (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
+                          (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
                           ++ (lib.optionals (network == "singbox") [ "/dev/net/tun" ])
                           ++ (lib.optionals gpu [
                             "/dev/dri"
@@ -772,7 +771,7 @@ in
   config = {
     _module.args = {
       inherit staticBwrap;
-      mkSandbox = mkSandbox;
+      inherit mkSandbox;
     };
   }
   // lib.optionalAttrs (options ? home.file) {

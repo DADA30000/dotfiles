@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 SOURCE="$1"
 TARGET="$2"
 TARGET_DIR="$(dirname "$TARGET")"

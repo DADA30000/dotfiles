@@ -8,31 +8,31 @@ prompt=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-  -p | --prompt)
-    prompt="$2"
-    shift 2
-    ;;
-  -p=* | --prompt=*)
-    prompt="${1#*=}"
-    shift 1
-    ;;
-  -dmenu)
-    shift 1
-    ;;
-  -mesg | -theme | -font | -selected-row | -filter | -format)
-    shift 2 2>/dev/null || shift 1
-    ;;
-  -i | -no-custom | -password | -case-sensitive | -markup-rows | -async)
-    shift 1
-    ;;
-  *)
-    # Ignore unknown rofi flags
-    if [[ "$1" == -* ]]; then
+    -p | --prompt)
+      prompt="$2"
+      shift 2
+      ;;
+    -p=* | --prompt=*)
+      prompt="${1#*=}"
       shift 1
-    else
+      ;;
+    -dmenu)
       shift 1
-    fi
-    ;;
+      ;;
+    -mesg | -theme | -font | -selected-row | -filter | -format)
+      shift 2 2>/dev/null || shift 1
+      ;;
+    -i | -no-custom | -password | -case-sensitive | -markup-rows | -async)
+      shift 1
+      ;;
+    *)
+      # Ignore unknown rofi flags
+      if [[ "$1" == -* ]]; then
+        shift 1
+      else
+        shift 1
+      fi
+      ;;
   esac
 done
 

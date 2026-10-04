@@ -24,7 +24,7 @@ if ! [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # Source configuration file
-# shellcheck source=/dev/null
+# shellcheck source=/dev/null disable=SC2154
 source "$CONFIG_FILE"
 
 # Validate parameters with safe defaults

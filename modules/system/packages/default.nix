@@ -26,7 +26,10 @@ let
       closePattern ? "}}}",
     }:
     let
-      effectiveScope = { inherit pkgs lib; } // scope;
+      effectiveScope = {
+        inherit pkgs lib;
+      }
+      // scope;
       parts = lib.splitString openPattern string;
       process =
         part:
@@ -122,12 +125,12 @@ let
     sh =
       path:
       pkgs.writeShellScriptBin (stripExtension (baseNameOf path)) (evalAndSubstitute {
-        string = (builtins.readFile path);
+        string = builtins.readFile path;
       });
     py =
       path:
       pkgs.writers.writePython3Bin (stripExtension (baseNameOf path)) { } (evalAndSubstitute {
-        string = (builtins.readFile path);
+        string = builtins.readFile path;
       });
     rs =
       path:

@@ -127,11 +127,11 @@ let
 
   steamrt3 = pkgs.stdenv.mkDerivation {
     name = "steamrt3";
-    version = steamrt3_data.version;
+    inherit (steamrt3_data) version;
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
       url = "https://repo.steampowered.com/steamrt3/images/${steamrt3_data.version}/SteamLinuxRuntime_sniper.tar.xz";
-      hash = steamrt3_data.hash;
+      inherit (steamrt3_data) hash;
     };
     installPhase = ''
       mkdir -p "$out"
@@ -144,11 +144,11 @@ let
 
   steamrt4 = pkgs.stdenv.mkDerivation {
     name = "steamrt4";
-    version = steamrt4_data.version;
+    inherit (steamrt4_data) version;
     phases = [ "installPhase" ];
     src = pkgs.fetchurl {
       url = "https://repo.steampowered.com/steamrt4/images/${steamrt4_data.version}/SteamLinuxRuntime_4.tar.xz";
-      hash = steamrt4_data.hash;
+      inherit (steamrt4_data) hash;
     };
     installPhase = ''
       mkdir -p "$out"
@@ -199,7 +199,7 @@ let
   # ---------------------------------------------------------------------------
   runtime = pkgs.stdenv.mkDerivation {
     name = "umu-runtime.img";
-    version = steamrt4_data.version;
+    inherit (steamrt4_data) version;
     nativeBuildInputs = [
       pkgs.erofs-utils
       pkgs.bubblewrap
@@ -390,7 +390,7 @@ let
     pname = "umu-launcher";
     inherit (patched-umu) version meta;
 
-    extraPkgs = pkgs: [ patched-umu ];
+    extraPkgs = _: [ patched-umu ];
     executableName = patched-umu.meta.mainProgram;
     runScript = lib.getExe patched-umu;
 

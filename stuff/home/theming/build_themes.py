@@ -1,7 +1,5 @@
 import glob
-import json
 import os
-import shutil
 import tomllib
 
 colors = [
@@ -76,7 +74,9 @@ for key, cursor in cursors.items():
     svgs = []
     if "*" in png_pattern:
         base_name = png_pattern.split("-*")[0]
-        svgs = sorted(glob.glob(os.path.join("svg/modern", base_name, "*.svg")))
+        svgs = sorted(
+            glob.glob(os.path.join("svg/modern", base_name, "*.svg"))
+        )
     else:
         base_name = png_pattern.replace(".png", ".svg")
         svg_path = os.path.join("svg/modern", base_name)

@@ -1,8 +1,10 @@
 from gi import require_version
-require_version('Gtk', '4.0')
+
+require_version("Gtk", "4.0")
 from gi.repository import Nautilus, GObject
 import subprocess
 from urllib.parse import unquote
+
 
 class OpenAsRootExtension(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
@@ -14,15 +16,15 @@ class OpenAsRootExtension(GObject.GObject, Nautilus.MenuProvider):
         'folder' is a Nautilus.FileInfo object.
         """
         uri = folder.get_uri()
-        
-        if not uri.startswith('file://'):
-            return # Only works for local files
+
+        if not uri.startswith("file://"):
+            return  # Only works for local files
 
         path = unquote(uri[7:])
         admin_uri = f"admin://{path}"
-        
+
         try:
-            subprocess.Popen(['nautilus', admin_uri])
+            subprocess.Popen(["nautilus", admin_uri])
         except Exception as e:
             print(f"Open as Root Error: {e}")
 
@@ -33,15 +35,15 @@ class OpenAsRootExtension(GObject.GObject, Nautilus.MenuProvider):
         # We only want this for a single, selected, local directory
         if len(files) != 1:
             return []
-        
+
         item = files[0]
-        if not item.is_directory() or not item.get_uri().startswith('file://'):
+        if not item.is_directory() or not item.get_uri().startswith("file://"):
             return []
 
         menu_item = Nautilus.MenuItem(
             name="OpenAsRootExtension::OpenFileAsRoot",
             label="Открыть как администратор",
-            tip="Открывает эту папку с правами суперпользователя"
+            tip="Открывает эту папку с правами суперпользователя",
         )
         menu_item.connect("activate", self._open_with_admin_privileges, item)
         return [menu_item]
@@ -51,13 +53,15 @@ class OpenAsRootExtension(GObject.GObject, Nautilus.MenuProvider):
         Called when right-clicking on the background of a directory.
         """
         # Ensure we are in a local directory
-        if not current_folder.get_uri().startswith('file://'):
+        if not current_folder.get_uri().startswith("file://"):
             return []
-        
+
         menu_item = Nautilus.MenuItem(
             name="OpenAsRootExtension::OpenBackgroundAsRoot",
             label="Открыть как администратор",
-            tip="Открывает текущую папку с правами суперпользователя"
+            tip="Открывает текущую папку с правами суперпользователя",
         )
-        menu_item.connect("activate", self._open_with_admin_privileges, current_folder)
+        menu_item.connect(
+            "activate", self._open_with_admin_privileges, current_folder
+        )
         return [menu_item]

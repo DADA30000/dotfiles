@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -x
 export PATH="/run/wrappers/bin:$PATH"
 mkdir -p "$HOME/Documents/Replays"

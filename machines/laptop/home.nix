@@ -1,7 +1,4 @@
-{
-  ...
-}:
-{
+_: {
   theming.cursor_size = 28;
 
   hyprland.additional-monitors = [

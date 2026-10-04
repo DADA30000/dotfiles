@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 POOL="${1:-}"
 if [ -z "$POOL" ]; then

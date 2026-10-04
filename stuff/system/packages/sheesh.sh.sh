@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 THE_MOUNT_POINT="$HOME/.local/state/nixos-config"
 USER_ID="$(id -u)"
 GROUP_ID="$(id -g)"

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 LOG_FILE="$HOME/.cache/nixos-rebuild.log"
 rm -f "$LOG_FILE"
 NOTIFY_ID=$(notify-send -p "Обновление" "Ожидание ввода пароля...")

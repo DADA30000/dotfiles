@@ -1,8 +1,9 @@
 from gi import require_version
-require_version('Gtk', '4.0')
+
+require_version("Gtk", "4.0")
 from gi.repository import Nautilus, GObject, Gtk, Gio, GLib
 from urllib.parse import quote
-import os
+
 
 def _select_file(uri):
     try:
@@ -28,7 +29,9 @@ def _select_file(uri):
 class EntryDialog(Gtk.Dialog):
     def __init__(self, parent, title, message, default_text=""):
         super().__init__(title=title, transient_for=parent, modal=True)
-        self.add_buttons("_Cancel", Gtk.ResponseType.CANCEL, "_Ok", Gtk.ResponseType.OK)
+        self.add_buttons(
+            "_Cancel", Gtk.ResponseType.CANCEL, "_Ok", Gtk.ResponseType.OK
+        )
         self.set_default_size(300, 100)
         self.set_resizable(False)
         box = self.get_content_area()
@@ -56,8 +59,8 @@ class NewFileExtension(GObject.GObject, Nautilus.MenuProvider):
             filename = dialog.get_text()
             if filename:
                 folder_uri = folder.get_uri()
-                if not folder_uri.endswith('/'):
-                    folder_uri += '/'
+                if not folder_uri.endswith("/"):
+                    folder_uri += "/"
                 new_file_uri = folder_uri + quote(filename)
 
                 try:
@@ -73,11 +76,17 @@ class NewFileExtension(GObject.GObject, Nautilus.MenuProvider):
     def menu_activate_cb(self, menu, folder):
         app = Gtk.Application.get_default()
         window = app.get_active_window() if app else None
-        dialog = EntryDialog(window, "Создать новый файл", "Введите название файла:", "")
+        dialog = EntryDialog(
+            window, "Создать новый файл", "Введите название файла:", ""
+        )
         dialog.present()
         dialog.connect("response", self._on_dialog_response, folder)
 
     def get_background_items(self, folder):
-        item = Nautilus.MenuItem(name="NewFileExtension::CreateNewFile", label="Создать новый файл", tip="Создаёт новый файл в текущей директории")
+        item = Nautilus.MenuItem(
+            name="NewFileExtension::CreateNewFile",
+            label="Создать новый файл",
+            tip="Создаёт новый файл в текущей директории",
+        )
         item.connect("activate", self.menu_activate_cb, folder)
         return [item]

@@ -8,12 +8,12 @@
 
 for arg; do
   case "$arg" in
-  *=*)
-    ;;
-  *)
-    exec_path="$arg"
-    break
-    ;;
+    *=*)
+      ;;
+    *)
+      exec_path="$arg"
+      break
+      ;;
   esac
 done
 

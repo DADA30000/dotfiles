@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 TITLE=""
 APP_ID=""
 WORKDIR=""
@@ -5,29 +6,29 @@ HOLD=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-  -T | --title)
-    TITLE="$2"
-    shift 2
-    ;;
-  --class | --app-id)
-    APP_ID="$2"
-    shift 2
-    ;;
-  --working-directory)
-    WORKDIR="$2"
-    shift 2
-    ;;
-  --hold)
-    HOLD="1"
-    shift
-    ;;
-  -e | --)
-    shift
-    break
-    ;;
-  *)
-    break
-    ;;
+    -T | --title)
+      TITLE="$2"
+      shift 2
+      ;;
+    --class | --app-id)
+      APP_ID="$2"
+      shift 2
+      ;;
+    --working-directory)
+      WORKDIR="$2"
+      shift 2
+      ;;
+    --hold)
+      HOLD="1"
+      shift
+      ;;
+    -e | --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
   esac
 done
 

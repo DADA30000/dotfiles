@@ -661,7 +661,7 @@ in
         settings = {
           initial_session = {
             command = "uwsm start hyprland-uwsm.desktop > /dev/null 2>&1";
-            user = user;
+            inherit user;
           };
           default_session = {
             command = "${tuigreet-patched}/bin/tuigreet --user-menu --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";

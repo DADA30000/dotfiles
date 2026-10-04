@@ -267,12 +267,26 @@ let
 
   setup_script = pkgs.writeShellScript "sing-box-setup" (evalAndSubstitute {
     string = builtins.readFile ../../../stuff/system/sing-box/sing-box-setup.sh;
-    scope = { inherit pkgs cleanup_script vpnRoutingNft MTU; };
+    scope = {
+      inherit
+        pkgs
+        cleanup_script
+        vpnRoutingNft
+        MTU
+        ;
+    };
   });
 
   init_script = pkgs.writeShellScript "sing-box-init" (evalAndSubstitute {
     string = builtins.readFile ../../../stuff/system/sing-box/sing-box-init.sh;
-    scope = { inherit setup_script CREDENTIAL_DIR build-config-py sing-box-config-file; };
+    scope = {
+      inherit
+        setup_script
+        CREDENTIAL_DIR
+        build-config-py
+        sing-box-config-file
+        ;
+    };
   });
 
   stop_script = pkgs.writeShellScript "sing-box-stop" "${cleanup_script}";

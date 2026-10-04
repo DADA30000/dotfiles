@@ -8,7 +8,11 @@ for path in sys.argv[1:]:
         s = f.read()
 
     if "import filecmp" not in s:
-        s = s.replace("#!/usr/bin/env python3\n", "#!/usr/bin/env python3\nimport filecmp\n", 1)
+        s = s.replace(
+            "#!/usr/bin/env python3\n",
+            "#!/usr/bin/env python3\nimport filecmp\n",
+            1,
+        )
 
     old_check = "        if file_exists(dst, follow_symlinks=False):\n            os.remove(dst)"
     new_check = (

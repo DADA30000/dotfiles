@@ -8,8 +8,8 @@
 let
   cfg = config.hyprland;
   nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix { };
-  mkPluginPermissionEntries = list: map (plugin: mkPluginPermissionEntry plugin) list;
-  mkPluginExecEntries = list: lib.concatLines (map (plugin: mkPluginExecEntry plugin) list);
+  mkPluginPermissionEntries = list: map mkPluginPermissionEntry list;
+  mkPluginExecEntries = list: lib.concatLines (map mkPluginExecEntry list);
   mkPluginExecEntry = plugin: "hl.exec_cmd [[${plugin-loader plugin}/bin/hypr-plugin-loader]]";
   mkPluginPermissionEntry = plugin: {
     binary = "${lib.escapeRegex "${plugin-loader plugin}/bin/hypr-plugin-loader"}";
@@ -22,7 +22,7 @@ let
     lockFile = "${inputs.oo7}/Cargo.lock";
   };
 
-  oo7 = pkgs.oo7.overrideAttrs (old: {
+  oo7 = pkgs.oo7.overrideAttrs (_: {
     src = inputs.oo7;
     inherit cargoDeps;
     sourceRoot = "source";
@@ -33,7 +33,7 @@ let
       inherit oo7;
       useWrappedDaemon = false;
     }).overrideAttrs
-      (old: {
+      (_: {
         src = inputs.oo7;
         inherit cargoDeps;
         sourceRoot = "source/server";

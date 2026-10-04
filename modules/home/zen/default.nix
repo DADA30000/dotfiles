@@ -204,7 +204,7 @@ let
   };
   zen-package =
     (inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight-unwrapped.override {
-      policies = cfg_orig.policies;
+      inherit (cfg_orig) policies;
     }).overrideAttrs
       (prev: {
         postInstall = prev.postInstall or "" + ''
@@ -223,7 +223,7 @@ in
       "bookmarks.html".source = ../../../stuff/home/zen/bookmarks.html;
       ".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
       "zen/default/zen-keyboard-shortcuts.json".source = shortcuts;
-      #"zen/default/xulstore.json".source = xulstore_json;
+      "zen/default/xulstore.json".source = xulstore_json;
       "zen/default/chrome" = {
         source = combined_chrome;
         recursive = true;
@@ -270,9 +270,9 @@ in
     programs.zen-browser = {
       enable = true;
       package = (pkgs.wrapFirefox zen-package { icon = "zen-twilight"; }).override {
-        extraPrefs = cfg_orig.extraPrefs;
-        extraPrefsFiles = cfg_orig.extraPrefsFiles;
-        nativeMessagingHosts = cfg_orig.nativeMessagingHosts;
+        inherit (cfg_orig) extraPrefs;
+        inherit (cfg_orig) extraPrefsFiles;
+        inherit (cfg_orig) nativeMessagingHosts;
       };
       nativeMessagingHosts = [
         inputs.pipewire-screenaudio.packages.${pkgs.stdenv.hostPlatform.system}.default
