@@ -89,7 +89,7 @@ let
         chmod +x $out/bin/${name}
       '';
 
-      preFixup = ''
+      preFixup = lib.optionalString (pathDeps != [ ]) ''
         gappsWrapperArgs+=(
           --prefix PATH : "${lib.makeBinPath pathDeps}"
         )
