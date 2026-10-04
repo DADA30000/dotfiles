@@ -255,267 +255,27 @@ let
     '';
   };
 
-  vpnRoutingNft = pkgs.writeText "vpn_routing.nft" ''
-    table inet vpn_routing {
-      chain output {
-        type route hook output priority mangle; policy accept;
-        meta mark 0x40000000 meta mark set 0x2024 accept
-        ip saddr 10.201.0.1 counter queue num ${zapret-qnum} bypass
-        ip6 saddr fd00:201::1 counter queue num ${zapret-qnum} bypass
-      }
+  vpnRoutingNft = pkgs.writeText "vpn_routing.nft" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/vpn_routing.nft;
+    scope = { inherit zapret-qnum; };
+  });
 
-      chain postrouting {
-        type nat hook postrouting priority srcnat; policy accept;
-        ip saddr 10.201.0.0/24 masquerade
-        ip6 saddr fd00:201::/112 masquerade
-      }
-    }
-  '';
+  cleanup_script = pkgs.writeShellScript "sing-box-cleanup" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/sing-box-cleanup.sh;
+    scope = { inherit pkgs; };
+  });
 
-  cleanup_script = pkgs.writeShellScript "sing-box-cleanup" ''
-    PATH="$PATH:${pkgs.iproute2}/bin:${pkgs.nftables}/bin"
+  setup_script = pkgs.writeShellScript "sing-box-setup" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/sing-box-setup.sh;
+    scope = { inherit pkgs cleanup_script vpnRoutingNft MTU; };
+  });
 
-    nft delete table inet vpn_routing 2>/dev/null || true
+  init_script = pkgs.writeShellScript "sing-box-init" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/sing-box-init.sh;
+    scope = { inherit setup_script CREDENTIAL_DIR build-config-py sing-box-config-file; };
+  });
 
-    rm -rf /etc/netns/vpn_wrapper
-    ip netns del vpn_wrapper 2>/dev/null || true
-    ip link del veth_host 2>/dev/null || true
-    ip link del zapret0 2>/dev/null || true
-
-    ip addr del 10.201.0.1/24 dev lo 2>/dev/null || true
-    ip -6 addr del fd00:201::1/112 dev lo 2>/dev/null || true
-
-    ip rule del to 10.200.0.0/24 lookup main priority 2 2>/dev/null || true
-    ip -6 rule del to fd00:200::/126 lookup main priority 2 2>/dev/null || true
-  '';
-
-  setup_script = pkgs.writeShellScript "sing-box-setup" ''
-    PATH="$PATH:${pkgs.iproute2}/bin:${pkgs.nftables}/bin"
-    ${cleanup_script}
-    set -e
-
-    ip addr add 10.201.0.1/24 dev lo 2>/dev/null || true
-    ip -6 addr add fd00:201::1/112 dev lo 2>/dev/null || true
-
-    nft -f ${vpnRoutingNft}
-
-    ip netns add vpn_wrapper
-    ip link add veth_host mtu ${toString MTU} type veth peer name veth_peer mtu ${toString MTU}
-    ip link set veth_peer netns vpn_wrapper
-
-    ip addr add 10.200.0.1/24 dev veth_host
-    ip addr add fd00:200::1/126 dev veth_host
-    ip link set veth_host up
-
-    ip netns exec vpn_wrapper ip addr add 10.200.0.2/24 dev veth_peer
-    ip netns exec vpn_wrapper ip -6 addr add fd00:200::2/126 dev veth_peer
-    ip netns exec vpn_wrapper ip link set veth_peer up
-    ip netns exec vpn_wrapper ip link set lo up
-    ip netns exec vpn_wrapper ip route add default via 10.200.0.1
-    ip netns exec vpn_wrapper ip -6 route add default via fd00:200::1
-
-    ip rule add to 10.200.0.0/24 lookup main priority 2
-    ip -6 rule add to fd00:200::/126 lookup main priority 2 2>/dev/null || true
-
-    mkdir -p /etc/netns/vpn_wrapper
-    echo "nameserver 10.200.0.1" > /etc/netns/vpn_wrapper/resolv.conf
-  '';
-
-  init_script = pkgs.writeShellScript "sing-box-init" ''
-    set -e
-
-    echo "Initializing base network policies..."
-    ${setup_script}
-
-    ALL_NEW_TAGS="[]"
-    CRED_CONF="${CREDENTIAL_DIR}/config.json"
-    if [[ -f "$CRED_CONF" ]]; then
-      EXTRA_TAGS=$(jq -r '[.outbounds[]?.tag // empty, .endpoints[]?.tag // empty] | reverse | .[]' "$CRED_CONF" 2>/dev/null || true)
-      for tag in $EXTRA_TAGS; do
-        ALL_NEW_TAGS=$(jq -n --argjson list "$ALL_NEW_TAGS" --arg tag "$tag" '[$tag] + $list')
-      done
-    else
-      CRED_CONF="none"
-    fi
-
-    echo "Assembling unified sing-box config..."
-    python3 ${build-config-py} \
-      "${sing-box-config-file}" \
-      "$CRED_CONF" \
-      "/run/sing-box/config.json" \
-      "[]" \
-      "$ALL_NEW_TAGS"
-
-    chmod 600 /run/sing-box/config.json
-    echo "sing-box initialization complete."
-  '';
-
-  stop_script = pkgs.writeShellScript "sing-box-stop" ''
-    ${cleanup_script}
-  '';
-
-  sing-box-watcher-src = pkgs.writeText "sing-box-watcher.c" ''
-    #define _GNU_SOURCE
-    #include <stdio.h>
-    #include <stdlib.h>
-    #include <string.h>
-    #include <unistd.h>
-    #include <dirent.h>
-    #include <fcntl.h>
-    #include <signal.h>
-    #include <poll.h>
-    #include <sys/socket.h>
-    #include <linux/rtnetlink.h>
-    #include <sys/wait.h>
-
-    static volatile sig_atomic_t g_running = 1;
-
-    static void handle_signal(int sig) {
-        (void)sig;
-        g_running = 0;
-    }
-
-    static void run_systemctl(const char *action) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            execl("${pkgs.systemd}/bin/systemctl", "systemctl", action, "sing-box-init.service", NULL);
-            _exit(1);
-        } else if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
-        }
-    }
-
-    static int has_physical_carrier(void) {
-        DIR *dir = opendir("/sys/class/net");
-        if (!dir) return 0;
-
-        struct dirent *de;
-        int connected = 0;
-
-        while ((de = readdir(dir)) != NULL) {
-            if (de->d_name[0] == '.') continue;
-
-            char path[512];
-            snprintf(path, sizeof(path), "/sys/class/net/%s/device", de->d_name);
-            if (access(path, F_OK) != 0) {
-                // Ignore virtual network devices (tun0, lo, veth, etc.)
-                continue;
-            }
-
-            // Check carrier
-            snprintf(path, sizeof(path), "/sys/class/net/%s/carrier", de->d_name);
-            int fd = open(path, O_RDONLY | O_CLOEXEC);
-            if (fd >= 0) {
-                char ch = 0;
-                if (read(fd, &ch, 1) == 1 && ch == '1') {
-                    connected = 1;
-                    close(fd);
-                    break;
-                }
-                close(fd);
-            }
-
-            // Check operstate fallback
-            snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", de->d_name);
-            fd = open(path, O_RDONLY | O_CLOEXEC);
-            if (fd >= 0) {
-                char buf[8];
-                ssize_t n = read(fd, buf, sizeof(buf) - 1);
-                if (n >= 2 && strncmp(buf, "up", 2) == 0) {
-                    connected = 1;
-                    close(fd);
-                    break;
-                }
-                close(fd);
-            }
-        }
-
-        closedir(dir);
-        return connected;
-    }
-
-    int main(void) {
-        struct sigaction sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_handler = handle_signal;
-        sigaction(SIGTERM, &sa, NULL);
-        sigaction(SIGINT, &sa, NULL);
-
-        int nl_fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
-        if (nl_fd < 0) {
-            perror("socket(AF_NETLINK)");
-            return 1;
-        }
-
-        struct sockaddr_nl sa_nl;
-        memset(&sa_nl, 0, sizeof(sa_nl));
-        sa_nl.nl_family = AF_NETLINK;
-        sa_nl.nl_groups = RTMGRP_LINK;
-
-        if (bind(nl_fd, (struct sockaddr *)&sa_nl, sizeof(sa_nl)) < 0) {
-            perror("bind(AF_NETLINK)");
-            close(nl_fd);
-            return 1;
-        }
-
-        int last_state = -1;
-
-        while (g_running) {
-            int connected = has_physical_carrier();
-
-            if (connected != last_state) {
-                last_state = connected;
-                if (connected) {
-                    fprintf(stderr, "[sing-box-watcher] Physical link UP. Starting sing-box-init...\n");
-                    run_systemctl("start");
-                } else {
-                    fprintf(stderr, "[sing-box-watcher] Physical link DOWN. Stopping sing-box-init...\n");
-                    run_systemctl("stop");
-                }
-            }
-
-            struct pollfd pfd;
-            memset(&pfd, 0, sizeof(pfd));
-            pfd.fd = nl_fd;
-            pfd.events = POLLIN;
-
-            int ret = poll(&pfd, 1, -1);
-            if (ret > 0 && (pfd.revents & POLLIN)) {
-                char buf[4096];
-                while (recv(nl_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {}
-
-                // Debounce 1.5s to absorb link flapping / DHCP negotiation
-                int remaining_ms = 1500;
-                while (g_running && remaining_ms > 0) {
-                    struct pollfd pfd_db = { .fd = nl_fd, .events = POLLIN, .revents = 0 };
-                    int db_ret = poll(&pfd_db, 1, (remaining_ms > 200) ? 200 : remaining_ms);
-                    if (db_ret > 0 && (pfd_db.revents & POLLIN)) {
-                        while (recv(nl_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {}
-                    }
-                    remaining_ms -= 200;
-                }
-            }
-        }
-
-        fprintf(stderr, "[sing-box-watcher] Exiting, stopping sing-box-init...\n");
-        run_systemctl("stop");
-        close(nl_fd);
-        return 0;
-    }
-  '';
-
-  sing-box-watcher = pkgs.stdenv.mkDerivation {
-    pname = "sing-box-watcher";
-    version = "1.0";
-    dontUnpack = true;
-    src = sing-box-watcher-src;
-    buildPhase = "$CC -O2 -Wall $src -o sing-box-watcher";
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 sing-box-watcher $out/bin/sing-box-watcher
-    '';
-  };
+  stop_script = pkgs.writeShellScript "sing-box-stop" "${cleanup_script}";
 
 in
 {
@@ -552,7 +312,7 @@ in
           Type = "simple";
           Restart = "always";
           RestartSec = "3s";
-          ExecStart = "${sing-box-watcher}/bin/sing-box-watcher";
+          ExecStart = "/run/current-system/sw/bin/sing-box-watcher";
           ExecStopPost = "${pkgs.systemd}/bin/systemctl stop sing-box-init.service";
         };
       };

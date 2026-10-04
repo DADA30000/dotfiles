@@ -107,26 +107,7 @@ in
         })
       ];
 
-      appendConfig = ''
-        rtmp {
-          server {
-            listen 1935;
-            chunk_size 4096;
-            allow publish 127.0.0.1;
-            deny publish all;
-            application live {
-              live on;
-              record off;
-              hls on;
-              hls_path /website/stream/hls;
-              hls_fragment 3;
-              hls_playlist_length 60;
-              dash on;
-              dash_path /website/stream/dash;
-            }
-          }
-        }
-      '';
+      appendConfig = builtins.readFile ../../../stuff/system/my-services/nginx-rtmp.conf;
     };
 
     systemd = {

@@ -1,0 +1,121 @@
+:root {
+  --panel-box-shadow: none !important;
+  --zen-colors-tertiary: rgba(0, 0, 0, 0.01) !important;
+  --zen-colors-secondary: rgba(0, 0, 0, 0.01) !important;
+  --arrowpanel-background: rgba(0, 0, 0, 0.01) !important;
+  --panel-background: rgba(0, 0, 0, 0.01) !important;
+  --menu-background-color: rgba(0, 0, 0, 0.01) !important;
+  --panel-border-color: transparent !important;
+  --arrowpanel-border-color: transparent !important;
+  --menupopup-shadow: none !important;
+  --panel-shadow: none !important;
+  --menu-shadow: none !important;
+  --menu-box-shadow: none !important;
+  --arrowpanel-shadow-margin: 0px !important;
+  --panel-shadow-margin: 0px !important;
+}
+
+panel,
+menupopup {
+  background: transparent !important;
+  background-color: transparent !important;
+  -moz-window-shadow: none !important;
+}
+
+.menupopup-arrowscrollbox {
+  background: rgba(0, 0, 0, 0.01) !important;
+  background-color: rgba(0, 0, 0, 0.01) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  overflow: hidden !important;
+  -moz-window-shadow: none !important;
+}
+
+.panel-arrowcontainer {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  -moz-window-shadow: none !important;
+  border: none !important;
+}
+
+.panel-arrowcontent,
+.panel-subview-body,
+.translations-panel-header-wrapper,
+.translations-panel-footer,
+panelmultiview,
+.panel-viewcontainer,
+.panel-viewstack,
+menupopup::part(content),
+panel::part(content),
+panel[type="arrow"]::part(content),
+menupopup[type="arrow"]::part(content) {
+  background: rgba(0, 0, 0, 0.01) !important;
+  background-color: rgba(0, 0, 0, 0.01) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  overflow: hidden !important;
+  -moz-window-shadow: none !important;
+}
+
+.panel-arrow,
+tooltip,
+dialog {
+  border: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#urlbar[breakout-extend="true"],
+#urlbar[open],
+#urlbar-input-container,
+.urlbar-input-container,
+.urlbarView,
+.urlbarView-body,
+.urlbarView-results,
+.autocomplete-richlistbox {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#urlbar[breakout-extend="true"] > #urlbar-background,
+#urlbar[open] > #urlbar-background,
+#urlbar[breakout-extend="true"] .urlbar-background,
+#urlbar[open] .urlbar-background {
+  background: var(--nebula-color-glass) !important;
+  background-color: var(--nebula-color-glass) !important;
+  backdrop-filter: none !important;
+}
+
+/* Only apply when compact mode (on-hover mode) is active */
+:root[zen-compact-mode='true'] #navigator-toolbox {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* In compact mode, keep the sidebar card solid so it stays solid while opening, open, and sliding away */
+:root[zen-compact-mode='true'] .zen-toolbar-background,
+:root[zen-compact-mode='true'] #titlebar > .zen-browser-generic-background {
+  background-color: #161618 !important;
+  backdrop-filter: none !important;
+  border-radius: 13px !important;
+}
+
+/* Expand the floating titlebar card to full sidebar width when hovered or animating */
+:root[zen-compact-mode='true'] #navigator-toolbox:is(
+  [zen-has-hover], [zen-user-show], [animate='true'],
+  [zen-has-empty-tab], [flash-popup],
+  [has-popup-menu], [movingtab],
+  [zen-compact-mode-active]
+) #titlebar {
+  max-width: var(--zen-sidebar-width) !important;
+  width: var(--zen-sidebar-width) !important;
+  min-width: var(--zen-sidebar-width) !important;
+}
+
+/* Hide the "Space" workspace indicator */
+.zen-current-workspace-indicator {
+  display: none !important;
+}

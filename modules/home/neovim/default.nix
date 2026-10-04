@@ -4,6 +4,7 @@
   lib,
   pkgs,
   kekma,
+  evalAndSubstitute,
   listFiles ? (
     paths:
     let
@@ -30,216 +31,9 @@ let
   };
 
   # Dispatcher script using explicit coreutils paths
-  smart-neovim-script = pkgs.writeShellScript "smart-nvim" ''
-    DIR=$(${pkgs.coreutils}/bin/dirname "$0")
-
-    # Direct pass-through for CLI info/build flags (crucial for Nix build sandboxes)
-    for arg in "$@"; do
-      case "$arg" in
-        --version|--help|--headless|--embed|-v|-u|-i|-c|--cmd|-s|-S|-p|-o|-n|-R|-M)
-          exec "$DIR/nvim-raw" "$@"
-          ;;
-      esac
-    done
-
-    # Resolve target Neovim RPC server socket
-    TARGET_NVIM=""
-    if [[ -n "$SESATT_SESSION" ]]; then
-      TARGET_NVIM="$(sesatt --get-nvim "$SESATT_SESSION" 2>/dev/null)"
-    fi
-    if [[ -z "$TARGET_NVIM" ]]; then
-      TARGET_NVIM="$NVIM"
-    fi
-
-    # Standalone mode (e.g. running inside Kitty outside Neovide)
-    if [[ -z "$TARGET_NVIM" ]]; then
-      if [ ! -t 0 ]; then
-        exec "$DIR/nvim-raw" -c "lua _G.OpenStandalonePager()"
-      else
-        exec "$DIR/nvim-raw" "$@"
-      fi
-    fi
-
-    # Stream stdin into user-isolated tmpfs RAM disk (/run/user/$UID/) with 0600 permissions
-    send_stdin_stream_rpc() {
-      local mode="$1"
-      shift
-
-      local JUMP_BOTTOM="v:false"
-
-      # Check CLI arguments
-      for arg in "$@"; do
-        case "$arg" in
-          +G|+G*|-e|--pager-end)
-            JUMP_BOTTOM="v:true"
-            ;;
-        esac
-      done
-
-      # Check $LESS environment variable passed by systemd/journalctl
-      if [[ "$LESS" == *"+G"* ]]; then
-        JUMP_BOTTOM="v:true"
-      fi
-
-      local RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-      if [[ ! -d "$RUNTIME_DIR" ]]; then
-        RUNTIME_DIR="/tmp"
-      fi
-
-      local TMPFILE
-      (
-        umask 077
-        TMPFILE=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-        ${pkgs.coreutils}/bin/cat > "$TMPFILE"
-
-        if [[ -s "$TMPFILE" ]]; then
-          local func
-          if [ "$mode" = "man" ]; then
-            func="_G.OpenManPageFile"
-          else
-            func="_G.OpenAnsiPagerFile"
-          fi
-
-          exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-            "v:lua.$func('$TMPFILE', $JUMP_BOTTOM)" >/dev/null 2>&1
-        else
-          ${pkgs.coreutils}/bin/rm -f "$TMPFILE"
-        fi
-      )
-      exit 0
-    }
-
-    # 1. Invoked from within an existing Neovim terminal tab (overtake current tab like Kitty)
-    if [[ -n "$TARGET_NVIM" && -n "$NVIM_BUF_ID" ]]; then
-      RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-      if [[ ! -d "$RUNTIME_DIR" ]]; then
-        RUNTIME_DIR="/tmp"
-      fi
-
-      FIFO=$(${pkgs.coreutils}/bin/mktemp -u "$RUNTIME_DIR/nvim-wait.XXXXXX")
-      ${pkgs.coreutils}/bin/mkfifo "$FIFO"
-
-      ACTION_JSON=""
-      if [[ "$1" == "+Man!" || "$1" == "+Man" ]]; then
-        shift
-        if [ ! -t 0 ]; then
-          TMPFILE=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-          ${pkgs.coreutils}/bin/cat > "$TMPFILE"
-          ACTION_JSON="{\"type\":\"man_stdin\",\"tmpfile\":\"$TMPFILE\",\"jump_bottom\":false}"
-        elif [[ -n "$1" ]]; then
-          if [[ -f "$1" ]]; then
-            ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$1")
-            ARG_CLEAN=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
-          else
-            ARG_CLEAN=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
-          fi
-          ACTION_JSON="{\"type\":\"man\",\"arg\":\"$ARG_CLEAN\"}"
-        else
-          ACTION_JSON="{\"type\":\"man\",\"arg\":\"\"}"
-        fi
-      elif [ ! -t 0 ]; then
-        TMPFILE=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/nvim-pager.XXXXXX")
-        ${pkgs.coreutils}/bin/cat > "$TMPFILE"
-        JUMP_BOTTOM="false"
-        for arg in "$@"; do
-          case "$arg" in
-            +G|+G*|-e|--pager-end)
-              JUMP_BOTTOM="true"
-              ;;
-          esac
-        done
-        if [[ "$LESS" == *"+G"* ]]; then
-          JUMP_BOTTOM="true"
-        fi
-        ACTION_JSON="{\"type\":\"pager\",\"tmpfile\":\"$TMPFILE\",\"jump_bottom\":$JUMP_BOTTOM}"
-      else
-        FILES_JSON="["
-        FIRST=1
-        for arg in "$@"; do
-          if [[ "$arg" != -* ]]; then
-            ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
-            CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            if [ $FIRST -eq 1 ]; then
-              FILES_JSON="$FILES_JSON\"$CLEAN_PATH\""
-              FIRST=0
-            else
-              FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
-            fi
-          fi
-        done
-        FILES_JSON="''${FILES_JSON}]"
-        ACTION_JSON="{\"type\":\"files\",\"files\":$FILES_JSON}"
-      fi
-
-      ACTION_JSON_ESC="''${ACTION_JSON//\'/\'\'}"
-
-      "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-        "v:lua._G.OvertakeTerminal($NVIM_BUF_ID, '$ACTION_JSON_ESC', '$FIFO')" >/dev/null 2>&1 &
-
-      ${pkgs.coreutils}/bin/cat "$FIFO" >/dev/null 2>&1
-      ${pkgs.coreutils}/bin/rm -f "$FIFO"
-      exit 0
-    fi
-
-    # 2. MANPAGER invocation outside terminal tab (`nvim +Man!` or `nvim +Man`)
-    if [[ "$1" == "+Man!" || "$1" == "+Man" ]]; then
-      shift
-      ARG="$1"
-
-      if [ ! -t 0 ]; then
-        send_stdin_stream_rpc "man" "$@"
-      elif [[ -n "$ARG" ]]; then
-        if [[ -f "$ARG" ]]; then
-          ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$ARG")
-          ARG_ESC="''${ABS_PATH//\'/\'\'}"
-        else
-          ARG_ESC="''${ARG//\'/\'\'}"
-        fi
-        exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-          "v:lua._G.OpenManPath('$ARG_ESC')" >/dev/null 2>&1
-      else
-        exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-          "v:lua._G.OpenManPath(\"\")" >/dev/null 2>&1
-      fi
-    fi
-
-    # 3. Piped Stdin outside terminal tab (e.g. `cat file | nvim` or `git diff | nvim` or `journalctl | nvim`)
-    if [ ! -t 0 ]; then
-      send_stdin_stream_rpc "pager" "$@"
-    fi
-
-    # 4. No arguments outside terminal tab (`nvim`)
-    if [ $# -eq 0 ]; then
-      PWD_ESC="''${PWD//\'/\'\'}"
-      exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr "v:lua._G.OpenNewTab('$PWD_ESC')" >/dev/null 2>&1
-    fi
-
-    # 5. File arguments outside terminal tab (`nvim file1 file2...`)
-    FILES_JSON="["
-    FIRST=1
-    for arg in "$@"; do
-      if [[ "$arg" == -* ]]; then
-        exec "$DIR/nvim-raw" "$@"
-      fi
-
-      # realpath -s -m resolves relative paths WITHOUT expanding/dereferencing symlinks
-      ABS_PATH=$(${pkgs.coreutils}/bin/realpath -s -m "$arg")
-
-      CLEAN_PATH=$(printf '%s' "$ABS_PATH" | sed 's/\\/\\\\/g; s/"/\\"/g')
-      if [ $FIRST -eq 1 ]; then
-        FILES_JSON="$FILES_JSON\"$CLEAN_PATH\""
-        FIRST=0
-      else
-        FILES_JSON="$FILES_JSON,\"$CLEAN_PATH\""
-      fi
-    done
-    FILES_JSON="''${FILES_JSON}]"
-
-    FILES_JSON_ESC="''${FILES_JSON//\'/\'\'}"
-
-    exec "$DIR/nvim-raw" --headless --server "$TARGET_NVIM" --remote-expr \
-      "v:lua._G.OpenFiles('$FILES_JSON_ESC')" >/dev/null 2>&1
-  '';
+  smart-neovim-script = pkgs.writeShellScript "smart-nvim" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/home/neovim/smart-nvim.sh;
+  });
 
   # Patched neovim-unwrapped built natively with C source changes & smart dispatcher script
   patched-neovim-unwrapped = pkgs.neovim-unwrapped.overrideAttrs (oldAttrs: {
@@ -286,22 +80,10 @@ let
     '';
   };
 
-  rustupInitScript = pkgs.writeShellScript "rustup-init" ''
-    export PATH="${
-      lib.makeBinPath [
-        pkgs.rustup
-        pkgs.gnugrep
-        pkgs.coreutils
-      ]
-    }:$PATH"
-
-    TOOLCHAIN_PATH="${config.xdg.dataHome}/nix-system-toolchain"
-    RUSTUP_PATH="${config.xdg.dataHome}/rustup"
-    mkdir -p "$RUSTUP_PATH/toolchains"
-    ln -s "$TOOLCHAIN_PATH" "$RUSTUP_PATH/toolchains/nix-system"
-    echo 'version = "12"' > "$RUSTUP_PATH/settings.toml"
-    echo 'default_toolchain = "nix-system"' >> "$RUSTUP_PATH/settings.toml"
-  '';
+  rustupInitScript = pkgs.writeShellScript "rustup-init" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/home/neovim/rustup-init.sh;
+    scope = { inherit config; };
+  });
 
   # Injected Nix runtime paths exposed directly to Lua via global _G.NIX table
   nixPreamble = /* lua */ ''

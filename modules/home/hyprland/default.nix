@@ -8,7 +8,6 @@
 let
   cfg = config.hyprland;
   nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix { };
-  nautilus-listener = pkgs.callPackage ./nautilus-listener.nix { };
   mkPluginPermissionEntries = list: map (plugin: mkPluginPermissionEntry plugin) list;
   mkPluginExecEntries = list: lib.concatLines (map (plugin: mkPluginExecEntry plugin) list);
   mkPluginExecEntry = plugin: "hl.exec_cmd [[${plugin-loader plugin}/bin/hypr-plugin-loader]]";
@@ -58,70 +57,18 @@ let
 
   plugin-loader =
     pkg:
+    let
+      pluginPath = if lib.types.package.check pkg then "${pkg}/lib/lib${pkg.pname}.so" else pkg;
+    in
     pkgs.stdenv.mkDerivation {
       pname = "${pkg.pname}-loader";
       version = "1.0";
-
-      src = pkgs.writeText "hypr-plugin-loader.c" ''
-        #include <stdio.h>
-        #include <stdlib.h>
-        #include <string.h>
-        #include <unistd.h>
-        #include <sys/socket.h>
-        #include <sys/un.h>
-
-        #define PLUGIN_PATH "${
-          if lib.types.package.check pkg then "${pkg}/lib/lib${pkg.pname}.so" else pkg
-        }"
-
-        int main() {
-            const char *xdg_runtime = getenv("XDG_RUNTIME_DIR");
-            const char *hypr_sig = getenv("HYPRLAND_INSTANCE_SIGNATURE");
-
-            if (!xdg_runtime || !hypr_sig) {
-                fprintf(stderr, "Missing Env Vars\n");
-                return 1;
-            }
-
-            int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (sock < 0) return 1;
-
-            struct sockaddr_un addr;
-            memset(&addr, 0, sizeof(addr));
-            addr.sun_family = AF_UNIX;
-            snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/hypr/%s/.socket.sock", xdg_runtime, hypr_sig);
-
-            if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-                close(sock);
-                return 1;
-            }
-
-            char command[2048];
-            snprintf(command, sizeof(command), "/plugin load %s", PLUGIN_PATH);
-
-            if (write(sock, command, strlen(command)) < 0) {
-                close(sock);
-                return 1;
-            }
-
-            shutdown(sock, SHUT_WR);
-
-            char buffer[4096];
-            ssize_t bytes_read = read(sock, buffer, sizeof(buffer) - 1);
-            if (bytes_read > 0) {
-                buffer[bytes_read] = '\0';
-                printf("Hyprland response: %s\n", buffer);
-            }
-
-            close(sock);
-            return 0;
-        }
-      '';
-
       dontUnpack = true;
 
       buildPhase = ''
-        $CC -O3 -flto -march=native -pipe -fPIE -pie -Wl,-s $src -o hypr-plugin-loader
+        $CC -O3 -flto -march=native -pipe -fPIE -pie -Wl,-s \
+          -DPLUGIN_PATH="\"${pluginPath}\"" \
+          ${../../../stuff/home/hyprland/hypr-plugin-loader.c} -o hypr-plugin-loader
       '';
 
       installPhase = ''
@@ -750,7 +697,6 @@ in
                   function () 
                     ${mkPluginExecEntries plugins}
                     hl.exec_cmd [[app2unit -s b -- kbuildsycoca6]]
-                    hl.exec_cmd [[app2unit -s b -- ${nautilus-listener}/bin/nautilus-listener]]
                     hl.exec_cmd [[app2unit -s b -- fumon]]
                     hl.exec_cmd [[app2unit -s b -- xhost +si:localuser:root]]
                     hl.exec_cmd [[app2unit -s b -- dash -c 'echo "Xft.dpi: 96" | xrdb -merge']]

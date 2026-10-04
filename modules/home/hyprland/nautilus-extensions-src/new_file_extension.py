@@ -1,14 +1,28 @@
 from gi import require_version
 require_version('Gtk', '4.0')
-from gi.repository import Nautilus, GObject, Gtk, Gio
+from gi.repository import Nautilus, GObject, Gtk, Gio, GLib
 from urllib.parse import quote
 import os
 
-xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-if xdg_runtime_dir:
-    PIPE_PATH = os.path.join(xdg_runtime_dir, "nautilus_select_pipe")
-else:
-    PIPE_PATH = f"/tmp/nautilus_select_pipe_{os.getuid()}"
+def _select_file(uri):
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call(
+            "org.freedesktop.FileManager1",
+            "/org/freedesktop/FileManager1",
+            "org.freedesktop.FileManager1",
+            "ShowItems",
+            GLib.Variant("(ass)", ([uri], "")),
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            None,
+            None,
+        )
+    except Exception as e:
+        print(f"Failed to select file via D-Bus: {e}")
+    return False
 
 
 class EntryDialog(Gtk.Dialog):
@@ -51,9 +65,7 @@ class NewFileExtension(GObject.GObject, Nautilus.MenuProvider):
                     ostream = new_file.create(Gio.FileCreateFlags.NONE, None)
                     ostream.close(None)
 
-                    with open(PIPE_PATH, "w") as fifo:
-                        fifo.write(new_file_uri)
-
+                    GLib.timeout_add(150, _select_file, new_file_uri)
                 except Exception as e:
                     print(f"Extension Error: {e}")
         dialog.destroy()

@@ -21,11 +21,12 @@ let
   evalAndSubstitute =
     {
       string,
-      scope ? { inherit pkgs lib; },
+      scope ? { },
       openPattern ? "%{{{",
       closePattern ? "}}}",
     }:
     let
+      effectiveScope = { inherit pkgs lib; } // scope;
       parts = lib.splitString openPattern string;
       process =
         part:
@@ -33,7 +34,7 @@ let
           sub = lib.splitString closePattern part;
         in
         if builtins.length sub > 1 then
-          toString (evalNix scope (builtins.head sub))
+          toString (evalNix effectiveScope (builtins.head sub))
           + builtins.concatStringsSep closePattern (builtins.tail sub)
         else
           openPattern + part;
