@@ -135,30 +135,54 @@ vim.diagnostic.config({
 
 local diag_float_win = nil
 
-local function close_diag_float()
+local function close_all_floating_previews()
 	if diag_float_win and vim.api.nvim_win_is_valid(diag_float_win) then
 		pcall(vim.api.nvim_win_close, diag_float_win, true)
 	end
 	diag_float_win = nil
+
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		if vim.api.nvim_win_is_valid(win) then
+			local ok_lsp, _ = pcall(vim.api.nvim_win_get_var, win, "lsp_floating_bufnr")
+			local cfg = vim.api.nvim_win_get_config(win)
+			if ok_lsp or (cfg and cfg.relative and cfg.relative ~= "" and not cfg.focusable) then
+				pcall(vim.api.nvim_win_close, win, true)
+			end
+		end
+	end
 end
+_G.CloseAllFloatingPreviews = close_all_floating_previews
+
+vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
+	border = "rounded",
+	close_events = {
+		"CursorMoved",
+		"CursorMovedI",
+		"BufLeave",
+		"BufHidden",
+		"WinLeave",
+		"CmdlineEnter",
+		"InsertEnter",
+	},
+})
 
 vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
 	group = vim.api.nvim_create_augroup("DiagnosticFloatHover", { clear = true }),
 	callback = function()
 		local mode = vim.api.nvim_get_mode().mode
 		if mode:match("^[ic]") or vim.bo.buftype ~= "" then
-			close_diag_float()
+			close_all_floating_previews()
 			return
 		end
 
 		local line = vim.fn.line(".") - 1
 		local diags = vim.diagnostic.get(0, { lnum = line })
 		if #diags == 0 then
-			close_diag_float()
+			close_all_floating_previews()
 			return
 		end
 
-		close_diag_float()
+		close_all_floating_previews()
 		local _, winid = vim.diagnostic.open_float(nil, {
 			focusable = false,
 			scope = "cursor",
@@ -180,7 +204,7 @@ vim.api.nvim_create_autocmd(
 	{ "CursorMoved", "CursorMovedI", "BufLeave", "BufHidden", "WinLeave", "CmdlineEnter", "InsertEnter" },
 	{
 		group = vim.api.nvim_create_augroup("DiagnosticFloatDismiss", { clear = true }),
-		callback = close_diag_float,
+		callback = close_all_floating_previews,
 	}
 )
 

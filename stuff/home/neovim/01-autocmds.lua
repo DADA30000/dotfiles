@@ -188,6 +188,9 @@ local netrw_cmd_configs = {
 
 for cmd_name, cfg in pairs(netrw_cmd_configs) do
 	vim.api.nvim_create_user_command(cmd_name, function(opts)
+		if _G.CloseAllFloatingPreviews then
+			_G.CloseAllFloatingPreviews()
+		end
 		local target_dir = opts.args
 		if not target_dir or target_dir == "" then
 			target_dir = get_clean_buffer_dir() or ""

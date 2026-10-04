@@ -13,7 +13,6 @@ _G.OPTS = {
 		prune_threshold = 10000, -- Buffer line count threshold to trigger pruning
 		pruned_history = 5000, -- Scrollback limit applied during pruning
 		max_scrollback = 100000, -- Full scrollback capacity restored after pruning
-		prune_restore_delay_ms = 50, -- Delay before restoring max scrollback (ms)
 	},
 
 	-- Neovide GPU GUI Settings

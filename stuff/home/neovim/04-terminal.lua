@@ -399,7 +399,7 @@ end
 vim.api.nvim_create_user_command("Hh", open_nos_terminal, { desc = "Open `nos` in a smart terminal" })
 vim.keymap.set("n", "!nos", ":Hh<CR>", { desc = "Open nos terminal", noremap = true, silent = true })
 
--- === TERMINAL AUTOMATIC SCROLLBACK PRUNING ===
+-- === TERMINAL AUTOMATIC SCROLLBACK PRUNING (VIEW-PRESERVING) ===
 vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
 	pattern = "term://*",
 	callback = function(args)
@@ -409,28 +409,64 @@ vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {
 		end
 
 		local line_count = vim.api.nvim_buf_line_count(bufnr)
-		if _G.OPTS and _G.OPTS.terminal and _G.OPTS.terminal.prune_threshold and line_count > _G.OPTS.terminal.prune_threshold then
-			local win_id = vim.fn.bufwinid(bufnr)
-			if win_id == -1 then
-				return
+		local opts_term = _G.OPTS and _G.OPTS.terminal
+		if not (opts_term and opts_term.prune_threshold and line_count > opts_term.prune_threshold) then
+			return
+		end
+
+		local prune_to = opts_term.pruned_history or 5000
+		local max_scbk = opts_term.max_scrollback or 100000
+
+		-- Snapshot view and bottom-following state of every window displaying this buffer
+		local win_views = {}
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == bufnr then
+				local view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
+				local win_h = vim.api.nvim_win_get_height(win)
+				local is_at_bottom = (view.topline >= line_count - win_h or (win == vim.api.nvim_get_current_win() and vim.fn.mode() == "t"))
+				win_views[win] = { view = view, is_at_bottom = is_at_bottom, win_h = win_h }
 			end
+		end
 
-			local win_info = vim.fn.getwininfo(win_id)[1]
-			local topline = win_info and win_info.topline
-			local win_height = vim.fn.winheight(win_id)
-			local max_topline = line_count - win_height + 1
+		-- Synchronous scrollback pruning
+		vim.bo[bufnr].scrollback = prune_to
+		vim.bo[bufnr].scrollback = max_scbk
 
-			if topline and topline < max_topline - 5 then
-				return
-			end
+		local new_line_count = vim.api.nvim_buf_line_count(bufnr)
+		local actual_deleted = line_count - new_line_count
 
-			vim.bo[bufnr].scrollback = _G.OPTS.terminal.pruned_history
+		if actual_deleted > 0 then
+			for win, data in pairs(win_views) do
+				if vim.api.nvim_win_is_valid(win) then
+					vim.api.nvim_win_call(win, function()
+						if data.is_at_bottom then
+							local new_topline = math.max(1, new_line_count - data.win_h + 1)
+							vim.fn.winrestview({ topline = new_topline, lnum = new_line_count, col = 0 })
+						else
+							local old_topline = data.view.topline
+							local old_lnum = data.view.lnum
+							if old_topline > actual_deleted then
+								local new_topline = old_topline - actual_deleted
+								local new_lnum = math.max(1, old_lnum - actual_deleted)
+								vim.fn.winrestview({ topline = new_topline, lnum = new_lnum, col = data.view.col })
+							else
+								vim.fn.winrestview({ topline = 1, lnum = 1, col = 0 })
+							end
+						end
+					end)
 
-			vim.defer_fn(function()
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					vim.bo[bufnr].scrollback = _G.OPTS.terminal.max_scrollback
+					if vim.w[win].saved_term_view then
+						local sv = vim.w[win].saved_term_view
+						if sv.topline > actual_deleted then
+							sv.topline = sv.topline - actual_deleted
+							sv.lnum = math.max(1, sv.lnum - actual_deleted)
+						else
+							sv.topline = 1
+							sv.lnum = 1
+						end
+					end
 				end
-			end, _G.OPTS.terminal.prune_restore_delay_ms)
+			end
 		end
 	end,
 })
