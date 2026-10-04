@@ -89,8 +89,7 @@ fn process_desktop_file(d_file: &Path) {
 
     if !actual_exe.is_empty() && !exe_path.exists() && is_active {
         // Mark inactive
-        let clean_name = game_name.clone();
-        let inactive_name = format!("{clean_name} (Inactive)");
+        let inactive_name = format!("{game_name} (Inactive)");
         let fix_exec = format!("fix-umu-path \"{}\"", d_file.display());
 
         let mut new_lines = Vec::new();
@@ -108,7 +107,7 @@ fn process_desktop_file(d_file: &Path) {
         notify(
             &icon_path,
             "Shortcut Inactive",
-            &format!("Executable missing for {clean_name}. Double-click shortcut to set new path."),
+            &format!("Executable missing for {game_name}. Double-click shortcut to set new path."),
         );
     } else if !actual_exe.is_empty() && exe_path.exists() && !is_active {
         // Restore active
@@ -205,8 +204,7 @@ fn prune_stale_icons(icon_dir: &Path, desktop_dir: &Path) {
 fn main() {
     let home = env::var("HOME").unwrap_or_else(|_| "/home/l0lk3k".to_string());
     let xdg_data_home = env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(&home).join(".local/share"));
+        .map_or_else(|_| PathBuf::from(&home).join(".local/share"), PathBuf::from);
 
     let desktop_dir = xdg_data_home.join("applications");
     let icon_dir = xdg_data_home.join("icons/umu");

@@ -1267,11 +1267,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1790944292,
-        "narHash": "sha256-QZ1x0eIq2cpExP2kKY84IGzcDV9IX01yOX8MEFqZ0I4=",
+        "lastModified": 1791112539,
+        "narHash": "sha256-sH1oxoDCsxxxhFK4tgqxtB0IBeLTe60OliIV7BmiG9g=",
         "owner": "mastershifuishere77",
         "repo": "nom-rs",
-        "rev": "494f6d78abae1de6ba2de7816ed217f8b52e9658",
+        "rev": "b5e0e2b61a9d626dc60c7e635f373269fb2639fb",
         "type": "github"
       },
       "original": {

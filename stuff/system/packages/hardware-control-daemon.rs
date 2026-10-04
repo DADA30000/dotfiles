@@ -18,23 +18,25 @@ fn has_fan() -> bool {
 
 fn set_fan_mode(mode: &str) -> Result<&'static str, &'static str> {
     match mode {
-        "quiet" => fs::write(FAN_MODE_PATH, b"3\n").map(|()| "ok").map_err(|_| "write error"),
-        "auto" => fs::write(FAN_MODE_PATH, b"0\n").map(|()| "ok").map_err(|_| "write error"),
-        "max" => fs::write(FAN_MODE_PATH, b"5\n").map(|()| "ok").map_err(|_| "write error"),
+        "quiet" => fs::write(FAN_MODE_PATH, b"3\n")
+            .map(|()| "ok")
+            .map_err(|_| "write error"),
+        "auto" => fs::write(FAN_MODE_PATH, b"0\n")
+            .map(|()| "ok")
+            .map_err(|_| "write error"),
+        "max" => fs::write(FAN_MODE_PATH, b"5\n")
+            .map(|()| "ok")
+            .map_err(|_| "write error"),
         _ => Err("invalid fan mode"),
     }
 }
 
 fn get_fan_mode() -> &'static str {
-    if let Ok(content) = fs::read_to_string(FAN_MODE_PATH) {
-        match content.trim() {
-            "5" => "max",
-            "3" => "quiet",
-            _ => "auto",
-        }
-    } else {
-        "unknown"
-    }
+    fs::read_to_string(FAN_MODE_PATH).map_or("unknown", |content| match content.trim() {
+        "5" => "max",
+        "3" => "quiet",
+        _ => "auto",
+    })
 }
 
 fn has_nv() -> bool {
@@ -101,11 +103,7 @@ fn has_smu() -> bool {
 }
 
 fn is_amd_cpu() -> bool {
-    if let Ok(content) = fs::read_to_string("/proc/cpuinfo") {
-        content.contains("AuthenticAMD")
-    } else {
-        false
-    }
+    fs::read_to_string("/proc/cpuinfo").is_ok_and(|content| content.contains("AuthenticAMD"))
 }
 
 fn has_ryzen() -> bool {

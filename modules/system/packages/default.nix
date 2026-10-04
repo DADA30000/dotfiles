@@ -140,6 +140,7 @@ let
         buildPhase = ''
           rustc --edition 2024 \
             --target x86_64-unknown-linux-musl \
+            -D warnings \
             -C target-feature=+crt-static \
             -C linker=$CC \
             -C opt-level=s \

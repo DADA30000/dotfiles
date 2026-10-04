@@ -68,11 +68,10 @@ fn parse_reg(path: &Path) -> RegFile {
                     sec.values.insert(k, full_val_lines);
                 }
             }
-            i += 1;
         } else {
             reg.header.push(line.to_string());
-            i += 1;
         }
+        i += 1;
     }
 
     reg
@@ -187,14 +186,14 @@ fn parse_ini(path: &Path) -> BTreeMap<String, IniSection> {
         let stripped = line.trim();
         if stripped.starts_with('[') && stripped.ends_with(']') {
             active = stripped.to_string();
-            sections.entry(active.clone()).or_insert_with(|| IniSection {
-                raw_header: line.to_string(),
-                lines: Vec::new(),
-            });
-        } else {
-            if let Some(sec) = sections.get_mut(&active) {
-                sec.lines.push(line.to_string());
-            }
+            sections
+                .entry(active.clone())
+                .or_insert_with(|| IniSection {
+                    raw_header: line.to_string(),
+                    lines: Vec::new(),
+                });
+        } else if let Some(sec) = sections.get_mut(&active) {
+            sec.lines.push(line.to_string());
         }
     }
 
@@ -224,7 +223,7 @@ fn rebase_ini(old_base_p: &Path, new_base_p: &Path, upper_p: &Path) {
                         let t_trim = target.trim();
                         if let Some(t_eq) = t_trim.find('=') {
                             if t_trim[..t_eq].trim().eq_ignore_ascii_case(key) {
-                                *target = line.clone();
+                                target.clone_from(&line);
                                 replaced = true;
                                 break;
                             }
@@ -316,19 +315,19 @@ fn main() {
     while i < args.len() {
         match args[i].as_str() {
             "--old-base" if i + 1 < args.len() => {
-                old_base = args[i + 1].clone();
+                old_base.clone_from(&args[i + 1]);
                 i += 1;
             }
             "--new-base" if i + 1 < args.len() => {
-                new_base = args[i + 1].clone();
+                new_base.clone_from(&args[i + 1]);
                 i += 1;
             }
             "--upper" if i + 1 < args.len() => {
-                upper = args[i + 1].clone();
+                upper.clone_from(&args[i + 1]);
                 i += 1;
             }
             "--home" if i + 1 < args.len() => {
-                home = args[i + 1].clone();
+                home.clone_from(&args[i + 1]);
                 i += 1;
             }
             _ => {}
@@ -337,7 +336,9 @@ fn main() {
     }
 
     if new_base.is_empty() || upper.is_empty() {
-        eprintln!("Usage: umu-rebase-pfx --new-base <dir> --upper <dir> [--old-base <dir>] [--home <dir>]");
+        eprintln!(
+            "Usage: umu-rebase-pfx --new-base <dir> --upper <dir> [--old-base <dir>] [--home <dir>]"
+        );
         std::process::exit(1);
     }
 
@@ -401,10 +402,7 @@ fn main() {
             let Ok(rel) = full_upper.strip_prefix(&upper_dir) else {
                 continue;
             };
-            let in_old = old_base_dir
-                .as_ref()
-                .map(|b| b.join(rel).exists())
-                .unwrap_or(false);
+            let in_old = old_base_dir.as_ref().is_some_and(|b| b.join(rel).exists());
             let in_new = new_base_dir.join(rel).exists();
 
             if in_old || in_new {

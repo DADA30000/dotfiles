@@ -37,6 +37,7 @@ const CONTROL_COMMAND_UNBIND: u8 = 2;
 const PACKET_SIZE: usize = 7;
 const CONFIG_LEN_SIZE: usize = 4;
 const HEARTBEAT_SIZE: usize = 1;
+const MAX_CONFIG_LEN: usize = 64 * 1024;
 const DEFAULT_LOOP_SLEEP_MS: u64 = 500;
 const ACCEPT_RETRY_SLEEP_MS: u64 = 100;
 const EXPORT_SLEEP_MS: u64 = 500;
@@ -238,6 +239,10 @@ fn run_pass_role(
                     }
 
                     let remote_len = u32::from_be_bytes(remote_len_bytes) as usize;
+                    if remote_len > MAX_CONFIG_LEN {
+                        log_bridge("Error: Remote configuration exceeds maximum size limit.");
+                        std::process::exit(1);
+                    }
                     let mut remote_bytes = vec![0u8; remote_len];
                     if unix_stream.read_exact(&mut remote_bytes).is_err() {
                         log_bridge("Error: Failed to read remote configuration data.");
@@ -289,8 +294,7 @@ fn run_pass_role(
                                 }
 
                                 for (ip_str, port) in &current_active {
-                                    if !known_ports.contains(&(ip_str.clone(), *port)) {
-                                        known_ports.insert((ip_str.clone(), *port));
+                                    if known_ports.insert((ip_str.clone(), *port)) {
                                         log_bridge(&format!(
                                             "Auto-detected new bind target: {}:{}",
                                             ip_str, port
@@ -434,6 +438,10 @@ fn run_listen_role(
         std::process::exit(1);
     }
     let remote_len = u32::from_be_bytes(remote_len_bytes) as usize;
+    if remote_len > MAX_CONFIG_LEN {
+        log_bridge("Error: Remote configuration exceeds maximum size limit.");
+        std::process::exit(1);
+    }
     let mut remote_bytes = vec![0u8; remote_len];
     if stream.read_exact(&mut remote_bytes).is_err() {
         log_bridge("Error: Failed to read remote config data.");
@@ -516,9 +524,7 @@ fn run_listen_role(
                     if let Ok(listener) = TcpListener::bind(&listen_target) {
                         let _ = listener.set_nonblocking(true);
                         loop {
-                            let is_active = active_clone
-                                .lock()
-                                .is_ok_and(|a| a.contains(&key));
+                            let is_active = active_clone.lock().is_ok_and(|a| a.contains(&key));
 
                             if !is_active {
                                 break;

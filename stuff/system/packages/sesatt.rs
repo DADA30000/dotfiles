@@ -15,6 +15,7 @@
     clippy::trivially_copy_pass_by_ref,
     clippy::format_push_string,
     clippy::unnecessary_debug_formatting,
+    clippy::option_if_let_else,
     clippy::collapsible_if
 )]
 
@@ -69,7 +70,7 @@ impl Winsize {
         b
     }
 
-    fn from_bytes(b: [u8; 8]) -> Self {
+    const fn from_bytes(b: [u8; 8]) -> Self {
         Self {
             ws_row: u16::from_ne_bytes([b[0], b[1]]),
             ws_col: u16::from_ne_bytes([b[2], b[3]]),
@@ -180,7 +181,8 @@ fn get_sesatt_dir() -> PathBuf {
     if let Err(e) = fs::create_dir_all(&dir) {
         eprintln!(
             "Error: Failed to create sesatt runtime directory '{}': {}",
-            dir.display(), e
+            dir.display(),
+            e
         );
         std::process::exit(1);
     }
@@ -415,11 +417,27 @@ fn main() -> io::Result<()> {
 
     if let Some(cmd_pipe) = get_sandbox_command_pipe(session) {
         const SKIP_VARS: &[&str] = &[
-            "PATH", "HOME", "USER", "LOGNAME", "SHELL",
-            "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
-            "DBUS_SESSION_BUS_ADDRESS", "WAYLAND_DISPLAY", "DISPLAY",
-            "LD_LIBRARY_PATH", "LD_PRELOAD",
-            "APP_ID", "SANDBOX_ROLE", "_", "PWD", "OLDPWD", "SHLVL"
+            "PATH",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "SHELL",
+            "XDG_RUNTIME_DIR",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_STATE_HOME",
+            "XDG_CACHE_HOME",
+            "DBUS_SESSION_BUS_ADDRESS",
+            "WAYLAND_DISPLAY",
+            "DISPLAY",
+            "LD_LIBRARY_PATH",
+            "LD_PRELOAD",
+            "APP_ID",
+            "SANDBOX_ROLE",
+            "_",
+            "PWD",
+            "OLDPWD",
+            "SHLVL",
         ];
         let mut exports = String::new();
         for (k, v) in env::vars() {
@@ -535,7 +553,8 @@ fn get_all_sessions() -> Vec<(String, bool)> {
                 if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
                     if get_sandbox_command_pipe(name).is_some() {
                         let sock_path = dir.join(name).join("sesatt.sock");
-                        let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
+                        let is_active =
+                            sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
                         sessions_map.entry(name.to_string()).or_insert(is_active);
                     }
                 }
@@ -871,109 +890,107 @@ fn run_daemon_server(
     let latest_nvim: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
 
     let clients_clone = clients.clone();
-    let latest_nvim_clone = latest_nvim.clone();
-    let log_path_clone = log_path.clone();
 
     thread::spawn(move || {
         for mut s in listener.incoming().flatten() {
-            let latest_nvim_inner = latest_nvim_clone.clone();
+            let latest_nvim_inner = latest_nvim.clone();
             let clients_inner = clients_clone.clone();
-            let log_path_inner = log_path_clone.clone();
+            let log_path_inner = log_path.clone();
 
             thread::spawn(move || {
-                    let mut tag = [0u8; 1];
-                    if s.read_exact(&mut tag).is_err() {
-                        return;
+                let mut tag = [0u8; 1];
+                if s.read_exact(&mut tag).is_err() {
+                    return;
+                }
+
+                if tag[0] == 0x03 {
+                    if let Ok(guard) = latest_nvim_inner.lock() {
+                        let _ = s.write_all(guard.as_bytes());
+                        let _ = s.flush();
                     }
+                    let _ = s.shutdown(Shutdown::Both);
+                    return;
+                }
 
-                    if tag[0] == 0x03 {
-                        if let Ok(guard) = latest_nvim_inner.lock() {
-                            let _ = s.write_all(guard.as_bytes());
-                            let _ = s.flush();
-                        }
-                        let _ = s.shutdown(Shutdown::Both);
-                        return;
+                if let Ok(bytes) = get_tail_bytes(&log_path_inner, 256 * 1024, 3000) {
+                    if !bytes.is_empty() {
+                        let _ = s.write_all(&bytes);
+                        let _ = s.flush();
                     }
+                }
 
-                    if let Ok(bytes) = get_tail_bytes(&log_path_inner, 256 * 1024, 3000) {
-                        if !bytes.is_empty() {
-                            let _ = s.write_all(&bytes);
-                            let _ = s.flush();
-                        }
-                    }
+                let s_clone = match s.try_clone() {
+                    Ok(c) => c,
+                    Err(_) => return,
+                };
 
-                    let s_clone = match s.try_clone() {
-                        Ok(c) => c,
-                        Err(_) => return,
-                    };
+                if let Ok(mut guard) = clients_inner.lock() {
+                    guard.push(s_clone);
+                }
 
-                    if let Ok(mut guard) = clients_inner.lock() {
-                        guard.push(s_clone);
-                    }
+                let mut my_nvim = String::new();
+                let mut current_tag = tag[0];
+                loop {
+                    match current_tag {
+                        0x00 => {
+                            let mut len_buf = [0u8; 2];
+                            if s.read_exact(&mut len_buf).is_err() {
+                                break;
+                            }
+                            let len = u16::from_be_bytes(len_buf) as usize;
+                            let mut data_buf = vec![0u8; len];
+                            if s.read_exact(&mut data_buf).is_err() {
+                                break;
+                            }
 
-                    let mut my_nvim = String::new();
-                    let mut current_tag = tag[0];
-                    loop {
-                        match current_tag {
-                            0x00 => {
-                                let mut len_buf = [0u8; 2];
-                                if s.read_exact(&mut len_buf).is_err() {
-                                    break;
-                                }
-                                let len = u16::from_be_bytes(len_buf) as usize;
-                                let mut data_buf = vec![0u8; len];
-                                if s.read_exact(&mut data_buf).is_err() {
-                                    break;
-                                }
-
-                                if !my_nvim.is_empty() {
-                                    if let Ok(mut guard) = latest_nvim_inner.lock() {
-                                        *guard = my_nvim.clone();
-                                    }
-                                }
-
-                                unsafe {
-                                    write(master_fd, data_buf.as_ptr() as *const CVoid, len);
+                            if !my_nvim.is_empty() {
+                                if let Ok(mut guard) = latest_nvim_inner.lock() {
+                                    *guard = my_nvim.clone();
                                 }
                             }
-                            0x01 => {
-                                let mut ws_buf = [0u8; 8];
-                                if s.read_exact(&mut ws_buf).is_err() {
-                                    break;
-                                }
-                                let client_ws = Winsize::from_bytes(ws_buf);
-                                unsafe {
-                                    ioctl(master_fd, TIOCSWINSZ, &raw const client_ws);
-                                }
-                            }
-                            0x02 => {
-                                let mut len_buf = [0u8; 2];
-                                if s.read_exact(&mut len_buf).is_err() {
-                                    break;
-                                }
-                                let len = u16::from_be_bytes(len_buf) as usize;
-                                let mut str_buf = vec![0u8; len];
-                                if s.read_exact(&mut str_buf).is_err() {
-                                    break;
-                                }
-                                if let Ok(nvim_str) = String::from_utf8(str_buf) {
-                                    my_nvim = nvim_str.clone();
-                                    if let Ok(mut guard) = latest_nvim_inner.lock() {
-                                        *guard = nvim_str;
-                                    }
-                                }
-                            }
-                            _ => break,
-                        }
 
-                        let mut next_tag = [0u8; 1];
-                        if s.read_exact(&mut next_tag).is_err() {
-                            break;
+                            unsafe {
+                                write(master_fd, data_buf.as_ptr() as *const CVoid, len);
+                            }
                         }
-                        current_tag = next_tag[0];
+                        0x01 => {
+                            let mut ws_buf = [0u8; 8];
+                            if s.read_exact(&mut ws_buf).is_err() {
+                                break;
+                            }
+                            let client_ws = Winsize::from_bytes(ws_buf);
+                            unsafe {
+                                ioctl(master_fd, TIOCSWINSZ, &raw const client_ws);
+                            }
+                        }
+                        0x02 => {
+                            let mut len_buf = [0u8; 2];
+                            if s.read_exact(&mut len_buf).is_err() {
+                                break;
+                            }
+                            let len = u16::from_be_bytes(len_buf) as usize;
+                            let mut str_buf = vec![0u8; len];
+                            if s.read_exact(&mut str_buf).is_err() {
+                                break;
+                            }
+                            if let Ok(nvim_str) = String::from_utf8(str_buf) {
+                                my_nvim = nvim_str.clone();
+                                if let Ok(mut guard) = latest_nvim_inner.lock() {
+                                    *guard = nvim_str;
+                                }
+                            }
+                        }
+                        _ => break,
                     }
-                });
-            }
+
+                    let mut next_tag = [0u8; 1];
+                    if s.read_exact(&mut next_tag).is_err() {
+                        break;
+                    }
+                    current_tag = next_tag[0];
+                }
+            });
+        }
     });
 
     let mut buf = [0u8; 4096];

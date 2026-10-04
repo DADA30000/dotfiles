@@ -41,11 +41,7 @@ struct Epoll(i32);
 impl Epoll {
     fn new() -> Option<Self> {
         let fd = unsafe { epoll_create1(0) };
-        if fd >= 0 {
-            Some(Self(fd))
-        } else {
-            None
-        }
+        if fd >= 0 { Some(Self(fd)) } else { None }
     }
 
     fn add(&self, fd: i32) -> bool {
@@ -85,11 +81,7 @@ fn pidfd_open(pid: i32) -> Option<i32> {
         return None;
     }
     let fd = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) as i32 };
-    if fd >= 0 {
-        Some(fd)
-    } else {
-        None
-    }
+    if fd >= 0 { Some(fd) } else { None }
 }
 
 fn create_signalfd() -> Option<i32> {
@@ -110,11 +102,7 @@ fn create_signalfd() -> Option<i32> {
             8i64,
             SFD_CLOEXEC | SFD_NONBLOCK,
         ) as i32;
-        if sfd >= 0 {
-            Some(sfd)
-        } else {
-            None
-        }
+        if sfd >= 0 { Some(sfd) } else { None }
     }
 }
 

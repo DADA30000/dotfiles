@@ -15,24 +15,24 @@ fn main() {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--app-id" => {
+            "--app-id" if i + 1 < args.len() => {
                 app_id = Some(&args[i + 1]);
                 i += 2;
             }
-            "--scope" => {
+            "--scope" if i + 1 < args.len() => {
                 scope = Some(&args[i + 1]);
                 i += 2;
             }
-            "--cgroup-procs" => {
+            "--cgroup-procs" if i + 1 < args.len() => {
                 cgroup_procs = Some(&args[i + 1]);
                 i += 2;
             }
-            "--go-pipe" => {
+            "--go-pipe" if i + 1 < args.len() => {
                 go_pipe = Some(&args[i + 1]);
                 i += 2;
             }
             _ => {
-                eprintln!("Unknown argument: {}", args[i]);
+                eprintln!("Invalid or incomplete argument: {}", args[i]);
                 process::exit(1);
             }
         }

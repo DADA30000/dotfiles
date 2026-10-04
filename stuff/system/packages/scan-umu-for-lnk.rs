@@ -18,6 +18,7 @@ pub struct LnkInfo {
     pub icon_location: String,
 }
 
+#[must_use]
 pub fn parse_lnk(data: &[u8]) -> Option<LnkInfo> {
     if data.len() < 76 || data[0..4] != [0x4C, 0x00, 0x00, 0x00] {
         return None;
@@ -158,11 +159,7 @@ fn resolve_case_insensitive(base: &Path, rel: &str) -> Option<PathBuf> {
             return None;
         }
     }
-    if cur.is_file() {
-        Some(cur)
-    } else {
-        None
-    }
+    if cur.is_file() { Some(cur) } else { None }
 }
 
 fn resolve_actual_exe(prefix: &Path, win_path: &str) -> Option<PathBuf> {
@@ -292,8 +289,7 @@ fn main() {
     let _ = Command::new("cleanup-desktop-with-umu").status();
 
     let xdg_data_home = env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(&home).join(".local/share"));
+        .map_or_else(|_| PathBuf::from(&home).join(".local/share"), PathBuf::from);
     let desktop_dir = xdg_data_home.join("applications");
 
     let existing_lnks = collect_existing_lnk_paths(&desktop_dir);
@@ -310,8 +306,8 @@ fn main() {
                     if desk.is_dir() {
                         search_roots.push(desk);
                     }
-                    let start_menu = user_dir
-                        .join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
+                    let start_menu =
+                        user_dir.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
                     if start_menu.is_dir() {
                         search_roots.push(start_menu);
                     }
