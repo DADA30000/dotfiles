@@ -306,19 +306,14 @@ fn resolve_user_home(uid: u32) -> Result<PathBuf, io::Error> {
 }
 
 fn sanitize_and_open_image(img_path: &Path, uid: u32) -> Result<Fd, io::Error> {
-    let c_img_path = CString::new(img_path.to_string_lossy().as_bytes())
+    let real_path = fs::canonicalize(img_path)?;
+    let c_img_path = CString::new(real_path.to_string_lossy().as_bytes())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
     let img_fd = Fd::new(unsafe { open(c_img_path.as_ptr(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC) })
         .ok_or_else(io::Error::last_os_error)?;
 
-    let meta = fs::metadata(img_path)?;
-    if meta.file_type().is_symlink() {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Symlink runtime images are forbidden",
-        ));
-    }
+    let meta = fs::metadata(&real_path)?;
 
     let img_uid = meta.uid();
     if img_uid != 0 && img_uid != uid {
@@ -560,6 +555,8 @@ fn mount_runtime(uid: u32, img_path: &Path) -> Result<(), io::Error> {
     fs::create_dir_all(&target_dir)?;
     fs::create_dir_all(&work_dir)?;
 
+    let img_fd = sanitize_and_open_image(img_path, uid)?;
+
     let tmp_path = format!("/run/umu/mnt_{uid}_{}", std::process::id());
     let tmp_path_cstr = CString::new(tmp_path.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
@@ -570,8 +567,6 @@ fn mount_runtime(uid: u32, img_path: &Path) -> Result<(), io::Error> {
         .ok_or_else(io::Error::last_os_error)?;
     let work_fd = Fd::new(unsafe { open(c_work.as_ptr(), O_PATH | O_DIRECTORY | O_CLOEXEC) })
         .ok_or_else(io::Error::last_os_error)?;
-
-    let img_fd = sanitize_and_open_image(img_path, uid)?;
 
     let fs_fd = match try_direct_fsopen(&img_fd) {
         Ok(fd) => fd,
@@ -595,6 +590,7 @@ fn mount_runtime(uid: u32, img_path: &Path) -> Result<(), io::Error> {
         )
     } < 0
     {
+        let _ = fs::remove_dir(&tmp_path);
         return Err(io::Error::last_os_error());
     }
 
