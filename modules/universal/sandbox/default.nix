@@ -1,36 +1,52 @@
 {
-  inputs,
   lib,
-  config,
   options,
-  osConfig,
   pkgs,
+  inputs ? { },
+  osConfig ? { },
+  config ? { },
   ...
 }:
 let
-  cfg = config.sandboxing;
   staticBwrap = pkgs.pkgsStatic.bubblewrap;
-
   staticDbusProxy =
     pkgs.runCommand "xdg-dbus-proxy"
       {
-        nativeBuildInputs = [ pkgs.removeReferencesTo ];
+        nativeBuildInputs = [
+          pkgs.nukeReferences
+          pkgs.removeReferencesTo
+        ];
       }
       ''
         mkdir -p $out/bin
         cp ${pkgs.pkgsStatic.xdg-dbus-proxy}/bin/xdg-dbus-proxy $out/bin/
         remove-references-to -t ${pkgs.pkgsStatic.glib.dev} $out/bin/xdg-dbus-proxy
+        remove-references-to -t ${pkgs.pkgsStatic.glib.out} $out/bin/xdg-dbus-proxy
+        ${pkgs.nukeReferences}/bin/nuke-refs $out/bin/xdg-dbus-proxy
         chmod +x $out/bin/xdg-dbus-proxy
       '';
+  sloth = import ./sloth.nix { inherit lib; };
 
-  mkNixPak = inputs.nixpak.lib.nixpak {
-    inherit (pkgs) lib;
-    pkgs = pkgs // {
-      xdg-dbus-proxy = staticDbusProxy;
-    };
-  };
+  processes_to_proxy =
+    if osConfig ? sing-box.processes_to_proxy then
+      osConfig.sing-box.processes_to_proxy
+    else if config ? sing-box.processes_to_proxy then
+      config.sing-box.processes_to_proxy
+    else
+      [
+        "Battle.net.exe"
+        ".AyuGram-wrapped"
+        ".Discord-wrapped"
+        ".spotify-wrapped"
+        ".DiscordCanary-wrapped"
+        "TeamSpeak"
+        "electron"
+        "prismlauncher"
+      ];
+
   sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
-    log.level = "error";
+    log.level = "info";
+    log.timestamp = true;
     route = {
       final = "direct";
       rules = [
@@ -55,13 +71,11 @@ let
           ];
           outbound = "real-direct";
         }
-      ]
-      ++ (lib.optionals (osConfig ? sing-box.processes_to_proxy) [
         {
           outbound = "to-host-vpn";
-          process_name = osConfig.sing-box.processes_to_proxy;
+          process_name = processes_to_proxy;
         }
-      ]);
+      ];
     };
     inbounds = [
       {
@@ -79,7 +93,7 @@ let
       {
         type = "tun";
         tag = "tun-in";
-        interface_name = "tun-sb";
+        interface_name = "sb-net";
         address = [
           "172.19.0.5/30"
           "fd00::5/126"
@@ -87,6 +101,7 @@ let
         auto_route = true;
         strict_route = true;
         auto_redirect = true;
+        iproute2_table_index = 254;
         stack = "system";
         mtu = 1480;
       }
@@ -115,12 +130,6 @@ let
     ];
   };
 
-  way-secure = pkgs.rustPlatform.buildRustPackage {
-    pname = "way-secure";
-    version = "unstable";
-    cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
-    src = pkgs.lib.cleanSource "${inputs.way-secure}";
-  };
   sing-box-lite =
     (pkgs.sing-box.override {
       withNaiveOutbound = false;
@@ -138,6 +147,104 @@ let
           "with_local_interceptor"
         ];
       });
+
+  pasta-pkg = pkgs.passt.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ../../../stuff/patches/passt-fix-user-namespace-detection.patch
+    ];
+  });
+
+  sb-executor-pkg = pkgs.pkgsStatic.stdenv.mkDerivation {
+    pname = "sb-executor";
+    name = "sb-executor";
+    dontUnpack = true;
+    nativeBuildInputs = [
+      pkgs.pkgsStatic.rustc
+      pkgs.clippy
+      pkgs.rustfmt
+    ];
+    buildPhase = ''
+      rustfmt --edition 2024 --check ${../../../stuff/system/packages/sb-executor.rs}
+      clippy-driver --edition 2024 \
+        -D warnings \
+        -W clippy::all \
+        -W clippy::pedantic \
+        -W clippy::nursery \
+        ${../../../stuff/system/packages/sb-executor.rs} --emit=metadata -o lint_check.rmeta
+      rm -f lint_check.rmeta
+
+      rustc --edition 2024 \
+        --target x86_64-unknown-linux-musl \
+        -D warnings \
+        -D dead-code \
+        -D unused-imports \
+        -C target-feature=+crt-static \
+        -C linker=$CC \
+        -C overflow-checks=on \
+        -C link-arg=-Wl,-z,relro,-z,now \
+        -C link-arg=-Wl,-z,noexecstack \
+        -C opt-level=3 \
+        -C lto=fat \
+        -C codegen-units=1 \
+        -C panic=abort \
+        -C strip=symbols \
+        -O ${../../../stuff/system/packages/sb-executor.rs} -o sb-executor
+    '';
+    installPhase = ''
+      mkdir -p $out/bin
+      install -m 0755 sb-executor $out/bin/sb-executor
+    '';
+  };
+
+  sb-run-pkg = pkgs.pkgsStatic.stdenv.mkDerivation {
+    pname = "sb-run";
+    name = "sb-run";
+    dontUnpack = true;
+    nativeBuildInputs = [
+      pkgs.pkgsStatic.rustc
+      pkgs.clippy
+      pkgs.rustfmt
+    ];
+    buildPhase = ''
+      rustfmt --edition 2024 --check ${../../../stuff/system/packages/sb-run.rs}
+      clippy-driver --edition 2024 \
+        -D warnings \
+        -W clippy::all \
+        -W clippy::pedantic \
+        -W clippy::nursery \
+        ${../../../stuff/system/packages/sb-run.rs} --emit=metadata -o lint_check.rmeta
+      rm -f lint_check.rmeta
+
+      rustc --edition 2024 \
+        --target x86_64-unknown-linux-musl \
+        -D warnings \
+        -D dead-code \
+        -D unused-imports \
+        -C target-feature=+crt-static \
+        -C linker=$CC \
+        -C overflow-checks=on \
+        -C link-arg=-Wl,-z,relro,-z,now \
+        -C link-arg=-Wl,-z,noexecstack \
+        -C opt-level=3 \
+        -C lto=fat \
+        -C codegen-units=1 \
+        -C panic=abort \
+        -C strip=symbols \
+        -O ${../../../stuff/system/packages/sb-run.rs} -o sb-run
+    '';
+    installPhase = ''
+      mkdir -p $out/bin
+      install -m 0755 sb-run $out/bin/sb-run
+    '';
+  };
+
+  way-secure-pkg = pkgs.rustPlatform.buildRustPackage {
+    pname = "way-secure";
+    version = "unstable";
+    src = inputs.way-secure;
+    cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
+  };
+
   portal-xdg-open = pkgs.writeShellScriptBin "xdg-open" ''
     exec ${pkgs.systemd}/bin/busctl --user call \
       org.freedesktop.portal.Desktop \
@@ -146,6 +253,7 @@ let
       OpenURI \
       ssa{sv} "" "$1" 0
   '';
+
   portal-files = pkgs.runCommand "portal-files" { } ''
     mkdir -p $out/applications
 
@@ -166,558 +274,308 @@ let
     x-scheme-handler/unknown=nixpak-portal.desktop
     EOF
   '';
+
   mkSandbox =
-    if !cfg.enable then
-      { package, ... }: package
-    else
-      args@{
-        appId,
-        package,
-        gpu ? false,
-        network ? "off", # "off" | "sandboxed" | "singbox" | "passthrough"
-        webcam ? 0,
-        audio_pulse ? "off", # "off" | "sandboxed" | "passthrough"
-        audio_pipewire ? "off", # "off" | "sandboxed" | "passthrough"
-        wayland ? "off", # "off" | "sandboxed" | "passthrough"
-        x11 ? "off", # "off" | "sandboxed" | "passthrough"
-        use_landlock ? true,
-        portals_for_files ? true,
-        sandbox_shm ? true,
-        sandbox_tmp ? true,
-        main_desktop_file ? "none",
-        additional_args ? { },
-        additional_inside_commands ? "",
-        additional_outside_commands ? "",
-        extraAttrs ? [ ],
-      }:
+    args@{
+      appId,
+      package,
+      gpu ? false,
+      network ? "off", # "off" | "sandboxed" | "singbox" | "passthrough"
+      webcam ? 0,
+      audio_pulse ? "off", # "off" | "sandboxed" | "passthrough"
+      audio_pipewire ? "off", # "off" | "sandboxed" | "passthrough"
+      wayland ? "off", # "off" | "sandboxed" | "passthrough"
+      x11 ? "off", # "off" | "sandboxed" | "passthrough"
+      use_landlock ? true,
+      portals_for_files ? true,
+      sandbox_shm ? true,
+      sandbox_tmp ? true,
+      main_desktop_file ? "none",
+      additional_args ? { },
+      additional_inside_commands ? "",
+      additional_outside_commands ? "",
+      extraAttrs ? [ ],
+    }:
       let
-        writeDash = pkgs.writers.writeDash;
-        stage1_inside = writeDash "stage1_inside" (
-          if (network == "singbox") then
-            ''
-              ${pkgs.util-linux}/bin/unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" -- ${stage2_inside} "$@" &
-              exec env GOMAXPROCS=1 GOMEMLIMIT=8MiB GOGC=15 GODEBUG=madvdontneed=1 ${sing-box-lite}/bin/sing-box -c "${sing-box-sandbox-config}" run
-            ''
+        rawArgs =
+          if builtins.isFunction additional_args then
+            additional_args { inherit sloth lib pkgs; }
           else
-            ''
-              . ${stage2_inside} "$@" &
-              exec pause
-            ''
+            additional_args;
+
+        dbusCfg = rawArgs.dbus or { };
+        bwrapCfg = rawArgs.bubblewrap or { };
+
+        dbusEnabled = dbusCfg.enable or true;
+        dbusPolicies = dbusCfg.policies or { };
+
+        dbusFlags = lib.concatLists (
+          lib.mapAttrsToList (name: policy: [ "--dbus-${policy}=${name}" ]) dbusPolicies
         );
-        stage2_inside = writeDash "stage2_inside" ''
-          ${additional_inside_commands}
-          ${lib.optionalString (
-            x11 == "sandboxed"
-          ) "${pkgs.xwayland-satellite}/bin/xwayland-satellite -nolisten local &"}
-          ${lib.optionalString (
-            network == "singbox"
-          ) "rust-bridge -r listen -s \"$XDG_RUNTIME_DIR/sing-box\" --address 127.0.0.1:[1919,2121] -d"}
-          env SANDBOX_ROLE=executor ${executor_script} "$@" &
-          exit 0
-        '';
-        executor_script = writeDash "executor_script" ''
-          exec 7<> "$XDG_RUNTIME_DIR/cgroup_pipe"
-          exec 8<> "$XDG_RUNTIME_DIR/go_pipe"
-          echo "ready" >&7
-          read -r _ <&8
-          exec 7<&-
-          exec 8<&-
-          ("$@" &)
-          echo "[$APP_ID] Startup: $(( ($(${pkgs.coreutils}/bin/date +%s%N) - START_TIME) / 1000000 )) ms"
-          echo "ready" > "$XDG_RUNTIME_DIR/ready_pipe"
-          exec 3<> "$XDG_RUNTIME_DIR/command_pipe"
-          while read -r cmd <&3; do 
-            (eval "$cmd" &)
-          done
-        '';
-        cleanup_script = writeDash "cleanup_script" ''
-          rm -rf "$SANDBOX_DIR"
-          systemctl --user --no-block stop "$MY_SCOPE"
-        '';
-        startup_script = writeDash "startups_script" ''
-          if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
-            export START_TIME=$(date +%s%N)
-            export SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/$APP_ID"
-            SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
-            COMMAND_PIPE="$SANDBOXED_RUNTIME_DIR/command_pipe"
-            PARENT_PID="$(cat "$SANDBOX_DIR/parent_pid" 2>/dev/null)"
 
-            # Check if parent supervisor is alive, command pipe is writable, and cgroup exists
-            if [ -n "$PARENT_PID" ] && kill -0 "$PARENT_PID" 2>/dev/null && [ -p "$COMMAND_PIPE" ] && dd if=/dev/null of="$COMMAND_PIPE" oflag=nonblock count=0 2>/dev/null; then
-              CMD_LINE=""
-              SQ=$(printf '\047')
-              for arg in "$TARGET" "$@"; do
-                rem="$arg"
-                escaped=""
-                while true; do
-                  case "$rem" in
-                    *"$SQ"*)
-                      escaped="''${escaped}''${rem%%$SQ*}$SQ\\$SQ$SQ"
-                      rem="''${rem#*$SQ}"
-                      ;;
-                    *)
-                      escaped="''${escaped}''${rem}"
-                      break
-                      ;;
-                  esac
-                done
-                CMD_LINE="''${CMD_LINE}$SQ''${escaped}$SQ "
-              done
-              B64_CMD=$(printf "%s" "$CMD_LINE" | ${pkgs.coreutils}/bin/base64 -w 0)
-              PAYLOAD="eval \"\$(printf '%s' '$B64_CMD' | ${pkgs.coreutils}/bin/base64 -d)\""
-              printf "%s\n" "$PAYLOAD" >> "$COMMAND_PIPE"
-            else
-              if [ -f "$SANDBOX_DIR/scope" ]; then
-                systemctl --user stop "$(cat "$SANDBOX_DIR/scope")" 2>/dev/null || true
-              fi
-              rm -rf "$SANDBOX_DIR"
-
-              MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
-              MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
-              case "$MY_SCOPE" in
-                *"$APP_ID"*)
-                  mkdir -p "$SANDBOX_DIR"
-                  printf '%s\n' "$MY_SCOPE" > "$SANDBOX_DIR/scope"
-                  printf '%s\n' "$$" > "$SANDBOX_DIR/parent_pid"
-                  ;;
-                *)
-                  exec app2unit -a "$APP_ID" -- "$0" "$@"
-                  ;;
-              esac
-              mkdir "$MY_CGROUP/helpers"
-              echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
-              echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control"
-              echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control"
-              export MY_CGROUP MY_SCOPE
-
-              rm -f "$COMMAND_PIPE"
-              mkdir -p "$SANDBOXED_RUNTIME_DIR"
-              mkfifo "$COMMAND_PIPE"
-              READY_PIPE="$SANDBOXED_RUNTIME_DIR/ready_pipe"
-              rm -f "$READY_PIPE"
-              mkfifo "$READY_PIPE"
-              exec 5<> "$READY_PIPE"
-              CGROUP_PIPE="$SANDBOXED_RUNTIME_DIR/cgroup_pipe"
-              rm -f "$CGROUP_PIPE"
-              mkfifo "$CGROUP_PIPE"
-              exec 6<> "$CGROUP_PIPE"
-              GO_PIPE="$SANDBOXED_RUNTIME_DIR/go_pipe"
-              rm -f "$GO_PIPE"
-              mkfifo "$GO_PIPE"
-              exec 8<> "$GO_PIPE"
-              mkdir "$MY_CGROUP/inside"
-
-              ${additional_outside_commands}
-
-              ${lib.optionalString (network == "singbox") ''
-                rust-bridge -r pass -s "$SANDBOXED_RUNTIME_DIR/sing-box" --address 127.0.0.1:[1919,2121] &
-              ''}
-
-              ${lib.optionalString (wayland == "sandboxed") ''
-                SOCK="$SANDBOXED_RUNTIME_DIR/wayland-secure"
-                NOTIFY_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-secure-notify-$APP_ID"
-                WAY_CLOSE_PIPE="$XDG_RUNTIME_DIR/.nixpak/$APP_ID/way-close-pipe"
-
-                rm -f "$SOCK" "$SOCK.lock" "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
-                mkfifo "$NOTIFY_PIPE" "$WAY_CLOSE_PIPE"
-                exec 3<> "$NOTIFY_PIPE"
-                ${way-secure}/bin/way-secure --socket-path "$SOCK" -a "$APP_ID" -e flatpak -r 4 -c 8 4> "$NOTIFY_PIPE" 8< "$WAY_CLOSE_PIPE" &
-                exec 9> "$WAY_CLOSE_PIPE"
-                if ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&3; then
-                    echo "way-secure started"
-                else
-                    echo "Error: way-secure failed to start within 5 seconds" >&2
-                    exit 1
-                fi
-                exec 3<&-
-                rm -f "$NOTIFY_PIPE"
-              ''}
-
-              ${lib.optionalString portals_for_files ''
-                export PATH="${portal-xdg-open}/bin:$PATH"
-                export XDG_DATA_DIRS="${portal-files}:''${XDG_DATA_DIRS:-/usr/share:/run/current-system/sw/share}"
-                export XDG_CONFIG_DIRS="${portal-files}:''${XDG_CONFIG_DIRS:-/etc/xdg}"
-              ''}
-
-              ${lib.optionalString (network == "singbox") ''
-                export ORIG_UID="$(id -u)"
-                export ORIG_GID="$(id -g)"
-              ''}
-
-              ${lib.optionalString use_landlock "landlock \\"}
-              "$SANDBOXED_DASH"/bin/dash ${stage1_inside} "$TARGET" "$@" &
-
-              if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&6; then
-                  echo "Error: Timeout waiting for sandbox ready signal" >&2
-                  systemctl --user --no-block stop "$MY_SCOPE"
-                  exit 1
-              fi
-              if ! GUEST_HOST_PID=$(sandbox-migrator \
-                --app-id "$APP_ID" \
-                --scope "$MY_SCOPE" \
-                --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
-                --go-pipe "$SANDBOXED_RUNTIME_DIR/go_pipe"); then
-                  echo "Error: sandbox-migrator failed" >&2
-                  systemctl --user --no-block stop "$MY_SCOPE"
-                  exit 1
-              fi
-              exec 6<&-
-              exec 8<&-
-              if ! ${pkgs.coreutils}/bin/timeout 5 ${pkgs.coreutils}/bin/head -n 1 <&5; then
-                  echo "Error: Timeout waiting for sandbox ready signal" >&2
-                  systemctl --user --no-block stop "$MY_SCOPE"
-                  exit 1
-              fi
-              exec 5<&-
-              rm -f "$READY_PIPE" "$CGROUP_PIPE" "$GO_PIPE"
-              exec sandbox_supervisor \
-                --cgroup-procs "$MY_CGROUP/inside/cgroup.procs" \
-                --runner-pid "$GUEST_HOST_PID" \
-                ${lib.optionalString (wayland == "sandboxed") "--close-fd 9"} \
-                --cleanup "${cleanup_script}"
-            fi
+        extractList =
+          val:
+          if builtins.isList val then
+            val
+          else if builtins.isAttrs val && val ? content then
+            extractList val.content
           else
-            exec ${pkgs.dash}/bin/dash -c 'exec "$0" "$@"' "$TARGET" "$@"
-          fi
-        '';
-        wrapWithProxy =
-          pkg:
-          let
-            sandboxed_app = mkNixPak {
-              config =
-                { sloth, ... }:
-                let
-                  concat = sloth.concat';
-                  mkdir-concat = one: two: sloth.mkdir (sloth.concat' one two);
-                  actual_config = {
-                    app.package = pkgs.dash;
-                    app.binPath = "bin/dash";
+            [ ];
 
-                    dbus = {
-                      policies = {
-                        # Alternative tray
-                        "org.ayatana.indicator.application" = "talk";
-                        # Prevents system from sleeping or locking automatically
-                        "org.freedesktop.ScreenSaver" = "talk";
-                        # Window Manager Idle Monitor (Used to update your 'Online' status)
-                        "org.gnome.Mutter.IdleMonitor" = "talk";
-                        # Music control
-                        "org.mpris.MediaPlayer2.Player" = "talk";
-                        # Notifications
-                        "org.freedesktop.Notifications" = "talk";
-                        # xdg-desktop-portal
-                        "org.freedesktop.portal.Desktop" = "talk";
-                        # show icon in tray
-                        "org.kde.StatusNotifierWatcher" = "talk";
-                        # add actions to tray icon
-                        "com.canonical.AppMenu.Registrar" = "talk";
-                        # Get and store individual secrets
-                        "org.freedesktop.portal.Secret" = "talk";
-                        # Allows the app to interact with the document portal to safely read/write files you select via the native file chooser
-                        "org.freedesktop.portal.Documents" = "talk";
-                        # Enables the "Show in Folder" feature to open your host file manager directly to a downloaded file's location
-                        "org.freedesktop.FileManager1" = "talk";
-                      };
-                    };
+        rwFlags = map (
+          p: "--rw=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+        ) (extractList (bwrapCfg.bind.rw or [ ]));
 
-                    gpu.enable = gpu;
+        roFlags = map (
+          p: "--ro=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+        ) (extractList (bwrapCfg.bind.ro or [ ]));
 
-                    flatpak.appId = appId;
+        devFlags = map (
+          p: "--dev=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+        ) (extractList (bwrapCfg.bind.dev or [ ]));
 
-                    pasta = {
-                      enable = network == "sandboxed";
-                      mode = "isolate";
-                    };
+        sharePidFlag = lib.optional (bwrapCfg.sharePid or false) "--share-pid";
+        landlockFlag = lib.optional (!use_landlock) "--no-landlock";
+        portalsFlag = lib.optional (!portals_for_files) "--no-portals";
+        portalEnvFlags = lib.optionals portals_for_files [
+          "--env"
+          "PATH=${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin"
+          "--env"
+          "XDG_DATA_DIRS=${portal-files}:/usr/share:/run/current-system/sw/share"
+          "--env"
+          "XDG_CONFIG_DIRS=${portal-files}:/etc/xdg"
+        ];
+        envFlags = lib.concatLists (
+          lib.mapAttrsToList (k: v: [
+            "--env"
+            "${k}=${v}"
+          ]) (bwrapCfg.env or { })
+        );
 
-                    bubblewrap = {
+        sbRunFlags = lib.flatten [
+          "--id"
+          appId
+          "--executor-bin"
+          "${sb-executor-pkg}/bin/sb-executor"
+          "--net"
+          network
+          (lib.optionals (network == "singbox") [
+            "--singbox-bin"
+            "${sing-box-lite}/bin/sing-box"
+            "--singbox-config"
+            "${sing-box-sandbox-config}"
+          ])
+          (lib.optionals (network == "sandboxed") [
+            "--pasta-bin"
+            "${pasta-pkg}/bin/pasta"
+          ])
+          (lib.optional gpu "--gpu")
+          [
+            "--pulse"
+            audio_pulse
+            "--pipewire"
+            audio_pipewire
+            "--wayland"
+            wayland
+            (lib.optionals (wayland == "sandboxed") [
+              "--way-secure-bin"
+              "${way-secure-pkg}/bin/way-secure"
+            ])
+            "--x11"
+            x11
+            (lib.optionals (x11 == "sandboxed") [
+              "--xwayland-satellite-bin"
+              "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
+            ])
+            "--shm"
+            (if sandbox_shm then "sandboxed" else "passthrough")
+            "--tmp"
+            (if sandbox_tmp then "sandboxed" else "passthrough")
+          ]
+          landlockFlag
+          portalsFlag
+          portalEnvFlags
+          (lib.optional (webcam != 0) [
+            "--webcam"
+            (toString webcam)
+          ])
+          (if dbusEnabled then [
+            "--dbus"
+            "sandboxed"
+            "--dbus-proxy-bin"
+            "${staticDbusProxy}/bin/xdg-dbus-proxy"
+          ] else [
+            "--dbus"
+            "off"
+          ])
+          (lib.optional (dbusCfg.system or false) "--system-dbus")
+          dbusFlags
+          rwFlags
+          roFlags
+          devFlags
+          envFlags
+          sharePidFlag
+          (if (args.cli or false) then "--cli" else "--gui")
+        ];
 
-                      package = staticBwrap;
+      wrapperScript = pkgs.writeShellScript "sandbox-launcher-${appId}" ''
+        if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
+          export START_TIME=$(date +%s%N)
+          export APP_ID="${appId}"
 
-                      bindEntireStore = true;
+          MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
+          MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
+          case "$MY_SCOPE" in
+            *"${appId}"*)
+              ;;
+            *)
+              exec app2unit -a "${appId}" -- "$0" "$@"
+              ;;
+          esac
 
-                      network = network != "off" && network != "singbox";
+          mkdir -p "$MY_CGROUP/helpers"
+          echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
+          echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control" 2>/dev/null || true
+          echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control" 2>/dev/null || true
+          mkdir -p "$MY_CGROUP/inside"
+          export MY_CGROUP MY_SCOPE
 
-                      env =
-                        { }
-                        // lib.optionalAttrs (wayland == "sandboxed") {
-                          WAYLAND_DISPLAY = "wayland-secure";
-                        };
+          export SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/${appId}"
+          export SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
+          mkdir -p "$SANDBOXED_RUNTIME_DIR"
 
-                      apivfs = {
-                        proc = true;
-                        dev = true;
-                      };
+          ${additional_outside_commands}
+          exec ${sb-run-pkg}/bin/sb-run ${lib.escapeShellArgs sbRunFlags} -- "$0" "$@"
+        else
+          ${additional_inside_commands}
+          exec "$TARGET" "$@"
+        fi
+      '';
 
-                      extraArgs = lib.optionals (network == "singbox") [
-                        "--gid"
-                        "0"
-                        "--uid"
-                        "0"
-                        "--cap-add"
-                        "CAP_NET_ADMIN"
-                        "--cap-add"
-                        "CAP_SETFCAP"
-                        "--cap-add"
-                        "CAP_NET_RAW"
-                        "--cap-add"
-                        "CAP_NET_BIND_SERVICE"
-                      ];
-
-                      sockets = {
-                        pulse = audio_pulse == "passthrough";
-                        pipewire = audio_pipewire == "passthrough";
-                        wayland = wayland == "passthrough";
-                        x11 = false;
-                      };
-
-                      bind = {
-
-                        dev =
-                          (lib.optionals (webcam != 0) (builtins.genList (i: "/dev/video${toString i}") 10))
-                          ++ (lib.optionals (network == "singbox") [ "/dev/net/tun" ])
-                          ++ (lib.optionals gpu [
-                            "/dev/dri"
-                            "/dev/nvidia0"
-                            "/dev/nvidiactl"
-                            "/dev/nvidia-modeset"
-                            "/dev/nvidia-uvm"
-                            "/dev/nvidia-uvm-tools"
-                          ]);
-
-                        rw = [
-                          [
-                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/runtime")
-                            sloth.runtimeDir
-                          ]
-                          [
-                            (mkdir-concat sloth.homeDir "/.nixpak/${appId}/home")
-                            sloth.homeDir
-                          ]
-                        ]
-                        ++ (lib.optionals sandbox_shm [
-                          [
-                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/shm")
-                            "/dev/shm"
-                          ]
-                        ])
-                        ++ (lib.optionals sandbox_tmp [
-                          [
-                            (mkdir-concat sloth.runtimeDir "/.nixpak/${appId}/tmp")
-                            "/tmp"
-                          ]
-                        ])
-                        ++ [
-                          (mkdir-concat sloth.runtimeDir "/sesatt/${appId}")
-                          (concat sloth.runtimeDir "/doc")
-                        ];
-
-                        ro = [
-                          "/bin"
-                          "/usr/bin"
-                          "/etc/xdg"
-                          "/run/current-system"
-                          "/etc/fonts"
-                          "/etc/localtime"
-                          "/etc/profiles"
-                          "/etc/static"
-                          "/nix/profile"
-                          "/nix/var/nix/profiles"
-                          "/etc/ssl/certs"
-                          "/etc/static/ssl/certs"
-                          "/etc/pki"
-                          "/etc/hosts"
-                          "/etc/nsswitch.conf"
-                          "/etc/machine-id"
-                          "/etc/os-release"
-                          "/etc/mime.types"
-                          "/etc/passwd"
-                          "/etc/group"
-                          "/sys/class/hwmon"
-                          (concat sloth.homeDir "/.nix-profile")
-                          (concat sloth.homeDir "/.local/state/nix/profile")
-                          (concat sloth.homeDir "/.icons")
-                          (concat sloth.homeDir "/.themes")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.dirs")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/user-dirs.conf")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-4.0")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/gtk-3.0")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/qt6ct")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/qt5ct")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/Kvantum")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/starship.toml")
-                          (concat (sloth.env "XDG_CONFIG_HOME") "/fastfetch")
-                          (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshenv")
-                          (concat (sloth.env "XDG_DATA_HOME") "/zsh/.zshrc")
-                          (concat (sloth.env "XDG_DATA_HOME") "/icons")
-                          (concat (sloth.env "XDG_DATA_HOME") "/themes")
-                        ]
-                        ++ (lib.optionals gpu [
-                          "/run/opengl-driver"
-                          "/run/opengl-driver-32"
-                          "/sys/class/drm"
-                          "/sys/devices"
-                          "/sys/bus/pci"
-                        ])
-                        ++ (lib.optionals (x11 == "passthrough") [ "/tmp/.X11-unix" ])
-                        ++ (lib.optionals (network == "singbox") [ "/etc/resolv.conf" ])
-                        ++ (lib.optionals portals_for_files [ (concat (sloth.env "XDG_CONFIG_HOME") "/mimeapps.list") ])
-                        ++ (lib.optionals (wayland == "passthrough") [
-                          (sloth.concat [
-                            (sloth.env "XDG_RUNTIME_DIR")
-                            "/"
-                            (sloth.env "WAYLAND_DISPLAY")
-                          ])
-                        ])
-                        ++ (lib.optionals (audio_pulse == "sandboxed") [
-                          [
-                            (sloth.concat' sloth.runtimeDir "/pulse/restricted")
-                            (sloth.concat' sloth.runtimeDir "/pulse/native")
-                          ]
-                        ])
-                        ++ (lib.optionals (audio_pipewire == "sandboxed") [
-                          [
-                            (sloth.concat' sloth.runtimeDir "/pipewire-0-restricted")
-                            (sloth.concat' sloth.runtimeDir "/pipewire-0")
-                          ]
-                        ]);
-
-                      };
-                    };
-                  };
-
-                in
-                {
-                  imports = [
-                    additional_args
-                    actual_config
-                  ];
-                };
-            };
-            wrapped =
-              pkgs.symlinkJoin {
-                name = "${appId}-wrapper";
-                paths = [ pkg ];
-                nativeBuildInputs = [ pkgs.findutils ];
-                postBuild = ''
-                  echo "reached postBuild"
-
-                  materialize_path() {
-                    local target_path="$1"
-                    local rel=''${target_path#$out/}
-                    local current="$out"
-                    IFS='/' read -ra parts <<< "$rel"
-                    for part in "''${parts[@]}"; do
-                      [[ -z "$part" ]] && continue
-                      current="$current/$part"
-                      if [[ -L "$current" ]] && [[ -d "$current" ]]; then
-                        local link_target=$(readlink -f "$current")
-                        rm "$current"
-                        mkdir -p "$current"
-                        find "$link_target" -maxdepth 1 -mindepth 1 -exec ln -s -t "$current/" {} +
-                      fi
-                    done
-                  }
-
-                  find "$out" -type l -not -xtype d | while read -r link; do
-                    ls -la "$link"
-                    target=$(readlink -fm "$link")
-                    
-                    is_desktop_or_service=0
-                    is_executable=0
-                    
-                    if [[ "$link" == *.desktop ]] || [[ "$link" == *.service ]]; then
-                      is_desktop_or_service=1
-                    elif [[ "$link" != *.so* ]]; then
-                      if LC_ALL=C grep -q "^.ELF" "$target" 2>/dev/null; then
-                        is_executable=1
-                      elif LC_ALL=C grep -q "^#!" "$target" 2>/dev/null; then
-                        is_executable=1
-                      fi
-                    fi
-
-                    if [ "$is_desktop_or_service" -eq 1 ] || [ "$is_executable" -eq 1 ]; then
-                      materialize_path "$(dirname "$link")"
-                      rm "$link"
-                      
-                      if [ "$is_desktop_or_service" -eq 1 ]; then
-                        cp "$target" "$link"
-                        chmod +w "$link"
-                        sed -i "s|${pkg}|$out|g" "$link"
-                      else
-                        cp "${startup_script}" "$link"
-                        sed -i "1a SANDBOXED_DASH=\"${sandboxed_app.config.script}\"" "$link"
-                        sed -i "1a TARGET=\"$target\"" "$link"
-                        sed -i "1a export APP_ID=\"${appId}\"" "$link"
-                        chmod +x "$link"
-                      fi
+      wrapWithProxy =
+        pkg:
+        let
+          wrapped =
+            pkgs.symlinkJoin {
+              name = "${appId}-wrapper";
+              paths = [ pkg ];
+              nativeBuildInputs = [ pkgs.findutils ];
+              postBuild = ''
+                materialize_path() {
+                  local target_path="$1"
+                  local rel="''${target_path#$out/}"
+                  local current="$out"
+                  IFS='/' read -ra parts <<< "$rel"
+                  for part in "''${parts[@]}"; do
+                    [[ -z "$part" ]] && continue
+                    current="$current/$part"
+                    if [[ -L "$current" ]] && [[ -d "$current" ]]; then
+                      local link_target
+                      link_target="$(readlink -f "$current")"
+                      rm "$current"
+                      mkdir -p "$current"
+                      find "$link_target" -maxdepth 1 -mindepth 1 -exec ln -s -t "$current/" {} +
                     fi
                   done
+                }
 
-
-                  if [[ -d "$out/share/applications" ]]; then
-                    materialize_path "$out/share/applications"
-                    
-                    shopt -s nullglob
-                    apps=("$out/share/applications/"*.desktop)
-                    target_name="$out/share/applications/${appId}.desktop"
-
-                    if [[ "${main_desktop_file}" != "none" ]]; then
-                      src="$out/share/applications/${main_desktop_file}"
-                      if [[ -e "$src" ]] && [[ "$src" != "$target_name" ]]; then
-                        mv "$src" "$target_name"
-                      fi
-                    elif [[ ''${#apps[@]} -eq 1 ]]; then
-                      if [[ "''${apps[0]}" != "$target_name" ]]; then
-                        mv "''${apps[0]}" "$target_name"
-                      fi
+                find "$out" -type l -not -xtype d | while read -r link; do
+                  target="$(readlink -fm "$link")"
+                  
+                  is_desktop_or_service=0
+                  is_executable=0
+                  
+                  if [[ "$link" == *.desktop ]] || [[ "$link" == *.service ]]; then
+                    is_desktop_or_service=1
+                  elif [[ "$link" != *.so* ]]; then
+                    if LC_ALL=C grep -q "^.ELF" "$target" 2>/dev/null; then
+                      is_executable=1
+                    elif LC_ALL=C grep -q "^#!" "$target" 2>/dev/null; then
+                      is_executable=1
                     fi
-                    shopt -u nullglob
                   fi
-                '';
-              }
-              // {
-                pname = "${appId}-wrapped";
-                version = pkg.version or "1.0";
-              };
-          in
-          wrapped
-          // (lib.optionalAttrs (pkg ? override) {
-            override = overrideArgs: wrapWithProxy (pkg.override overrideArgs);
-          })
-          // (lib.optionalAttrs (pkg ? overrideAttrs) {
-            overrideAttrs = f: wrapWithProxy (pkg.overrideAttrs f);
-          });
-        mainWrapper = wrapWithProxy package;
-        proxiedExtra = lib.genAttrs extraAttrs (
-          attr:
-          let
-            origAttr = package.${attr} or null;
-          in
-          if lib.isDerivation origAttr then wrapWithProxy origAttr else origAttr
+
+                  if [ "$is_desktop_or_service" -eq 1 ] || [ "$is_executable" -eq 1 ]; then
+                    materialize_path "$(dirname "$link")"
+                    rm "$link"
+                    
+                    if [ "$is_desktop_or_service" -eq 1 ]; then
+                      cp "$target" "$link"
+                      chmod +w "$link"
+                      sed -i "s|${pkg}|$out|g" "$link"
+                    else
+                      cp "${wrapperScript}" "$link"
+                      sed -i "1a TARGET=\"$target\"" "$link"
+                      chmod +x "$link"
+                    fi
+                  fi
+                done
+
+                if [[ -d "$out/share/applications" ]]; then
+                  materialize_path "$out/share/applications"
+                  
+                  shopt -s nullglob
+                  apps=("$out/share/applications/"*.desktop)
+                  target_name="$out/share/applications/${appId}.desktop"
+
+                  if [[ "${main_desktop_file}" != "none" ]]; then
+                    src="$out/share/applications/${main_desktop_file}"
+                    if [[ -e "$src" ]] && [[ "$src" != "$target_name" ]]; then
+                      mv "$src" "$target_name"
+                    fi
+                  elif [[ ''${#apps[@]} -eq 1 ]]; then
+                    if [[ "''${apps[0]}" != "$target_name" ]]; then
+                      mv "''${apps[0]}" "$target_name"
+                    fi
+                  fi
+                  shopt -u nullglob
+                fi
+              '';
+            }
+            // {
+              pname = "${appId}-wrapped";
+              version = pkg.version or "1.0";
+            };
+        in
+        wrapped
+        // (lib.optionalAttrs (pkg ? override) {
+          override = overrideArgs: wrapWithProxy (pkg.override overrideArgs);
+        })
+        // (lib.optionalAttrs (pkg ? overrideAttrs) {
+          overrideAttrs = f: wrapWithProxy (pkg.overrideAttrs f);
+        });
+
+      mainWrapper = wrapWithProxy package;
+      proxiedExtra = lib.genAttrs extraAttrs (
+        attr:
+        let
+          origAttr = package.${attr} or null;
+        in
+        if lib.isDerivation origAttr then wrapWithProxy origAttr else origAttr
+      );
+    in
+    mainWrapper
+    // proxiedExtra
+    // (lib.optionalAttrs (package ? override) {
+      override =
+        overrideArgs:
+        mkSandbox (
+          args
+          // {
+            package = package.override overrideArgs;
+          }
         );
-      in
-      mainWrapper
-      // proxiedExtra
-      // (lib.optionalAttrs (package ? override) {
-        override =
-          overrideArgs:
-          mkSandbox (
-            args
-            // {
-              package = package.override overrideArgs;
-            }
-          );
-      })
-      // (lib.optionalAttrs (package ? overrideAttrs) {
-        overrideAttrs =
-          f:
-          mkSandbox (
-            args
-            // {
-              package = package.overrideAttrs f;
-            }
-          );
-      });
+    })
+    // (lib.optionalAttrs (package ? overrideAttrs) {
+      overrideAttrs =
+        f:
+        mkSandbox (
+          args
+          // {
+            package = package.overrideAttrs f;
+          }
+        );
+    });
 
   pipewireRestrictedSocketConfig = {
     "module.protocol-native.args".sockets = [
@@ -786,34 +644,31 @@ let
   };
 in
 {
-  options.sandboxing.enable = lib.mkEnableOption "app sandboxing using nixpak";
+  options.sandboxing.enable = lib.mkEnableOption "app sandboxing";
   config = {
     _module.args = {
-      inherit staticBwrap;
-      inherit mkSandbox;
+      inherit staticBwrap mkSandbox;
     };
   }
   // lib.optionalAttrs (options ? home.file) {
-    home.packages = [ staticBwrap ];
-    home.file.".not-a-sandbox".text = "not a sandbox";
-    xdg.configFile =
-      lib.mapAttrs'
-        (
-          path: conf:
-          lib.nameValuePair path {
-            source = (pkgs.formats.json { }).generate (baseNameOf path) conf;
-          }
-        )
-        {
-          "pipewire/pipewire.conf.d/99-restricted-socket.conf" = pipewireRestrictedSocketConfig;
-          "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf" = pipewirePulseRestrictedSocketConfig;
-          "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" =
-            wireplumberRestrictedPermissionsConfig;
-        };
+    home = {
+      packages = [ staticBwrap ];
+      file.".not-a-sandbox".text = "not a sandbox";
+    };
+    xdg.configFile = {
+      "pipewire/pipewire.conf.d/99-restricted-socket.conf".text =
+        builtins.toJSON pipewireRestrictedSocketConfig;
+      "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf".text =
+        builtins.toJSON pipewirePulseRestrictedSocketConfig;
+      "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf".text =
+        builtins.toJSON wireplumberRestrictedPermissionsConfig;
+    };
   }
   // lib.optionalAttrs (options ? environment.etc) {
-    environment.systemPackages = [ staticBwrap ];
-    environment.etc.".not-a-sandbox".text = "not a sandbox";
+    environment = {
+      systemPackages = [ staticBwrap ];
+      etc.".not-a-sandbox".text = "not a sandbox";
+    };
     services.pipewire = {
       package = pkgs.pipewire.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [

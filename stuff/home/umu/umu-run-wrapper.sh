@@ -1,5 +1,53 @@
 set -e
 
+# 0. Check if launched via .desktop shortcut (%k)
+if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
+  desktop_file="$1"
+  shift
+  get_dprop() {
+    sed -rn "s/^$1=(.*)$/\1/p" "$desktop_file" | head -n 1
+  }
+  target_exe="$(get_dprop 'X-UMU-Actual-Exe')"
+  raw_args="$(get_dprop 'X-UMU-Raw-Args')"
+  pfx_prop="$(get_dprop 'X-UMU-Prefix-Name')"
+  [[ -n "$pfx_prop" ]] && export UMU_PREFIX_NAME="$pfx_prop"
+  export UMU_PROTON_TYPE="$(get_dprop 'X-UMU-Proton-Type')"
+  export UMU_GPU_SELECT="$(get_dprop 'X-UMU-GPU-Select')"
+  export USE_GAMEMODE="$(get_dprop 'X-UMU-Gamemode')"
+  export USE_MANGOHUD="$(get_dprop 'X-UMU-Mangohud')"
+  export PROTON_ENABLE_WAYLAND="$(get_dprop 'X-UMU-Wayland')"
+  export USE_STEAM_INTEGRATION="$(get_dprop 'X-UMU-Steam-Integration')"
+  export USE_STEAM_OVERLAY="$(get_dprop 'X-UMU-Steam-Overlay')"
+  export USE_STEAM_PORTS="$(get_dprop 'X-UMU-Steam-Ports')"
+  export USE_VPN="$(get_dprop 'X-UMU-VPN')"
+  export GAMEID="$(get_dprop 'X-UMU-Game-ID')"
+  export USE_SANDBOX="$(get_dprop 'X-UMU-Sandbox')"
+  export USE_GAMEPAD="$(get_dprop 'X-UMU-Gamepad')"
+  export USE_NETWORK="$(get_dprop 'X-UMU-Network')"
+  export UMU_EXTRA_PATHS="$(get_dprop 'X-UMU-Extra-Paths')"
+
+  EXTRA_CLI_ARGS=("$@")
+  RAW_ARGS_LIST=()
+  if [[ -n "$raw_args" ]]; then
+    mapfile -d '' RAW_ARGS_LIST < <(printf '%s\n' "$raw_args" | xargs -n1 printf '%s\0' 2>/dev/null || true)
+  fi
+
+  FINAL_ARGS=()
+  has_cmd_placeholder=0
+  for a in "${RAW_ARGS_LIST[@]}"; do
+    if [[ "$a" == "%command%" ]]; then
+      FINAL_ARGS+=("$target_exe")
+      has_cmd_placeholder=1
+    else
+      FINAL_ARGS+=("$a")
+    fi
+  done
+  if [[ $has_cmd_placeholder -eq 0 ]]; then
+    FINAL_ARGS=("$target_exe" "${RAW_ARGS_LIST[@]}")
+  fi
+  set -- "${FINAL_ARGS[@]}" "${EXTRA_CLI_ARGS[@]}"
+fi
+
 # 1. Resolve Prefix Storage Directory
 prefix_name="${UMU_PREFIX_NAME:-default}"
 PREFIX_DIR="$HOME/.umu/$prefix_name"
@@ -204,13 +252,90 @@ run_overlay_app() {
     UPPER_DIR="$PREFIX_DIR/upper" \
     WORK_DIR="$PREFIX_DIR/.work" \
     MERGED_PFX="$MERGED_PFX" \
+    PREFIX_DIR="$PREFIX_DIR" \
     ORIG_UID="$ORIG_UID" \
     ORIG_GID="$ORIG_GID" \
+    prefix_name="$prefix_name" \
+    USE_SANDBOX="${USE_SANDBOX:-1}" \
+    USE_GAMEPAD="${USE_GAMEPAD:-1}" \
+    USE_NETWORK="${USE_NETWORK:-1}" \
+    USE_VPN="${USE_VPN:-0}" \
+    USE_STEAM_PORTS="${USE_STEAM_PORTS:-$USE_STEAM_INTEGRATION}" \
+    UMU_EXTRA_PATHS="${UMU_EXTRA_PATHS:-}" \
     UNIT_NAME="umu-pfx-$prefix_name.scope" \
-    sh -c '
+    bash -c '
       mount --bind "$SECURE_MOUNT" "$MOUNT_DIR" || exit 1
       mount -t overlay overlay -o "lowerdir=$BASE_PFX,upperdir=$UPPER_DIR,workdir=$WORK_DIR" "$MERGED_PFX" || exit 1
-      exec unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" env WINEPREFIX="$MERGED_PFX" app2unit -u "$UNIT_NAME" -- "$@"
+
+      if [ "$USE_SANDBOX" != "0" ]; then
+        mkdir -p "$PREFIX_DIR/sandbox"
+        GAMEPAD_ARGS=()
+        if [ "$USE_GAMEPAD" != "0" ]; then
+          GAMEPAD_ARGS+=(--gamepad)
+        fi
+
+        NET_MODE="sandboxed"
+        if [ "$USE_NETWORK" = "0" ] || [ "$USE_NETWORK" = "off" ]; then
+          NET_MODE="off"
+        elif [ "$USE_NETWORK" = "passthrough" ] || [ "$USE_NETWORK" = "1" ]; then
+          NET_MODE="passthrough"
+        fi
+        [ "$USE_VPN" = "1" ] && NET_MODE="singbox"
+
+        STEAM_BINDS=()
+        if [ -d "$HOME/.steam" ]; then
+          STEAM_BINDS+=(--ro "$HOME/.steam:$HOME/.steam")
+          if [ -e "$HOME/.steam/steam.pipe" ]; then
+            STEAM_BINDS+=(--rw "$HOME/.steam/steam.pipe:$HOME/.steam/steam.pipe")
+          fi
+        fi
+        if [ -d "$HOME/.local/share/Steam" ]; then
+          STEAM_BINDS+=(--ro "$HOME/.local/share/Steam:$HOME/.local/share/Steam")
+        fi
+        if [ -d "$HOME/.steam2" ] || [ -L "$HOME/.steam2" ]; then
+          STEAM_BINDS+=(--ro "$HOME/.steam2:$HOME/.steam2")
+        fi
+
+        STEAM_BRIDGE=()
+        if [ "$USE_STEAM_PORTS" = "1" ]; then
+          STEAM_BRIDGE+=(--bridge "from:127.0.0.1:57343,27060")
+        fi
+
+        EXTRA_PATHS_ARGS=()
+        if [ -n "$UMU_EXTRA_PATHS" ]; then
+          raw_paths=()
+          mapfile -d '' raw_paths < <(printf '%s\n' "$UMU_EXTRA_PATHS" | xargs -n1 printf '%s\0' 2>/dev/null || true)
+          idx=0
+          while [ $idx -lt ${#raw_paths[@]} ]; do
+            mode="${raw_paths[$idx]}"
+            if [ "$mode" = "--rw" ] || [ "$mode" = "--ro" ] || [ "$mode" = "--dev" ]; then
+              if [ $((idx + 1)) -lt ${#raw_paths[@]} ]; then
+                EXTRA_PATHS_ARGS+=("$mode" "${raw_paths[$((idx + 1))]}")
+                idx=$((idx + 2))
+                continue
+              fi
+            fi
+            idx=$((idx + 1))
+          done
+        fi
+
+        exec sb-run \
+          --id "umu-$prefix_name" \
+          --dir "$PREFIX_DIR/sandbox" \
+          --rw "$MERGED_PFX" \
+          --rw "$PWD" \
+          --ro "$SECURE_MOUNT" \
+          --gpu \
+          --audio \
+          "${GAMEPAD_ARGS[@]}" \
+          --net "$NET_MODE" \
+          "${STEAM_BINDS[@]}" \
+          "${STEAM_BRIDGE[@]}" \
+          "${EXTRA_PATHS_ARGS[@]}" \
+          -- env WINEPREFIX="$MERGED_PFX" "$@"
+      else
+        exec unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" env WINEPREFIX="$MERGED_PFX" app2unit -u "$UNIT_NAME" -- "$@"
+      fi
     ' _ "$@"
 }
 

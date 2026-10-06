@@ -266,7 +266,7 @@ in
   environment = {
     defaultPackages = [ ];
     pathsToLink = extra-paths;
-    systemPackages = system-package-list;
+    systemPackages = system-package-list ++ [ pkgs.xdg-dbus-proxy ];
   };
 
   boot.extraModulePackages = [

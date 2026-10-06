@@ -42,15 +42,7 @@ let
       rules = [
         { action = "sniff"; }
         {
-          inbound = [ "direct-in" ];
-          outbound = "final-toggle";
-        }
-        {
           inbound = [ "vless-in" ];
-          outbound = "proxy";
-        }
-        {
-          inbound = [ "mixed-in" ];
           outbound = "proxy";
         }
         {
@@ -176,12 +168,6 @@ let
             name = "sandbox-user";
           }
         ];
-      }
-      {
-        tag = "mixed-in";
-        listen_port = 2080;
-        listen = "127.0.0.1";
-        type = "mixed";
       }
       {
         type = "tun";

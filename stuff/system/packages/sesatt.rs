@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::env;
-use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::Shutdown;
@@ -169,24 +168,26 @@ fn get_sesatt_dir() -> PathBuf {
     dir
 }
 
-fn get_nixpak_dir() -> PathBuf {
-    get_xdg_runtime_dir().join(".nixpak")
-}
-
-fn get_sandbox_command_pipe(app_id: &str) -> Option<PathBuf> {
-    let app_dir = get_nixpak_dir().join(app_id);
-    let parent_pid_file = app_dir.join("parent_pid");
-    let cmd_pipe = app_dir.join("runtime").join("command_pipe");
-
-    if parent_pid_file.exists()
-        && cmd_pipe.exists()
-        && let Ok(pid_str) = fs::read_to_string(&parent_pid_file)
-        && let Ok(pid) = pid_str.trim().parse::<i32>()
-        && Path::new(&format!("/proc/{pid}")).exists()
-    {
-        return Some(cmd_pipe);
+fn is_sandbox_running(app_id: &str) -> bool {
+    let runtime_dir = get_xdg_runtime_dir();
+    let candidates = [
+        runtime_dir
+            .join(".nixpak")
+            .join(app_id)
+            .join("runtime")
+            .join("ipc.sock"),
+        runtime_dir.join(".nixpak").join(app_id).join("ipc.sock"),
+        runtime_dir.join("sb-run").join(app_id).join("ipc.sock"),
+    ];
+    for sock in &candidates {
+        if sock.exists() {
+            if UnixStream::connect(sock).is_ok() {
+                return true;
+            }
+            let _ = fs::remove_file(sock);
+        }
     }
-    None
+    false
 }
 
 fn validate_session_name(session: &str) {
@@ -340,77 +341,39 @@ fn handle_editor_mode(args: &[String]) {
     }
 }
 
-fn forward_to_sandbox(
+fn resolve_daemon_args(
     session: &str,
     args: &[String],
     session_idx: usize,
-    cmd_pipe: &Path,
-    detach_mode: bool,
-    sock_path: &Path,
-    log_path: &Path,
-) -> io::Result<()> {
-    const SKIP_VARS: &[&str] = &[
-        "PATH",
-        "HOME",
-        "USER",
-        "LOGNAME",
-        "SHELL",
-        "XDG_RUNTIME_DIR",
-        "XDG_CONFIG_HOME",
-        "XDG_DATA_HOME",
-        "XDG_STATE_HOME",
-        "XDG_CACHE_HOME",
-        "DBUS_SESSION_BUS_ADDRESS",
-        "WAYLAND_DISPLAY",
-        "DISPLAY",
-        "LD_LIBRARY_PATH",
-        "LD_PRELOAD",
-        "APP_ID",
-        "SANDBOX_ROLE",
-        "_",
-        "PWD",
-        "OLDPWD",
-        "SHLVL",
-    ];
-    let mut exports = String::new();
-    for (k, v) in env::vars() {
-        if !SKIP_VARS.contains(&k.as_str()) {
-            let esc = v.replace('\'', "'\\''");
-            let _ = write!(exports, "export {k}='{esc}'; ");
-        }
-    }
-
-    let cmd_args_str = if args.len() > session_idx + 1 {
-        args[session_idx + 1..]
-            .iter()
-            .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
-            .collect::<Vec<_>>()
-            .join(" ")
+    is_sandbox: bool,
+) -> Vec<String> {
+    let cmd_args = if args.len() > session_idx + 1 {
+        args[session_idx + 1..].to_vec()
+    } else if is_sandbox {
+        vec!["/run/current-system/sw/bin/zsh".to_string()]
     } else {
-        "/run/current-system/sw/bin/zsh".to_string()
-    };
-
-    let payload = format!("{exports}sesatt -d '{session}' {cmd_args_str}");
-
-    let mut pipe = match OpenOptions::new().write(true).open(cmd_pipe) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("Error opening sandbox command pipe: {e}");
-            std::process::exit(1);
+        match env::var("SHELL") {
+            Ok(s) if !s.is_empty() => vec![s],
+            _ => {
+                eprintln!("Error: 'SHELL' environment variable is not set.");
+                std::process::exit(1);
+            }
         }
     };
-    if let Err(e) = writeln!(pipe, "{payload}") {
-        eprintln!("Error sending launch command to sandbox: {e}");
-        std::process::exit(1);
-    }
-    let _ = pipe.flush();
 
-    if detach_mode {
-        println!("Started session '{session}' in sandbox in detached mode.");
-        return Ok(());
+    if is_sandbox {
+        let mut v = vec![
+            "sb-run".to_string(),
+            "--id".to_string(),
+            session.to_string(),
+            "--cli".to_string(),
+            "--".to_string(),
+        ];
+        v.extend(cmd_args);
+        v
+    } else {
+        cmd_args
     }
-
-    attach_session(sock_path, log_path)
 }
 
 fn main() -> io::Result<()> {
@@ -484,37 +447,17 @@ fn main() -> io::Result<()> {
         let _ = fs::remove_file(&sock_path);
     }
 
-    if let Some(cmd_pipe) = get_sandbox_command_pipe(session) {
-        return forward_to_sandbox(
-            session,
-            &args,
-            session_idx,
-            &cmd_pipe,
-            detach_mode,
-            &sock_path,
-            &log_path,
-        );
-    }
+    let is_sandbox = is_sandbox_running(session);
 
-    if log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
+    if !is_sandbox && log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
         dump_scrollback(&log_path)?;
         println!("\n--- Process finished. Log preserved above. ---");
         return Ok(());
     }
 
-    let cmd_args = if args.len() > session_idx + 1 {
-        args[session_idx + 1..].to_vec()
-    } else {
-        match env::var("SHELL") {
-            Ok(s) if !s.is_empty() => vec![s],
-            _ => {
-                eprintln!("Error: 'SHELL' environment variable is not set.");
-                std::process::exit(1);
-            }
-        }
-    };
+    let daemon_args = resolve_daemon_args(session, &args, session_idx, is_sandbox);
 
-    spawn_daemon(session, &cmd_args);
+    spawn_daemon(session, &daemon_args);
 
     if detach_mode {
         println!("Started session '{session}' in detached mode.");
@@ -544,7 +487,14 @@ fn print_help() {
     );
 }
 
-fn get_all_sessions() -> Vec<(String, bool)> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SessionStatus {
+    Active,
+    SandboxOnDemand,
+    Dead,
+}
+
+fn get_all_sessions() -> Vec<(String, SessionStatus)> {
     let dir = get_sesatt_dir();
     let mut sessions_map = BTreeMap::new();
 
@@ -555,23 +505,34 @@ fn get_all_sessions() -> Vec<(String, bool)> {
                 && let Some(name) = path.file_name().and_then(|s| s.to_str())
             {
                 let sock_path = path.join("sesatt.sock");
-                let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
-                sessions_map.insert(name.to_string(), is_active);
+                let status = if sock_path.exists() && UnixStream::connect(&sock_path).is_ok() {
+                    SessionStatus::Active
+                } else {
+                    SessionStatus::Dead
+                };
+                sessions_map.insert(name.to_string(), status);
             }
         }
     }
 
-    let nixpak_dir = get_nixpak_dir();
-    if let Ok(entries) = fs::read_dir(&nixpak_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir()
-                && let Some(name) = path.file_name().and_then(|s| s.to_str())
-                && get_sandbox_command_pipe(name).is_some()
-            {
-                let sock_path = dir.join(name).join("sesatt.sock");
-                let is_active = sock_path.exists() && UnixStream::connect(&sock_path).is_ok();
-                sessions_map.entry(name.to_string()).or_insert(is_active);
+    let runtime_dir = get_xdg_runtime_dir();
+    for base_dir in &[runtime_dir.join(".nixpak"), runtime_dir.join("sb-run")] {
+        if let Ok(entries) = fs::read_dir(base_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir()
+                    && let Some(name) = path.file_name().and_then(|s| s.to_str())
+                {
+                    match sessions_map.get(name) {
+                        Some(SessionStatus::Active) => {}
+                        _ => {
+                            if is_sandbox_running(name) {
+                                sessions_map
+                                    .insert(name.to_string(), SessionStatus::SandboxOnDemand);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -586,13 +547,11 @@ fn list_sessions() {
         return;
     }
 
-    for (name, is_active) in sessions {
-        if is_active {
-            println!("• {name} (active)");
-        } else if get_sandbox_command_pipe(&name).is_some() {
-            println!("• {name} (sandbox, on-demand)");
-        } else {
-            println!("• {name} (dead)");
+    for (name, status) in sessions {
+        match status {
+            SessionStatus::Active => println!("• {name} (active)"),
+            SessionStatus::SandboxOnDemand => println!("• {name} (sandbox, on-demand)"),
+            SessionStatus::Dead => println!("• {name} (dead)"),
         }
     }
 }
@@ -601,8 +560,8 @@ fn clean_dead_sessions() {
     let sessions = get_all_sessions();
     let mut cleaned_count = 0;
 
-    for (name, is_active) in sessions {
-        if !is_active && get_sandbox_command_pipe(&name).is_none() {
+    for (name, status) in sessions {
+        if status == SessionStatus::Dead {
             let session_dir = get_session_dir(&name);
             let _ = fs::remove_dir_all(&session_dir);
             println!("Cleaned dead session '{name}'.");

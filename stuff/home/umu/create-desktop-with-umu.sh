@@ -18,6 +18,9 @@ env_steam=${USE_STEAM_INTEGRATION:-0}
 env_overlay=${USE_STEAM_OVERLAY:-0}
 env_vpn=${USE_VPN:-0}
 env_gameid=${GAMEID:-""}
+env_sandbox=${USE_SANDBOX:-1}
+env_gamepad=${USE_GAMEPAD:-1}
+env_extra_paths=${UMU_EXTRA_PATHS:-""}
 
 PREFIX_DIR=$HOME/.umu/$env_prefix_name
 
@@ -121,35 +124,40 @@ if [[ -f "$actual_exe" ]]; then
     fi
   fi
 
-  ENV_BASE="env GAMEID=$env_gameid USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn UMU_GPU_SELECT=\"$env_gpu_select\""
-
-  if [[ "$args" == *"%command%"* ]]; then
-    prefix_args="${args%%\%command\%*}"
-    suffix_args="${args#*\%command\%}"
-    EXEC_CMD="$ENV_BASE $prefix_args umu-run-wrapper \"$actual_exe\" $suffix_args"
-  else
-    EXEC_CMD="$ENV_BASE umu-run-wrapper \"$actual_exe\" $args"
+  ENV_BASE="env GAMEID=$env_gameid USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn UMU_GPU_SELECT=\"$env_gpu_select\" USE_SANDBOX=$env_sandbox USE_GAMEPAD=$env_gamepad USE_NETWORK=${env_network:-1} USE_STEAM_PORTS=${env_steam_ports:-$env_steam}"
+  if [[ -n "$env_extra_paths" ]]; then
+    ENV_BASE="$ENV_BASE UMU_EXTRA_PATHS=\"$env_extra_paths\""
   fi
 
   cat <<EOF >"$DESKTOP_FILE"
 [Desktop Entry]
-Name=$LNK_DISPLAY_NAME
-Exec=$EXEC_CMD
-Icon=$ICON_SPEC
 Type=Application
-Categories=Game;
+Name=$LNK_DISPLAY_NAME
+Exec=umu-run-wrapper %k
+Icon=$ICON_SPEC
 Path=$(dirname "$actual_exe")
 Terminal=false
-X-UMU-Lnk-Path=$lnk
-X-UMU-Raw-Args=$args
+Categories=Game;
+
+# UMU Configuration
 X-UMU-Actual-Exe=$actual_exe
+X-UMU-Raw-Args=$args
 X-UMU-Prefix-Name=$env_prefix_name
 X-UMU-GPU-Select=$env_gpu_select
+X-UMU-Gamemode=$env_gamemode
+X-UMU-Mangohud=$env_mangohud
+X-UMU-Wayland=$env_wayland
 X-UMU-Steam-Integration=$env_steam
 X-UMU-Steam-Overlay=$env_overlay
+X-UMU-Steam-Ports=${env_steam_ports:-$env_steam}
 X-UMU-Proton-Type=$env_proton_type
 X-UMU-VPN=$env_vpn
 X-UMU-Game-ID=$env_gameid
+X-UMU-Sandbox=$env_sandbox
+X-UMU-Gamepad=$env_gamepad
+X-UMU-Network=${env_network:-1}
+X-UMU-Extra-Paths=$env_extra_paths
+X-UMU-Lnk-Path=$lnk
 EOF
 
   chmod +x "$DESKTOP_FILE"

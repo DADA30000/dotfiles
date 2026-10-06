@@ -117,10 +117,7 @@
       url = "github:schembriaiden/helium-browser-nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpak = {
-      url = "github:DADA30000/nixpak/new_stuff";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.2.0";
       inputs.nixpkgs.follows = "nixpkgs";
