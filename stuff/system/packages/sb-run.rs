@@ -1477,6 +1477,12 @@ fn add_ipc_and_dbus_binds(
 }
 
 fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
+    let instance_id = format!("nixpak-app-{}", cfg.app_id);
+    let uid = libc_getuid();
+    let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
+    let flatpak_dir = PathBuf::from(format!("{runtime_base}/.flatpak/{instance_id}"));
+    let _ = fs::create_dir_all(&flatpak_dir);
+
     let info_path = sandbox_runtime.join("flatpak-info");
     let mut content = format!(
         "[Application]\nname={}\nruntime=runtime/com.nixpak.Platform/x86_64/1\n\n[Context]\n",
@@ -1494,6 +1500,11 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
         let _ = writeln!(content, "shared={};", shared.join(";"));
     }
 
+    let _ = write!(
+        content,
+        "\n[Instance]\ninstance-id={instance_id}\napp-path=/app\nruntime-path=/usr\n"
+    );
+
     content.push_str("\n[Session Bus Policy]\norg.kde.StatusNotifierWatcher=talk\norg.kde.StatusNotifierItem.*=own\norg.kde.StatusNotifierItem=own\norg.ayatana.indicator.application=talk\ncom.canonical.AppMenu.Registrar=talk\norg.freedesktop.Notifications=talk\norg.freedesktop.portal.Desktop=talk\norg.freedesktop.portal.Secret=talk\norg.freedesktop.portal.Documents=talk\norg.freedesktop.FileManager1=talk\norg.freedesktop.ScreenSaver=talk\norg.gnome.Mutter.IdleMonitor=talk\norg.mpris.MediaPlayer2.Player=talk\norg.mpris.MediaPlayer2.*=own\n");
 
     for talk in &cfg.dbus_talk {
@@ -1506,7 +1517,8 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
         let _ = writeln!(content, "{see}=see");
     }
 
-    let _ = fs::write(&info_path, content);
+    let _ = fs::write(&info_path, &content);
+    let _ = fs::write(flatpak_dir.join("info"), &content);
     info_path
 }
 
@@ -2242,6 +2254,10 @@ fn cleanup_session(
     let _ = fs::remove_file(&paths.ipc_sock);
     let _ = fs::remove_file(paths.runtime.join("sing-box.sock"));
     cleanup_token_for_app(&cfg.app_id);
+    let instance_id = format!("nixpak-app-{}", cfg.app_id);
+    let uid = libc_getuid();
+    let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
+    let _ = fs::remove_dir_all(format!("{runtime_base}/.flatpak/{instance_id}"));
     if (cfg.flags & CFG_TMPFS) != 0 {
         let _ = fs::remove_dir_all(&paths.runtime);
         let _ = fs::remove_dir_all(&paths.home);
@@ -2618,6 +2634,18 @@ fn main() {
     {
         let inside_procs = format!("{cgroup}/inside/cgroup.procs");
         let _ = fs::write(inside_procs, format!("{runner_pid}\n"));
+    }
+
+    if runner_pid > 0 {
+        let instance_id = format!("nixpak-app-{}", cfg.app_id);
+        let uid = libc_getuid();
+        let runtime_base =
+            env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
+        let flatpak_dir = PathBuf::from(format!("{runtime_base}/.flatpak/{instance_id}"));
+        let _ = fs::write(
+            flatpak_dir.join("bwrapinfo.json"),
+            format!("{{\"child-pid\": {runner_pid}}}\n"),
+        );
     }
 
     let bridge_pids = if cfg.bridges.is_empty() {
