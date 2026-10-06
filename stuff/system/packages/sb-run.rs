@@ -296,7 +296,7 @@ struct SandboxConfig {
 
 #[derive(Default)]
 struct HelperProcesses {
-    way_secure: Option<Child>,
+    way_secure_close_fd: Option<i32>,
     dbus_proxy: Option<Child>,
     singbox_bridge: Option<Child>,
     pasta: Option<Child>,
@@ -1563,14 +1563,21 @@ fn add_custom_binds_and_env(cmd: &mut Command, cfg: &SandboxConfig) {
     }
 }
 
-fn add_bwrap_cgroup_pre_exec(cmd: &mut Command, pasta_sync: Option<(i32, i32)>) {
+fn add_bwrap_cgroup_pre_exec(
+    cmd: &mut Command,
+    pasta_sync: Option<(i32, i32)>,
+    extra_info_fd: Option<i32>,
+) {
     let cgroup = env::var("MY_CGROUP").ok();
-    let c_path = cgroup.and_then(|cg| CString::new(format!("{cg}/inside/cgroup.procs")).ok());
+    let c_path = cgroup.and_then(|cg| CString::new(format!("{cg}/helpers/cgroup.procs")).ok());
 
     unsafe {
         cmd.pre_exec(move || {
             if let Some((r_block, w_info)) = pasta_sync {
                 let _ = fcntl(r_block, 2, 0);
+                let _ = fcntl(w_info, 2, 0);
+            }
+            if let Some(w_info) = extra_info_fd {
                 let _ = fcntl(w_info, 2, 0);
             }
             if let Some(ref path) = c_path {
@@ -1667,6 +1674,7 @@ fn build_bwrap_command(
     sandbox_home: &Path,
     auth_token_hex: Option<&str>,
     pasta_sync: Option<(i32, i32)>,
+    extra_info_fd: Option<i32>,
 ) -> Command {
     let mut cmd = if (cfg.flags & CFG_USE_VPNIFY) != 0 {
         let mut v = Command::new("vpnify");
@@ -1678,6 +1686,8 @@ fn build_bwrap_command(
 
     if let Some((r_block, w_info)) = pasta_sync {
         cmd.arg("--block-fd").arg(r_block.to_string());
+        cmd.arg("--info-fd").arg(w_info.to_string());
+    } else if let Some(w_info) = extra_info_fd {
         cmd.arg("--info-fd").arg(w_info.to_string());
     }
 
@@ -1757,7 +1767,7 @@ fn build_bwrap_command(
         auth_token_hex,
     );
 
-    add_bwrap_cgroup_pre_exec(&mut cmd, pasta_sync);
+    add_bwrap_cgroup_pre_exec(&mut cmd, pasta_sync, extra_info_fd);
 
     cmd
 }
@@ -1924,7 +1934,7 @@ fn cleanup_bridges(pids: &[i32], sandbox_runtime: &Path, count: usize) {
     }
 }
 
-fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<Child> {
+fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> {
     if cfg.wayland_mode != "sandboxed" {
         return None;
     }
@@ -1932,12 +1942,23 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<Child
     let _ = fs::remove_file(&sock_path);
     let _ = fs::remove_file(sandbox_runtime.join("wayland-secure.lock"));
 
-    let mut pipe_fds = [0i32; 2];
-    if unsafe { pipe(pipe_fds.as_mut_ptr()) } != 0 {
+    let mut ready_pipe = [0i32; 2];
+    if unsafe { pipe(ready_pipe.as_mut_ptr()) } != 0 {
         eprintln!("[sb-run] Error: Failed to create pipe for way-secure readiness");
         exit(1);
     }
-    let [r_fd, w_fd] = pipe_fds;
+    let [ready_r, ready_w] = ready_pipe;
+
+    let mut close_pipe = [0i32; 2];
+    if unsafe { pipe(close_pipe.as_mut_ptr()) } != 0 {
+        unsafe {
+            close(ready_r);
+            close(ready_w);
+        }
+        eprintln!("[sb-run] Error: Failed to create pipe for way-secure close");
+        exit(1);
+    }
+    let [close_r, close_w] = close_pipe;
 
     let bin_name = cfg.way_secure_bin.as_ref().map_or_else(
         || {
@@ -1959,37 +1980,46 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<Child
         .arg("-e")
         .arg("flatpak")
         .arg("-r")
-        .arg(w_fd.to_string());
+        .arg(ready_w.to_string())
+        .arg("-c")
+        .arg(close_r.to_string());
 
     unsafe {
         cmd.pre_exec(move || {
-            let _ = fcntl(w_fd, 2, 0);
+            let _ = fcntl(ready_w, 2, 0);
+            let _ = fcntl(close_r, 2, 0);
             prctl(1, 15, 0, 0, 0);
             Ok(())
         });
     }
 
     match cmd.spawn() {
-        Ok(child) => {
-            unsafe { close(w_fd) };
+        Ok(mut child) => {
+            unsafe {
+                close(ready_w);
+                close(close_r);
+            }
             let mut buf = [0u8; 8];
-            let n = unsafe { read(r_fd, buf.as_mut_ptr().cast(), 8) };
-            unsafe { close(r_fd) };
+            let n = unsafe { read(ready_r, buf.as_mut_ptr().cast(), 8) };
+            unsafe { close(ready_r) };
             if n <= 0 && !sock_path.exists() {
                 eprintln!(
                     "[sb-run] Error: way-secure failed before signaling readiness on '{}'",
                     sock_path.display()
                 );
-                let mut c = child;
-                let _ = c.kill();
+                let _ = child.kill();
+                unsafe { close(close_w) };
                 exit(1);
             }
-            Some(child)
+            let _ = child.wait();
+            Some(close_w)
         }
         Err(err) => {
             unsafe {
-                close(w_fd);
-                close(r_fd);
+                close(ready_w);
+                close(ready_r);
+                close(close_r);
+                close(close_w);
             }
             eprintln!("[sb-run] Error: Failed to spawn way-secure: {err}");
             exit(1);
@@ -1997,12 +2027,7 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<Child
     }
 }
 
-fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path) -> Option<Child> {
-    let Ok(session_bus) = env::var("DBUS_SESSION_BUS_ADDRESS") else {
-        return None;
-    };
-    let _ = fs::remove_file(proxy_sock);
-
+fn add_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
     let default_talks = [
         "org.freedesktop.portal.Desktop",
         "org.freedesktop.portal.Documents",
@@ -2023,20 +2048,6 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path) -> Option<Child> {
         "org.mpris.MediaPlayer2.*",
     ];
 
-    let bin_name = cfg.dbus_proxy_bin.as_ref().map_or_else(
-        || {
-            let sys = PathBuf::from("/run/current-system/sw/bin/xdg-dbus-proxy");
-            if sys.exists() {
-                sys
-            } else {
-                PathBuf::from("xdg-dbus-proxy")
-            }
-        },
-        Clone::clone,
-    );
-    let mut proxy_cmd = Command::new(bin_name);
-    proxy_cmd.arg(&session_bus).arg(proxy_sock).arg("--filter");
-
     for talk in default_talks {
         proxy_cmd.arg(format!("--talk={talk}"));
     }
@@ -2055,6 +2066,62 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path) -> Option<Child> {
     for arg in &cfg.dbus_extra_args {
         proxy_cmd.arg(arg);
     }
+}
+
+fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path) -> Option<Child> {
+    let Ok(session_bus) = env::var("DBUS_SESSION_BUS_ADDRESS") else {
+        return None;
+    };
+    let _ = fs::remove_file(proxy_sock);
+
+    let bin_name = cfg.dbus_proxy_bin.as_ref().map_or_else(
+        || {
+            let sys = PathBuf::from("/run/current-system/sw/bin/xdg-dbus-proxy");
+            if sys.exists() {
+                sys
+            } else {
+                PathBuf::from("xdg-dbus-proxy")
+            }
+        },
+        Clone::clone,
+    );
+
+    let bwrap_bin = {
+        let sys = PathBuf::from("/run/current-system/sw/bin/bwrap");
+        if sys.exists() {
+            sys
+        } else {
+            PathBuf::from("bwrap")
+        }
+    };
+
+    let mut proxy_cmd = Command::new(bwrap_bin);
+    proxy_cmd
+        .arg("--ro-bind")
+        .arg("/etc")
+        .arg("/etc")
+        .arg("--ro-bind")
+        .arg("/nix/store")
+        .arg("/nix/store")
+        .arg("--bind")
+        .arg("/var")
+        .arg("/var")
+        .arg("--bind")
+        .arg("/tmp")
+        .arg("/tmp")
+        .arg("--bind")
+        .arg("/run")
+        .arg("/run")
+        .arg("--ro-bind-try")
+        .arg(flatpak_info)
+        .arg("/.flatpak-info")
+        .arg("--")
+        .arg(bin_name)
+        .arg(&session_bus)
+        .arg(proxy_sock)
+        .arg("--filter");
+
+    add_dbus_proxy_rules(&mut proxy_cmd, cfg);
     unsafe {
         proxy_cmd.pre_exec(|| {
             prctl(1, 15, 0, 0, 0);
@@ -2072,7 +2139,7 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path) -> Option<Child> {
             Some(child)
         }
         Err(err) => {
-            eprintln!("[sb-run] Failed to spawn xdg-dbus-proxy: {err}");
+            eprintln!("[sb-run] Failed to spawn xdg-dbus-proxy via bwrap: {err}");
             None
         }
     }
@@ -2150,15 +2217,12 @@ fn resolve_sandbox_home(cfg: &SandboxConfig, runtime_base: &str) -> PathBuf {
 
 fn cleanup_session(
     cfg: &SandboxConfig,
-    sandbox_runtime: &Path,
-    sandbox_home: &Path,
-    ipc_sock: &Path,
+    paths: &SandboxPaths,
     bridge_pids: &[i32],
     mut helpers: HelperProcesses,
 ) {
-    if let Some(ref mut c) = helpers.way_secure {
-        let _ = c.kill();
-        let _ = c.wait();
+    if let Some(fd) = helpers.way_secure_close_fd {
+        unsafe { close(fd) };
     }
     if let Some(ref mut c) = helpers.dbus_proxy {
         let _ = c.kill();
@@ -2172,15 +2236,15 @@ fn cleanup_session(
         let _ = c.kill();
         let _ = c.wait();
     }
-    let _ = fs::remove_file(sandbox_runtime.join("wayland-secure"));
-    let _ = fs::remove_file(sandbox_runtime.join("wayland-secure.lock"));
-    cleanup_bridges(bridge_pids, sandbox_runtime, cfg.bridges.len());
-    let _ = fs::remove_file(ipc_sock);
-    let _ = fs::remove_file(sandbox_runtime.join("sing-box.sock"));
+    let _ = fs::remove_file(paths.runtime.join("wayland-secure"));
+    let _ = fs::remove_file(paths.runtime.join("wayland-secure.lock"));
+    cleanup_bridges(bridge_pids, &paths.runtime, cfg.bridges.len());
+    let _ = fs::remove_file(&paths.ipc_sock);
+    let _ = fs::remove_file(paths.runtime.join("sing-box.sock"));
     cleanup_token_for_app(&cfg.app_id);
     if (cfg.flags & CFG_TMPFS) != 0 {
-        let _ = fs::remove_dir_all(sandbox_runtime);
-        let _ = fs::remove_dir_all(sandbox_home);
+        let _ = fs::remove_dir_all(&paths.runtime);
+        let _ = fs::remove_dir_all(&paths.home);
     }
     if let Ok(scope) = env::var("MY_SCOPE") {
         let _ = Command::new("systemctl")
@@ -2189,65 +2253,161 @@ fn cleanup_session(
     }
 }
 
+const SYS_PIDFD_OPEN: i64 = 434;
+const EPOLL_CTL_ADD: i32 = 1;
+const EPOLL_CTL_DEL: i32 = 2;
+const EPOLLIN: u32 = 1;
+
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+struct EpollEvent {
+    events: u32,
+    data: u64,
+}
+
+struct Epoll(i32);
+
+impl Epoll {
+    fn new() -> Option<Self> {
+        let fd = unsafe { epoll_create1(0) };
+        if fd >= 0 { Some(Self(fd)) } else { None }
+    }
+
+    fn add(&self, fd: i32) -> bool {
+        let Ok(data) = u64::try_from(fd) else {
+            return false;
+        };
+        let mut ev = EpollEvent {
+            events: EPOLLIN,
+            data,
+        };
+        unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
+    }
+
+    fn del_and_close(&self, fd: i32) {
+        unsafe {
+            epoll_ctl(self.0, EPOLL_CTL_DEL, fd, std::ptr::null_mut());
+            close(fd);
+        }
+    }
+
+    fn wait(&self, events: &mut [EpollEvent]) -> Result<usize, i32> {
+        let Ok(len) = i32::try_from(events.len()) else {
+            return Err(0);
+        };
+        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), len, -1) };
+        if n < 0 {
+            let err = std::io::Error::last_os_error();
+            Err(err.raw_os_error().unwrap_or(0))
+        } else {
+            usize::try_from(n).map_err(|_| 0)
+        }
+    }
+}
+
+impl Drop for Epoll {
+    fn drop(&mut self) {
+        unsafe { close(self.0) };
+    }
+}
+
+fn pidfd_open(pid: i32) -> Option<i32> {
+    if pid <= 0 {
+        return None;
+    }
+    let res = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) };
+    let fd = i32::try_from(res).ok()?;
+    if fd >= 0 { Some(fd) } else { None }
+}
+
+fn read_pids_from_file(path: &Path) -> std::collections::HashSet<i32> {
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.trim().parse().ok())
+        .filter(|&p| p > 0)
+        .collect()
+}
+
 fn monitor_scope_and_cleanup(
     cfg: &SandboxConfig,
-    sandbox_runtime: &Path,
-    sandbox_home: &Path,
-    ipc_sock: &Path,
+    paths: &SandboxPaths,
     bridge_pids: &[i32],
     helpers: HelperProcesses,
     child: &mut Child,
+    runner_pid: u32,
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
-        let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
-        let mut observed_populated = false;
+        let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
+        let mut has_seen_apps = false;
 
-        if let Ok(c_events) = CString::new(events_path.into_os_string().as_bytes()) {
-            let fd = unsafe { open(c_events.as_ptr(), 0) };
-            if fd >= 0 {
-                let mut pfd = PollFd {
-                    fd,
-                    events: 0x0002,
-                    revents: 0,
-                };
-                loop {
-                    let _ = unsafe { lseek(fd, 0, 0) };
-                    let mut buf = [0u8; 128];
-                    let n = unsafe { read(fd, buf.as_mut_ptr().cast(), 127) };
-                    if let Ok(len) = usize::try_from(n) {
-                        let content = std::str::from_utf8(&buf[..len]).unwrap_or("");
-                        if content.contains("populated 1") {
-                            observed_populated = true;
-                        } else if observed_populated && content.contains("populated 0") {
-                            break;
-                        }
-                    }
-
-                    if let Ok(Some(_)) = child.try_wait() {
-                        break;
-                    }
-
-                    let _ = unsafe { poll(&raw mut pfd, 1, 1000) };
-                }
-                unsafe { close(fd) };
-            } else {
-                let _ = child.wait();
-            }
-        } else {
+        let Some(epoll) = Epoll::new() else {
             let _ = child.wait();
+            cleanup_session(cfg, paths, bridge_pids, helpers);
+            return;
+        };
+
+        let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
+        let runner_fd = pidfd_open(runner_i32).unwrap_or(-1);
+        if runner_fd >= 0 {
+            epoll.add(runner_fd);
+        }
+
+        let mut monitored = std::collections::HashSet::new();
+
+        loop {
+            let current_pids = read_pids_from_file(&procs_path);
+
+            if (runner_i32 > 0 && !current_pids.contains(&runner_i32))
+                || (has_seen_apps && current_pids.len() <= 1)
+            {
+                break;
+            }
+
+            for &pid in &current_pids {
+                if pid == runner_i32 {
+                    continue;
+                }
+                has_seen_apps = true;
+                if monitored.contains(&pid) {
+                    continue;
+                }
+                if let Some(pfd) = pidfd_open(pid) {
+                    if epoll.add(pfd) {
+                        monitored.insert(pid);
+                    } else {
+                        unsafe { close(pfd) };
+                    }
+                }
+            }
+
+            let mut events = [EpollEvent { events: 0, data: 0 }; 16];
+            let n = match epoll.wait(&mut events) {
+                Ok(n) => n,
+                Err(4) => continue, // EINTR
+                Err(_) => break,
+            };
+
+            let mut terminate = false;
+            for event in events.iter().take(n) {
+                let Ok(fd) = i32::try_from(event.data) else {
+                    continue;
+                };
+                if fd == runner_fd {
+                    terminate = true;
+                    break;
+                }
+                epoll.del_and_close(fd);
+            }
+            if terminate {
+                break;
+            }
         }
     } else {
         let _ = child.wait();
     }
 
-    cleanup_session(
-        cfg,
-        sandbox_runtime,
-        sandbox_home,
-        ipc_sock,
-        bridge_pids,
-        helpers,
-    );
+    cleanup_session(cfg, paths, bridge_pids, helpers);
 }
 
 fn parse_child_pid_from_info(buf: &[u8]) -> Option<u32> {
@@ -2329,13 +2489,14 @@ fn prepare_sandbox_paths(cfg: &SandboxConfig) -> SandboxPaths {
 
 fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperProcesses {
     let mut helpers = HelperProcesses::default();
+    let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg);
 
     if cfg.dbus_mode == "sandboxed" {
         let proxy_sock = sandbox_runtime.join("nixpak-bus");
-        helpers.dbus_proxy = start_dbus_proxy(cfg, &proxy_sock);
+        helpers.dbus_proxy = start_dbus_proxy(cfg, &proxy_sock, &flatpak_info_path);
     }
 
-    helpers.way_secure = start_way_secure(cfg, sandbox_runtime);
+    helpers.way_secure_close_fd = start_way_secure(cfg, sandbox_runtime);
 
     if cfg.network == "singbox" {
         let sb_bridge_sock = sandbox_runtime.join("sing-box.sock");
@@ -2353,6 +2514,50 @@ fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperP
     }
 
     helpers
+}
+
+fn spawn_bwrap_and_get_runner(
+    cfg: &SandboxConfig,
+    paths: &SandboxPaths,
+    token_hex: &str,
+    pasta_sync_pass: Option<(i32, i32)>,
+    extra_info_w: Option<i32>,
+    extra_info_r: Option<i32>,
+) -> (Child, u32) {
+    let mut bwrap = build_bwrap_command(
+        cfg,
+        &paths.runtime,
+        &paths.home,
+        Some(token_hex),
+        pasta_sync_pass,
+        extra_info_w,
+    );
+    let child = match bwrap.spawn() {
+        Ok(c) => c,
+        Err(err) => {
+            eprintln!("[sb-run] Failed to spawn bwrap: {err}");
+            cleanup_token_for_app(&cfg.app_id);
+            exit(1);
+        }
+    };
+
+    let runner_pid = extra_info_r.map_or(0, |r_fd| {
+        if let Some(w) = extra_info_w {
+            unsafe { close(w) };
+        }
+        let mut info_buf = [0u8; 256];
+        let n = unsafe { read(r_fd, info_buf.as_mut_ptr().cast(), 255) };
+        unsafe { close(r_fd) };
+        if n > 0
+            && let Ok(n_usize) = usize::try_from(n)
+        {
+            parse_child_pid_from_info(&info_buf[..n_usize]).unwrap_or(0)
+        } else {
+            0
+        }
+    });
+
+    (child, runner_pid)
 }
 
 fn main() {
@@ -2380,21 +2585,25 @@ fn main() {
 
     let pasta_sync_pass = pasta_sync_fds.map(|([r_b, _], [_, w_i])| (r_b, w_i));
 
-    let mut bwrap = build_bwrap_command(
-        &cfg,
-        &paths.runtime,
-        &paths.home,
-        Some(&token_hex),
-        pasta_sync_pass,
-    );
-    let mut child = match bwrap.spawn() {
-        Ok(c) => c,
-        Err(err) => {
-            eprintln!("[sb-run] Failed to spawn bwrap: {err}");
-            cleanup_token_for_app(&cfg.app_id);
-            exit(1);
+    let (extra_info_r, extra_info_w) = if pasta_sync_fds.is_none() {
+        let mut fds = [0i32; 2];
+        if unsafe { pipe(fds.as_mut_ptr()) } == 0 {
+            (Some(fds[0]), Some(fds[1]))
+        } else {
+            (None, None)
         }
+    } else {
+        (None, None)
     };
+
+    let (mut child, runner_pid) = spawn_bwrap_and_get_runner(
+        &cfg,
+        &paths,
+        &token_hex,
+        pasta_sync_pass,
+        extra_info_w,
+        extra_info_r,
+    );
 
     helpers.pasta = handle_pasta_sync(pasta_sync_fds, &cfg);
 
@@ -2404,6 +2613,13 @@ fn main() {
     }
     let _ = fs::remove_file(&paths.ready_pipe);
 
+    if let Ok(cgroup) = env::var("MY_CGROUP")
+        && runner_pid > 0
+    {
+        let inside_procs = format!("{cgroup}/inside/cgroup.procs");
+        let _ = fs::write(inside_procs, format!("{runner_pid}\n"));
+    }
+
     let bridge_pids = if cfg.bridges.is_empty() {
         Vec::new()
     } else {
@@ -2412,14 +2628,7 @@ fn main() {
 
     if cfg.command.is_empty() {
         let status = child.wait().map_or(1, |s| s.code().unwrap_or(1));
-        cleanup_session(
-            &cfg,
-            &paths.runtime,
-            &paths.home,
-            &paths.ipc_sock,
-            &bridge_pids,
-            helpers,
-        );
+        cleanup_session(&cfg, &paths, &bridge_pids, helpers);
         exit(status);
     }
 
@@ -2428,37 +2637,22 @@ fn main() {
     {
         let _ = child.kill();
         let _ = child.wait();
-        cleanup_session(
-            &cfg,
-            &paths.runtime,
-            &paths.home,
-            &paths.ipc_sock,
-            &bridge_pids,
-            helpers,
-        );
+        cleanup_session(&cfg, &paths, &bridge_pids, helpers);
         exit(exit_code);
     }
 
-    monitor_scope_and_cleanup(
-        &cfg,
-        &paths.runtime,
-        &paths.home,
-        &paths.ipc_sock,
-        &bridge_pids,
-        helpers,
-        &mut child,
-    );
+    monitor_scope_and_cleanup(&cfg, &paths, &bridge_pids, helpers, &mut child, runner_pid);
     exit(0);
 }
 
 unsafe extern "C" {
+    fn syscall(number: i64, ...) -> i64;
     fn getuid() -> u32;
     fn getgid() -> u32;
     fn getpid() -> i32;
     fn open(path: *const i8, flags: i32) -> i32;
     fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn close(fd: i32) -> i32;
-    fn lseek(fd: i32, offset: i64, whence: i32) -> i64;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
     fn pipe(pipefd: *mut i32) -> i32;
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
@@ -2466,6 +2660,9 @@ unsafe extern "C" {
     fn inotify_init1(flags: i32) -> i32;
     fn inotify_add_watch(fd: i32, pathname: *const i8, mask: u32) -> i32;
     fn prctl(option: i32, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> i32;
+    fn epoll_create1(flags: i32) -> i32;
+    fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
+    fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
 }
 
 #[repr(C)]

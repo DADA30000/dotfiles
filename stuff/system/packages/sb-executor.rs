@@ -169,6 +169,7 @@ unsafe extern "C" {
     fn ioctl(fd: i32, request: usize, ...) -> i32;
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn recvmsg(sockfd: i32, msg: *mut LibcMsghdr, flags: i32) -> isize;
+    fn unshare(flags: i32) -> i32;
 }
 
 #[repr(C)]
@@ -325,8 +326,6 @@ fn run_child_process(
     fds: &[OwnedFd],
     is_cli: bool,
     use_landlock: bool,
-    user_id: u32,
-    group_id: u32,
 ) -> ! {
     if fds.len() >= 3 {
         unsafe {
@@ -352,21 +351,10 @@ fn run_child_process(
         }
     }
 
-    let mut exec_args = Vec::new();
-    if user_id > 0 {
-        exec_args.push("unshare".to_string());
-        exec_args.push("--user".to_string());
-        exec_args.push("--forward-signals".to_string());
-        exec_args.push("--kill-child".to_string());
-        exec_args.push(format!("--map-user={user_id}"));
-        exec_args.push(format!("--map-group={group_id}"));
-        exec_args.push("--".to_string());
-    }
-    exec_args.extend(payload.args.iter().cloned());
-
-    let Ok(c_argv) = exec_args
-        .into_iter()
-        .map(CString::new)
+    let Ok(c_argv) = payload
+        .args
+        .iter()
+        .map(|arg| CString::new(arg.as_bytes()))
         .collect::<Result<Vec<CString>, _>>()
     else {
         eprintln!("[sb-executor] Argument contains invalid null byte");
@@ -463,8 +451,6 @@ fn handle_connection(
     use_landlock: bool,
     listener_fd: RawFd,
     auth_token: Option<[u8; 16]>,
-    user_id: u32,
-    group_id: u32,
 ) {
     let (header, fds) = match recv_header_with_fds(&stream) {
         Ok(res) => res,
@@ -531,7 +517,7 @@ fn handle_connection(
     if child_pid == 0 {
         unsafe { close(listener_fd) };
         drop(stream);
-        run_child_process(&payload, &fds, is_cli, use_landlock, user_id, group_id);
+        run_child_process(&payload, &fds, is_cli, use_landlock);
     }
 
     drop(fds);
@@ -600,6 +586,35 @@ fn start_singbox_services(bin_path: &str, config_path: &str, sock_path: &str) {
     sb_cmd.env("GODEBUG", "madvdontneed=1");
     if let Err(err) = sb_cmd.spawn() {
         eprintln!("[sb-executor] Failed to spawn sing-box: {err}");
+    }
+}
+
+fn enter_user_namespace(user_id: u32, group_id: u32) {
+    const CLONE_NEWUSER: i32 = 0x1000_0000;
+    if user_id == 0 {
+        return;
+    }
+    unsafe {
+        if unshare(CLONE_NEWUSER) != 0 {
+            eprintln!(
+                "[sb-executor] Failed to unshare user namespace: {}",
+                std::io::Error::last_os_error()
+            );
+            exit(1);
+        }
+    }
+
+    if let Err(err) = fs::write("/proc/self/setgroups", "deny\n") {
+        eprintln!("[sb-executor] Failed to write setgroups: {err}");
+        exit(1);
+    }
+    if let Err(err) = fs::write("/proc/self/gid_map", format!("{group_id} 0 1\n")) {
+        eprintln!("[sb-executor] Failed to write gid_map: {err}");
+        exit(1);
+    }
+    if let Err(err) = fs::write("/proc/self/uid_map", format!("{user_id} 0 1\n")) {
+        eprintln!("[sb-executor] Failed to write uid_map: {err}");
+        exit(1);
     }
 }
 
@@ -717,6 +732,21 @@ fn parse_executor_cli() -> ExecutorCli {
 fn main() {
     let cli = parse_executor_cli();
 
+    if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
+        start_singbox_services(&cli.singbox_bin, &cli.singbox_config, &cli.singbox_sock);
+    }
+
+    if cli.x11_mode == "sandboxed" {
+        let x_bin = if cli.xwayland_bin.is_empty() {
+            "xwayland-satellite"
+        } else {
+            &cli.xwayland_bin
+        };
+        let _ = Command::new(x_bin).args(["-nolisten", "local"]).spawn();
+    }
+
+    enter_user_namespace(cli.user_id, cli.group_id);
+
     let _ = fs::remove_file(&cli.socket_path);
     let listener = match UnixListener::bind(&cli.socket_path) {
         Ok(l) => l,
@@ -731,19 +761,6 @@ fn main() {
 
     let listener_fd = listener.as_raw_fd();
     let _ = fs::set_permissions(&cli.socket_path, fs::Permissions::from_mode(0o600));
-
-    if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
-        start_singbox_services(&cli.singbox_bin, &cli.singbox_config, &cli.singbox_sock);
-    }
-
-    if cli.x11_mode == "sandboxed" {
-        let x_bin = if cli.xwayland_bin.is_empty() {
-            "xwayland-satellite"
-        } else {
-            &cli.xwayland_bin
-        };
-        let _ = Command::new(x_bin).args(["-nolisten", "local"]).spawn();
-    }
 
     // Notify host runner that socket is listening and ready
     if !cli.ready_pipe.is_empty() {
@@ -763,11 +780,9 @@ fn main() {
             match listener.accept() {
                 Ok((s, _)) => {
                     let auth_token = cli.auth_token;
-                    let uid = cli.user_id;
-                    let gid = cli.group_id;
                     let landlock = cli.use_landlock;
                     std::thread::spawn(move || {
-                        handle_connection(s, landlock, listener_fd, auth_token, uid, gid);
+                        handle_connection(s, landlock, listener_fd, auth_token);
                     });
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
