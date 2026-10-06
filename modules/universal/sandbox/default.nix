@@ -296,127 +296,132 @@ let
       additional_outside_commands ? "",
       extraAttrs ? [ ],
     }:
-      let
-        rawArgs =
-          if builtins.isFunction additional_args then
-            additional_args { inherit sloth lib pkgs; }
+    let
+      rawArgs =
+        if builtins.isFunction additional_args then
+          additional_args { inherit sloth lib pkgs; }
+        else
+          additional_args;
+
+      dbusCfg = rawArgs.dbus or { };
+      bwrapCfg = rawArgs.bubblewrap or { };
+
+      dbusEnabled = dbusCfg.enable or true;
+      dbusPolicies = dbusCfg.policies or { };
+
+      dbusFlags = lib.concatLists (
+        lib.mapAttrsToList (name: policy: [ "--dbus-${policy}=${name}" ]) dbusPolicies
+      );
+
+      extractList =
+        val:
+        if builtins.isList val then
+          val
+        else if builtins.isAttrs val && val ? content then
+          extractList val.content
+        else
+          [ ];
+
+      rwFlags = map (
+        p: "--rw=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+      ) (extractList (bwrapCfg.bind.rw or [ ]));
+
+      roFlags = map (
+        p: "--ro=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+      ) (extractList (bwrapCfg.bind.ro or [ ]));
+
+      devFlags = map (
+        p: "--dev=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
+      ) (extractList (bwrapCfg.bind.dev or [ ]));
+
+      sharePidFlag = lib.optional (bwrapCfg.sharePid or false) "--share-pid";
+      landlockFlag = lib.optional (!use_landlock) "--no-landlock";
+      portalsFlag = lib.optional (!portals_for_files) "--no-portals";
+      portalEnvFlags = lib.optionals portals_for_files [
+        "--env"
+        "PATH=${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin"
+        "--env"
+        "XDG_DATA_DIRS=${portal-files}:/usr/share:/run/current-system/sw/share"
+        "--env"
+        "XDG_CONFIG_DIRS=${portal-files}:/etc/xdg"
+      ];
+      envFlags = lib.concatLists (
+        lib.mapAttrsToList (k: v: [
+          "--env"
+          "${k}=${v}"
+        ]) (bwrapCfg.env or { })
+      );
+
+      sbRunFlags = lib.flatten [
+        "--id"
+        appId
+        "--executor-bin"
+        "${sb-executor-pkg}/bin/sb-executor"
+        "--net"
+        network
+        (lib.optionals (network == "singbox") [
+          "--singbox-bin"
+          "${sing-box-lite}/bin/sing-box"
+          "--singbox-config"
+          "${sing-box-sandbox-config}"
+        ])
+        (lib.optionals (network == "sandboxed") [
+          "--pasta-bin"
+          "${pasta-pkg}/bin/pasta"
+        ])
+        (lib.optional gpu "--gpu")
+        [
+          "--pulse"
+          audio_pulse
+          "--pipewire"
+          audio_pipewire
+          "--wayland"
+          wayland
+          (lib.optionals (wayland == "sandboxed") [
+            "--way-secure-bin"
+            "${way-secure-pkg}/bin/way-secure"
+          ])
+          "--x11"
+          x11
+          (lib.optionals (x11 == "sandboxed") [
+            "--xwayland-satellite-bin"
+            "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
+          ])
+          "--shm"
+          (if sandbox_shm then "sandboxed" else "passthrough")
+          "--tmp"
+          (if sandbox_tmp then "sandboxed" else "passthrough")
+        ]
+        landlockFlag
+        portalsFlag
+        portalEnvFlags
+        (lib.optional (webcam != 0) [
+          "--webcam"
+          (toString webcam)
+        ])
+        (
+          if dbusEnabled then
+            [
+              "--dbus"
+              "sandboxed"
+              "--dbus-proxy-bin"
+              "${staticDbusProxy}/bin/xdg-dbus-proxy"
+            ]
           else
-            additional_args;
-
-        dbusCfg = rawArgs.dbus or { };
-        bwrapCfg = rawArgs.bubblewrap or { };
-
-        dbusEnabled = dbusCfg.enable or true;
-        dbusPolicies = dbusCfg.policies or { };
-
-        dbusFlags = lib.concatLists (
-          lib.mapAttrsToList (name: policy: [ "--dbus-${policy}=${name}" ]) dbusPolicies
-        );
-
-        extractList =
-          val:
-          if builtins.isList val then
-            val
-          else if builtins.isAttrs val && val ? content then
-            extractList val.content
-          else
-            [ ];
-
-        rwFlags = map (
-          p: "--rw=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-        ) (extractList (bwrapCfg.bind.rw or [ ]));
-
-        roFlags = map (
-          p: "--ro=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-        ) (extractList (bwrapCfg.bind.ro or [ ]));
-
-        devFlags = map (
-          p: "--dev=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-        ) (extractList (bwrapCfg.bind.dev or [ ]));
-
-        sharePidFlag = lib.optional (bwrapCfg.sharePid or false) "--share-pid";
-        landlockFlag = lib.optional (!use_landlock) "--no-landlock";
-        portalsFlag = lib.optional (!portals_for_files) "--no-portals";
-        portalEnvFlags = lib.optionals portals_for_files [
-          "--env"
-          "PATH=${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin"
-          "--env"
-          "XDG_DATA_DIRS=${portal-files}:/usr/share:/run/current-system/sw/share"
-          "--env"
-          "XDG_CONFIG_DIRS=${portal-files}:/etc/xdg"
-        ];
-        envFlags = lib.concatLists (
-          lib.mapAttrsToList (k: v: [
-            "--env"
-            "${k}=${v}"
-          ]) (bwrapCfg.env or { })
-        );
-
-        sbRunFlags = lib.flatten [
-          "--id"
-          appId
-          "--executor-bin"
-          "${sb-executor-pkg}/bin/sb-executor"
-          "--net"
-          network
-          (lib.optionals (network == "singbox") [
-            "--singbox-bin"
-            "${sing-box-lite}/bin/sing-box"
-            "--singbox-config"
-            "${sing-box-sandbox-config}"
-          ])
-          (lib.optionals (network == "sandboxed") [
-            "--pasta-bin"
-            "${pasta-pkg}/bin/pasta"
-          ])
-          (lib.optional gpu "--gpu")
-          [
-            "--pulse"
-            audio_pulse
-            "--pipewire"
-            audio_pipewire
-            "--wayland"
-            wayland
-            (lib.optionals (wayland == "sandboxed") [
-              "--way-secure-bin"
-              "${way-secure-pkg}/bin/way-secure"
-            ])
-            "--x11"
-            x11
-            (lib.optionals (x11 == "sandboxed") [
-              "--xwayland-satellite-bin"
-              "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
-            ])
-            "--shm"
-            (if sandbox_shm then "sandboxed" else "passthrough")
-            "--tmp"
-            (if sandbox_tmp then "sandboxed" else "passthrough")
-          ]
-          landlockFlag
-          portalsFlag
-          portalEnvFlags
-          (lib.optional (webcam != 0) [
-            "--webcam"
-            (toString webcam)
-          ])
-          (if dbusEnabled then [
-            "--dbus"
-            "sandboxed"
-            "--dbus-proxy-bin"
-            "${staticDbusProxy}/bin/xdg-dbus-proxy"
-          ] else [
-            "--dbus"
-            "off"
-          ])
-          (lib.optional (dbusCfg.system or false) "--system-dbus")
-          dbusFlags
-          rwFlags
-          roFlags
-          devFlags
-          envFlags
-          sharePidFlag
-          (if (args.cli or false) then "--cli" else "--gui")
-        ];
+            [
+              "--dbus"
+              "off"
+            ]
+        )
+        (lib.optional (dbusCfg.system or false) "--system-dbus")
+        dbusFlags
+        rwFlags
+        roFlags
+        devFlags
+        envFlags
+        sharePidFlag
+        (if (args.cli or false) then "--cli" else "--gui")
+      ];
 
       wrapperScript = pkgs.writeShellScript "sandbox-launcher-${appId}" ''
         if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
@@ -604,13 +609,10 @@ let
           { "pipewire.client.access" = "restricted"; }
           { "pipewire.client.access" = "flatpak"; }
         ];
-        actions = {
-          quirks = [
-            "block-source-volume"
-            "block-sink-volume"
-          ];
-          update-props."channelmix.lock-volumes" = true;
-        };
+        actions.quirks = [
+          "block-source-volume"
+          "block-sink-volume"
+        ];
       }
     ];
   };
