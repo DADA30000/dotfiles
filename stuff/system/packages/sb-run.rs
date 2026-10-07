@@ -2675,6 +2675,9 @@ fn setup_cgroup_and_scope() {
     let _ = fs::create_dir_all(&helpers_dir);
     let _ = fs::create_dir_all(&inside_dir);
 
+    let pid = unsafe { getpid() };
+    let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{pid}\n"));
+
     if let Some(parent) = cgroup_path.parent() {
         let _ = fs::write(
             parent.join("cgroup.subtree_control"),
@@ -2685,9 +2688,6 @@ fn setup_cgroup_and_scope() {
         cgroup_path.join("cgroup.subtree_control"),
         "+memory +pids +cpu +io\n",
     );
-
-    let pid = unsafe { getpid() };
-    let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{pid}\n"));
 
     unsafe {
         env::set_var("MY_CGROUP", &cgroup_path);
