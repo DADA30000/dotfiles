@@ -2376,6 +2376,8 @@ const SYS_PIDFD_OPEN: i64 = 434;
 const EPOLL_CTL_ADD: i32 = 1;
 const EPOLL_CTL_DEL: i32 = 2;
 const EPOLLIN: u32 = 1;
+const EPOLLPRI: u32 = 0x0002;
+const EPOLLERR: u32 = 0x0008;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -2398,6 +2400,17 @@ impl Epoll {
         };
         let mut ev = EpollEvent {
             events: EPOLLIN,
+            data,
+        };
+        unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
+    }
+
+    fn add_pri(&self, fd: i32) -> bool {
+        let Ok(data) = u64::try_from(fd) else {
+            return false;
+        };
+        let mut ev = EpollEvent {
+            events: EPOLLPRI | EPOLLERR,
             data,
         };
         unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
@@ -2458,6 +2471,7 @@ fn monitor_scope_and_cleanup(
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
+        let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
         let Some(epoll) = Epoll::new() else {
@@ -2465,6 +2479,21 @@ fn monitor_scope_and_cleanup(
             cleanup_session(cfg, paths, bridge_pids, helpers);
             return;
         };
+
+        let c_events = CString::new(events_path.into_os_string().as_bytes()).ok();
+        let cgroup_events_fd = c_events.map_or(-1, |p| unsafe { open(p.as_ptr(), 0) });
+        if cgroup_events_fd >= 0 {
+            let mut drain_buf = [0u8; 256];
+            unsafe {
+                lseek(cgroup_events_fd, 0, 0);
+                read(
+                    cgroup_events_fd,
+                    drain_buf.as_mut_ptr().cast(),
+                    drain_buf.len(),
+                );
+            };
+            epoll.add_pri(cgroup_events_fd);
+        }
 
         let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
         let runner_fd = pidfd_open(runner_i32).unwrap_or(-1);
@@ -2522,11 +2551,27 @@ fn monitor_scope_and_cleanup(
                     terminate = true;
                     break;
                 }
+                if fd == cgroup_events_fd {
+                    let mut drain_buf = [0u8; 256];
+                    unsafe {
+                        lseek(cgroup_events_fd, 0, 0);
+                        read(
+                            cgroup_events_fd,
+                            drain_buf.as_mut_ptr().cast(),
+                            drain_buf.len(),
+                        );
+                    };
+                    continue;
+                }
                 epoll.del_and_close(fd);
             }
             if terminate {
                 break;
             }
+        }
+
+        if cgroup_events_fd >= 0 {
+            unsafe { close(cgroup_events_fd) };
         }
     } else {
         let _ = child.wait();
@@ -2952,6 +2997,7 @@ unsafe extern "C" {
     fn open(path: *const i8, flags: i32) -> i32;
     fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn close(fd: i32) -> i32;
+    fn lseek(fd: i32, offset: i64, whence: i32) -> i64;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
     fn pipe(pipefd: *mut i32) -> i32;
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;

@@ -76,7 +76,7 @@ app_id="umu-$prefix_name"
 MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup 2>/dev/null | cut -d: -f3)"
 MY_SCOPE="$(basename "$MY_CGROUP" 2>/dev/null)"
 case "$MY_SCOPE" in
-  *"$app_id"*)
+  *"$prefix_name"*)
     ;;
   *)
     exec app2unit -a "$app_id" -d "UMU - $prefix_name" -- "$0" "$@"
@@ -300,18 +300,24 @@ if [[ "$USE_STEAM_PORTS" == "1" || "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEA
   REAL_VULKAN_LAYERS="$(readlink -f "$HOME/.local/share/vulkan/implicit_layer.d" 2>/dev/null || echo "")"
   REAL_STEAM_PIPE="$(readlink -f "$HOME/.steam/steam.pipe" 2>/dev/null || echo "")"
 
-  if [[ -n "$REAL_STEAM" && -d "$REAL_STEAM" ]]; then
-    STEAM_BINDS+=(--ro "$REAL_STEAM:$REAL_STEAM")
-    if [[ "$REAL_STEAM" != "$HOME/.steam" ]]; then
-      STEAM_BINDS+=(--ro "$REAL_STEAM:$HOME/.steam")
-    fi
-  fi
-
+  # Bind Steam data directory (RW so logs/gameoverlayrenderer.log can be written)
   if [[ -n "$REAL_STEAM_SHARE" && -d "$REAL_STEAM_SHARE" ]]; then
     STEAM_BINDS+=(--rw "$REAL_STEAM_SHARE:$REAL_STEAM_SHARE")
     if [[ "$REAL_STEAM_SHARE" != "$HOME/.local/share/Steam" ]]; then
       STEAM_BINDS+=(--rw "$REAL_STEAM_SHARE:$HOME/.local/share/Steam")
     fi
+  fi
+
+  # Bind only sdk/bin dirs and files from ~/.steam instead of entire directory
+  if [[ -n "$REAL_STEAM" && -d "$REAL_STEAM" ]]; then
+    for item in bin bin32 bin64 sdk32 sdk64 root steam registry.vdf steam.pid steam.token exportedsettings.json; do
+      if [[ -e "$REAL_STEAM/$item" ]]; then
+        STEAM_BINDS+=(--ro "$REAL_STEAM/$item:$HOME/.steam/$item")
+        if [[ "$REAL_STEAM" != "$HOME/.steam" ]]; then
+          STEAM_BINDS+=(--ro "$REAL_STEAM/$item:$REAL_STEAM/$item")
+        fi
+      fi
+    done
   fi
 
   if [[ -n "$REAL_VULKAN_LAYERS" && -d "$REAL_VULKAN_LAYERS" ]]; then
@@ -329,7 +335,13 @@ if [[ "$USE_STEAM_PORTS" == "1" || "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEA
   fi
 
   STEAM_BRIDGE+=(--bridge "from:127.0.0.1:57343,27060")
-  STEAM_TMP_SHM+=(--tmp passthrough --shm passthrough --share-pid)
+  STEAM_TMP_SHM=()
+  if [[ "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEAM_OVERLAY" == "1" ]]; then
+    STEAM_TMP_SHM+=(--share-pid)
+  fi
+  if [[ "$USE_STEAM_OVERLAY" == "1" ]]; then
+    STEAM_TMP_SHM+=(--tmp passthrough --shm passthrough --no-landlock)
+  fi
 fi
 
 VR_BINDS=()
@@ -368,7 +380,6 @@ fi
 if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   OVERLAY_EXEC_CMD=(
     sb-run
-    --no-scope
     --no-landlock
     --uid "$ORIG_UID"
     --gid "$ORIG_GID"
