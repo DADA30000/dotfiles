@@ -356,6 +356,7 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   OVERLAY_EXEC_CMD=(
     sb-run
     --id "umu-$prefix_name"
+    --gui
     --tmpfs
     --rw "$MERGED_PFX"
     --rw "$SECURE_MOUNT"
