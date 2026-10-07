@@ -1,5 +1,5 @@
 { lib }:
-rec {
+{
   env = name: "\$${name}";
   envOr = name: default: "\${${name}:-${default}}";
   homeDir = "\$HOME";

@@ -2,9 +2,9 @@
   lib,
   options,
   pkgs,
-  inputs ? { },
-  osConfig ? { },
-  config ? { },
+  inputs,
+  osConfig,
+  config,
   ...
 }:
 let
