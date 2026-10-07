@@ -1853,21 +1853,46 @@ fn wait_for_file_created(dir: &Path, file_name: &str, timeout_ms: i32) -> bool {
     full_path.exists()
 }
 
+fn move_bridge_listener_to_helpers(cgroup_path: &Path, runner_pid: u32) -> Option<i32> {
+    let inside_procs = cgroup_path.join("inside/cgroup.procs");
+    let helpers_procs = cgroup_path.join("helpers/cgroup.procs");
+    let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
+
+    for _ in 0..50 {
+        let pids = read_pids_from_file(&inside_procs);
+        for pid in pids {
+            if pid != runner_i32 {
+                let cmdline_path = format!("/proc/{pid}/cmdline");
+                if let Ok(cmd) = fs::read_to_string(&cmdline_path)
+                    && cmd.contains("rust-bridge")
+                {
+                    let _ = fs::write(&helpers_procs, format!("{pid}\n"));
+                    return Some(pid);
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    None
+}
+
 fn setup_bridge_from_sandbox(
     cfg: &SandboxConfig,
     bridge: &BridgeRule,
     host_sock: &Path,
     in_sandbox_sock: &str,
     ipc_sock: &Path,
-) -> Option<i32> {
+    cgroup_path: Option<&Path>,
+    runner_pid: u32,
+) -> (Option<i32>, Option<i32>) {
     let addr_spec = format!("{}:[{}]", bridge.address, bridge.ports);
     let child = Command::new("rust-bridge")
         .args(["-r", "pass", "--address", &addr_spec, "-s"])
         .arg(host_sock)
         .spawn()
-        .ok()?;
+        .ok();
 
-    let pid = i32::try_from(child.id()).ok()?;
+    let pid = child.and_then(|c| i32::try_from(c.id()).ok());
 
     if let Some(parent) = host_sock.parent()
         && let Some(name) = host_sock.file_name().and_then(|n| n.to_str())
@@ -1892,7 +1917,9 @@ fn setup_bridge_from_sandbox(
         ..Default::default()
     };
     let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
-    Some(pid)
+
+    let listener_pid = cgroup_path.and_then(|cg| move_bridge_listener_to_helpers(cg, runner_pid));
+    (pid, listener_pid)
 }
 
 fn setup_bridge_to_sandbox(
@@ -1936,7 +1963,13 @@ fn setup_bridge_to_sandbox(
     i32::try_from(child.id()).ok()
 }
 
-fn setup_bridges(cfg: &SandboxConfig, sandbox_runtime: &Path, ipc_sock: &Path) -> Vec<i32> {
+fn setup_bridges(
+    cfg: &SandboxConfig,
+    sandbox_runtime: &Path,
+    ipc_sock: &Path,
+    cgroup_path: Option<&Path>,
+    runner_pid: u32,
+) -> Vec<i32> {
     if cfg.network == "passthrough" {
         return Vec::new();
     }
@@ -1949,17 +1982,31 @@ fn setup_bridges(cfg: &SandboxConfig, sandbox_runtime: &Path, ipc_sock: &Path) -
         let in_sandbox_sock = format!("{runtime}/{sock_name}");
         let _ = fs::remove_file(&host_sock);
 
-        let pid_opt = match bridge.direction {
+        match bridge.direction {
             BridgeDirection::FromSandbox => {
-                setup_bridge_from_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                let (host_pid, listener_pid) = setup_bridge_from_sandbox(
+                    cfg,
+                    bridge,
+                    &host_sock,
+                    &in_sandbox_sock,
+                    ipc_sock,
+                    cgroup_path,
+                    runner_pid,
+                );
+                if let Some(p) = host_pid {
+                    pids.push(p);
+                }
+                if let Some(p) = listener_pid {
+                    pids.push(p);
+                }
             }
             BridgeDirection::ToSandbox => {
-                setup_bridge_to_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                if let Some(p) =
+                    setup_bridge_to_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                {
+                    pids.push(p);
+                }
             }
-        };
-
-        if let Some(pid) = pid_opt {
-            pids.push(pid);
         }
     }
     pids
@@ -2861,10 +2908,17 @@ fn main() {
         );
     }
 
+    let cgroup_opt = env::var("MY_CGROUP").ok().map(PathBuf::from);
     let bridge_pids = if cfg.bridges.is_empty() {
         Vec::new()
     } else {
-        setup_bridges(&cfg, &paths.runtime, &paths.ipc_sock)
+        setup_bridges(
+            &cfg,
+            &paths.runtime,
+            &paths.ipc_sock,
+            cgroup_opt.as_deref(),
+            runner_pid,
+        )
     };
 
     if cfg.command.is_empty() {
