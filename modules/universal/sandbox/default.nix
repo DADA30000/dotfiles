@@ -425,6 +425,16 @@ let
 
       wrapperScript = pkgs.writeShellScript "sandbox-launcher-${appId}" ''
         if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
+          MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
+          MY_SCOPE="$(basename "$MY_CGROUP" 2>/dev/null)"
+          case "$MY_SCOPE" in
+            *"${appId}"*)
+              ;;
+            *)
+              exec app2unit -a "${appId}" -- "$0" "$@"
+              ;;
+          esac
+
           export START_TIME=$(date +%s%N)
           export APP_ID="${appId}"
 

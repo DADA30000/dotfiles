@@ -2363,13 +2363,12 @@ fn cleanup_session(
         let _ = fs::remove_dir_all(&paths.runtime);
         let _ = fs::remove_dir_all(&paths.home);
     }
-    if let Ok(scope) = env::var("MY_SCOPE") {
-        let unescaped = systemd_unescape(&scope);
-        if unescaped.contains(&cfg.app_id) {
-            let _ = Command::new("systemctl")
-                .args(["--user", "--no-block", "stop", &scope])
-                .spawn();
-        }
+    if let Ok(scope) = env::var("MY_SCOPE")
+        && scope_matches_app(&scope, cfg)
+    {
+        let _ = Command::new("systemctl")
+            .args(["--user", "--no-block", "stop", &scope])
+            .spawn();
     }
 }
 
@@ -2377,10 +2376,8 @@ const SYS_PIDFD_OPEN: i64 = 434;
 const EPOLL_CTL_ADD: i32 = 1;
 const EPOLL_CTL_DEL: i32 = 2;
 const EPOLLIN: u32 = 1;
-const EPOLLPRI: u32 = 0x0002;
-const EPOLLERR: u32 = 0x0008;
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Clone, Copy)]
 struct EpollEvent {
     events: u32,
@@ -2401,17 +2398,6 @@ impl Epoll {
         };
         let mut ev = EpollEvent {
             events: EPOLLIN,
-            data,
-        };
-        unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
-    }
-
-    fn add_pri(&self, fd: i32) -> bool {
-        let Ok(data) = u64::try_from(fd) else {
-            return false;
-        };
-        let mut ev = EpollEvent {
-            events: EPOLLPRI | EPOLLERR,
             data,
         };
         unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
@@ -2472,7 +2458,6 @@ fn monitor_scope_and_cleanup(
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
-        let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
         let Some(epoll) = Epoll::new() else {
@@ -2480,12 +2465,6 @@ fn monitor_scope_and_cleanup(
             cleanup_session(cfg, paths, bridge_pids, helpers);
             return;
         };
-
-        let c_events = CString::new(events_path.into_os_string().as_bytes()).ok();
-        let cgroup_events_fd = c_events.map_or(-1, |p| unsafe { open(p.as_ptr(), 0) });
-        if cgroup_events_fd >= 0 {
-            epoll.add_pri(cgroup_events_fd);
-        }
 
         let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
         let runner_fd = pidfd_open(runner_i32).unwrap_or(-1);
@@ -2543,18 +2522,11 @@ fn monitor_scope_and_cleanup(
                     terminate = true;
                     break;
                 }
-                if fd == cgroup_events_fd {
-                    continue;
-                }
                 epoll.del_and_close(fd);
             }
             if terminate {
                 break;
             }
-        }
-
-        if cgroup_events_fd >= 0 {
-            unsafe { close(cgroup_events_fd) };
         }
     } else {
         let _ = child.wait();
@@ -2750,6 +2722,11 @@ fn systemd_unescape(s: &str) -> String {
     out
 }
 
+fn scope_matches_app(scope_str: &str, cfg: &SandboxConfig) -> bool {
+    let unescaped = systemd_unescape(scope_str);
+    unescaped.contains(&cfg.app_id)
+}
+
 fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     if (cfg.flags & CFG_SCOPE) == 0 || cfg.app_id.is_empty() {
         return;
@@ -2759,8 +2736,7 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     };
     let line = cgroup_content.lines().next().unwrap_or("");
     let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
-    let unescaped = systemd_unescape(rel_path);
-    if unescaped.contains(&cfg.app_id) {
+    if scope_matches_app(rel_path, cfg) {
         return;
     }
 
@@ -2813,8 +2789,7 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
         return;
     }
 
-    let unescaped = systemd_unescape(rel_path);
-    if !unescaped.contains(&cfg.app_id) {
+    if !scope_matches_app(rel_path, cfg) {
         return;
     }
 
