@@ -355,6 +355,7 @@ fi
 if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   OVERLAY_EXEC_CMD=(
     sb-run
+    --no-scope
     --id "umu-$prefix_name"
     --gui
     --tmpfs
