@@ -2346,9 +2346,12 @@ fn cleanup_session(
         let _ = fs::remove_dir_all(&paths.home);
     }
     if let Ok(scope) = env::var("MY_SCOPE") {
-        let _ = Command::new("systemctl")
-            .args(["--user", "--no-block", "stop", &scope])
-            .spawn();
+        let unescaped = systemd_unescape(&scope);
+        if unescaped.contains(&cfg.app_id) {
+            let _ = Command::new("systemctl")
+                .args(["--user", "--no-block", "stop", &scope])
+                .spawn();
+        }
     }
 }
 
@@ -2776,7 +2779,10 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     }
 }
 
-fn setup_cgroup_and_scope() {
+fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
+    if (cfg.flags & CFG_SCOPE) == 0 {
+        return;
+    }
     if env::var("MY_CGROUP").is_ok() && env::var("MY_SCOPE").is_ok() {
         return;
     }
@@ -2786,6 +2792,11 @@ fn setup_cgroup_and_scope() {
     let line = cgroup_content.lines().next().unwrap_or("");
     let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
     if rel_path.is_empty() || rel_path == "/" {
+        return;
+    }
+
+    let unescaped = systemd_unescape(rel_path);
+    if !unescaped.contains(&cfg.app_id) {
         return;
     }
 
@@ -2830,7 +2841,7 @@ fn main() {
 
     let cfg = parse_cli_args();
     ensure_app2unit_scope(&cfg);
-    setup_cgroup_and_scope();
+    setup_cgroup_and_scope(&cfg);
     let paths = prepare_sandbox_paths(&cfg);
 
     if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg) {
