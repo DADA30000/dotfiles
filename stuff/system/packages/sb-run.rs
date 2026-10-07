@@ -2605,6 +2605,36 @@ fn spawn_bwrap_and_get_runner(
     (child, runner_pid)
 }
 
+fn systemd_unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' && chars.peek() == Some(&'x') {
+            chars.next();
+            let h1 = chars.next();
+            let h2 = chars.next();
+            if let (Some(c1), Some(c2)) = (h1, h2) {
+                let mut buf = [0u8; 2];
+                buf[0] = c1 as u8;
+                buf[1] = c2 as u8;
+                if let Ok(hex_str) = std::str::from_utf8(&buf)
+                    && let Ok(byte) = u8::from_str_radix(hex_str, 16)
+                {
+                    out.push(byte as char);
+                    continue;
+                }
+                out.push('\\');
+                out.push('x');
+                out.push(c1);
+                out.push(c2);
+                continue;
+            }
+        }
+        out.push(ch);
+    }
+    out
+}
+
 fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     if (cfg.flags & CFG_SCOPE) == 0 || cfg.app_id.is_empty() {
         return;
@@ -2614,7 +2644,8 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     };
     let line = cgroup_content.lines().next().unwrap_or("");
     let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
-    if rel_path.contains(&cfg.app_id) {
+    let unescaped = systemd_unescape(rel_path);
+    if unescaped.contains(&cfg.app_id) {
         return;
     }
 
