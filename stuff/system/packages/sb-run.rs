@@ -1854,6 +1854,7 @@ fn wait_for_file_created(dir: &Path, file_name: &str, timeout_ms: i32) -> bool {
 }
 
 fn setup_bridge_from_sandbox(
+    cfg: &SandboxConfig,
     bridge: &BridgeRule,
     host_sock: &Path,
     in_sandbox_sock: &str,
@@ -1885,6 +1886,7 @@ fn setup_bridge_from_sandbox(
         "-d".to_string(),
     ];
     let bridge_cfg = SandboxConfig {
+        app_id: cfg.app_id.clone(),
         command: listen_cmd,
         flags: 0,
         ..Default::default()
@@ -1894,6 +1896,7 @@ fn setup_bridge_from_sandbox(
 }
 
 fn setup_bridge_to_sandbox(
+    cfg: &SandboxConfig,
     bridge: &BridgeRule,
     host_sock: &Path,
     in_sandbox_sock: &str,
@@ -1910,6 +1913,7 @@ fn setup_bridge_to_sandbox(
         in_sandbox_sock.to_string(),
     ];
     let bridge_cfg = SandboxConfig {
+        app_id: cfg.app_id.clone(),
         command: pass_cmd,
         flags: 0,
         ..Default::default()
@@ -1933,6 +1937,9 @@ fn setup_bridge_to_sandbox(
 }
 
 fn setup_bridges(cfg: &SandboxConfig, sandbox_runtime: &Path, ipc_sock: &Path) -> Vec<i32> {
+    if cfg.network == "passthrough" {
+        return Vec::new();
+    }
     let mut pids = Vec::new();
     let runtime = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/run/user/1000".into());
 
@@ -1944,10 +1951,10 @@ fn setup_bridges(cfg: &SandboxConfig, sandbox_runtime: &Path, ipc_sock: &Path) -
 
         let pid_opt = match bridge.direction {
             BridgeDirection::FromSandbox => {
-                setup_bridge_from_sandbox(bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                setup_bridge_from_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
             }
             BridgeDirection::ToSandbox => {
-                setup_bridge_to_sandbox(bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                setup_bridge_to_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
             }
         };
 

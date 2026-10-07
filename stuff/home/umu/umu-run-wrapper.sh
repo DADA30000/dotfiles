@@ -382,21 +382,13 @@ run_overlay_app() {
 }
 
 if [[ "$USE_VPN" == "1" ]]; then
-   export SOCKET_DIR=$(mktemp -d /tmp/umu-vpn-XXXXXX)
-   export SOCKET_PATH="$SOCKET_DIR/steam_pass"
-
-   # Start background bridge; cleanup_all handles shutdown on exit
-   rust-bridge -r pass --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" &
-
    export _VPN_LD_PRELOAD="$LD_PRELOAD"
    export _VPN_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
 
    vpnify sh -c '
-     rust-bridge -r listen --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" -d
      export LD_PRELOAD="$_VPN_LD_PRELOAD"
      export LD_LIBRARY_PATH="$_VPN_LD_LIBRARY_PATH"
      "$0"
-     pkill -15 -f "rust-bridge.*listen.*$SOCKET_PATH" 2>/dev/null || true
    ' run_overlay_app
 else
   run_overlay_app
