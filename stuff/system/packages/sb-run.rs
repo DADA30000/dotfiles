@@ -1192,6 +1192,7 @@ fn add_base_ro_binds(cmd: &mut Command) {
         "/etc/passwd",
         "/etc/group",
         "/sys/class/hwmon",
+        "/etc/xdg/openxr",
     ];
 
     for path in ro_system_paths {
@@ -1218,6 +1219,8 @@ fn add_user_theme_binds(cmd: &mut Command, home: &str, xdg_config: &str, xdg_dat
         format!("{xdg_data}/zsh/.zshrc"),
         format!("{xdg_data}/icons"),
         format!("{xdg_data}/themes"),
+        format!("{xdg_config}/openvr"),
+        format!("{xdg_config}/openxr"),
     ];
 
     for path in theme_paths {
@@ -1366,6 +1369,13 @@ fn add_subsystem_binds(
 
     add_audio_binds(cmd, cfg, runtime_dir);
     add_display_binds(cmd, cfg, runtime_dir, sandbox_runtime);
+
+    let wivrn_socket = format!("{runtime_dir}/wivrn");
+    if Path::new(&wivrn_socket).exists() {
+        cmd.arg("--ro-bind-try")
+            .arg(&wivrn_socket)
+            .arg(&wivrn_socket);
+    }
 
     if (cfg.subsystems & SUBSYS_GAMEPAD) != 0 {
         if Path::new("/dev/input").exists() {
@@ -2577,6 +2587,11 @@ fn spawn_bwrap_and_get_runner(
 }
 
 fn main() {
+    let raw_args: Vec<String> = env::args().collect();
+    if raw_args.len() > 1 {
+        eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
+    }
+
     let cfg = parse_cli_args();
     let paths = prepare_sandbox_paths(&cfg);
 

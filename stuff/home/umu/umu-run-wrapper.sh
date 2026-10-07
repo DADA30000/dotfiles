@@ -1,6 +1,10 @@
 set -e
 
 # 0. Check if launched via .desktop shortcut (%k)
+if [[ "${1:-}" == file://* ]]; then
+  set -- "${1#file://}" "${@:2}"
+fi
+
 if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   desktop_file="$1"
   shift
@@ -25,6 +29,8 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   export USE_GAMEPAD="$(get_dprop 'X-UMU-Gamepad')"
   export USE_NETWORK="$(get_dprop 'X-UMU-Network')"
   export UMU_EXTRA_PATHS="$(get_dprop 'X-UMU-Extra-Paths')"
+  export USE_BIND_CWD="$(get_dprop 'X-UMU-Bind-CWD')"
+  export UMU_X11_MODE="$(get_dprop 'X-UMU-X11')"
 
   EXTRA_CLI_ARGS=("$@")
   RAW_ARGS_LIST=()
@@ -34,18 +40,28 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
 
   FINAL_ARGS=()
   has_cmd_placeholder=0
+  in_env=1
   for a in "${RAW_ARGS_LIST[@]}"; do
     if [[ "$a" == "%command%" ]]; then
+      in_env=0
       FINAL_ARGS+=("$target_exe")
       has_cmd_placeholder=1
+    elif [[ $in_env -eq 1 && "$a" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]]; then
+      export "$a"
     else
+      in_env=0
       FINAL_ARGS+=("$a")
     fi
   done
   if [[ $has_cmd_placeholder -eq 0 ]]; then
-    FINAL_ARGS=("$target_exe" "${RAW_ARGS_LIST[@]}")
+    FINAL_ARGS=("$target_exe" "${FINAL_ARGS[@]}")
   fi
   set -- "${FINAL_ARGS[@]}" "${EXTRA_CLI_ARGS[@]}"
+fi
+
+if [ $# -eq 0 ]; then
+  echo "ERROR: umu-run-wrapper requires a target executable to run" >&2
+  exit 1
 fi
 
 # 1. Resolve Prefix Storage Directory
@@ -119,12 +135,10 @@ if [[ -z "$(printenv PROTONPATH)" ]]; then
   esac
 fi
 
-# 5. Ensure runtime EROFS is mounted via hardened systemd service
-if ! mountpoint -q "$SECURE_MOUNT"; then
-  if ! systemctl start "umu-mount@$ORIG_UID.service" || ! mountpoint -q "$SECURE_MOUNT"; then
-    %{{{pkgs.libnotify}}}/bin/notify-send "Closed" "UMU runtime mount failed."
-    exit 1
-  fi
+# 5. Ensure runtime EROFS is freshly mounted via hardened systemd service
+if ! systemctl restart "umu-mount@$ORIG_UID.service" || ! mountpoint -q "$SECURE_MOUNT"; then
+  %{{{pkgs.libnotify}}}/bin/notify-send "Closed" "UMU runtime mount failed."
+  exit 1
 fi
 
 # Ensure mount target directory exists on host as a regular directory (NOT a symlink)
@@ -243,100 +257,104 @@ if [[ "$USE_STEAM_OVERLAY" == "1" ]]; then
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:%{{{pkgs.libGL}}}/lib:%{{{pkgs.pkgsi686Linux.libGL}}}/lib"
 fi
 
-# 11. Run via in-kernel OverlayFS + app2unit systemd scope
-run_overlay_app() {
-  unshare -r -m env \
-    SECURE_MOUNT="$SECURE_MOUNT" \
-    MOUNT_DIR="$MOUNT_DIR" \
-    BASE_PFX="$BASE_PFX" \
-    UPPER_DIR="$PREFIX_DIR/upper" \
-    WORK_DIR="$PREFIX_DIR/.work" \
-    MERGED_PFX="$MERGED_PFX" \
-    PREFIX_DIR="$PREFIX_DIR" \
-    ORIG_UID="$ORIG_UID" \
-    ORIG_GID="$ORIG_GID" \
-    prefix_name="$prefix_name" \
-    USE_SANDBOX="${USE_SANDBOX:-1}" \
-    USE_GAMEPAD="${USE_GAMEPAD:-1}" \
-    USE_NETWORK="${USE_NETWORK:-1}" \
-    USE_VPN="${USE_VPN:-0}" \
-    USE_STEAM_PORTS="${USE_STEAM_PORTS:-$USE_STEAM_INTEGRATION}" \
-    UMU_EXTRA_PATHS="${UMU_EXTRA_PATHS:-}" \
-    UNIT_NAME="umu-pfx-$prefix_name.scope" \
-    bash -c '
-      mount --bind "$SECURE_MOUNT" "$MOUNT_DIR" || exit 1
-      mount -t overlay overlay -o "lowerdir=$BASE_PFX,upperdir=$UPPER_DIR,workdir=$WORK_DIR" "$MERGED_PFX" || exit 1
+# 11. Prepare execution arguments and subsystem flags
+GAMEPAD_ARGS=()
+if [[ "${USE_GAMEPAD:-0}" != "0" ]]; then
+  GAMEPAD_ARGS+=(--gamepad)
+fi
 
-      if [ "$USE_SANDBOX" != "0" ]; then
-        mkdir -p "$PREFIX_DIR/sandbox"
-        GAMEPAD_ARGS=()
-        if [ "$USE_GAMEPAD" != "0" ]; then
-          GAMEPAD_ARGS+=(--gamepad)
-        fi
+NET_MODE="sandboxed"
+if [[ "$USE_NETWORK" == "0" || "$USE_NETWORK" == "off" ]]; then
+  NET_MODE="off"
+elif [[ "$USE_NETWORK" == "passthrough" || "$USE_NETWORK" == "1" ]]; then
+  NET_MODE="passthrough"
+elif [[ "$USE_NETWORK" == "singbox" || "$USE_VPN" == "1" ]]; then
+  NET_MODE="singbox"
+fi
 
-        NET_MODE="sandboxed"
-        if [ "$USE_NETWORK" = "0" ] || [ "$USE_NETWORK" = "off" ]; then
-          NET_MODE="off"
-        elif [ "$USE_NETWORK" = "passthrough" ] || [ "$USE_NETWORK" = "1" ]; then
-          NET_MODE="passthrough"
-        fi
-        [ "$USE_VPN" = "1" ] && NET_MODE="singbox"
+STEAM_BINDS=()
+STEAM_BRIDGE=()
+STEAM_TMP_SHM=()
+if [[ "$USE_STEAM_PORTS" == "1" || "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEAM_OVERLAY" == "1" ]]; then
+  if [[ -d "$HOME/.steam" ]]; then
+    STEAM_BINDS+=(--ro "$HOME/.steam:$HOME/.steam")
+    if [[ -e "$HOME/.steam/steam.pipe" ]]; then
+      STEAM_BINDS+=(--rw "$HOME/.steam/steam.pipe:$HOME/.steam/steam.pipe")
+    fi
+  fi
+  if [[ -d "$HOME/.local/share/Steam" ]]; then
+    STEAM_BINDS+=(--ro "$HOME/.local/share/Steam:$HOME/.local/share/Steam")
+  fi
+  STEAM_BRIDGE+=(--bridge "from:127.0.0.1:57343,27060")
+  STEAM_TMP_SHM+=(--tmp passthrough --shm passthrough)
+fi
 
-        STEAM_BINDS=()
-        if [ -d "$HOME/.steam" ]; then
-          STEAM_BINDS+=(--ro "$HOME/.steam:$HOME/.steam")
-          if [ -e "$HOME/.steam/steam.pipe" ]; then
-            STEAM_BINDS+=(--rw "$HOME/.steam/steam.pipe:$HOME/.steam/steam.pipe")
-          fi
-        fi
-        if [ -d "$HOME/.local/share/Steam" ]; then
-          STEAM_BINDS+=(--ro "$HOME/.local/share/Steam:$HOME/.local/share/Steam")
-        fi
-        if [ -d "$HOME/.steam2" ] || [ -L "$HOME/.steam2" ]; then
-          STEAM_BINDS+=(--ro "$HOME/.steam2:$HOME/.steam2")
-        fi
+VR_BINDS=()
+XDG_CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
+[[ -d "$XDG_CONF/openvr" ]] && VR_BINDS+=(--ro "$XDG_CONF/openvr:$XDG_CONF/openvr")
+[[ -d "$XDG_CONF/openxr" ]] && VR_BINDS+=(--ro "$XDG_CONF/openxr:$XDG_CONF/openxr")
+[[ -d "$RUNTIME_ROOT/wivrn" ]] && VR_BINDS+=(--ro "$RUNTIME_ROOT/wivrn:$RUNTIME_ROOT/wivrn")
+[[ -d "/etc/xdg/openxr" ]] && VR_BINDS+=(--ro "/etc/xdg/openxr:/etc/xdg/openxr")
 
-        STEAM_BRIDGE=()
-        if [ "$USE_STEAM_PORTS" = "1" ]; then
-          STEAM_BRIDGE+=(--bridge "from:127.0.0.1:57343,27060")
-        fi
-
-        EXTRA_PATHS_ARGS=()
-        if [ -n "$UMU_EXTRA_PATHS" ]; then
-          raw_paths=()
-          mapfile -d '' raw_paths < <(printf '%s\n' "$UMU_EXTRA_PATHS" | xargs -n1 printf '%s\0' 2>/dev/null || true)
-          idx=0
-          while [ $idx -lt ${#raw_paths[@]} ]; do
-            mode="${raw_paths[$idx]}"
-            if [ "$mode" = "--rw" ] || [ "$mode" = "--ro" ] || [ "$mode" = "--dev" ]; then
-              if [ $((idx + 1)) -lt ${#raw_paths[@]} ]; then
-                EXTRA_PATHS_ARGS+=("$mode" "${raw_paths[$((idx + 1))]}")
-                idx=$((idx + 2))
-                continue
-              fi
-            fi
-            idx=$((idx + 1))
-          done
-        fi
-
-        exec sb-run \
-          --id "umu-$prefix_name" \
-          --dir "$PREFIX_DIR/sandbox" \
-          --rw "$MERGED_PFX" \
-          --rw "$PWD" \
-          --ro "$SECURE_MOUNT" \
-          --gpu \
-          --audio \
-          "${GAMEPAD_ARGS[@]}" \
-          --net "$NET_MODE" \
-          "${STEAM_BINDS[@]}" \
-          "${STEAM_BRIDGE[@]}" \
-          "${EXTRA_PATHS_ARGS[@]}" \
-          -- env WINEPREFIX="$MERGED_PFX" "$@"
-      else
-        exec unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" env WINEPREFIX="$MERGED_PFX" app2unit -u "$UNIT_NAME" -- "$@"
+EXTRA_PATHS_ARGS=()
+if [[ -n "$UMU_EXTRA_PATHS" ]]; then
+  raw_paths=()
+  mapfile -d '' raw_paths < <(printf '%s\n' "$UMU_EXTRA_PATHS" | xargs -n1 printf '%s\0' 2>/dev/null || true)
+  idx=0
+  while [[ $idx -lt ${#raw_paths[@]} ]]; do
+    mode="${raw_paths[$idx]}"
+    if [[ "$mode" == "--rw" || "$mode" == "--ro" || "$mode" == "--dev" ]]; then
+      if [[ $((idx + 1)) -lt ${#raw_paths[@]} ]]; then
+        EXTRA_PATHS_ARGS+=("$mode" "${raw_paths[$((idx + 1))]}")
+        idx=$((idx + 2))
+        continue
       fi
-    ' _ "$@"
+    fi
+    idx=$((idx + 1))
+  done
+fi
+
+DISPLAY_ARGS=()
+if [[ "$PROTON_ENABLE_WAYLAND" == "1" ]]; then
+  DISPLAY_ARGS+=(--wayland passthrough --x11 "${UMU_X11_MODE:-passthrough}")
+else
+  DISPLAY_ARGS+=(--no-wayland --x11 "${UMU_X11_MODE:-passthrough}")
+fi
+
+if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
+  OVERLAY_EXEC_CMD=(
+    sb-run
+    --id "umu-$prefix_name"
+    --tmpfs
+    --rw "$MERGED_PFX"
+    --rw "$SECURE_MOUNT"
+    --rw "$SECURE_MOUNT:$MOUNT_DIR"
+    --gpu
+    --pulse sandboxed
+    "${DISPLAY_ARGS[@]}"
+    "${GAMEPAD_ARGS[@]}"
+    --net "$NET_MODE"
+    "${STEAM_BINDS[@]}"
+    "${STEAM_BRIDGE[@]}"
+    "${STEAM_TMP_SHM[@]}"
+    "${VR_BINDS[@]}"
+    "${EXTRA_PATHS_ARGS[@]}"
+    -- env WINEPREFIX="$MERGED_PFX" "${CMD[@]}"
+  )
+else
+  OVERLAY_EXEC_CMD=(
+    env WINEPREFIX="$MERGED_PFX" app2unit -u "umu-pfx-$prefix_name.scope" -- "${CMD[@]}"
+  )
+fi
+
+# 12. Run via in-kernel OverlayFS
+run_overlay_app() {
+  unshare -r -m bash -c '
+    mount --bind "$1" "$2" || exit 1
+    mount -t overlay overlay -o "lowerdir=$3,upperdir=$4,workdir=$5" "$6" || exit 1
+    shift 6
+    exec unshare --user --map-user="$1" --map-group="$2" "${@:3}"
+  ' _ "$SECURE_MOUNT" "$MOUNT_DIR" "$BASE_PFX" "$PREFIX_DIR/upper" "$PREFIX_DIR/.work" "$MERGED_PFX" "$ORIG_UID" "$ORIG_GID" "${OVERLAY_EXEC_CMD[@]}"
 }
 
 if [[ "$USE_VPN" == "1" ]]; then
@@ -353,9 +371,9 @@ if [[ "$USE_VPN" == "1" ]]; then
      rust-bridge -r listen --address "127.0.0.1:[57343,27060]" -s "$SOCKET_PATH" -d
      export LD_PRELOAD="$_VPN_LD_PRELOAD"
      export LD_LIBRARY_PATH="$_VPN_LD_LIBRARY_PATH"
-     "$0" "$@"
+     "$0"
      pkill -15 -f "rust-bridge.*listen.*$SOCKET_PATH" 2>/dev/null || true
-   ' run_overlay_app "${CMD[@]}"
+   ' run_overlay_app
 else
-  run_overlay_app "${CMD[@]}"
+  run_overlay_app
 fi

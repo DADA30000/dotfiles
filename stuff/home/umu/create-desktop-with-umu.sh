@@ -8,9 +8,9 @@ args="$3"
 name="$4"
 custom_icon="$5"
 
-env_gamemode=${USE_GAMEMODE:-1}
-env_mangohud=${USE_MANGOHUD:-1}
-env_wayland=${PROTON_ENABLE_WAYLAND:-1}
+env_gamemode=${USE_GAMEMODE:-0}
+env_mangohud=${USE_MANGOHUD:-0}
+env_wayland=${PROTON_ENABLE_WAYLAND:-0}
 env_prefix_name=${UMU_PREFIX_NAME:-default}
 env_proton_type=${UMU_PROTON_TYPE:-"%{{{defaultProton.displayName}}}"}
 env_gpu_select=${UMU_GPU_SELECT:-Автоматически}
@@ -18,8 +18,8 @@ env_steam=${USE_STEAM_INTEGRATION:-0}
 env_overlay=${USE_STEAM_OVERLAY:-0}
 env_vpn=${USE_VPN:-0}
 env_gameid=${GAMEID:-""}
-env_sandbox=${USE_SANDBOX:-1}
-env_gamepad=${USE_GAMEPAD:-1}
+env_sandbox=${USE_SANDBOX:-0}
+env_gamepad=${USE_GAMEPAD:-0}
 env_extra_paths=${UMU_EXTRA_PATHS:-""}
 
 PREFIX_DIR=$HOME/.umu/$env_prefix_name
@@ -29,19 +29,11 @@ if [[ -f "$actual_exe" ]]; then
   DESKTOP_FILE="$DESKTOP_DIR/umu-$PATH_HASH.desktop"
   ICON_FILE="umu-$PATH_HASH.png"
 
-  if [[ -f "$DESKTOP_FILE" ]]; then
-    exit 0
-  fi
-
   LOCK_DIR="$DESKTOP_DIR/.lock-$PATH_HASH"
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     exit 0
   fi
   trap 'rm -rf "$LOCK_DIR"' EXIT
-
-  if [[ -f "$DESKTOP_FILE" ]]; then
-    exit 0
-  fi
 
   if [[ -n "$name" ]]; then
     LNK_DISPLAY_NAME="$name"
