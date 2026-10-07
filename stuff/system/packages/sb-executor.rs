@@ -21,6 +21,7 @@ const MSG_SIGNAL: u16 = 3;
 const MSG_EXIT_RESPONSE: u16 = 4;
 
 const FLAG_WAIT_EXIT: u32 = 1 << 0;
+const FLAG_HELPER: u32 = 1 << 2;
 
 const SOL_SOCKET: i32 = 1;
 const SCM_RIGHTS: i32 = 1;
@@ -505,10 +506,13 @@ fn handle_connection(
         return;
     }
 
+    let is_helper = (header.flags & FLAG_HELPER) != 0;
     let is_cli = (header.flags & FLAG_WAIT_EXIT) != 0;
 
-    ACTIVE_CHILDREN.fetch_add(1, Ordering::Release);
-    HAS_LAUNCHED.store(true, Ordering::Release);
+    if !is_helper {
+        ACTIVE_CHILDREN.fetch_add(1, Ordering::Release);
+        HAS_LAUNCHED.store(true, Ordering::Release);
+    }
 
     let child_pid = unsafe { fork() };
     if child_pid < 0 {
@@ -516,7 +520,9 @@ fn handle_connection(
             "[sb-executor] fork failed: {}",
             std::io::Error::last_os_error()
         );
-        ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
+        if !is_helper {
+            ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
+        }
         return;
     }
 
@@ -732,6 +738,10 @@ fn parse_executor_cli() -> ExecutorCli {
 fn main() {
     let cli = parse_executor_cli();
 
+    unsafe {
+        prctl(36, 1, 0, 0, 0); // PR_SET_CHILD_SUBREAPER = 36
+    }
+
     if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
         start_singbox_services(&cli.singbox_bin, &cli.singbox_config, &cli.singbox_sock);
     }
@@ -786,6 +796,15 @@ fn main() {
                     eprintln!("[sb-executor] Error accepting connection: {err}");
                 }
             }
+        }
+
+        let mut status: i32 = 0;
+        while unsafe { waitpid(-1, &raw mut status, 1) } > 0 {
+            ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
+        }
+
+        if HAS_LAUNCHED.load(Ordering::Acquire) && ACTIVE_CHILDREN.load(Ordering::Acquire) == 0 {
+            break;
         }
     }
 }

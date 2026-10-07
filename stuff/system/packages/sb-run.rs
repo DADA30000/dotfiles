@@ -23,6 +23,7 @@ const MSG_EXIT_RESPONSE: u16 = 4;
 
 const FLAG_WAIT_EXIT: u32 = 1 << 0;
 const FLAG_IS_TTY: u32 = 1 << 1;
+const FLAG_HELPER: u32 = 1 << 2;
 
 const SOL_SOCKET: i32 = 1;
 const SCM_RIGHTS: i32 = 1;
@@ -997,7 +998,7 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
 
     let is_cli = (cfg.flags & CFG_IS_CLI) != 0;
     let is_tty = unsafe { isatty(0) == 1 };
-    let mut flags = 0;
+    let mut flags = cfg.flags & FLAG_HELPER;
     if is_cli {
         flags |= FLAG_WAIT_EXIT;
     }
@@ -1931,7 +1932,7 @@ fn setup_bridge_from_sandbox(
     let bridge_cfg = SandboxConfig {
         app_id: cfg.app_id.clone(),
         command: listen_cmd,
-        flags: 0,
+        flags: FLAG_HELPER,
         ..Default::default()
     };
     let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
@@ -1960,7 +1961,7 @@ fn setup_bridge_to_sandbox(
     let bridge_cfg = SandboxConfig {
         app_id: cfg.app_id.clone(),
         command: pass_cmd,
-        flags: 0,
+        flags: FLAG_HELPER,
         ..Default::default()
     };
     let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
