@@ -2302,6 +2302,8 @@ const SYS_PIDFD_OPEN: i64 = 434;
 const EPOLL_CTL_ADD: i32 = 1;
 const EPOLL_CTL_DEL: i32 = 2;
 const EPOLLIN: u32 = 1;
+const EPOLLPRI: u32 = 0x0002;
+const EPOLLERR: u32 = 0x0008;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -2329,6 +2331,17 @@ impl Epoll {
         unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
     }
 
+    fn add_pri(&self, fd: i32) -> bool {
+        let Ok(data) = u64::try_from(fd) else {
+            return false;
+        };
+        let mut ev = EpollEvent {
+            events: EPOLLPRI | EPOLLERR,
+            data,
+        };
+        unsafe { epoll_ctl(self.0, EPOLL_CTL_ADD, fd, &raw mut ev) == 0 }
+    }
+
     fn del_and_close(&self, fd: i32) {
         unsafe {
             epoll_ctl(self.0, EPOLL_CTL_DEL, fd, std::ptr::null_mut());
@@ -2336,11 +2349,11 @@ impl Epoll {
         }
     }
 
-    fn wait(&self, events: &mut [EpollEvent]) -> Result<usize, i32> {
+    fn wait(&self, events: &mut [EpollEvent], timeout_ms: i32) -> Result<usize, i32> {
         let Ok(len) = i32::try_from(events.len()) else {
             return Err(0);
         };
-        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), len, -1) };
+        let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), len, timeout_ms) };
         if n < 0 {
             let err = std::io::Error::last_os_error();
             Err(err.raw_os_error().unwrap_or(0))
@@ -2384,6 +2397,7 @@ fn monitor_scope_and_cleanup(
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
+        let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
         let Some(epoll) = Epoll::new() else {
@@ -2392,10 +2406,22 @@ fn monitor_scope_and_cleanup(
             return;
         };
 
+        let c_events = CString::new(events_path.into_os_string().as_bytes()).ok();
+        let cgroup_events_fd = c_events.map_or(-1, |p| unsafe { open(p.as_ptr(), 0) });
+        if cgroup_events_fd >= 0 {
+            epoll.add_pri(cgroup_events_fd);
+        }
+
         let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
         let runner_fd = pidfd_open(runner_i32).unwrap_or(-1);
         if runner_fd >= 0 {
             epoll.add(runner_fd);
+        }
+
+        let child_i32 = i32::try_from(child.id()).unwrap_or(0);
+        let child_fd = pidfd_open(child_i32).unwrap_or(-1);
+        if child_fd >= 0 {
+            epoll.add(child_fd);
         }
 
         let mut monitored = std::collections::HashSet::new();
@@ -2427,7 +2453,7 @@ fn monitor_scope_and_cleanup(
             }
 
             let mut events = [EpollEvent { events: 0, data: 0 }; 16];
-            let n = match epoll.wait(&mut events) {
+            let n = match epoll.wait(&mut events, -1) {
                 Ok(n) => n,
                 Err(4) => continue, // EINTR
                 Err(_) => break,
@@ -2438,15 +2464,22 @@ fn monitor_scope_and_cleanup(
                 let Ok(fd) = i32::try_from(event.data) else {
                     continue;
                 };
-                if fd == runner_fd {
+                if fd == runner_fd || fd == child_fd {
                     terminate = true;
                     break;
+                }
+                if fd == cgroup_events_fd {
+                    continue;
                 }
                 epoll.del_and_close(fd);
             }
             if terminate {
                 break;
             }
+        }
+
+        if cgroup_events_fd >= 0 {
+            unsafe { close(cgroup_events_fd) };
         }
     } else {
         let _ = child.wait();
@@ -2467,8 +2500,10 @@ fn parse_child_pid_from_info(buf: &[u8]) -> Option<u32> {
 fn handle_pasta_sync(
     pasta_sync_fds: Option<([i32; 2], [i32; 2])>,
     cfg: &SandboxConfig,
-) -> Option<Child> {
-    let ([r_block, w_block], [r_info, w_info]) = pasta_sync_fds?;
+) -> (Option<Child>, u32) {
+    let Some(([r_block, w_block], [r_info, w_info])) = pasta_sync_fds else {
+        return (None, 0);
+    };
     unsafe {
         close(r_block);
         close(w_info);
@@ -2486,12 +2521,17 @@ fn handle_pasta_sync(
     }
     unsafe { close(r_info) };
 
-    let pasta_child = parse_child_pid_from_info(&data).and_then(|pid| start_pasta(cfg, pid));
+    let runner_pid = parse_child_pid_from_info(&data).unwrap_or(0);
+    let pasta_child = if runner_pid > 0 {
+        start_pasta(cfg, runner_pid)
+    } else {
+        None
+    };
 
     let _ = unsafe { write(w_block, b"x".as_ptr().cast(), 1) };
     unsafe { close(w_block) };
 
-    pasta_child
+    (pasta_child, runner_pid)
 }
 
 struct SandboxPaths {
@@ -2771,7 +2811,7 @@ fn main() {
         (None, None)
     };
 
-    let (mut child, runner_pid) = spawn_bwrap_and_get_runner(
+    let (mut child, extra_runner_pid) = spawn_bwrap_and_get_runner(
         &cfg,
         &paths,
         &token_hex,
@@ -2780,7 +2820,14 @@ fn main() {
         extra_info_r,
     );
 
-    helpers.pasta = handle_pasta_sync(pasta_sync_fds, &cfg);
+    let (pasta_child, pasta_runner_pid) = handle_pasta_sync(pasta_sync_fds, &cfg);
+    helpers.pasta = pasta_child;
+
+    let runner_pid = if pasta_runner_pid > 0 {
+        pasta_runner_pid
+    } else {
+        extra_runner_pid
+    };
 
     if let Ok(mut pipe_file) = fs::File::open(&paths.ready_pipe) {
         let mut buf = [0u8; 16];
