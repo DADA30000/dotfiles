@@ -250,11 +250,14 @@ if [[ "$USE_MANGOHUD" != "0" ]]; then
 fi
 CMD+=(%{{{umu}}}/bin/umu-run "$@")
 
+STEAM_OVERLAY_ENV=()
 if [[ "$USE_STEAM_OVERLAY" == "1" ]]; then
-  export SteamGameId=480
-  export ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
-  export LD_PRELOAD="$LD_PRELOAD:$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so"
-  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:%{{{pkgs.libGL}}}/lib:%{{{pkgs.pkgsi686Linux.libGL}}}/lib"
+  STEAM_OVERLAY_ENV+=(
+    SteamGameId=480
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
+    LD_PRELOAD="$HOME/.steam/bin32/gameoverlayrenderer.so:$HOME/.steam/bin64/gameoverlayrenderer.so"
+    LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}%{{{pkgs.libGL}}}/lib:%{{{pkgs.pkgsi686Linux.libGL}}}/lib"
+  )
 fi
 
 # 11. Prepare execution arguments and subsystem flags
@@ -264,13 +267,17 @@ if [[ "${USE_GAMEPAD:-0}" != "0" ]]; then
 fi
 
 NET_MODE="sandboxed"
+PASTA_ARG=()
 if [[ "$USE_NETWORK" == "0" || "$USE_NETWORK" == "off" ]]; then
   NET_MODE="off"
 elif [[ "$USE_NETWORK" == "passthrough" || "$USE_NETWORK" == "1" ]]; then
   NET_MODE="passthrough"
 elif [[ "$USE_NETWORK" == "singbox" || "$USE_VPN" == "1" ]]; then
   NET_MODE="singbox"
+else
+  PASTA_ARG+=(--pasta-bin "%{{{pkgs.passt}}}/bin/pasta")
 fi
+[[ "$NET_MODE" == "sandboxed" && ${#PASTA_ARG[@]} -eq 0 ]] && PASTA_ARG+=(--pasta-bin "%{{{pkgs.passt}}}/bin/pasta")
 
 STEAM_BINDS=()
 STEAM_BRIDGE=()
@@ -358,16 +365,17 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
     "${DISPLAY_ARGS[@]}"
     "${GAMEPAD_ARGS[@]}"
     --net "$NET_MODE"
+    "${PASTA_ARG[@]}"
     "${STEAM_BINDS[@]}"
     "${STEAM_BRIDGE[@]}"
     "${STEAM_TMP_SHM[@]}"
     "${VR_BINDS[@]}"
     "${EXTRA_PATHS_ARGS[@]}"
-    -- env WINEPREFIX="$MERGED_PFX" "${CMD[@]}"
+    -- env WINEPREFIX="$MERGED_PFX" "${STEAM_OVERLAY_ENV[@]}" "${CMD[@]}"
   )
 else
   OVERLAY_EXEC_CMD=(
-    env WINEPREFIX="$MERGED_PFX" app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${CMD[@]}"
+    env WINEPREFIX="$MERGED_PFX" "${STEAM_OVERLAY_ENV[@]}" app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${CMD[@]}"
   )
 fi
 
