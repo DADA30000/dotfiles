@@ -333,6 +333,12 @@ fn run_child_process(
             dup2(fds[1].as_raw_fd(), 1);
             dup2(fds[2].as_raw_fd(), 2);
         }
+        if is_cli {
+            unsafe {
+                setsid();
+                ioctl(0, 0x540E, 0);
+            }
+        }
     }
 
     if !is_cli {

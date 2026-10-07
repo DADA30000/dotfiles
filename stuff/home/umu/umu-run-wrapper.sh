@@ -70,6 +70,18 @@ PREFIX_DIR="$HOME/.umu/$prefix_name"
 ORIG_UID=$(id -u)
 RUNTIME_ROOT="${XDG_RUNTIME_DIR:-/run/user/$ORIG_UID}"
 MERGED_PFX="$RUNTIME_ROOT/umu-pfx/$prefix_name"
+app_id="umu-$prefix_name"
+
+# Ensure we are running inside a systemd scope matching this prefix
+MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup 2>/dev/null | cut -d: -f3)"
+MY_SCOPE="$(basename "$MY_CGROUP" 2>/dev/null)"
+case "$MY_SCOPE" in
+  *"$app_id"*)
+    ;;
+  *)
+    exec app2unit -a "$app_id" -d "UMU - $prefix_name" -- "$0" "$@"
+    ;;
+esac
 
 cleanup_all() {
   local exit_code=$?
@@ -296,9 +308,9 @@ if [[ "$USE_STEAM_PORTS" == "1" || "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEA
   fi
 
   if [[ -n "$REAL_STEAM_SHARE" && -d "$REAL_STEAM_SHARE" ]]; then
-    STEAM_BINDS+=(--ro "$REAL_STEAM_SHARE:$REAL_STEAM_SHARE")
+    STEAM_BINDS+=(--rw "$REAL_STEAM_SHARE:$REAL_STEAM_SHARE")
     if [[ "$REAL_STEAM_SHARE" != "$HOME/.local/share/Steam" ]]; then
-      STEAM_BINDS+=(--ro "$REAL_STEAM_SHARE:$HOME/.local/share/Steam")
+      STEAM_BINDS+=(--rw "$REAL_STEAM_SHARE:$HOME/.local/share/Steam")
     fi
   fi
 
@@ -357,6 +369,7 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   OVERLAY_EXEC_CMD=(
     sb-run
     --no-scope
+    --no-landlock
     --uid "$ORIG_UID"
     --gid "$ORIG_GID"
     --id "umu-$prefix_name"
