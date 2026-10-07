@@ -654,7 +654,10 @@ in
   }
   // lib.optionalAttrs (options ? home.file) {
     home = {
-      packages = [ staticBwrap ];
+      packages = [
+        staticBwrap
+        way-secure-pkg
+      ];
       file.".not-a-sandbox".text = "not a sandbox";
     };
     xdg.configFile = {
@@ -668,7 +671,10 @@ in
   }
   // lib.optionalAttrs (options ? environment.etc) {
     environment = {
-      systemPackages = [ staticBwrap ];
+      systemPackages = [
+        staticBwrap
+        way-secure-pkg
+      ];
       etc.".not-a-sandbox".text = "not a sandbox";
     };
     services.pipewire = {
