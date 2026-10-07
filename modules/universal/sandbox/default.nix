@@ -428,23 +428,6 @@ let
           export START_TIME=$(date +%s%N)
           export APP_ID="${appId}"
 
-          MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
-          MY_SCOPE="$(printf '%s\n' "$MY_CGROUP" | sed -rn 's|.*/([^/]+)$|\1|p' | head -n 1)"
-          case "$MY_SCOPE" in
-            *"${appId}"*)
-              ;;
-            *)
-              exec app2unit -a "${appId}" -- "$0" "$@"
-              ;;
-          esac
-
-          mkdir -p "$MY_CGROUP/helpers"
-          echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
-          echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control" 2>/dev/null || true
-          echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control" 2>/dev/null || true
-          mkdir -p "$MY_CGROUP/inside"
-          export MY_CGROUP MY_SCOPE
-
           export SANDBOX_DIR="$XDG_RUNTIME_DIR/.nixpak/${appId}"
           export SANDBOXED_RUNTIME_DIR="$SANDBOX_DIR/runtime"
           mkdir -p "$SANDBOXED_RUNTIME_DIR"
@@ -654,10 +637,7 @@ in
   }
   // lib.optionalAttrs (options ? home.file) {
     home = {
-      packages = [
-        staticBwrap
-        way-secure-pkg
-      ];
+      packages = [ staticBwrap ];
       file.".not-a-sandbox".text = "not a sandbox";
     };
     xdg.configFile = {
@@ -671,10 +651,7 @@ in
   }
   // lib.optionalAttrs (options ? environment.etc) {
     environment = {
-      systemPackages = [
-        staticBwrap
-        way-secure-pkg
-      ];
+      systemPackages = [ staticBwrap ];
       etc.".not-a-sandbox".text = "not a sandbox";
     };
     services.pipewire = {

@@ -40,6 +40,7 @@ const CFG_PORTALS: u32 = 1 << 6;
 const CFG_USE_VPNIFY: u32 = 1 << 7;
 const CFG_SYSTEM_DBUS: u32 = 1 << 8;
 const CFG_FLATPAK_INFO: u32 = 1 << 9;
+const CFG_SCOPE: u32 = 1 << 10;
 
 const TIOCGWINSZ: usize = 0x5413;
 
@@ -646,6 +647,16 @@ fn parse_system_state_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usiz
             *i += 1;
             true
         }
+        "--scope" => {
+            cfg.flags |= CFG_SCOPE;
+            *i += 1;
+            true
+        }
+        "--no-scope" => {
+            cfg.flags &= !CFG_SCOPE;
+            *i += 1;
+            true
+        }
         "--share-pid" => {
             cfg.flags |= CFG_SHARE_PID;
             *i += 1;
@@ -885,7 +896,7 @@ fn parse_cli_args() -> SandboxConfig {
         dbus_mode: "sandboxed".into(),
         shm_mode: "sandboxed".into(),
         tmp_mode: "sandboxed".into(),
-        flags: CFG_DBUS | CFG_LANDLOCK | CFG_IS_CLI | CFG_PORTALS | CFG_FLATPAK_INFO,
+        flags: CFG_DBUS | CFG_LANDLOCK | CFG_IS_CLI | CFG_PORTALS | CFG_FLATPAK_INFO | CFG_SCOPE,
         ..Default::default()
     };
 
@@ -2119,6 +2130,7 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path)
 
     let mut proxy_cmd = Command::new(bwrap_bin);
     proxy_cmd
+        .arg("--die-with-parent")
         .arg("--ro-bind")
         .arg("/etc")
         .arg("/etc")
@@ -2247,6 +2259,13 @@ fn cleanup_session(
         unsafe { close(fd) };
     }
     if let Some(ref mut c) = helpers.dbus_proxy {
+        let pid = c.id();
+        if let Ok(pid_i32) = i32::try_from(pid) {
+            unsafe {
+                kill(-pid_i32, 15);
+                kill(pid_i32, 15);
+            }
+        }
         let _ = c.kill();
         let _ = c.wait();
     }
@@ -2586,6 +2605,98 @@ fn spawn_bwrap_and_get_runner(
     (child, runner_pid)
 }
 
+fn ensure_app2unit_scope(cfg: &SandboxConfig) {
+    if (cfg.flags & CFG_SCOPE) == 0 || cfg.app_id.is_empty() {
+        return;
+    }
+    let Ok(cgroup_content) = fs::read_to_string("/proc/self/cgroup") else {
+        return;
+    };
+    let line = cgroup_content.lines().next().unwrap_or("");
+    let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
+    if rel_path.contains(&cfg.app_id) {
+        return;
+    }
+
+    let args: Vec<String> = env::args().collect();
+    let current_exe = env::current_exe().unwrap_or_else(|_| PathBuf::from(&args[0]));
+
+    let Ok(c_app2unit) = CString::new("app2unit") else {
+        return;
+    };
+    let Ok(c_a) = CString::new("-a") else {
+        return;
+    };
+    let Ok(c_app_id) = CString::new(cfg.app_id.as_bytes()) else {
+        return;
+    };
+    let Ok(c_dashdash) = CString::new("--") else {
+        return;
+    };
+    let Ok(c_exe) = CString::new(current_exe.as_os_str().as_bytes()) else {
+        return;
+    };
+
+    let mut c_args = vec![c_app2unit.clone(), c_a, c_app_id, c_dashdash, c_exe];
+    for a in &args[1..] {
+        if let Ok(ca) = CString::new(a.as_bytes()) {
+            c_args.push(ca);
+        }
+    }
+    let mut c_ptrs: Vec<*const i8> = c_args.iter().map(|cs| cs.as_ptr()).collect();
+    c_ptrs.push(std::ptr::null());
+
+    unsafe {
+        execvp(c_app2unit.as_ptr(), c_ptrs.as_ptr());
+    }
+}
+
+fn setup_cgroup_and_scope() {
+    if env::var("MY_CGROUP").is_ok() && env::var("MY_SCOPE").is_ok() {
+        return;
+    }
+    let Ok(cgroup_content) = fs::read_to_string("/proc/self/cgroup") else {
+        return;
+    };
+    let line = cgroup_content.lines().next().unwrap_or("");
+    let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
+    if rel_path.is_empty() || rel_path == "/" {
+        return;
+    }
+
+    let cgroup_path = PathBuf::from(format!("/sys/fs/cgroup{rel_path}"));
+    let scope_name = cgroup_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(String::from);
+
+    let helpers_dir = cgroup_path.join("helpers");
+    let inside_dir = cgroup_path.join("inside");
+    let _ = fs::create_dir_all(&helpers_dir);
+    let _ = fs::create_dir_all(&inside_dir);
+
+    if let Some(parent) = cgroup_path.parent() {
+        let _ = fs::write(
+            parent.join("cgroup.subtree_control"),
+            "+memory +pids +cpu +io\n",
+        );
+    }
+    let _ = fs::write(
+        cgroup_path.join("cgroup.subtree_control"),
+        "+memory +pids +cpu +io\n",
+    );
+
+    let pid = unsafe { getpid() };
+    let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{pid}\n"));
+
+    unsafe {
+        env::set_var("MY_CGROUP", &cgroup_path);
+        if let Some(ref sc) = scope_name {
+            env::set_var("MY_SCOPE", sc);
+        }
+    }
+}
+
 fn main() {
     let raw_args: Vec<String> = env::args().collect();
     if raw_args.len() > 1 {
@@ -2593,6 +2704,8 @@ fn main() {
     }
 
     let cfg = parse_cli_args();
+    ensure_app2unit_scope(&cfg);
+    setup_cgroup_and_scope();
     let paths = prepare_sandbox_paths(&cfg);
 
     if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg) {
@@ -2706,6 +2819,7 @@ unsafe extern "C" {
     fn epoll_create1(flags: i32) -> i32;
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
     fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
+    fn execvp(file: *const i8, argv: *const *const i8) -> i32;
 }
 
 #[repr(C)]

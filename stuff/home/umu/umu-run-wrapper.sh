@@ -276,17 +276,41 @@ STEAM_BINDS=()
 STEAM_BRIDGE=()
 STEAM_TMP_SHM=()
 if [[ "$USE_STEAM_PORTS" == "1" || "$USE_STEAM_INTEGRATION" == "1" || "$USE_STEAM_OVERLAY" == "1" ]]; then
-  if [[ -d "$HOME/.steam" ]]; then
-    STEAM_BINDS+=(--ro "$HOME/.steam:$HOME/.steam")
-    if [[ -e "$HOME/.steam/steam.pipe" ]]; then
-      STEAM_BINDS+=(--rw "$HOME/.steam/steam.pipe:$HOME/.steam/steam.pipe")
+  REAL_STEAM="$(readlink -f "$HOME/.steam" 2>/dev/null || echo "")"
+  REAL_STEAM_SHARE="$(readlink -f "$HOME/.local/share/Steam" 2>/dev/null || echo "")"
+  REAL_VULKAN_LAYERS="$(readlink -f "$HOME/.local/share/vulkan/implicit_layer.d" 2>/dev/null || echo "")"
+  REAL_STEAM_PIPE="$(readlink -f "$HOME/.steam/steam.pipe" 2>/dev/null || echo "")"
+
+  if [[ -n "$REAL_STEAM" && -d "$REAL_STEAM" ]]; then
+    STEAM_BINDS+=(--ro "$REAL_STEAM:$REAL_STEAM")
+    if [[ "$REAL_STEAM" != "$HOME/.steam" ]]; then
+      STEAM_BINDS+=(--ro "$REAL_STEAM:$HOME/.steam")
     fi
   fi
-  if [[ -d "$HOME/.local/share/Steam" ]]; then
-    STEAM_BINDS+=(--ro "$HOME/.local/share/Steam:$HOME/.local/share/Steam")
+
+  if [[ -n "$REAL_STEAM_SHARE" && -d "$REAL_STEAM_SHARE" ]]; then
+    STEAM_BINDS+=(--ro "$REAL_STEAM_SHARE:$REAL_STEAM_SHARE")
+    if [[ "$REAL_STEAM_SHARE" != "$HOME/.local/share/Steam" ]]; then
+      STEAM_BINDS+=(--ro "$REAL_STEAM_SHARE:$HOME/.local/share/Steam")
+    fi
   fi
+
+  if [[ -n "$REAL_VULKAN_LAYERS" && -d "$REAL_VULKAN_LAYERS" ]]; then
+    STEAM_BINDS+=(--ro "$REAL_VULKAN_LAYERS:$REAL_VULKAN_LAYERS")
+    if [[ "$REAL_VULKAN_LAYERS" != "$HOME/.local/share/vulkan/implicit_layer.d" ]]; then
+      STEAM_BINDS+=(--ro "$REAL_VULKAN_LAYERS:$HOME/.local/share/vulkan/implicit_layer.d")
+    fi
+  fi
+
+  if [[ -n "$REAL_STEAM_PIPE" && -e "$REAL_STEAM_PIPE" ]]; then
+    STEAM_BINDS+=(--rw "$REAL_STEAM_PIPE:$HOME/.steam/steam.pipe")
+    if [[ "$REAL_STEAM_PIPE" != "$HOME/.steam/steam.pipe" ]]; then
+      STEAM_BINDS+=(--rw "$REAL_STEAM_PIPE:$REAL_STEAM_PIPE")
+    fi
+  fi
+
   STEAM_BRIDGE+=(--bridge "from:127.0.0.1:57343,27060")
-  STEAM_TMP_SHM+=(--tmp passthrough --shm passthrough)
+  STEAM_TMP_SHM+=(--tmp passthrough --shm passthrough --share-pid)
 fi
 
 VR_BINDS=()
@@ -343,7 +367,7 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   )
 else
   OVERLAY_EXEC_CMD=(
-    env WINEPREFIX="$MERGED_PFX" app2unit -u "umu-pfx-$prefix_name.scope" -- "${CMD[@]}"
+    env WINEPREFIX="$MERGED_PFX" app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${CMD[@]}"
   )
 fi
 
