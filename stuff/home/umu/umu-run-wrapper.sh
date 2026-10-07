@@ -352,39 +352,45 @@ else
   DISPLAY_ARGS+=(--no-wayland --x11 "${UMU_X11_MODE:-passthrough}")
 fi
 
-# 12. Small runner that mounts OverlayFS and drops UID
-OVERLAY_INNER_CMD=(
+# 12. Execution configuration
+if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
+  OVERLAY_EXEC_CMD=(
+    sb-run
+    --no-scope
+    --uid "$ORIG_UID"
+    --gid "$ORIG_GID"
+    --id "umu-$prefix_name"
+    --tmpfs
+    --rw "$MERGED_PFX"
+    --rw "$SECURE_MOUNT"
+    --rw "$SECURE_MOUNT:$MOUNT_DIR"
+    --gpu
+    --pulse sandboxed
+    "${DISPLAY_ARGS[@]}"
+    "${GAMEPAD_ARGS[@]}"
+    --net "$NET_MODE"
+    "${PASTA_ARG[@]}"
+    "${STEAM_BINDS[@]}"
+    "${STEAM_BRIDGE[@]}"
+    "${STEAM_TMP_SHM[@]}"
+    "${VR_BINDS[@]}"
+    "${EXTRA_PATHS_ARGS[@]}"
+    -- env WINEPREFIX="$MERGED_PFX" "${STEAM_OVERLAY_ENV[@]}" "${CMD[@]}"
+  )
+else
+  OVERLAY_EXEC_CMD=(
+    unshare --user --map-user="$ORIG_UID" --map-group="$ORIG_GID" env WINEPREFIX="$MERGED_PFX" "${STEAM_OVERLAY_ENV[@]}" app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${CMD[@]}"
+  )
+fi
+
+run_overlay_app() {
   unshare -r -m bash -c '
     mount --bind "$1" "$2" || exit 1
     mount -t overlay overlay -o "lowerdir=$3,upperdir=$4,workdir=$5" "$6" || exit 1
     shift 6
-    exec unshare --user --map-user="$1" --map-group="$2" env WINEPREFIX="$6" "${@:3}"
-  ' _ "$SECURE_MOUNT" "$MOUNT_DIR" "$BASE_PFX" "$PREFIX_DIR/upper" "$PREFIX_DIR/.work" "$MERGED_PFX" "$ORIG_UID" "$ORIG_GID" "${STEAM_OVERLAY_ENV[@]}" "${CMD[@]}"
-)
-
-if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
-  exec sb-run \
-    --id "umu-$prefix_name" \
-    --tmpfs \
-    --rw "$SECURE_MOUNT" \
-    --rw "$PREFIX_DIR/upper" \
-    --rw "$PREFIX_DIR/.work" \
-    --rw "$MERGED_PFX" \
-    --rw "$MOUNT_DIR" \
-    --ro "$BASE_PFX" \
-    --gpu \
-    --pulse sandboxed \
-    "${DISPLAY_ARGS[@]}" \
-    "${GAMEPAD_ARGS[@]}" \
-    --net "$NET_MODE" \
-    "${PASTA_ARG[@]}" \
-    "${STEAM_BINDS[@]}" \
-    "${STEAM_BRIDGE[@]}" \
-    "${STEAM_TMP_SHM[@]}" \
-    "${VR_BINDS[@]}" \
-    "${EXTRA_PATHS_ARGS[@]}" \
-    -- "${OVERLAY_INNER_CMD[@]}"
-fi
+    exec "${@:3}"
+  ' _ "$SECURE_MOUNT" "$MOUNT_DIR" "$BASE_PFX" "$PREFIX_DIR/upper" "$PREFIX_DIR/.work" "$MERGED_PFX" "$ORIG_UID" "$ORIG_GID" "${OVERLAY_EXEC_CMD[@]}"
+}
 
 if [[ "$USE_VPN" == "1" ]]; then
    export _VPN_LD_PRELOAD="$LD_PRELOAD"
@@ -393,8 +399,8 @@ if [[ "$USE_VPN" == "1" ]]; then
    exec vpnify sh -c '
      export LD_PRELOAD="$_VPN_LD_PRELOAD"
      export LD_LIBRARY_PATH="$_VPN_LD_LIBRARY_PATH"
-     "$0" "$@"
-   ' app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${OVERLAY_INNER_CMD[@]}"
+     "$0"
+   ' run_overlay_app
 else
-  exec app2unit -a "umu-$prefix_name" -d "UMU - $prefix_name" -- "${OVERLAY_INNER_CMD[@]}"
+  run_overlay_app
 fi

@@ -545,12 +545,6 @@ fn handle_connection(
     if is_cli {
         monitor_cli_child(stream, child_pid);
         ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
-    } else {
-        std::thread::spawn(move || {
-            let mut status: i32 = 0;
-            let _ = unsafe { waitpid(child_pid, &raw mut status, 0) };
-            ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
-        });
     }
 }
 
@@ -779,21 +773,13 @@ fn main() {
         if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
             match listener.accept() {
                 Ok((s, _)) => {
-                    let auth_token = cli.auth_token;
-                    let landlock = cli.use_landlock;
-                    std::thread::spawn(move || {
-                        handle_connection(s, landlock, listener_fd, auth_token);
-                    });
+                    handle_connection(s, cli.use_landlock, listener_fd, cli.auth_token);
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(err) => {
                     eprintln!("[sb-executor] Error accepting connection: {err}");
                 }
             }
-        }
-
-        if HAS_LAUNCHED.load(Ordering::Acquire) && ACTIVE_CHILDREN.load(Ordering::Acquire) == 0 {
-            break;
         }
     }
 }

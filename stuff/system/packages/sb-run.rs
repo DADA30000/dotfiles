@@ -292,6 +292,8 @@ struct SandboxConfig {
     way_secure_bin: Option<PathBuf>,
     pasta_bin: Option<PathBuf>,
     xwayland_satellite_bin: Option<PathBuf>,
+    custom_uid: Option<u32>,
+    custom_gid: Option<u32>,
     command: Vec<String>,
 }
 
@@ -816,6 +818,14 @@ fn parse_option_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> 
             cfg.pasta_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
             *i += 2;
         }
+        "--uid" if *i + 1 < args.len() => {
+            cfg.custom_uid = args[*i + 1].parse().ok();
+            *i += 2;
+        }
+        "--gid" if *i + 1 < args.len() => {
+            cfg.custom_gid = args[*i + 1].parse().ok();
+            *i += 2;
+        }
         "--xwayland-satellite-bin" if *i + 1 < args.len() => {
             cfg.xwayland_satellite_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
             *i += 2;
@@ -896,7 +906,7 @@ fn parse_cli_args() -> SandboxConfig {
         dbus_mode: "sandboxed".into(),
         shm_mode: "sandboxed".into(),
         tmp_mode: "sandboxed".into(),
-        flags: CFG_DBUS | CFG_LANDLOCK | CFG_IS_CLI | CFG_PORTALS | CFG_FLATPAK_INFO | CFG_SCOPE,
+        flags: CFG_DBUS | CFG_LANDLOCK | CFG_PORTALS | CFG_FLATPAK_INFO | CFG_SCOPE,
         ..Default::default()
     };
 
@@ -1730,7 +1740,15 @@ fn build_bwrap_command(
     let xdg_data = env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{home}/.local/share"));
 
     cmd.arg("--die-with-parent");
-    cmd.arg("--unshare-user-try");
+    if let Some(uid) = cfg.custom_uid {
+        cmd.arg("--unshare-user");
+        cmd.arg("--uid").arg(uid.to_string());
+        if let Some(gid) = cfg.custom_gid {
+            cmd.arg("--gid").arg(gid.to_string());
+        }
+    } else {
+        cmd.arg("--unshare-user-try");
+    }
     if (cfg.flags & CFG_SHARE_IPC) == 0 {
         cmd.arg("--unshare-ipc");
     }
