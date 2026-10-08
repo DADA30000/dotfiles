@@ -137,7 +137,7 @@ index ff9cf9a..845e842 100644
    spec.accordion = group.accordion;
    spec.accordionDirection = group.accordionDirection;
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index bad0c24..578d99f 100644
+index bad0c24..c784c2e 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
 @@ -40,6 +40,10 @@ struct BarCapsuleGroupStyle {
@@ -162,7 +162,16 @@ index bad0c24..578d99f 100644
    // Capsule background opacity multiplier (0.0–1.0).
    float opacity = 1.0F;
    bool hoverHighlight = true;
-@@ -993,6 +1001,13 @@ struct ShellConfig {
+@@ -559,6 +567,8 @@ struct LockscreenConfig {
+   bool fingerprint = true;
+   bool allowEmptyPassword = false;
+   bool blurredDesktop = false;
++  bool transparent = false;
++  float backgroundOpacity = 0.05F;
+   std::vector<LockscreenTransition> transitions = {LockscreenTransition::Fade, LockscreenTransition::Wipe,
+                                                    LockscreenTransition::Disc, LockscreenTransition::Stripes,
+                                                    LockscreenTransition::Zoom, LockscreenTransition::Honeycomb};
+@@ -993,6 +1003,13 @@ struct ShellConfig {
    struct AnimationConfig {
      bool enabled = true;
      float speed = 1.0F;
@@ -176,7 +185,7 @@ index bad0c24..578d99f 100644
  
      bool operator==(const AnimationConfig&) const = default;
    };
-@@ -1006,6 +1021,8 @@ struct ShellConfig {
+@@ -1006,6 +1023,8 @@ struct ShellConfig {
  
    struct PanelConfig {
      PanelTransparencyMode transparencyMode = PanelTransparencyMode::Solid;
@@ -186,10 +195,19 @@ index bad0c24..578d99f 100644
      bool shadow = true;                    // cast the global [shell.shadow] from panel surfaces
      bool listItemBackground = false;       // filled rounded background behind launcher/clipboard list items
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index ef45b41..9ffb05e 100644
+index ef45b41..d653c27 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
-@@ -1309,10 +1309,42 @@ namespace noctalia::config::schema {
+@@ -128,6 +128,8 @@ namespace noctalia::config::schema {
+         field(&LockscreenConfig::fingerprint, "fingerprint"),
+         field(&LockscreenConfig::allowEmptyPassword, "allow_empty_password"),
+         field(&LockscreenConfig::blurredDesktop, "blurred_desktop"),
++        field(&LockscreenConfig::transparent, "transparent"),
++        field(&LockscreenConfig::backgroundOpacity, "background_opacity", kUnitRange),
+         enumArrayField(
+             &LockscreenConfig::transitions, "transition", kLockscreenTransitions, std::optional<LockscreenTransition>{}
+         ),
+@@ -1309,10 +1311,42 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -232,7 +250,7 @@ index ef45b41..9ffb05e 100644
        };
        return s;
      }
-@@ -1369,6 +1401,8 @@ namespace noctalia::config::schema {
+@@ -1369,6 +1403,8 @@ namespace noctalia::config::schema {
      const Schema<ShellConfig::PanelConfig>& shellPanelSchema() {
        static const Schema<ShellConfig::PanelConfig> s = {
            enumField(&ShellConfig::PanelConfig::transparencyMode, "transparency_mode", kPanelTransparencyModes),
@@ -241,7 +259,7 @@ index ef45b41..9ffb05e 100644
            field(&ShellConfig::PanelConfig::borders, "borders"),
            field(&ShellConfig::PanelConfig::shadow, "shadow"),
            field(&ShellConfig::PanelConfig::listItemBackground, "list_item_background"),
-@@ -2151,29 +2185,6 @@ namespace noctalia::config::schema {
+@@ -2151,29 +2187,6 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -271,7 +289,7 @@ index ef45b41..9ffb05e 100644
      template <typename Struct>
      Field<Struct> optionalDoubleField(
          std::optional<double> Struct::* member, std::string_view key, std::optional<Range<double>> range = std::nullopt
-@@ -2213,6 +2224,10 @@ namespace noctalia::config::schema {
+@@ -2213,6 +2226,10 @@ namespace noctalia::config::schema {
            optionalColorField(&BarCapsuleGroupStyle::foreground, "foreground"),
            field(&BarCapsuleGroupStyle::padding, "padding", kBarCapsulePaddingRange),
            optionalFloatField(&BarCapsuleGroupStyle::radius, "radius", kBarCapsuleRadiusRangeF),
@@ -1521,10 +1539,10 @@ index 99a7480..a7809ca 100644
          setBorder(colorSpecFromRole(ColorRole::Hover), Style::borderWidth);
        } else {
 diff --git a/src/shell/control_center/tabs/power_tab.cpp b/src/shell/control_center/tabs/power_tab.cpp
-index b18b3e7..2551d05 100644
+index b18b3e7..aaaa3d4 100644
 --- a/src/shell/control_center/tabs/power_tab.cpp
 +++ b/src/shell/control_center/tabs/power_tab.cpp
-@@ -1,21 +1,37 @@
+@@ -1,21 +1,38 @@
  #include "shell/control_center/tabs/power_tab.h"
  
 +#include "core/deferred_call.h"
@@ -1538,6 +1556,7 @@ index b18b3e7..2551d05 100644
  #include "time/time_format.h"
  #include "ui/builders.h"
 +#include "ui/controls/button.h"
++#include "ui/controls/input.h"
 +#include "ui/controls/segmented.h"
  #include "ui/controls/toggle.h"
  #include "ui/palette.h"
@@ -1562,7 +1581,7 @@ index b18b3e7..2551d05 100644
  
  using namespace control_center;
  
-@@ -60,6 +76,212 @@ namespace {
+@@ -60,6 +77,219 @@ namespace {
      return state.configuredStart == state.effectiveStart && state.configuredEnd == state.effectiveEnd;
    }
  
@@ -1625,6 +1644,13 @@ index b18b3e7..2551d05 100644
 +  bool hasAorusFan() {
 +    std::error_code ec;
 +    return std::filesystem::exists("/sys/devices/platform/aorus_laptop/fan_mode", ec);
++  }
++
++  bool hasBatteryCap() {
++    std::error_code ec;
++    return std::filesystem::exists("/sys/devices/platform/aorus_laptop/charge_limit", ec)
++        || std::filesystem::exists("/sys/class/power_supply/BAT1/charge_control_end_threshold", ec)
++        || std::filesystem::exists("/sys/class/power_supply/BAT0/charge_control_end_threshold", ec);
 +  }
 +
 +  std::string getFanMode() {
@@ -1775,7 +1801,7 @@ index b18b3e7..2551d05 100644
  } // namespace
  
  PowerTab::ChargeLimitMode PowerTab::classifyChargeLimit(const UPowerChargeLimitState& state) noexcept {
-@@ -139,6 +361,8 @@ std::unique_ptr<Flex> PowerTab::create() {
+@@ -139,6 +369,8 @@ std::unique_ptr<Flex> PowerTab::create() {
    content->setAlign(FlexAlign::Stretch);
    content->setGap(Style::spaceMd * scale);
  
@@ -1784,7 +1810,7 @@ index b18b3e7..2551d05 100644
    buildStatusCard(*content, scale);
    buildProfilesCard(*content, scale);
    buildChargingCard(*content, scale);
-@@ -327,6 +551,126 @@ void PowerTab::buildProfilesCard(Flex& root, float scale) {
+@@ -327,6 +559,157 @@ void PowerTab::buildProfilesCard(Flex& root, float scale) {
    root.addChild(std::move(card));
  }
  
@@ -1792,7 +1818,8 @@ index b18b3e7..2551d05 100644
 +  const bool hasNv = noctalia::system::NvidiaGpuService::instance().status().present;
 +  const bool hasFan = hasAorusFan();
 +  const bool hasRyzen = hasRyzenAdj();
-+  if (!hasNv && !hasFan && !hasRyzen) return;
++  const bool hasBattery = hasBatteryCap();
++  if (!hasNv && !hasFan && !hasRyzen && !hasBattery) return;
 +
 +  auto card = ui::column({
 +      .configure = [scale, opacity = panelCardOpacity()](Flex& section) { applySectionCardStyle(section, scale, opacity); },
@@ -1863,6 +1890,36 @@ index b18b3e7..2551d05 100644
 +        },
 +    })));
 +  }
++
++  if (hasBattery) {
++    auto batInputState = std::make_shared<std::string>("80");
++    auto batRow = ui::row(
++        {.align = FlexAlign::Center, .gap = Style::spaceXs * scale},
++        ui::input({
++            .value = "80",
++            .placeholder = "60-100",
++            .fontSize = Style::fontSizeCaption * scale,
++            .horizontalPadding = Style::spaceXs * scale,
++            .minLayoutWidth = 44.0F * scale,
++            .surfaceOpacity = panelCardOpacity(),
++            .width = 52.0F * scale,
++            .onChange = [batInputState](const std::string& val) { *batInputState = val; },
++        }),
++        ui::button({
++            .text = "Задать",
++            .variant = ButtonVariant::Primary,
++            .paddingV = Style::spaceXs * 0.8F * scale,
++            .paddingH = Style::spaceSm * scale,
++            .radius = Style::scaledRadiusSm(scale),
++            .onClick = [batInputState]() {
++              if (batInputState && !batInputState->empty()) {
++                sendDaemonCommand(std::format("battery set {}", *batInputState));
++              }
++            },
++        })
++    );
++    card->addChild(makeRow("Лимит заряда батареи (%)", std::move(batRow)));
++  }
 +  root.addChild(std::move(card));
 +}
 +
@@ -1911,7 +1968,7 @@ index b18b3e7..2551d05 100644
  void PowerTab::buildHealthCard(Flex& root, float scale) {
    if (m_upower == nullptr) {
      return;
-@@ -395,6 +739,24 @@ void PowerTab::buildPeripheralsCard(Flex& root, float scale) {
+@@ -395,6 +778,24 @@ void PowerTab::buildPeripheralsCard(Flex& root, float scale) {
    root.addChild(std::move(card));
  }
  
@@ -1936,7 +1993,7 @@ index b18b3e7..2551d05 100644
  void PowerTab::onClose() {
    m_root = nullptr;
    m_statusCard = nullptr;
-@@ -415,6 +777,14 @@ void PowerTab::onClose() {
+@@ -415,6 +816,14 @@ void PowerTab::onClose() {
    m_inhibitedRow = nullptr;
    m_inhibitedLabel = nullptr;
    m_healthCard = nullptr;
@@ -1951,7 +2008,7 @@ index b18b3e7..2551d05 100644
    m_healthLabel = nullptr;
    m_healthBar = nullptr;
    m_peripheralsCard = nullptr;
-@@ -439,6 +809,14 @@ void PowerTab::doUpdate(Renderer& /*renderer*/) {
+@@ -439,6 +848,14 @@ void PowerTab::doUpdate(Renderer& /*renderer*/) {
    syncPowerProfiles();
    syncBatteryHealth();
    rebuildPeripherals();
@@ -2849,8 +2906,30 @@ index 724827b..998ebd9 100644
  
    void create() override;
    void onOpen(std::string_view context) override;
+diff --git a/src/shell/lockscreen/lock_screen.cpp b/src/shell/lockscreen/lock_screen.cpp
+index d5c94b3..4893a91 100644
+--- a/src/shell/lockscreen/lock_screen.cpp
++++ b/src/shell/lockscreen/lock_screen.cpp
+@@ -683,6 +683,9 @@ bool LockScreen::shouldCaptureDesktop() const {
+     return false;
+   }
+   const auto& lockscreen = m_configService->config().lockscreen;
++  if (lockscreen.transparent) {
++    return false;
++  }
+   return lockscreen.blurredDesktop || !lockscreen.transitions.empty();
+ }
+ 
+@@ -875,6 +878,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
+     return;
+   }
+   const auto& lockscreen = m_configService->config().lockscreen;
++  surface.setTransparency(lockscreen.transparent, lockscreen.backgroundOpacity);
+   surface.setBackgroundStyle(lockscreen.blurIntensity, lockscreen.tintIntensity);
+ }
+ 
 diff --git a/src/shell/lockscreen/lock_surface.cpp b/src/shell/lockscreen/lock_surface.cpp
-index 7c03bb4..487fc18 100644
+index 7c03bb4..bf5055b 100644
 --- a/src/shell/lockscreen/lock_surface.cpp
 +++ b/src/shell/lockscreen/lock_surface.cpp
 @@ -110,20 +110,18 @@ namespace {
@@ -2876,6 +2955,131 @@ index 7c03bb4..487fc18 100644
    }
  
    [[nodiscard]] std::string weekdayAbbrev(const std::string& isoDate) {
+@@ -716,6 +714,24 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
+   requestLayout();
+ }
+ 
++void LockSurface::setTransparency(bool transparent, float opacity) {
++  if (m_isTransparent == transparent && std::abs(m_transparentOpacity - opacity) < 0.001F) {
++    return;
++  }
++  m_isTransparent = transparent;
++  m_transparentOpacity = std::clamp(opacity, 0.0F, 1.0F);
++  if (m_isTransparent) {
++    m_transitionPhase = TransitionPhase::Disabled;
++    if (m_wallpaper != nullptr) {
++      m_wallpaper->setVisible(false);
++    }
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setVisible(false);
++    }
++  }
++  requestRedraw();
++}
++
+ void LockSurface::setWallpaperFillMode(WallpaperFillMode fillMode) {
+   if (m_wallpaperFillMode == fillMode) {
+     return;
+@@ -1211,34 +1227,51 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   m_backgroundLayer->setPosition(0.0F, 0.0F);
+   m_backgroundLayer->setSize(sw, sh);
+ 
+-  m_wallpaper->setPosition(0.0F, 0.0F);
+-  m_wallpaper->setSize(sw, sh);
+-  m_wallpaper->setFillMode(m_wallpaperFillMode);
+-  m_wallpaper->setFillColor(m_wallpaperFillColor);
+-
+-  m_backdrop->setPosition(0.0F, 0.0F);
+-  m_backdrop->setSize(sw, sh);
+-  m_backdrop->setVisible(m_wallpaperFillColor.a > 0.0F);
+-  m_backdrop->setStyle(
+-      RoundedRectStyle{
+-          .fill = m_wallpaperFillColor,
+-          .fillMode = FillMode::Solid,
+-      }
+-  );
++  if (m_isTransparent) {
++    m_wallpaper->setVisible(false);
++    m_backdrop->setPosition(0.0F, 0.0F);
++    m_backdrop->setSize(sw, sh);
++    m_backdrop->setVisible(m_transparentOpacity > 0.001F);
++    m_backdrop->setStyle(
++        RoundedRectStyle{
++            .fill = rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
++            .fillMode = FillMode::Solid,
++        }
++    );
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setVisible(false);
++    }
++  } else {
++    m_wallpaper->setVisible(true);
++    m_wallpaper->setPosition(0.0F, 0.0F);
++    m_wallpaper->setSize(sw, sh);
++    m_wallpaper->setFillMode(m_wallpaperFillMode);
++    m_wallpaper->setFillColor(m_wallpaperFillColor);
+ 
+-  if (m_tintOverlay != nullptr) {
+-    m_tintOverlay->setPosition(0.0F, 0.0F);
+-    m_tintOverlay->setSize(sw, sh);
+-    const float tintIntensity = m_tintIntensity;
+-    const bool showTint = tintIntensity > 0.0F;
+-    m_tintOverlay->setVisible(showTint);
+-    if (showTint) {
+-      m_tintOverlay->setStyle(
+-          RoundedRectStyle{
+-              .fill = colorForRole(ColorRole::Surface, tintIntensity),
+-              .fillMode = FillMode::Solid,
+-          }
+-      );
++    m_backdrop->setPosition(0.0F, 0.0F);
++    m_backdrop->setSize(sw, sh);
++    m_backdrop->setVisible(m_wallpaperFillColor.a > 0.0F);
++    m_backdrop->setStyle(
++        RoundedRectStyle{
++            .fill = m_wallpaperFillColor,
++            .fillMode = FillMode::Solid,
++        }
++    );
++
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setPosition(0.0F, 0.0F);
++      m_tintOverlay->setSize(sw, sh);
++      const float tintIntensity = m_tintIntensity;
++      const bool showTint = tintIntensity > 0.0F;
++      m_tintOverlay->setVisible(showTint);
++      if (showTint) {
++        m_tintOverlay->setStyle(
++            RoundedRectStyle{
++                .fill = colorForRole(ColorRole::Surface, tintIntensity),
++                .fillMode = FillMode::Solid,
++            }
++        );
++      }
+     }
+   }
+ 
+diff --git a/src/shell/lockscreen/lock_surface.h b/src/shell/lockscreen/lock_surface.h
+index 949c283..0d8af03 100644
+--- a/src/shell/lockscreen/lock_surface.h
++++ b/src/shell/lockscreen/lock_surface.h
+@@ -59,6 +59,7 @@ public:
+   void setKeyboardIndicators(bool capsLock, bool hasMultipleLayouts, bool layoutSwitchable, std::string layoutLabel);
+   void setTextureCache(SharedTextureCache* cache) noexcept { m_textureCache = cache; }
+   void setWallpaperPath(std::string wallpaperPath);
++  void setTransparency(bool transparent, float opacity);
+   void setWallpaperFillMode(WallpaperFillMode fillMode);
+   void setWallpaperFillColor(Color fillColor);
+   void setDesktopCapture(std::optional<ScreencopyImage> capture, bool useAsBackground);
+@@ -213,6 +214,8 @@ private:
+   WallpaperFillMode m_wallpaperFillMode = WallpaperFillMode::Crop;
+   Color m_wallpaperFillColor = rgba(0.0F, 0.0F, 0.0F, 0.0F);
+   bool m_wallpaperDirty = false;
++  bool m_isTransparent = false;
++  float m_transparentOpacity = 0.05F;
+   InputDispatcher m_inputDispatcher;
+   std::function<void()> m_onLogin;
+   std::function<void()> m_onCycleLayout;
 diff --git a/src/shell/lockscreen/lockscreen_login_box.cpp b/src/shell/lockscreen/lockscreen_login_box.cpp
 index c1a1d1a..c4c4e83 100644
 --- a/src/shell/lockscreen/lockscreen_login_box.cpp

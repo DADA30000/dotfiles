@@ -10,6 +10,33 @@ use std::thread;
 
 const SOCKET_PATH: &str = "/run/hwcontrol.sock";
 const FAN_MODE_PATH: &str = "/sys/devices/platform/aorus_laptop/fan_mode";
+const AORUS_CHARGE_LIMIT_PATH: &str = "/sys/devices/platform/aorus_laptop/charge_limit";
+
+fn has_battery_cap() -> bool {
+    Path::new(AORUS_CHARGE_LIMIT_PATH).exists()
+        || Path::new("/sys/class/power_supply/BAT1/charge_control_end_threshold").exists()
+        || Path::new("/sys/class/power_supply/BAT0/charge_control_end_threshold").exists()
+}
+
+fn set_battery_cap(cap: u32) -> Result<&'static str, &'static str> {
+    if Path::new(AORUS_CHARGE_LIMIT_PATH).exists() {
+        fs::write(AORUS_CHARGE_LIMIT_PATH, format!("{cap}\n").as_bytes())
+            .map(|()| "ok")
+            .map_err(|_| "write error")
+    } else if let Ok(entries) = fs::read_dir("/sys/class/power_supply") {
+        for entry in entries.flatten() {
+            let threshold_path = entry.path().join("charge_control_end_threshold");
+            if threshold_path.exists() {
+                return fs::write(threshold_path, format!("{cap}\n").as_bytes())
+                    .map(|()| "ok")
+                    .map_err(|_| "write error");
+            }
+        }
+        Err("no battery threshold file found")
+    } else {
+        Err("not supported")
+    }
+}
 
 fn has_fan() -> bool {
     Path::new(FAN_MODE_PATH).exists()
@@ -162,27 +189,37 @@ fn handle_client(mut stream: UnixStream) {
     let mut line = String::new();
     if reader.read_line(&mut line).is_ok() {
         let cmd = line.trim();
-        let response = match cmd {
-            "fan quiet" => set_fan_mode("quiet").unwrap_or("error").to_string(),
-            "fan auto" => set_fan_mode("auto").unwrap_or("error").to_string(),
-            "fan max" => set_fan_mode("max").unwrap_or("error").to_string(),
-            "fan get" => get_fan_mode().to_string(),
+        let response = if cmd.starts_with("battery ") {
+            let val_str = cmd.trim_start_matches("battery ").trim();
+            let val_str = val_str.trim_start_matches("set ").trim();
+            val_str.parse::<u32>().map_or_else(
+                |_| "invalid value".to_string(),
+                |cap| set_battery_cap(cap).unwrap_or("error").to_string(),
+            )
+        } else {
+            match cmd {
+                "fan quiet" => set_fan_mode("quiet").unwrap_or("error").to_string(),
+                "fan auto" => set_fan_mode("auto").unwrap_or("error").to_string(),
+                "fan max" => set_fan_mode("max").unwrap_or("error").to_string(),
+                "fan get" => get_fan_mode().to_string(),
 
-            "nv block" => set_nv_blocked(true).unwrap_or("error").to_string(),
-            "nv unblock" => set_nv_blocked(false).unwrap_or("error").to_string(),
-            "nv status" => get_nv_status().to_string(),
+                "nv block" => set_nv_blocked(true).unwrap_or("error").to_string(),
+                "nv unblock" => set_nv_blocked(false).unwrap_or("error").to_string(),
+                "nv status" => get_nv_status().to_string(),
 
-            "ryzen max" | "ryzen unlock" => set_ryzen_max().unwrap_or("error").to_string(),
-            "ryzen get" => get_ryzen_limits(),
+                "ryzen max" | "ryzen unlock" => set_ryzen_max().unwrap_or("error").to_string(),
+                "ryzen get" => get_ryzen_limits(),
 
-            "check" => format!(
-                "has_fan:{} has_nv:{} has_ryzen:{}",
-                usize::from(has_fan()),
-                usize::from(has_nv()),
-                usize::from(has_ryzen()),
-            ),
-            "ping" => "pong".to_string(),
-            _ => "unknown command".to_string(),
+                "check" => format!(
+                    "has_fan:{} has_nv:{} has_ryzen:{} has_battery:{}",
+                    usize::from(has_fan()),
+                    usize::from(has_nv()),
+                    usize::from(has_ryzen()),
+                    usize::from(has_battery_cap()),
+                ),
+                "ping" => "pong".to_string(),
+                _ => "unknown command".to_string(),
+            }
         };
         let _ = writeln!(stream, "{response}");
     }

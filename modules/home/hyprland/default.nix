@@ -356,8 +356,10 @@ in
               swallow_regex = "^(kitty|lutris|bottles|alacritty)$";
               swallow_exception_regex = "^(ncspot)$";
               force_default_wallpaper = 2;
+              session_lock_xray = true;
+              session_lock_blur = true;
             };
-            binds.scroll_event_delay = 60;
+            binds.scroll_event_delay = 0;
           };
           bind =
             bind-exec [
@@ -893,8 +895,8 @@ in
           system.monitor.gpu_poll_seconds = 1;
 
           lockscreen = {
-            blurred_desktop = true;
-            blur_intensity = 0.6;
+            transparent = true;
+            background_opacity = 0.05;
           };
 
           shell = {
