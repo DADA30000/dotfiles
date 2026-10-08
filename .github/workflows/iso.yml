@@ -40,16 +40,13 @@ jobs:
         uses: Malix-Labs/GitHub-Action_Nix-Reclaim@main
         with:
           remove-swap: false
-          nix-permissions: true
+          nix-permissions: false
           summary: true
 
       - name: Configure Storage & Sysctls
         run: |
-          sudo mkdir -p /nix/build
-          sudo chown -R $USER /nix/build
-
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0 || true
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
           echo "=== Final Memory & Storage Setup ==="
           swapon --show
@@ -57,13 +54,16 @@ jobs:
           df -h
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: NixOS/nix-installer-action@main
         with:
-          nix_path: nixpkgs=channel:nixos-unstable
-          extra_nix_config: |
-            experimental-features = flakes nix-command
+          extra-conf: |
             auto-optimise-store = true
             build-dir = /nix/build
+
+      - name: Setup Nix Build Directory
+        run: |
+          sudo mkdir -p /nix/build
+          sudo chmod 1777 /nix/build
 
       - name: Build ISO
         run: |
