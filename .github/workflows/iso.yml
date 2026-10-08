@@ -62,7 +62,6 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             experimental-features = flakes nix-command
-            allow-import-from-derivation = true
             auto-optimise-store = true
             build-dir = /nix/build
 
@@ -87,10 +86,10 @@ jobs:
           ) &
           MONITOR_PID=$!
           trap "kill $MONITOR_PID 2>/dev/null || true" EXIT
-          nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 128 -j 32
+          nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 128 -j 8
           nix-collect-garbage
           rm result
-          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128 -j 32
+          nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128 -j 8
           ln -sf result/iso/*.iso nixos.iso
 
       - name: Upload ISO to artifacts
