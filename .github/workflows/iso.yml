@@ -36,15 +36,17 @@ jobs:
 
           swapon --show
 
-      - name: Nothing but Nix (Rampage Mode)
-        uses: wimpysworld/nothing-but-nix@main
+      - name: Nix Reclaim Disk Space
+        uses: Malix-Labs/GitHub-Action_Nix-Reclaim@main
         with:
-          hatchet-protocol: "rampage"
-          witness-carnage: true
+          remove-swap: false
+          nix-permissions: true
+          summary: true
 
       - name: Configure Storage & Sysctls
         run: |
-          sudo mount -o remount,compress=none /nix
+          sudo mkdir -p /nix/build
+          sudo chown -R $USER /nix/build
 
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -52,7 +54,7 @@ jobs:
           echo "=== Final Memory & Storage Setup ==="
           swapon --show
           free -h
-          df -h /nix
+          df -h
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
