@@ -196,6 +196,12 @@ in
               direction = "horizontal";
               action = "workspace";
             }
+            {
+              fingers = 3;
+              direction = "pinch";
+              action = "cursor_zoom";
+              mode = "live";
+            }
           ];
           animation = [
             {
