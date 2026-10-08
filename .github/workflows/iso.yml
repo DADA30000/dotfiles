@@ -63,6 +63,7 @@ jobs:
           extra_nix_config: |
             experimental-features = flakes nix-command
             auto-optimise-store = true
+            build-dir = /nix/build
 
       - name: Build ISO
         run: |
