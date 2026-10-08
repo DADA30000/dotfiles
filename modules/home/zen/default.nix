@@ -365,6 +365,7 @@ in
           nebula-workspace-style = 1;
           # Breaks zen into some kind of weird grid of panels
           # "gfx.wayland.hdr" = true;
+          "zen.library.enabled" = false;
           "mousewheel.with_control.action" = 5;
           "network.dns.preferIPv6" = true;
           "browser.aboutConfig.showWarning" = false;
@@ -379,7 +380,7 @@ in
           "xpinstall.signatures.required" = false;
           "browser.tabs.allow_transparent_browser" = true;
           "browser.tabs.unloadOnLowMemory" = true;
-          "zen.mediacontrols.enabled" = false;
+          #"zen.mediacontrols.enabled" = false;
           "zen.widget.linux.transparency" = true;
           "zen.welcome-screen.seen" = true;
           "zen.view.use-single-toolbar" = false;

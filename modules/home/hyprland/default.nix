@@ -637,10 +637,6 @@ in
               float = true;
               match.title = "Извлечённый текст";
             }
-            #{
-            #  opacity = "0.99 override 0.99 override";
-            #  match.title = "^(QDiskInfo|MainPicker)$";
-            #}
             {
               float = true;
               match = {
@@ -651,7 +647,7 @@ in
           ];
           permission = [
             {
-              binary = lib.escapeRegex "${pkgs.sunshine}/bin/sunshine";
+              binary = lib.escapeRegex "${pkgs.sunshine}/bin/.sunshine-wrapped";
               type = "screencopy";
               mode = "allow";
             }

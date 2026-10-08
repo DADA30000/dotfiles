@@ -48,7 +48,6 @@ let
 
     proton-umu-10 = {
       displayName = "Proton UMU 10";
-      default = true;
       pkg = pkgs.stdenv.mkDerivation (finalAttrs: {
         name = "UMU-Proton";
         version = "10.0-4";
@@ -99,6 +98,7 @@ let
     };
 
     proton-ge-latest = {
+      default = true;
       displayName = "Proton GE (Latest)";
       pkg = pkgs.proton-ge-bin.steamcompattool;
     };
