@@ -279,10 +279,12 @@ in
 
     kernelPackages =
       let
+        # Filter candidates: matches versioned kernels and testing/rc variants
         zfsCompatibleKernelPackages = lib.filterAttrs (
           name: kernelPackages:
-          (builtins.match "linux_[0-9]+_[0-9]+" name) != null
+          (builtins.match "linux_([0-9]+_[0-9]+.*|testing.*)" name) != null
           && (builtins.tryEval kernelPackages).success
+          && kernelPackages ? ${config.boot.zfs.package.kernelModuleAttribute}
           && (!kernelPackages.${config.boot.zfs.package.kernelModuleAttribute}.meta.broken)
         ) pkgs.linuxKernel.packages;
       in

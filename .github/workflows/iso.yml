@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure Swap & ZRAM
         run: |
@@ -58,12 +58,6 @@ jobs:
         with:
           extra-conf: |
             auto-optimise-store = true
-            build-dir = /nix/build
-
-      - name: Setup Nix Build Directory
-        run: |
-          sudo mkdir -p /nix/build
-          sudo chmod 1777 /nix/build
 
       - name: Build ISO
         run: |
