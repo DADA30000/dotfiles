@@ -85,6 +85,9 @@ jobs:
           ) &
           MONITOR_PID=$!
           trap "kill $MONITOR_PID 2>/dev/null || true" EXIT
+          nix build .#nixosConfigurations.iso.config.system.build.toplevel --fallback --max-substitution-jobs 128 -j 32
+          nix-collect-garbage
+          rm result
           nix build .#nixosConfigurations.iso.config.system.build.isoImage --fallback --max-substitution-jobs 128 -j 32
           ln -sf result/iso/*.iso nixos.iso
 
