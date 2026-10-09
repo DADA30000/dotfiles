@@ -2805,7 +2805,13 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
         return;
     };
     let line = cgroup_content.lines().next().unwrap_or("");
-    let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
+    let mut rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
+    while let Some(parent) = rel_path.strip_suffix("/helpers") {
+        rel_path = parent;
+    }
+    while let Some(parent) = rel_path.strip_suffix("/inside") {
+        rel_path = parent;
+    }
     if scope_matches_app(rel_path, cfg) {
         return;
     }
@@ -2854,9 +2860,15 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
         return;
     };
     let line = cgroup_content.lines().next().unwrap_or("");
-    let rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
+    let mut rel_path = line.strip_prefix("0::").unwrap_or(line).trim();
     if rel_path.is_empty() || rel_path == "/" {
         return;
+    }
+    while let Some(parent) = rel_path.strip_suffix("/helpers") {
+        rel_path = parent;
+    }
+    while let Some(parent) = rel_path.strip_suffix("/inside") {
+        rel_path = parent;
     }
 
     if !scope_matches_app(rel_path, cfg) {
@@ -2874,6 +2886,10 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
     let _ = fs::create_dir_all(&helpers_dir);
     let _ = fs::create_dir_all(&inside_dir);
 
+    let root_procs = read_pids_from_file(&cgroup_path.join("cgroup.procs"));
+    for p in root_procs {
+        let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{p}\n"));
+    }
     let pid = unsafe { getpid() };
     let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{pid}\n"));
 
