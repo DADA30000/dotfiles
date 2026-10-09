@@ -2716,6 +2716,15 @@ fn parse_child_pid_from_info(buf: &[u8]) -> Option<u32> {
     num_str.parse().ok()
 }
 
+fn write_bwrap_info(app_id: &str, data: &[u8]) {
+    let instance_id = format!("nixpak-app-{app_id}");
+    let uid = libc_getuid();
+    let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
+    let flatpak_dir = PathBuf::from(format!("{runtime_base}/.flatpak/{instance_id}"));
+    let _ = fs::create_dir_all(&flatpak_dir);
+    let _ = fs::write(flatpak_dir.join("bwrapinfo.json"), data);
+}
+
 fn handle_pasta_sync(
     pasta_sync_fds: Option<([i32; 2], [i32; 2])>,
     cfg: &SandboxConfig,
@@ -2742,12 +2751,7 @@ fn handle_pasta_sync(
 
     let runner_pid = parse_child_pid_from_info(&data).unwrap_or(0);
     if runner_pid > 0 {
-        let instance_id = format!("nixpak-app-{}", cfg.app_id);
-        let uid = libc_getuid();
-        let runtime_base =
-            env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
-        let flatpak_dir = PathBuf::from(format!("{runtime_base}/.flatpak/{instance_id}"));
-        let _ = fs::write(flatpak_dir.join("bwrapinfo.json"), &data);
+        write_bwrap_info(&cfg.app_id, &data);
     }
 
     let pasta_child = if runner_pid > 0 {
@@ -2864,7 +2868,9 @@ fn spawn_bwrap_and_get_runner(
         if n > 0
             && let Ok(n_usize) = usize::try_from(n)
         {
-            parse_child_pid_from_info(&info_buf[..n_usize]).unwrap_or(0)
+            let data = &info_buf[..n_usize];
+            write_bwrap_info(&cfg.app_id, data);
+            parse_child_pid_from_info(data).unwrap_or(0)
         } else {
             0
         }
