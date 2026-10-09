@@ -1021,6 +1021,20 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
     }
     let _ = stream.flush();
 
+    let is_helper = (cfg.flags & FLAG_HELPER) != 0;
+    if !is_helper && let Ok(cgroup) = env::var("MY_CGROUP") {
+        let mut pid_bytes = [0u8; 4];
+        if stream.read_exact(&mut pid_bytes).is_ok() {
+            let child_pid = i32::from_le_bytes(pid_bytes);
+            if child_pid > 0 {
+                let inside_procs = format!("{cgroup}/inside/cgroup.procs");
+                let _ = fs::write(inside_procs, format!("{child_pid}\n"));
+            }
+            let _ = stream.write_all(&[1u8]);
+            let _ = stream.flush();
+        }
+    }
+
     if !is_cli {
         return Some(0);
     }
@@ -2472,6 +2486,7 @@ fn monitor_scope_and_cleanup(
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
+        let helpers_path = PathBuf::from(&cgroup_path).join("helpers/cgroup.procs");
         let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
@@ -2511,18 +2526,16 @@ fn monitor_scope_and_cleanup(
         let mut monitored = std::collections::HashSet::new();
 
         loop {
-            let current_pids = read_pids_from_file(&procs_path);
+            let inside_pids = read_pids_from_file(&procs_path);
+            let helpers_pids = read_pids_from_file(&helpers_path);
 
-            if (runner_i32 > 0 && !current_pids.contains(&runner_i32))
-                || (has_seen_apps && current_pids.len() <= 1)
+            if (runner_i32 > 0 && !helpers_pids.contains(&runner_i32))
+                || (has_seen_apps && inside_pids.is_empty())
             {
                 break;
             }
 
-            for &pid in &current_pids {
-                if pid == runner_i32 {
-                    continue;
-                }
+            for &pid in &inside_pids {
                 has_seen_apps = true;
                 if monitored.contains(&pid) {
                     continue;
@@ -2942,8 +2955,8 @@ fn main() {
     if let Ok(cgroup) = env::var("MY_CGROUP")
         && runner_pid > 0
     {
-        let inside_procs = format!("{cgroup}/inside/cgroup.procs");
-        let _ = fs::write(inside_procs, format!("{runner_pid}\n"));
+        let helpers_procs = format!("{cgroup}/helpers/cgroup.procs");
+        let _ = fs::write(helpers_procs, format!("{runner_pid}\n"));
     }
 
     if runner_pid > 0 {

@@ -435,6 +435,9 @@ let
               ;;
           esac
 
+          mkdir -p "$MY_CGROUP/helpers" "$MY_CGROUP/inside"
+          echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
+
           export START_TIME=$(date +%s%N)
           export APP_ID="${appId}"
 

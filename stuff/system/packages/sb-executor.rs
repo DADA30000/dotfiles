@@ -159,6 +159,9 @@ unsafe extern "C" {
     fn syscall(number: i64, ...) -> i64;
     fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn close(fd: i32) -> i32;
+    fn pipe(pipefd: *mut i32) -> i32;
+    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
+    fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn fork() -> i32;
     fn execvp(file: *const i8, argv: *const *const i8) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
@@ -453,6 +456,28 @@ fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
     }
 }
 
+fn print_startup_timing(payload: &ExecPayload) {
+    if !HAS_PRINTED_STARTUP.swap(true, Ordering::AcqRel)
+        && let Some(item) = payload.env.iter().find(|e| e.starts_with("START_TIME="))
+        && let Some((_, start_str)) = item.split_once('=')
+        && let Ok(start_ns) = start_str.trim().parse::<u128>()
+    {
+        let now_ns = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        if now_ns >= start_ns {
+            let elapsed_ms = (now_ns - start_ns) / 1_000_000;
+            let app_id = payload
+                .env
+                .iter()
+                .find(|e| e.starts_with("APP_ID="))
+                .and_then(|e| e.split_once('='))
+                .map_or("sandbox", |(_, id)| id);
+            println!("[{app_id}] Startup: {elapsed_ms} ms");
+        }
+    }
+}
+
 fn handle_connection(
     mut stream: UnixStream,
     use_landlock: bool,
@@ -509,6 +534,11 @@ fn handle_connection(
     let is_helper = (header.flags & FLAG_HELPER) != 0;
     let is_cli = (header.flags & FLAG_WAIT_EXIT) != 0;
 
+    let mut sync_pipe = [0i32; 2];
+    if !is_helper {
+        unsafe { pipe(sync_pipe.as_mut_ptr()) };
+    }
+
     if !is_helper {
         ACTIVE_CHILDREN.fetch_add(1, Ordering::Release);
         HAS_LAUNCHED.store(true, Ordering::Release);
@@ -522,37 +552,43 @@ fn handle_connection(
         );
         if !is_helper {
             ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
+            unsafe {
+                close(sync_pipe[0]);
+                close(sync_pipe[1]);
+            };
         }
         return;
     }
 
     if child_pid == 0 {
         unsafe { close(listener_fd) };
+        if !is_helper {
+            unsafe {
+                close(sync_pipe[1]);
+                let mut b = [0u8; 1];
+                read(sync_pipe[0], b.as_mut_ptr().cast(), 1);
+                close(sync_pipe[0]);
+            };
+        }
         drop(stream);
         run_child_process(&payload, &fds, is_cli, use_landlock);
     }
 
+    if !is_helper {
+        unsafe { close(sync_pipe[0]) };
+        let _ = stream.write_all(&child_pid.to_le_bytes());
+        let _ = stream.flush();
+        let mut ack = [0u8; 1];
+        let _ = stream.read_exact(&mut ack);
+        unsafe {
+            let _ = write(sync_pipe[1], [1u8].as_ptr().cast(), 1);
+            close(sync_pipe[1]);
+        };
+    }
+
     drop(fds);
 
-    if !HAS_PRINTED_STARTUP.swap(true, Ordering::AcqRel)
-        && let Some(item) = payload.env.iter().find(|e| e.starts_with("START_TIME="))
-        && let Some((_, start_str)) = item.split_once('=')
-        && let Ok(start_ns) = start_str.trim().parse::<u128>()
-    {
-        let now_ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        if now_ns >= start_ns {
-            let elapsed_ms = (now_ns - start_ns) / 1_000_000;
-            let app_id = payload
-                .env
-                .iter()
-                .find(|e| e.starts_with("APP_ID="))
-                .and_then(|e| e.split_once('='))
-                .map_or("sandbox", |(_, id)| id);
-            println!("[{app_id}] Startup: {elapsed_ms} ms");
-        }
-    }
+    print_startup_timing(&payload);
 
     if is_cli {
         monitor_cli_child(stream, child_pid);
