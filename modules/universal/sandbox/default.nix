@@ -205,6 +205,7 @@ let
       wayland ? "off", # "off" | "sandboxed" | "passthrough"
       x11 ? "off", # "off" | "sandboxed" | "passthrough"
       use_landlock ? true,
+      use_flatpak_info ? true,
       portals_for_files ? true,
       sandbox_shm ? true,
       sandbox_tmp ? true,
@@ -309,6 +310,7 @@ let
           (if sandbox_tmp then "sandboxed" else "passthrough")
         ]
         landlockFlag
+        (lib.optional (!use_flatpak_info) "--no-flatpak-info")
         portalsFlag
         portalEnvFlags
         (lib.optional (webcam != 0) [

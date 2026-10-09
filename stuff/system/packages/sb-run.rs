@@ -1891,9 +1891,8 @@ fn build_bwrap_command(
             .arg(&host_sesatt)
             .arg(&in_sandbox_sesatt);
 
-        let host_doc = format!("{p}/doc");
+        let host_doc = format!("{p}/doc/by-app/{}", cfg.app_id);
         let in_sandbox_doc = format!("{runtime}/doc");
-        let _ = fs::create_dir_all(&host_doc);
         cmd.arg("--bind-try").arg(&host_doc).arg(&in_sandbox_doc);
     }
 

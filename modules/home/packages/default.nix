@@ -232,6 +232,7 @@ let
         gpu = true;
         wayland = "sandboxed";
         use_landlock = false;
+        use_flatpak_info = false;
         sandbox_tmp = false;
         sandbox_shm = false;
         additional_outside_commands = ''
@@ -265,6 +266,26 @@ let
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                 ];
                 rw = lib.mkAfter [
+                  [
+                    (sloth.mkdir (
+                      sloth.concat [
+                        "/mnt/data-nvme/"
+                        (sloth.env "USER")
+                        "/SteamLibrary"
+                      ]
+                    ))
+                    "/mnt/steam-nvme"
+                  ]
+                  [
+                    (sloth.mkdir (
+                      sloth.concat [
+                        "/mnt/data-hdd/"
+                        (sloth.env "USER")
+                        "/SteamLibrary"
+                      ]
+                    ))
+                    "/mnt/steam-hdd"
+                  ]
                   (sloth.mkdir (
                     sloth.concat [
                       "/mnt/data-nvme/"
