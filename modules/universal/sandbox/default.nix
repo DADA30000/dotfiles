@@ -351,6 +351,13 @@ let
               ;;
           esac
 
+          mkdir -p "$MY_CGROUP/helpers"
+          echo $$ > "$MY_CGROUP/helpers/cgroup.procs"
+          echo "+memory +pids +cpu +io" > "$(dirname "$MY_CGROUP")/cgroup.subtree_control" 2>/dev/null || true
+          echo "+memory +pids +cpu +io" > "$MY_CGROUP/cgroup.subtree_control" 2>/dev/null || true
+          mkdir -p "$MY_CGROUP/inside"
+          export MY_CGROUP MY_SCOPE
+
           export START_TIME=$(date +%s%N)
           export APP_ID="${appId}"
 
@@ -359,9 +366,10 @@ let
           mkdir -p "$SANDBOXED_RUNTIME_DIR"
 
           ${additional_outside_commands}
-          exec sb-run ${lib.escapeShellArgs sbRunFlags} -- "$0" "$@"
+          exec sb-run ${lib.escapeShellArgs sbRunFlags} \
+            ${lib.optionalString (additional_inside_commands != "") "--inside-init ${lib.escapeShellArg additional_inside_commands}"} \
+            -- "$TARGET" "$@"
         else
-          ${additional_inside_commands}
           exec "$TARGET" "$@"
         fi
       '';

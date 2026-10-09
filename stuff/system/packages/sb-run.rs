@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::os::unix::net::UnixStream;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, exit};
@@ -44,6 +44,130 @@ const CFG_FLATPAK_INFO: u32 = 1 << 9;
 const CFG_SCOPE: u32 = 1 << 10;
 
 const TIOCGWINSZ: usize = 0x5413;
+const SYS_PIDFD_OPEN: i64 = 434;
+const SO_PEERCRED: i32 = 17;
+const EPOLL_CTL_ADD: i32 = 1;
+const EPOLL_CTL_DEL: i32 = 2;
+const EPOLLIN: u32 = 1;
+const EPOLLPRI: u32 = 0x0002;
+const EPOLLERR: u32 = 0x0008;
+
+const ALLOWED_ENV_VARS: &[&str] = &[
+    "HOME",
+    "XDG_RUNTIME_DIR",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CACHE_HOME",
+    "USER",
+];
+
+const RO_SYSTEM_PATHS: &[&str] = &[
+    "/nix/store",
+    "/bin",
+    "/usr/bin",
+    "/run/current-system",
+    "/etc/xdg",
+    "/etc/fonts",
+    "/etc/localtime",
+    "/etc/profiles",
+    "/etc/static",
+    "/nix/profile",
+    "/nix/var/nix/profiles",
+    "/etc/ssl/certs",
+    "/etc/static/ssl/certs",
+    "/etc/pki",
+    "/etc/hosts",
+    "/etc/nsswitch.conf",
+    "/etc/machine-id",
+    "/etc/os-release",
+    "/etc/mime.types",
+    "/etc/passwd",
+    "/etc/group",
+    "/sys/class/hwmon",
+    "/etc/xdg/openxr",
+];
+
+const USER_THEME_SUBPATHS: &[&str] = &[
+    ".nix-profile",
+    ".local/state/nix/profile",
+    ".icons",
+    ".themes",
+];
+
+const XDG_CONFIG_SUBPATHS: &[&str] = &[
+    "user-dirs.dirs",
+    "user-dirs.conf",
+    "gtk-4.0",
+    "gtk-3.0",
+    "qt6ct",
+    "qt5ct",
+    "Kvantum",
+    "starship.toml",
+    "fastfetch",
+    "openvr",
+    "openxr",
+];
+
+const XDG_DATA_SUBPATHS: &[&str] = &["zsh/.zshenv", "zsh/.zshrc", "icons", "themes"];
+
+const NVIDIA_NODES: &[&str] = &[
+    "/dev/nvidia0",
+    "/dev/nvidiactl",
+    "/dev/nvidia-modeset",
+    "/dev/nvidia-uvm",
+    "/dev/nvidia-uvm-tools",
+];
+
+const DEFAULT_DBUS_TALKS: &[&str] = &[
+    "org.freedesktop.portal.Desktop",
+    "org.freedesktop.portal.Documents",
+    "org.freedesktop.portal.Secret",
+    "org.freedesktop.Notifications",
+    "org.freedesktop.FileManager1",
+    "org.freedesktop.ScreenSaver",
+    "org.gnome.Mutter.IdleMonitor",
+    "org.kde.StatusNotifierWatcher",
+    "org.ayatana.indicator.application",
+    "com.canonical.AppMenu.Registrar",
+    "org.mpris.MediaPlayer2.Player",
+];
+
+const DEFAULT_DBUS_OWNS: &[&str] = &[
+    "org.kde.StatusNotifierItem.*",
+    "org.kde.StatusNotifierItem",
+    "org.mpris.MediaPlayer2.*",
+];
+
+const PASTA_DEFAULT_ARGS: &[&str] = &[
+    "--config-net",
+    "--no-dhcp",
+    "--no-dhcpv6",
+    "--no-ra",
+    "--no-map-gw",
+    "-t",
+    "none",
+    "-u",
+    "none",
+    "-T",
+    "none",
+    "-U",
+    "none",
+    "--ns-ifname",
+    "eth0",
+    "--address",
+    "192.168.1.100",
+    "--netmask",
+    "255.255.255.0",
+    "--gateway",
+    "192.168.1.1",
+    "--dns-forward",
+    "192.168.1.1",
+    "--search",
+    "none",
+];
+
+const DEFAULT_FLATPAK_POLICY_BUS: &str = "\n[Session Bus Policy]\norg.kde.StatusNotifierWatcher=talk\norg.kde.StatusNotifierItem.*=own\norg.kde.StatusNotifierItem=own\norg.ayatana.indicator.application=talk\ncom.canonical.AppMenu.Registrar=talk\norg.freedesktop.Notifications=talk\norg.freedesktop.portal.Desktop=talk\norg.freedesktop.portal.Secret=talk\norg.freedesktop.portal.Documents=talk\norg.freedesktop.FileManager1=talk\norg.freedesktop.ScreenSaver=talk\norg.gnome.Mutter.IdleMonitor=talk\norg.mpris.MediaPlayer2.Player=talk\norg.mpris.MediaPlayer2.*=own\n";
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -295,6 +419,8 @@ struct SandboxConfig {
     xwayland_satellite_bin: Option<PathBuf>,
     custom_uid: Option<u32>,
     custom_gid: Option<u32>,
+    inside_init: Vec<String>,
+    is_helper_request: bool,
     command: Vec<String>,
 }
 
@@ -337,22 +463,13 @@ fn parse_bridge_arg(arg: &str) -> Option<BridgeRule> {
 }
 
 fn expand_env_path(path_str: &str) -> String {
-    const ALLOWED_VARS: &[&str] = &[
-        "HOME",
-        "XDG_RUNTIME_DIR",
-        "XDG_CONFIG_HOME",
-        "XDG_DATA_HOME",
-        "XDG_STATE_HOME",
-        "XDG_CACHE_HOME",
-        "USER",
-    ];
     let mut result = path_str.to_string();
     if result.starts_with("~/")
         && let Ok(home) = env::var("HOME")
     {
         result = format!("{home}/{}", &result[2..]);
     }
-    for &k in ALLOWED_VARS {
+    for &k in ALLOWED_ENV_VARS {
         if let Ok(v) = env::var(k) {
             let var_dollar = format!("${k}");
             let var_braced = format!("${{{k}}}");
@@ -761,6 +878,11 @@ fn parse_command_and_env_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut u
             *i += 2;
             true
         }
+        "--inside-init" if *i + 1 < args.len() => {
+            cfg.inside_init.push(args[*i + 1].clone());
+            *i += 2;
+            true
+        }
         "--env" if *i + 1 < args.len() => {
             cfg.extra_env.push(args[*i + 1].clone());
             *i += 2;
@@ -998,7 +1120,10 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
 
     let is_cli = (cfg.flags & CFG_IS_CLI) != 0;
     let is_tty = unsafe { isatty(0) == 1 };
-    let mut flags = cfg.flags & FLAG_HELPER;
+    let mut flags = 0u32;
+    if cfg.is_helper_request {
+        flags |= FLAG_HELPER;
+    }
     if is_cli {
         flags |= FLAG_WAIT_EXIT;
     }
@@ -1194,30 +1319,7 @@ fn print_help_and_exit() -> ! {
 }
 
 fn add_base_ro_binds(cmd: &mut Command) {
-    let ro_system_paths = [
-        "/nix/store",
-        "/bin",
-        "/usr/bin",
-        "/run/current-system",
-        "/etc/xdg",
-        "/etc/fonts",
-        "/etc/localtime",
-        "/etc/profiles",
-        "/etc/static",
-        "/etc/ssl/certs",
-        "/etc/pki",
-        "/etc/hosts",
-        "/etc/nsswitch.conf",
-        "/etc/machine-id",
-        "/etc/os-release",
-        "/etc/mime.types",
-        "/etc/passwd",
-        "/etc/group",
-        "/sys/class/hwmon",
-        "/etc/xdg/openxr",
-    ];
-
-    for path in ro_system_paths {
+    for path in RO_SYSTEM_PATHS {
         if Path::new(path).exists() {
             cmd.arg("--ro-bind-try").arg(path).arg(path);
         }
@@ -1225,43 +1327,29 @@ fn add_base_ro_binds(cmd: &mut Command) {
 }
 
 fn add_user_theme_binds(cmd: &mut Command, home: &str, xdg_config: &str, xdg_data: &str) {
-    let theme_paths = [
-        format!("{home}/.icons"),
-        format!("{home}/.themes"),
-        format!("{xdg_config}/user-dirs.dirs"),
-        format!("{xdg_config}/user-dirs.conf"),
-        format!("{xdg_config}/gtk-4.0"),
-        format!("{xdg_config}/gtk-3.0"),
-        format!("{xdg_config}/qt6ct"),
-        format!("{xdg_config}/qt5ct"),
-        format!("{xdg_config}/Kvantum"),
-        format!("{xdg_config}/starship.toml"),
-        format!("{xdg_config}/fastfetch"),
-        format!("{xdg_data}/zsh/.zshenv"),
-        format!("{xdg_data}/zsh/.zshrc"),
-        format!("{xdg_data}/icons"),
-        format!("{xdg_data}/themes"),
-        format!("{xdg_config}/openvr"),
-        format!("{xdg_config}/openxr"),
-    ];
-
-    for path in theme_paths {
-        if Path::new(&path).exists() {
-            cmd.arg("--ro-bind-try").arg(&path).arg(&path);
+    for sub in USER_THEME_SUBPATHS {
+        let p = format!("{home}/{sub}");
+        if Path::new(&p).exists() {
+            cmd.arg("--ro-bind-try").arg(&p).arg(&p);
+        }
+    }
+    for sub in XDG_CONFIG_SUBPATHS {
+        let p = format!("{xdg_config}/{sub}");
+        if Path::new(&p).exists() {
+            cmd.arg("--ro-bind-try").arg(&p).arg(&p);
+        }
+    }
+    for sub in XDG_DATA_SUBPATHS {
+        let p = format!("{xdg_data}/{sub}");
+        if Path::new(&p).exists() {
+            cmd.arg("--ro-bind-try").arg(&p).arg(&p);
         }
     }
 }
 
 fn add_gpu_binds(cmd: &mut Command) {
     cmd.arg("--dev-bind").arg("/dev/dri").arg("/dev/dri");
-    let nvidia_nodes = [
-        "/dev/nvidia0",
-        "/dev/nvidiactl",
-        "/dev/nvidia-modeset",
-        "/dev/nvidia-uvm",
-        "/dev/nvidia-uvm-tools",
-    ];
-    for node in nvidia_nodes {
+    for node in NVIDIA_NODES {
         if Path::new(node).exists() {
             cmd.arg("--dev-bind").arg(node).arg(node);
         }
@@ -1532,23 +1620,12 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
         let _ = writeln!(content, "shared={};", shared.join(";"));
     }
 
-    let mut fs_list = vec!["host".to_string(), "xdg-run/media".to_string()];
-    for rw in &cfg.rw_binds {
-        let src = rw.split_once(':').map_or(rw.as_str(), |(s, _)| s);
-        fs_list.push(src.to_string());
-    }
-    for ro in &cfg.ro_binds {
-        let src = ro.split_once(':').map_or(ro.as_str(), |(s, _)| s);
-        fs_list.push(format!("{src}:ro"));
-    }
-    let _ = writeln!(content, "filesystems={};", fs_list.join(";"));
-
     let _ = write!(
         content,
         "\n[Instance]\ninstance-id={instance_id}\napp-path=/app\nruntime-path=/usr\n"
     );
 
-    content.push_str("\n[Session Bus Policy]\norg.kde.StatusNotifierWatcher=talk\norg.kde.StatusNotifierItem.*=own\norg.kde.StatusNotifierItem=own\norg.ayatana.indicator.application=talk\ncom.canonical.AppMenu.Registrar=talk\norg.freedesktop.Notifications=talk\norg.freedesktop.portal.Desktop=talk\norg.freedesktop.portal.Secret=talk\norg.freedesktop.portal.Documents=talk\norg.freedesktop.FileManager1=talk\norg.freedesktop.ScreenSaver=talk\norg.gnome.Mutter.IdleMonitor=talk\norg.mpris.MediaPlayer2.Player=talk\norg.mpris.MediaPlayer2.*=own\n");
+    content.push_str(DEFAULT_FLATPAK_POLICY_BUS);
 
     for talk in &cfg.dbus_talk {
         let _ = writeln!(content, "{talk}=talk");
@@ -1724,6 +1801,12 @@ fn add_bwrap_executor_args(
     if (cfg.flags & CFG_LANDLOCK) == 0 {
         cmd.arg("--no-landlock");
     }
+
+    for init_cmd in &cfg.inside_init {
+        cmd.arg("--inside-init").arg(init_cmd);
+    }
+    let in_sandbox_migrator = format!("{runtime}/migrator.sock");
+    cmd.arg("--migrator-socket").arg(&in_sandbox_migrator);
 }
 
 fn build_bwrap_command(
@@ -1800,6 +1883,20 @@ fn build_bwrap_command(
     let bin_dir = sandbox_runtime.join("bin");
     let _ = fs::create_dir_all(&bin_dir);
 
+    if let Ok(p) = env::var("XDG_RUNTIME_DIR") {
+        let host_sesatt = format!("{p}/sesatt/{}", cfg.app_id);
+        let in_sandbox_sesatt = format!("{runtime}/sesatt/{}", cfg.app_id);
+        let _ = fs::create_dir_all(&host_sesatt);
+        cmd.arg("--bind-try")
+            .arg(&host_sesatt)
+            .arg(&in_sandbox_sesatt);
+
+        let host_doc = format!("{p}/doc");
+        let in_sandbox_doc = format!("{runtime}/doc");
+        let _ = fs::create_dir_all(&host_doc);
+        cmd.arg("--bind-try").arg(&host_doc).arg(&in_sandbox_doc);
+    }
+
     add_base_ro_binds(&mut cmd);
     add_user_theme_binds(&mut cmd, &home, &xdg_config, &xdg_data);
     add_subsystem_binds(&mut cmd, cfg, &runtime, sandbox_runtime);
@@ -1810,10 +1907,6 @@ fn build_bwrap_command(
         cmd.arg("--ro-bind")
             .arg(&flatpak_info_path)
             .arg("/.flatpak-info");
-        cmd.arg("--setenv")
-            .arg("FLATPAK_METADATA_FILE")
-            .arg("/.flatpak-info");
-        cmd.arg("--setenv").arg("FLATPAK_ID").arg(&cfg.app_id);
     }
 
     if (cfg.flags & CFG_PORTALS) != 0 {
@@ -1950,7 +2043,7 @@ fn setup_bridge_from_sandbox(
     let bridge_cfg = SandboxConfig {
         app_id: cfg.app_id.clone(),
         command: listen_cmd,
-        flags: FLAG_HELPER,
+        is_helper_request: true,
         ..Default::default()
     };
     let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
@@ -1979,7 +2072,7 @@ fn setup_bridge_to_sandbox(
     let bridge_cfg = SandboxConfig {
         app_id: cfg.app_id.clone(),
         command: pass_cmd,
-        flags: FLAG_HELPER,
+        is_helper_request: true,
         ..Default::default()
     };
     let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
@@ -2152,33 +2245,13 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
 }
 
 fn add_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
-    let default_talks = [
-        "org.freedesktop.portal.Desktop",
-        "org.freedesktop.portal.Documents",
-        "org.freedesktop.portal.Secret",
-        "org.freedesktop.Notifications",
-        "org.freedesktop.FileManager1",
-        "org.freedesktop.ScreenSaver",
-        "org.gnome.Mutter.IdleMonitor",
-        "org.kde.StatusNotifierWatcher",
-        "org.ayatana.indicator.application",
-        "com.canonical.AppMenu.Registrar",
-        "org.mpris.MediaPlayer2.Player",
-    ];
-
-    let default_owns = [
-        "org.kde.StatusNotifierItem.*",
-        "org.kde.StatusNotifierItem",
-        "org.mpris.MediaPlayer2.*",
-    ];
-
-    for talk in default_talks {
+    for talk in DEFAULT_DBUS_TALKS {
         proxy_cmd.arg(format!("--talk={talk}"));
     }
     for talk in &cfg.dbus_talk {
         proxy_cmd.arg(format!("--talk={talk}"));
     }
-    for own in default_owns {
+    for own in DEFAULT_DBUS_OWNS {
         proxy_cmd.arg(format!("--own={own}"));
     }
     for own in &cfg.dbus_own {
@@ -2287,33 +2360,7 @@ fn start_pasta(cfg: &SandboxConfig, child_pid: u32) -> Option<Child> {
     );
 
     let mut cmd = Command::new(pasta_bin);
-    cmd.args([
-        "--config-net",
-        "--no-dhcp",
-        "--no-dhcpv6",
-        "--no-ra",
-        "--no-map-gw",
-        "-t",
-        "none",
-        "-u",
-        "none",
-        "-T",
-        "none",
-        "-U",
-        "none",
-        "--ns-ifname",
-        "eth0",
-        "--address",
-        "192.168.1.100",
-        "--netmask",
-        "255.255.255.0",
-        "--gateway",
-        "192.168.1.1",
-        "--dns-forward",
-        "192.168.1.1",
-        "--search",
-        "none",
-    ]);
+    cmd.args(PASTA_DEFAULT_ARGS);
     cmd.arg(child_pid.to_string());
     match cmd.spawn() {
         Ok(child) => Some(child),
@@ -2372,6 +2419,7 @@ fn cleanup_session(
     let _ = fs::remove_file(paths.runtime.join("wayland-secure.lock"));
     cleanup_bridges(bridge_pids, &paths.runtime, cfg.bridges.len());
     let _ = fs::remove_file(&paths.ipc_sock);
+    let _ = fs::remove_file(paths.runtime.join("migrator.sock"));
     let _ = fs::remove_file(paths.runtime.join("sing-box.sock"));
     cleanup_token_for_app(&cfg.app_id);
     let instance_id = format!("nixpak-app-{}", cfg.app_id);
@@ -2390,13 +2438,6 @@ fn cleanup_session(
             .spawn();
     }
 }
-
-const SYS_PIDFD_OPEN: i64 = 434;
-const EPOLL_CTL_ADD: i32 = 1;
-const EPOLL_CTL_DEL: i32 = 2;
-const EPOLLIN: u32 = 1;
-const EPOLLPRI: u32 = 0x0002;
-const EPOLLERR: u32 = 0x0008;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -2480,13 +2521,100 @@ fn read_pids_from_file(path: &Path) -> std::collections::HashSet<i32> {
         .collect()
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct UCred {
+    pid: i32,
+    uid: u32,
+    gid: u32,
+}
+
+fn handle_migration(listener: &UnixListener, inside_procs: &Path) -> Option<i32> {
+    match listener.accept() {
+        Ok((mut stream, _)) => {
+            let mut ucred = UCred::default();
+            let mut len = u32::try_from(size_of::<UCred>()).unwrap_or(0);
+            let fd = stream.as_raw_fd();
+            let res = unsafe {
+                getsockopt(
+                    fd,
+                    SOL_SOCKET,
+                    SO_PEERCRED,
+                    (&raw mut ucred).cast(),
+                    &raw mut len,
+                )
+            };
+            if res == 0 && ucred.pid > 0 {
+                let _ = fs::write(inside_procs, format!("{}\n", ucred.pid));
+                let _ = stream.write_all(b"G");
+                let _ = stream.flush();
+                Some(ucred.pid)
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+struct MonitorContext<'a> {
+    epoll: &'a Epoll,
+    cgroup_events_fd: i32,
+    child_fd: i32,
+    migrator_fd: i32,
+    migrator_listener: Option<&'a UnixListener>,
+    procs_path: &'a Path,
+}
+
+fn process_epoll_events(
+    ctx: &MonitorContext<'_>,
+    events: &[EpollEvent],
+    monitored: &mut std::collections::HashSet<i32>,
+) -> bool {
+    for event in events {
+        let Ok(fd) = i32::try_from(event.data) else {
+            continue;
+        };
+        if fd == ctx.child_fd {
+            return true;
+        }
+        if ctx.migrator_fd >= 0 && fd == ctx.migrator_fd {
+            if let Some(l) = ctx.migrator_listener
+                && let Some(pid) = handle_migration(l, ctx.procs_path)
+                && let Some(pfd) = pidfd_open(pid)
+            {
+                if ctx.epoll.add(pfd) {
+                    monitored.insert(pid);
+                } else {
+                    unsafe { close(pfd) };
+                }
+            }
+            continue;
+        }
+        if fd == ctx.cgroup_events_fd {
+            let mut drain_buf = [0u8; 256];
+            unsafe {
+                lseek(ctx.cgroup_events_fd, 0, 0);
+                read(
+                    ctx.cgroup_events_fd,
+                    drain_buf.as_mut_ptr().cast(),
+                    drain_buf.len(),
+                );
+            };
+            continue;
+        }
+        ctx.epoll.del_and_close(fd);
+    }
+    false
+}
+
 fn monitor_scope_and_cleanup(
     cfg: &SandboxConfig,
     paths: &SandboxPaths,
     bridge_pids: &[i32],
     helpers: HelperProcesses,
     child: &mut Child,
-    runner_pid: u32,
+    migrator_listener: Option<&UnixListener>,
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
@@ -2514,17 +2642,25 @@ fn monitor_scope_and_cleanup(
             epoll.add_pri(cgroup_events_fd);
         }
 
-        let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
-        let runner_fd = pidfd_open(runner_i32).unwrap_or(-1);
-        if runner_fd >= 0 {
-            epoll.add(runner_fd);
-        }
-
         let child_i32 = i32::try_from(child.id()).unwrap_or(0);
         let child_fd = pidfd_open(child_i32).unwrap_or(-1);
         if child_fd >= 0 {
             epoll.add(child_fd);
         }
+
+        let migrator_fd = migrator_listener.map_or(-1, AsRawFd::as_raw_fd);
+        if migrator_fd >= 0 {
+            epoll.add(migrator_fd);
+        }
+
+        let ctx = MonitorContext {
+            epoll: &epoll,
+            cgroup_events_fd,
+            child_fd,
+            migrator_fd,
+            migrator_listener,
+            procs_path: &procs_path,
+        };
 
         let mut monitored = std::collections::HashSet::new();
 
@@ -2556,30 +2692,7 @@ fn monitor_scope_and_cleanup(
                 Err(_) => break,
             };
 
-            let mut terminate = false;
-            for event in events.iter().take(n) {
-                let Ok(fd) = i32::try_from(event.data) else {
-                    continue;
-                };
-                if fd == runner_fd || fd == child_fd {
-                    terminate = true;
-                    break;
-                }
-                if fd == cgroup_events_fd {
-                    let mut drain_buf = [0u8; 256];
-                    unsafe {
-                        lseek(cgroup_events_fd, 0, 0);
-                        read(
-                            cgroup_events_fd,
-                            drain_buf.as_mut_ptr().cast(),
-                            drain_buf.len(),
-                        );
-                    };
-                    continue;
-                }
-                epoll.del_and_close(fd);
-            }
-            if terminate {
+            if process_epoll_events(&ctx, &events[..n], &mut monitored) {
                 break;
             }
         }
@@ -2910,6 +3023,27 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
     }
 }
 
+fn create_pasta_sync_pipes(network: &str) -> Option<([i32; 2], [i32; 2])> {
+    if network == "sandboxed" {
+        let mut block_fds = [0i32; 2];
+        let mut info_fds = [0i32; 2];
+        let _ = unsafe { pipe(block_fds.as_mut_ptr()) };
+        let _ = unsafe { pipe(info_fds.as_mut_ptr()) };
+        Some((block_fds, info_fds))
+    } else {
+        None
+    }
+}
+
+fn create_extra_info_pipes() -> (Option<i32>, Option<i32>) {
+    let mut fds = [0i32; 2];
+    if unsafe { pipe(fds.as_mut_ptr()) } == 0 {
+        (Some(fds[0]), Some(fds[1]))
+    } else {
+        (None, None)
+    }
+}
+
 fn main() {
     let raw_args: Vec<String> = env::args().collect();
     if raw_args.len() > 1 {
@@ -2927,28 +3061,21 @@ fn main() {
 
     let mut helpers = spawn_initial_helpers(&cfg, &paths.runtime);
 
+    let migrator_sock = paths.runtime.join("migrator.sock");
+    let _ = fs::remove_file(&migrator_sock);
+    let migrator_listener = UnixListener::bind(&migrator_sock).ok();
+    if let Some(ref l) = migrator_listener {
+        let _ = l.set_nonblocking(true);
+    }
+
     let auth_token = create_token_for_app(&cfg.app_id);
     let token_hex = bytes_to_hex(&auth_token);
 
-    let pasta_sync_fds = if cfg.network == "sandboxed" {
-        let mut block_fds = [0i32; 2];
-        let mut info_fds = [0i32; 2];
-        let _ = unsafe { pipe(block_fds.as_mut_ptr()) };
-        let _ = unsafe { pipe(info_fds.as_mut_ptr()) };
-        Some((block_fds, info_fds))
-    } else {
-        None
-    };
-
+    let pasta_sync_fds = create_pasta_sync_pipes(&cfg.network);
     let pasta_sync_pass = pasta_sync_fds.map(|([r_b, _], [_, w_i])| (r_b, w_i));
 
     let (extra_info_r, extra_info_w) = if pasta_sync_fds.is_none() {
-        let mut fds = [0i32; 2];
-        if unsafe { pipe(fds.as_mut_ptr()) } == 0 {
-            (Some(fds[0]), Some(fds[1]))
-        } else {
-            (None, None)
-        }
+        create_extra_info_pipes()
     } else {
         (None, None)
     };
@@ -3003,23 +3130,36 @@ fn main() {
         exit(status);
     }
 
-    if let Ok(cgroup) = env::var("MY_CGROUP")
-        && runner_pid > 0
+    let _ = try_connect_running_sandbox(&paths.ipc_sock, &cfg);
+    if let Ok(ref cgroup) = env::var("MY_CGROUP")
+        && let Some(ref listener) = migrator_listener
     {
-        let inside_procs = format!("{cgroup}/inside/cgroup.procs");
-        let _ = fs::write(inside_procs, format!("{runner_pid}\n"));
+        let inside_procs = PathBuf::from(format!("{cgroup}/inside/cgroup.procs"));
+        let mut pfd = PollFd {
+            fd: listener.as_raw_fd(),
+            events: 1, // POLLIN
+            revents: 0,
+        };
+        if unsafe { poll(&raw mut pfd, 1, 5000) } > 0 {
+            handle_migration(listener, &inside_procs);
+        }
     }
 
-    if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg)
-        && (cfg.flags & CFG_IS_CLI) != 0
-    {
+    if (cfg.flags & CFG_IS_CLI) != 0 {
         let _ = child.kill();
         let _ = child.wait();
         cleanup_session(&cfg, &paths, &bridge_pids, helpers);
-        exit(exit_code);
+        exit(0);
     }
 
-    monitor_scope_and_cleanup(&cfg, &paths, &bridge_pids, helpers, &mut child, runner_pid);
+    monitor_scope_and_cleanup(
+        &cfg,
+        &paths,
+        &bridge_pids,
+        helpers,
+        &mut child,
+        migrator_listener.as_ref(),
+    );
     exit(0);
 }
 
@@ -3043,6 +3183,13 @@ unsafe extern "C" {
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
     fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
     fn execvp(file: *const i8, argv: *const *const i8) -> i32;
+    fn getsockopt(
+        sockfd: i32,
+        level: i32,
+        optname: i32,
+        optval: *mut c_void,
+        optlen: *mut u32,
+    ) -> i32;
 }
 
 #[repr(C)]

@@ -6,10 +6,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::{Command, exit};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-static ACTIVE_CHILDREN: AtomicUsize = AtomicUsize::new(0);
-static HAS_LAUNCHED: AtomicBool = AtomicBool::new(false);
 static HAS_PRINTED_STARTUP: AtomicBool = AtomicBool::new(false);
 
 const IPC_MAGIC: [u8; 4] = *b"SBEX";
@@ -480,6 +478,7 @@ fn handle_connection(
     use_landlock: bool,
     listener_fd: RawFd,
     auth_token: Option<[u8; 16]>,
+    migrator_socket: &str,
 ) {
     let (header, fds) = match recv_header_with_fds(&stream) {
         Ok(res) => res,
@@ -531,26 +530,21 @@ fn handle_connection(
     let is_helper = (header.flags & FLAG_HELPER) != 0;
     let is_cli = (header.flags & FLAG_WAIT_EXIT) != 0;
 
-    if !is_helper {
-        ACTIVE_CHILDREN.fetch_add(1, Ordering::Release);
-        HAS_LAUNCHED.store(true, Ordering::Release);
-    }
-
     let child_pid = unsafe { fork() };
     if child_pid < 0 {
         eprintln!(
             "[sb-executor] fork failed: {}",
             std::io::Error::last_os_error()
         );
-        if !is_helper {
-            ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
-        }
         return;
     }
 
     if child_pid == 0 {
         unsafe { close(listener_fd) };
         drop(stream);
+        if !is_helper && !migrator_socket.is_empty() {
+            migrate_to_inside(migrator_socket);
+        }
         run_child_process(&payload, &fds, is_cli, use_landlock);
     }
 
@@ -560,7 +554,13 @@ fn handle_connection(
 
     if is_cli {
         monitor_cli_child(stream, child_pid);
-        ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
+    }
+}
+
+fn migrate_to_inside(migrator_socket: &str) {
+    if let Ok(mut stream) = UnixStream::connect(migrator_socket) {
+        let mut ack = [0u8; 1];
+        let _ = stream.read_exact(&mut ack);
     }
 }
 
@@ -642,6 +642,8 @@ fn hex_to_16_bytes(hex: &str) -> Result<[u8; 16], ()> {
 struct ExecutorCli {
     socket_path: String,
     ready_pipe: String,
+    migrator_socket: String,
+    inside_init: Vec<String>,
     use_landlock: bool,
     auth_token: Option<[u8; 16]>,
     singbox_bin: String,
@@ -657,6 +659,8 @@ fn parse_executor_cli() -> ExecutorCli {
     let args: Vec<String> = env::args().collect();
     let mut socket_path = String::new();
     let mut ready_pipe = String::new();
+    let mut migrator_socket = String::new();
+    let mut inside_init = Vec::new();
     let mut use_landlock = true;
     let mut auth_token = None;
     let mut singbox_bin = String::new();
@@ -680,6 +684,14 @@ fn parse_executor_cli() -> ExecutorCli {
             }
             "--ready-pipe" if i + 1 < args.len() => {
                 ready_pipe.clone_from(&args[i + 1]);
+                i += 2;
+            }
+            "--migrator-socket" if i + 1 < args.len() => {
+                migrator_socket.clone_from(&args[i + 1]);
+                i += 2;
+            }
+            "--inside-init" if i + 1 < args.len() => {
+                inside_init.push(args[i + 1].clone());
                 i += 2;
             }
             "--token" if i + 1 < args.len() => {
@@ -727,6 +739,8 @@ fn parse_executor_cli() -> ExecutorCli {
     ExecutorCli {
         socket_path,
         ready_pipe,
+        migrator_socket,
+        inside_init,
         use_landlock,
         auth_token,
         singbox_bin,
@@ -744,6 +758,10 @@ fn main() {
 
     unsafe {
         prctl(36, 1, 0, 0, 0); // PR_SET_CHILD_SUBREAPER = 36
+    }
+
+    for init_cmd in &cli.inside_init {
+        let _ = Command::new("sh").args(["-c", init_cmd]).status();
     }
 
     if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
@@ -793,7 +811,13 @@ fn main() {
         if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
             match listener.accept() {
                 Ok((s, _)) => {
-                    handle_connection(s, cli.use_landlock, listener_fd, cli.auth_token);
+                    handle_connection(
+                        s,
+                        cli.use_landlock,
+                        listener_fd,
+                        cli.auth_token,
+                        &cli.migrator_socket,
+                    );
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(err) => {
@@ -803,12 +827,6 @@ fn main() {
         }
 
         let mut status: i32 = 0;
-        while unsafe { waitpid(-1, &raw mut status, 1) } > 0 {
-            ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
-        }
-
-        if HAS_LAUNCHED.load(Ordering::Acquire) && ACTIVE_CHILDREN.load(Ordering::Acquire) == 0 {
-            break;
-        }
+        while unsafe { waitpid(-1, &raw mut status, 1) } > 0 {}
     }
 }
