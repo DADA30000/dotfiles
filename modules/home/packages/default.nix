@@ -3,6 +3,7 @@
   lib,
   inputs,
   osConfig,
+  config,
   mkSandbox,
   staticBwrap,
   ...
@@ -218,6 +219,11 @@ let
     protontricks
   ];
 
+  steamExtraLibraries = [
+    "/mnt/data-nvme/${config.home.username}/SteamLibrary"
+    "/mnt/data-hdd/${config.home.username}/SteamLibrary"
+  ];
+
   steamSandbox =
     let
       overriddenSteam = pkgs.steam.override {
@@ -241,6 +247,7 @@ let
           ln -sf "$HOME/.nixpak/${appId}/home/.steam" "$HOME/.steam"
           ln -sf "$SANDBOXED_XDG_DATA_HOME/Steam" "$XDG_DATA_HOME/Steam"
           ln -sf "$SANDBOXED_XDG_DATA_HOME/vulkan/implicit_layer.d" "$XDG_DATA_HOME/vulkan/implicit_layer.d"
+          ${pkgs.python3}/bin/python3 ${../../../stuff/home/steam/sync-steam-libraries.py} ${lib.escapeShellArgs steamExtraLibraries}
         '';
         additional_inside_commands = ''
           rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d
@@ -255,13 +262,6 @@ let
                 "com.feralinteractive.GameMode" = "talk";
               };
             };
-            system_dbus = {
-              enable = true;
-              policies = {
-                "org.freedesktop.UDisks2" = "talk";
-                "org.freedesktop.UPower" = "talk";
-              };
-            };
             bubblewrap = {
               sharePid = true;
               bind = {
@@ -271,31 +271,18 @@ let
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                 ];
-                rw = lib.mkAfter [
-                  "/mnt/data-nvme"
-                  "/mnt/data-hdd"
-                  (sloth.mkdir (
-                    sloth.concat [
-                      "/mnt/data-nvme/"
-                      (sloth.env "USER")
-                      "/SteamLibrary"
-                    ]
-                  ))
-                  (sloth.mkdir (
-                    sloth.concat [
-                      "/mnt/data-hdd/"
-                      (sloth.env "USER")
-                      "/SteamLibrary"
-                    ]
-                  ))
-                  "/tmp"
-                  "/sys/class"
-                  "/sys/bus"
-                  "/sys/dev"
-                  "/sys/devices"
-                  "/sys/block"
-                  "/run/udev"
-                ];
+                rw = lib.mkAfter (
+                  steamExtraLibraries
+                  ++ [
+                    "/tmp"
+                    "/sys/class"
+                    "/sys/bus"
+                    "/sys/dev"
+                    "/sys/devices"
+                    "/sys/block"
+                    "/run/udev"
+                  ]
+                );
               };
             };
           };

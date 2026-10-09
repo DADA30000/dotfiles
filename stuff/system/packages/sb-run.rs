@@ -3216,7 +3216,28 @@ fn create_extra_info_pipes() -> (Option<i32>, Option<i32>) {
     }
 }
 
+fn ensure_start_time() {
+    if env::var_os("START_TIME").is_none() {
+        let now_ns = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        unsafe {
+            env::set_var("START_TIME", now_ns.to_string());
+        }
+    }
+}
+
+fn setup_migrator_listener(runtime: &Path) -> Option<UnixListener> {
+    let migrator_sock = runtime.join("migrator.sock");
+    let _ = fs::remove_file(&migrator_sock);
+    let listener = UnixListener::bind(&migrator_sock).ok()?;
+    let _ = listener.set_nonblocking(true);
+    Some(listener)
+}
+
 fn main() {
+    ensure_start_time();
+
     let raw_args: Vec<String> = env::args().collect();
     if raw_args.len() > 1 {
         eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
@@ -3232,13 +3253,7 @@ fn main() {
     }
 
     let mut helpers = spawn_initial_helpers(&cfg, &paths.runtime);
-
-    let migrator_sock = paths.runtime.join("migrator.sock");
-    let _ = fs::remove_file(&migrator_sock);
-    let migrator_listener = UnixListener::bind(&migrator_sock).ok();
-    if let Some(ref l) = migrator_listener {
-        let _ = l.set_nonblocking(true);
-    }
+    let migrator_listener = setup_migrator_listener(&paths.runtime);
 
     let auth_token = create_token_for_app(&cfg.app_id);
     let token_hex = bytes_to_hex(&auth_token);

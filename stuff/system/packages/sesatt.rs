@@ -84,6 +84,7 @@ unsafe extern "C" {
     fn signal(sig: CInt, handler: usize) -> CVoid;
     fn open(path: *const CChar, flags: CInt) -> CInt;
     fn dup2(oldfd: CInt, newfd: CInt) -> CInt;
+    fn isatty(fd: CInt) -> CInt;
 }
 
 const TCSANOW: CInt = 0;
@@ -100,18 +101,26 @@ extern "C" fn sigwinch_handler(_: CInt) {
     WINCH_RECEIVED.store(true, Ordering::SeqCst);
 }
 
-fn ffi_get_terminal_size() -> io::Result<Winsize> {
+fn ffi_get_terminal_size() -> Winsize {
     let mut ws = Winsize::default();
     let res = unsafe { ioctl(0, TIOCGWINSZ, &raw mut ws) };
     if res == 0 && ws.col > 0 && ws.row > 0 {
-        Ok(ws)
+        ws
     } else {
-        Err(io::Error::other("Failed to query terminal dimensions"))
+        Winsize {
+            row: 24,
+            col: 80,
+            xpixel: 0,
+            ypixel: 0,
+        }
     }
 }
 
 fn ffi_set_raw_mode() -> io::Result<Termios> {
     let mut orig = Termios::default();
+    if unsafe { isatty(0) } == 0 {
+        return Ok(orig);
+    }
     if unsafe { tcgetattr(0, &raw mut orig) } != 0 {
         return Err(io::Error::last_os_error());
     }
@@ -124,8 +133,10 @@ fn ffi_set_raw_mode() -> io::Result<Termios> {
 }
 
 fn ffi_reset_mode(orig: &Termios) {
-    unsafe {
-        tcsetattr(0, TCSANOW, orig);
+    if unsafe { isatty(0) } != 0 {
+        unsafe {
+            tcsetattr(0, TCSANOW, orig);
+        }
     }
 }
 
@@ -257,12 +268,7 @@ fn handle_internal_daemon(args: &[String]) -> bool {
         let cmd_args = &args[3..];
         let sock_path = get_sock_path(session);
         let log_path = get_log_path(session);
-        let ws = ffi_get_terminal_size().unwrap_or(Winsize {
-            row: 24,
-            col: 80,
-            xpixel: 0,
-            ypixel: 0,
-        });
+        let ws = ffi_get_terminal_size();
         run_daemon_server(session, sock_path, &log_path, cmd_args, ws);
         return true;
     }
@@ -341,16 +347,40 @@ fn handle_editor_mode(args: &[String]) {
     }
 }
 
-fn resolve_daemon_args(
+fn forward_to_sandbox(
     session: &str,
-    args: &[String],
-    session_idx: usize,
-    is_sandbox: bool,
-) -> Vec<String> {
-    let cmd_args = if args.len() > session_idx + 1 {
+    cmd_args: &[String],
+    detach_mode: bool,
+    sock_path: &Path,
+    log_path: &Path,
+) -> io::Result<()> {
+    let mut sb_cmd = Command::new("sb-run");
+    sb_cmd.arg("--id").arg(session);
+    sb_cmd.arg("--");
+    sb_cmd.arg("sesatt");
+    sb_cmd.arg("-d");
+    sb_cmd.arg(session);
+    for arg in cmd_args {
+        sb_cmd.arg(arg);
+    }
+
+    let status = sb_cmd.status()?;
+    if !status.success() {
+        eprintln!("Error: Failed to launch sesatt inside sandbox '{session}'.");
+        std::process::exit(1);
+    }
+
+    if detach_mode {
+        println!("Started session '{session}' in sandbox in detached mode.");
+        return Ok(());
+    }
+
+    attach_session(sock_path, log_path)
+}
+
+fn resolve_daemon_args(args: &[String], session_idx: usize) -> Vec<String> {
+    if args.len() > session_idx + 1 {
         args[session_idx + 1..].to_vec()
-    } else if is_sandbox {
-        vec!["/run/current-system/sw/bin/zsh".to_string()]
     } else {
         match env::var("SHELL") {
             Ok(s) if !s.is_empty() => vec![s],
@@ -359,20 +389,6 @@ fn resolve_daemon_args(
                 std::process::exit(1);
             }
         }
-    };
-
-    if is_sandbox {
-        let mut v = vec![
-            "sb-run".to_string(),
-            "--id".to_string(),
-            session.to_string(),
-            "--cli".to_string(),
-            "--".to_string(),
-        ];
-        v.extend(cmd_args);
-        v
-    } else {
-        cmd_args
     }
 }
 
@@ -449,13 +465,23 @@ fn main() -> io::Result<()> {
 
     let is_sandbox = is_sandbox_running(session);
 
-    if !is_sandbox && log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
+    if is_sandbox {
+        let cmd_args = if args.len() > session_idx + 1 {
+            args[session_idx + 1..].to_vec()
+        } else {
+            vec!["/run/current-system/sw/bin/zsh".to_string()]
+        };
+
+        return forward_to_sandbox(session, &cmd_args, detach_mode, &sock_path, &log_path);
+    }
+
+    if log_path.exists() && args.len() == session_idx + 1 && !detach_mode {
         dump_scrollback(&log_path)?;
         println!("\n--- Process finished. Log preserved above. ---");
         return Ok(());
     }
 
-    let daemon_args = resolve_daemon_args(session, &args, session_idx, is_sandbox);
+    let daemon_args = resolve_daemon_args(&args, session_idx);
 
     spawn_daemon(session, &daemon_args);
 
@@ -562,8 +588,11 @@ fn clean_dead_sessions() {
 
     for (name, status) in sessions {
         if status == SessionStatus::Dead {
-            let session_dir = get_session_dir(&name);
-            let _ = fs::remove_dir_all(&session_dir);
+            let _ = fs::remove_file(get_sock_path(&name));
+            let _ = fs::remove_file(get_log_path(&name));
+            if !is_sandbox_running(&name) {
+                let _ = fs::remove_dir_all(get_session_dir(&name));
+            }
             println!("Cleaned dead session '{name}'.");
             cleaned_count += 1;
         }
@@ -594,7 +623,11 @@ fn kill_session(session: &str) {
         .stderr(Stdio::null())
         .status();
 
-    let _ = fs::remove_dir_all(&session_dir);
+    let _ = fs::remove_file(get_sock_path(session));
+    let _ = fs::remove_file(get_log_path(session));
+    if !is_sandbox_running(session) {
+        let _ = fs::remove_dir_all(&session_dir);
+    }
     println!("Session '{session}' terminated.");
 }
 
@@ -632,7 +665,7 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
         }
     };
 
-    let ws = ffi_get_terminal_size()?;
+    let ws = ffi_get_terminal_size();
     send_resize_pkt(&mut stream, ws)?;
     send_nvim_pkt(&mut stream)?;
 
@@ -649,13 +682,13 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
         let mut last_ws = ws;
         loop {
             thread::sleep(Duration::from_millis(100));
-            if WINCH_RECEIVED.swap(false, Ordering::SeqCst)
-                && let Ok(cur_ws) = ffi_get_terminal_size()
-                && cur_ws != last_ws
-            {
-                last_ws = cur_ws;
-                if send_resize_pkt(&mut stream_winch, cur_ws).is_err() {
-                    break;
+            if WINCH_RECEIVED.swap(false, Ordering::SeqCst) {
+                let cur_ws = ffi_get_terminal_size();
+                if cur_ws != last_ws {
+                    last_ws = cur_ws;
+                    if send_resize_pkt(&mut stream_winch, cur_ws).is_err() {
+                        break;
+                    }
                 }
             }
         }

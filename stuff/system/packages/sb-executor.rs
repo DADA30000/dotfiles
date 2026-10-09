@@ -6,9 +6,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::{Command, exit};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static HAS_PRINTED_STARTUP: AtomicBool = AtomicBool::new(false);
+static FALLBACK_START_TIME: AtomicU64 = AtomicU64::new(0);
 
 const IPC_MAGIC: [u8; 4] = *b"SBEX";
 const IPC_VERSION: u16 = 1;
@@ -386,6 +387,30 @@ fn run_child_process(
     exit(127);
 }
 
+fn kill_process_tree(root_pid: i32, sig: i32) {
+    let mut to_visit = vec![root_pid];
+    let mut all_pids = Vec::new();
+
+    while let Some(pid) = to_visit.pop() {
+        all_pids.push(pid);
+        let path = format!("/proc/{pid}/task/{pid}/children");
+        if let Ok(content) = fs::read_to_string(&path) {
+            for part in content.split_whitespace() {
+                if let Ok(child) = part.parse::<i32>() {
+                    to_visit.push(child);
+                }
+            }
+        }
+    }
+
+    for &pid in all_pids.iter().rev() {
+        unsafe {
+            kill(-pid, sig);
+            kill(pid, sig);
+        }
+    }
+}
+
 fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
     let mut status: i32 = 0;
     let stream_fd = stream.as_raw_fd();
@@ -426,10 +451,7 @@ fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
                             let mut sig_bytes = [0u8; 4];
                             if stream.read_exact(&mut sig_bytes).is_ok() {
                                 let sig = i32::from_le_bytes(sig_bytes);
-                                unsafe {
-                                    kill(-child_pid, sig);
-                                    kill(child_pid, sig);
-                                };
+                                kill_process_tree(child_pid, sig);
                             }
                         }
                         MSG_WINSIZE => {
@@ -443,7 +465,7 @@ fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
                 }
             }
             if (rev & (POLLHUP | POLLERR)) != 0 {
-                unsafe { kill(child_pid, SIGTERM) };
+                kill_process_tree(child_pid, SIGTERM);
                 let _ = unsafe { waitpid(child_pid, &raw mut status, 0) };
                 break;
             }
@@ -452,16 +474,27 @@ fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
 }
 
 fn print_startup_timing(payload: &ExecPayload) {
-    if !HAS_PRINTED_STARTUP.swap(true, Ordering::AcqRel)
-        && let Some(item) = payload.env.iter().find(|e| e.starts_with("START_TIME="))
-        && let Some((_, start_str)) = item.split_once('=')
-        && let Ok(start_ns) = start_str.trim().parse::<u128>()
-    {
-        let now_ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        if now_ns >= start_ns {
-            let elapsed_ms = (now_ns - start_ns) / 1_000_000;
+    if !HAS_PRINTED_STARTUP.swap(true, Ordering::AcqRel) {
+        let now_ms = u64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis()),
+        )
+        .unwrap_or(0);
+
+        let start_ms = payload
+            .env
+            .iter()
+            .find(|e| e.starts_with("START_TIME="))
+            .and_then(|e| e.split_once('='))
+            .and_then(|(_, s)| s.trim().parse::<u128>().ok())
+            .map_or_else(
+                || FALLBACK_START_TIME.load(Ordering::Relaxed),
+                |ns| u64::try_from(ns / 1_000_000).unwrap_or(0),
+            );
+
+        if start_ms > 0 && now_ms >= start_ms {
+            let elapsed_ms = now_ms - start_ms;
             let app_id = payload
                 .env
                 .iter()
@@ -754,6 +787,14 @@ fn parse_executor_cli() -> ExecutorCli {
 }
 
 fn main() {
+    let now_ms = u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis()),
+    )
+    .unwrap_or(0);
+    FALLBACK_START_TIME.store(now_ms, Ordering::Relaxed);
+
     let cli = parse_executor_cli();
 
     unsafe {
