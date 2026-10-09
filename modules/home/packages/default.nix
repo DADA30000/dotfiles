@@ -232,7 +232,6 @@ let
         gpu = true;
         wayland = "sandboxed";
         use_landlock = false;
-        use_flatpak_info = false;
         sandbox_tmp = false;
         sandbox_shm = false;
         additional_outside_commands = ''
@@ -256,6 +255,13 @@ let
                 "com.feralinteractive.GameMode" = "talk";
               };
             };
+            system_dbus = {
+              enable = true;
+              policies = {
+                "org.freedesktop.UDisks2" = "talk";
+                "org.freedesktop.UPower" = "talk";
+              };
+            };
             bubblewrap = {
               sharePid = true;
               bind = {
@@ -266,26 +272,8 @@ let
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                 ];
                 rw = lib.mkAfter [
-                  [
-                    (sloth.mkdir (
-                      sloth.concat [
-                        "/mnt/data-nvme/"
-                        (sloth.env "USER")
-                        "/SteamLibrary"
-                      ]
-                    ))
-                    "/mnt/steam-nvme"
-                  ]
-                  [
-                    (sloth.mkdir (
-                      sloth.concat [
-                        "/mnt/data-hdd/"
-                        (sloth.env "USER")
-                        "/SteamLibrary"
-                      ]
-                    ))
-                    "/mnt/steam-hdd"
-                  ]
+                  "/mnt/data-nvme"
+                  "/mnt/data-hdd"
                   (sloth.mkdir (
                     sloth.concat [
                       "/mnt/data-nvme/"

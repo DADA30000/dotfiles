@@ -405,6 +405,10 @@ struct SandboxConfig {
     dbus_own: Vec<String>,
     dbus_see: Vec<String>,
     dbus_extra_args: Vec<String>,
+    system_dbus_talk: Vec<String>,
+    system_dbus_own: Vec<String>,
+    system_dbus_see: Vec<String>,
+    system_dbus_extra_args: Vec<String>,
     rw_binds: Vec<String>,
     ro_binds: Vec<String>,
     dev_binds: Vec<String>,
@@ -428,6 +432,7 @@ struct SandboxConfig {
 struct HelperProcesses {
     way_secure_close_fd: Option<i32>,
     dbus_proxy: Option<Child>,
+    system_dbus_proxy: Option<Child>,
     singbox_bridge: Option<Child>,
     pasta: Option<Child>,
 }
@@ -567,7 +572,47 @@ fn run_interactive_prompt(cfg: &mut SandboxConfig) {
 
 fn parse_dbus_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
     let arg = &args[*i];
-    if let Some(talk) = arg.strip_prefix("--dbus-talk=") {
+    if let Some(talk) = arg.strip_prefix("--system-dbus-talk=") {
+        cfg.system_dbus_talk.push(talk.into());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 1;
+        true
+    } else if let Some(own) = arg.strip_prefix("--system-dbus-own=") {
+        cfg.system_dbus_own.push(own.into());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 1;
+        true
+    } else if let Some(see) = arg.strip_prefix("--system-dbus-see=") {
+        cfg.system_dbus_see.push(see.into());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 1;
+        true
+    } else if let Some(call) = arg.strip_prefix("--system-dbus-call=") {
+        cfg.system_dbus_extra_args.push(format!("--call={call}"));
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 1;
+        true
+    } else if arg == "--system-dbus-talk" && *i + 1 < args.len() {
+        cfg.system_dbus_talk.push(args[*i + 1].clone());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 2;
+        true
+    } else if arg == "--system-dbus-own" && *i + 1 < args.len() {
+        cfg.system_dbus_own.push(args[*i + 1].clone());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 2;
+        true
+    } else if arg == "--system-dbus-see" && *i + 1 < args.len() {
+        cfg.system_dbus_see.push(args[*i + 1].clone());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 2;
+        true
+    } else if (arg == "--system-dbus-arg" || arg == "--system-dbus-call") && *i + 1 < args.len() {
+        cfg.system_dbus_extra_args.push(args[*i + 1].clone());
+        cfg.flags |= CFG_SYSTEM_DBUS;
+        *i += 2;
+        true
+    } else if let Some(talk) = arg.strip_prefix("--dbus-talk=") {
         cfg.dbus_talk.push(talk.into());
         *i += 1;
         true
@@ -749,11 +794,6 @@ fn parse_system_state_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usiz
         }
         "--flatpak-info" => {
             cfg.flags |= CFG_FLATPAK_INFO;
-            *i += 1;
-            true
-        }
-        "--no-flatpak-info" => {
-            cfg.flags &= !CFG_FLATPAK_INFO;
             *i += 1;
             true
         }
@@ -1589,10 +1629,18 @@ fn add_ipc_and_dbus_binds(
         cmd.arg("--unsetenv").arg("DBUS_SESSION_BUS_ADDRESS");
     }
 
-    if (cfg.flags & CFG_SYSTEM_DBUS) != 0 && Path::new("/run/dbus/system_bus_socket").exists() {
-        cmd.arg("--ro-bind")
-            .arg("/run/dbus/system_bus_socket")
+    if (cfg.flags & CFG_SYSTEM_DBUS) != 0 {
+        let host_sys_proxy = sandbox_runtime.join("nixpak-system-bus");
+        let in_sandbox_sys_proxy = format!("{runtime}/nixpak-system-bus");
+        cmd.arg("--bind-try")
+            .arg(&host_sys_proxy)
+            .arg(&in_sandbox_sys_proxy);
+        cmd.arg("--bind-try")
+            .arg(&host_sys_proxy)
             .arg("/run/dbus/system_bus_socket");
+        cmd.arg("--setenv")
+            .arg("DBUS_SYSTEM_BUS_ADDRESS")
+            .arg(format!("unix:path={in_sandbox_sys_proxy}"));
     }
 }
 
@@ -2342,6 +2390,103 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path)
     }
 }
 
+fn add_system_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
+    for talk in &cfg.system_dbus_talk {
+        proxy_cmd.arg(format!("--talk={talk}"));
+    }
+    for own in &cfg.system_dbus_own {
+        proxy_cmd.arg(format!("--own={own}"));
+    }
+    for see in &cfg.system_dbus_see {
+        proxy_cmd.arg(format!("--see={see}"));
+    }
+    for arg in &cfg.system_dbus_extra_args {
+        proxy_cmd.arg(arg);
+    }
+}
+
+fn start_system_dbus_proxy(
+    cfg: &SandboxConfig,
+    proxy_sock: &Path,
+    flatpak_info: &Path,
+) -> Option<Child> {
+    if !Path::new("/run/dbus/system_bus_socket").exists() {
+        return None;
+    }
+    let _ = fs::remove_file(proxy_sock);
+
+    let bin_name = cfg.dbus_proxy_bin.as_ref().map_or_else(
+        || {
+            let sys = PathBuf::from("/run/current-system/sw/bin/xdg-dbus-proxy");
+            if sys.exists() {
+                sys
+            } else {
+                PathBuf::from("xdg-dbus-proxy")
+            }
+        },
+        Clone::clone,
+    );
+
+    let bwrap_bin = {
+        let sys = PathBuf::from("/run/current-system/sw/bin/bwrap");
+        if sys.exists() {
+            sys
+        } else {
+            PathBuf::from("bwrap")
+        }
+    };
+
+    let mut proxy_cmd = Command::new(bwrap_bin);
+    proxy_cmd
+        .arg("--die-with-parent")
+        .arg("--ro-bind")
+        .arg("/etc")
+        .arg("/etc")
+        .arg("--ro-bind")
+        .arg("/nix/store")
+        .arg("/nix/store")
+        .arg("--bind")
+        .arg("/var")
+        .arg("/var")
+        .arg("--bind")
+        .arg("/tmp")
+        .arg("/tmp")
+        .arg("--bind")
+        .arg("/run")
+        .arg("/run")
+        .arg("--ro-bind-try")
+        .arg(flatpak_info)
+        .arg("/.flatpak-info")
+        .arg("--")
+        .arg(bin_name)
+        .arg("unix:path=/run/dbus/system_bus_socket")
+        .arg(proxy_sock)
+        .arg("--filter");
+
+    add_system_dbus_proxy_rules(&mut proxy_cmd, cfg);
+    unsafe {
+        proxy_cmd.pre_exec(|| {
+            prctl(1, 15, 0, 0, 0);
+            Ok(())
+        });
+    }
+
+    match proxy_cmd.spawn() {
+        Ok(child) => {
+            if let Some(parent) = proxy_sock.parent()
+                && let Some(name) = proxy_sock.file_name().and_then(|n| n.to_str())
+            {
+                wait_for_file_created(parent, name, 1000);
+            }
+            Some(child)
+        }
+        Err(err) => {
+            eprintln!("[sb-run] Failed to spawn system xdg-dbus-proxy via bwrap: {err}");
+            None
+        }
+    }
+}
+
 fn start_pasta(cfg: &SandboxConfig, child_pid: u32) -> Option<Child> {
     if cfg.network != "sandboxed" {
         return None;
@@ -2396,6 +2541,17 @@ fn cleanup_session(
         unsafe { close(fd) };
     }
     if let Some(ref mut c) = helpers.dbus_proxy {
+        let pid = c.id();
+        if let Ok(pid_i32) = i32::try_from(pid) {
+            unsafe {
+                kill(-pid_i32, 15);
+                kill(pid_i32, 15);
+            }
+        }
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+    if let Some(ref mut c) = helpers.system_dbus_proxy {
         let pid = c.id();
         if let Ok(pid_i32) = i32::try_from(pid) {
             unsafe {
@@ -2820,6 +2976,12 @@ fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperP
     if cfg.dbus_mode == "sandboxed" {
         let proxy_sock = sandbox_runtime.join("nixpak-bus");
         helpers.dbus_proxy = start_dbus_proxy(cfg, &proxy_sock, &flatpak_info_path);
+    }
+
+    if (cfg.flags & CFG_SYSTEM_DBUS) != 0 {
+        let sys_proxy_sock = sandbox_runtime.join("nixpak-system-bus");
+        helpers.system_dbus_proxy =
+            start_system_dbus_proxy(cfg, &sys_proxy_sock, &flatpak_info_path);
     }
 
     helpers.way_secure_close_fd = start_way_secure(cfg, sandbox_runtime);

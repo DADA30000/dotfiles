@@ -205,7 +205,6 @@ let
       wayland ? "off", # "off" | "sandboxed" | "passthrough"
       x11 ? "off", # "off" | "sandboxed" | "passthrough"
       use_landlock ? true,
-      use_flatpak_info ? true,
       portals_for_files ? true,
       sandbox_shm ? true,
       sandbox_tmp ? true,
@@ -223,6 +222,7 @@ let
           additional_args;
 
       dbusCfg = rawArgs.dbus or { };
+      systemDbusCfg = rawArgs.system_dbus or (rawArgs.system-dbus or { });
       bwrapCfg = rawArgs.bubblewrap or { };
 
       dbusEnabled = dbusCfg.enable or true;
@@ -230,6 +230,16 @@ let
 
       dbusFlags = lib.concatLists (
         lib.mapAttrsToList (name: policy: [ "--dbus-${policy}=${name}" ]) dbusPolicies
+      );
+
+      systemDbusEnabled = systemDbusCfg.enable or (dbusCfg.system or false);
+      systemDbusPolicies = systemDbusCfg.policies or { };
+
+      systemDbusFlags = lib.optionals systemDbusEnabled (
+        [ "--system-dbus" ]
+        ++ lib.concatLists (
+          lib.mapAttrsToList (name: policy: [ "--system-dbus-${policy}=${name}" ]) systemDbusPolicies
+        )
       );
 
       extractList =
@@ -310,7 +320,6 @@ let
           (if sandbox_tmp then "sandboxed" else "passthrough")
         ]
         landlockFlag
-        (lib.optional (!use_flatpak_info) "--no-flatpak-info")
         portalsFlag
         portalEnvFlags
         (lib.optional (webcam != 0) [
@@ -331,7 +340,7 @@ let
               "off"
             ]
         )
-        (lib.optional (dbusCfg.system or false) "--system-dbus")
+        systemDbusFlags
         dbusFlags
         rwFlags
         roFlags
