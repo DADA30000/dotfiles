@@ -154,89 +154,7 @@ let
     ];
   });
 
-  sb-executor-pkg = pkgs.pkgsStatic.stdenv.mkDerivation {
-    pname = "sb-executor";
-    name = "sb-executor";
-    dontUnpack = true;
-    nativeBuildInputs = [
-      pkgs.pkgsStatic.rustc
-      pkgs.clippy
-      pkgs.rustfmt
-    ];
-    buildPhase = ''
-      rustfmt --edition 2024 --check ${../../../stuff/system/packages/sb-executor.rs}
-      clippy-driver --edition 2024 \
-        -D warnings \
-        -W clippy::all \
-        -W clippy::pedantic \
-        -W clippy::nursery \
-        ${../../../stuff/system/packages/sb-executor.rs} --emit=metadata -o lint_check.rmeta
-      rm -f lint_check.rmeta
 
-      rustc --edition 2024 \
-        --target x86_64-unknown-linux-musl \
-        -D warnings \
-        -D dead-code \
-        -D unused-imports \
-        -C target-feature=+crt-static \
-        -C linker=$CC \
-        -C overflow-checks=on \
-        -C link-arg=-Wl,-z,relro,-z,now \
-        -C link-arg=-Wl,-z,noexecstack \
-        -C opt-level=3 \
-        -C lto=fat \
-        -C codegen-units=1 \
-        -C panic=abort \
-        -C strip=symbols \
-        -O ${../../../stuff/system/packages/sb-executor.rs} -o sb-executor
-    '';
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 sb-executor $out/bin/sb-executor
-    '';
-  };
-
-  sb-run-pkg = pkgs.pkgsStatic.stdenv.mkDerivation {
-    pname = "sb-run";
-    name = "sb-run";
-    dontUnpack = true;
-    nativeBuildInputs = [
-      pkgs.pkgsStatic.rustc
-      pkgs.clippy
-      pkgs.rustfmt
-    ];
-    buildPhase = ''
-      rustfmt --edition 2024 --check ${../../../stuff/system/packages/sb-run.rs}
-      clippy-driver --edition 2024 \
-        -D warnings \
-        -W clippy::all \
-        -W clippy::pedantic \
-        -W clippy::nursery \
-        ${../../../stuff/system/packages/sb-run.rs} --emit=metadata -o lint_check.rmeta
-      rm -f lint_check.rmeta
-
-      rustc --edition 2024 \
-        --target x86_64-unknown-linux-musl \
-        -D warnings \
-        -D dead-code \
-        -D unused-imports \
-        -C target-feature=+crt-static \
-        -C linker=$CC \
-        -C overflow-checks=on \
-        -C link-arg=-Wl,-z,relro,-z,now \
-        -C link-arg=-Wl,-z,noexecstack \
-        -C opt-level=3 \
-        -C lto=fat \
-        -C codegen-units=1 \
-        -C panic=abort \
-        -C strip=symbols \
-        -O ${../../../stuff/system/packages/sb-run.rs} -o sb-run
-    '';
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 sb-run $out/bin/sb-run
-    '';
-  };
 
   way-secure-pkg = pkgs.rustPlatform.buildRustPackage {
     pname = "way-secure";
@@ -355,8 +273,6 @@ let
       sbRunFlags = lib.flatten [
         "--id"
         appId
-        "--executor-bin"
-        "${sb-executor-pkg}/bin/sb-executor"
         "--net"
         network
         (lib.optionals (network == "singbox") [
@@ -446,7 +362,7 @@ let
           mkdir -p "$SANDBOXED_RUNTIME_DIR"
 
           ${additional_outside_commands}
-          exec ${sb-run-pkg}/bin/sb-run ${lib.escapeShellArgs sbRunFlags} -- "$0" "$@"
+          exec sb-run ${lib.escapeShellArgs sbRunFlags} -- "$0" "$@"
         else
           ${additional_inside_commands}
           exec "$TARGET" "$@"
