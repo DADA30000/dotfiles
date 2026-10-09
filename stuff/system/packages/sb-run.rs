@@ -2529,7 +2529,7 @@ struct UCred {
     gid: u32,
 }
 
-fn handle_migration(listener: &UnixListener, inside_procs: &Path) -> Option<i32> {
+fn handle_migration(listener: &UnixListener, inside_procs: Option<&Path>) -> Option<i32> {
     match listener.accept() {
         Ok((mut stream, _)) => {
             let mut ucred = UCred::default();
@@ -2544,10 +2544,15 @@ fn handle_migration(listener: &UnixListener, inside_procs: &Path) -> Option<i32>
                     &raw mut len,
                 )
             };
+            if let Some(p) = inside_procs
+                && res == 0
+                && ucred.pid > 0
+            {
+                let _ = fs::write(p, format!("{}\n", ucred.pid));
+            }
+            let _ = stream.write_all(b"G");
+            let _ = stream.flush();
             if res == 0 && ucred.pid > 0 {
-                let _ = fs::write(inside_procs, format!("{}\n", ucred.pid));
-                let _ = stream.write_all(b"G");
-                let _ = stream.flush();
                 Some(ucred.pid)
             } else {
                 None
@@ -2580,7 +2585,7 @@ fn process_epoll_events(
         }
         if ctx.migrator_fd >= 0 && fd == ctx.migrator_fd {
             if let Some(l) = ctx.migrator_listener
-                && let Some(pid) = handle_migration(l, ctx.procs_path)
+                && let Some(pid) = handle_migration(l, Some(ctx.procs_path))
                 && let Some(pfd) = pidfd_open(pid)
             {
                 if ctx.epoll.add(pfd) {
@@ -2725,6 +2730,22 @@ fn write_bwrap_info(app_id: &str, data: &[u8]) {
     let _ = fs::write(flatpak_dir.join("bwrapinfo.json"), data);
 }
 
+fn read_info_fd_data(r_fd: i32) -> Vec<u8> {
+    let mut data = Vec::new();
+    let mut chunk = [0u8; 256];
+    while !data.contains(&b'}') {
+        let n = unsafe { read(r_fd, chunk.as_mut_ptr().cast(), chunk.len()) };
+        if n <= 0 {
+            break;
+        }
+        if let Ok(u_len) = usize::try_from(n) {
+            data.extend_from_slice(&chunk[..u_len]);
+        }
+    }
+    unsafe { close(r_fd) };
+    data
+}
+
 fn handle_pasta_sync(
     pasta_sync_fds: Option<([i32; 2], [i32; 2])>,
     cfg: &SandboxConfig,
@@ -2736,18 +2757,7 @@ fn handle_pasta_sync(
         close(r_block);
         close(w_info);
     };
-    let mut data = Vec::new();
-    let mut chunk = [0u8; 256];
-    while !data.contains(&b'}') {
-        let n = unsafe { read(r_info, chunk.as_mut_ptr().cast(), chunk.len()) };
-        if n <= 0 {
-            break;
-        }
-        if let Ok(u_len) = usize::try_from(n) {
-            data.extend_from_slice(&chunk[..u_len]);
-        }
-    }
-    unsafe { close(r_info) };
+    let data = read_info_fd_data(r_info);
 
     let runner_pid = parse_child_pid_from_info(&data).unwrap_or(0);
     if runner_pid > 0 {
@@ -2862,17 +2872,12 @@ fn spawn_bwrap_and_get_runner(
         if let Some(w) = extra_info_w {
             unsafe { close(w) };
         }
-        let mut info_buf = [0u8; 256];
-        let n = unsafe { read(r_fd, info_buf.as_mut_ptr().cast(), 255) };
-        unsafe { close(r_fd) };
-        if n > 0
-            && let Ok(n_usize) = usize::try_from(n)
-        {
-            let data = &info_buf[..n_usize];
-            write_bwrap_info(&cfg.app_id, data);
-            parse_child_pid_from_info(data).unwrap_or(0)
-        } else {
+        let data = read_info_fd_data(r_fd);
+        if data.is_empty() {
             0
+        } else {
+            write_bwrap_info(&cfg.app_id, &data);
+            parse_child_pid_from_info(&data).unwrap_or(0)
         }
     });
 
@@ -3137,17 +3142,17 @@ fn main() {
     }
 
     let _ = try_connect_running_sandbox(&paths.ipc_sock, &cfg);
-    if let Ok(ref cgroup) = env::var("MY_CGROUP")
-        && let Some(ref listener) = migrator_listener
-    {
-        let inside_procs = PathBuf::from(format!("{cgroup}/inside/cgroup.procs"));
+    let inside_procs = env::var("MY_CGROUP")
+        .ok()
+        .map(|cg| PathBuf::from(format!("{cg}/inside/cgroup.procs")));
+    if let Some(ref listener) = migrator_listener {
         let mut pfd = PollFd {
             fd: listener.as_raw_fd(),
             events: 1, // POLLIN
             revents: 0,
         };
         if unsafe { poll(&raw mut pfd, 1, 5000) } > 0 {
-            handle_migration(listener, &inside_procs);
+            handle_migration(listener, inside_procs.as_deref());
         }
     }
 
