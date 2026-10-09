@@ -2490,7 +2490,6 @@ fn monitor_scope_and_cleanup(
 ) {
     if let Ok(cgroup_path) = env::var("MY_CGROUP") {
         let procs_path = PathBuf::from(&cgroup_path).join("inside/cgroup.procs");
-        let helpers_path = PathBuf::from(&cgroup_path).join("helpers/cgroup.procs");
         let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
@@ -2531,11 +2530,8 @@ fn monitor_scope_and_cleanup(
 
         loop {
             let inside_pids = read_pids_from_file(&procs_path);
-            let helpers_pids = read_pids_from_file(&helpers_path);
 
-            if (runner_i32 > 0 && !helpers_pids.contains(&runner_i32))
-                || (has_seen_apps && inside_pids.is_empty())
-            {
+            if has_seen_apps && inside_pids.is_empty() {
                 break;
             }
 
