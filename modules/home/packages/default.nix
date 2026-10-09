@@ -258,33 +258,27 @@ let
             bubblewrap = {
               sharePid = true;
               bind = {
-                dev = [ "/dev/input" ];
+                dev = [ "/dev" ];
                 ro = [
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
                   (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
                 ];
                 rw = lib.mkAfter [
-                  [
-                    (sloth.mkdir (
-                      sloth.concat [
-                        "/mnt/data-nvme/"
-                        (sloth.env "USER")
-                        "/SteamLibrary"
-                      ]
-                    ))
-                    "/data-nvme"
-                  ]
-                  [
-                    (sloth.mkdir (
-                      sloth.concat [
-                        "/mnt/data-hdd/"
-                        (sloth.env "USER")
-                        "/SteamLibrary"
-                      ]
-                    ))
-                    "/data-hdd"
-                  ]
+                  (sloth.mkdir (
+                    sloth.concat [
+                      "/mnt/data-nvme/"
+                      (sloth.env "USER")
+                      "/SteamLibrary"
+                    ]
+                  ))
+                  (sloth.mkdir (
+                    sloth.concat [
+                      "/mnt/data-hdd/"
+                      (sloth.env "USER")
+                      "/SteamLibrary"
+                    ]
+                  ))
                   "/tmp"
                   "/sys/class"
                   "/sys/bus"
