@@ -1546,6 +1546,17 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
         let _ = writeln!(content, "shared={};", shared.join(";"));
     }
 
+    let mut fs_list = vec!["host".to_string(), "xdg-run/media".to_string()];
+    for rw in &cfg.rw_binds {
+        let src = rw.split_once(':').map_or(rw.as_str(), |(s, _)| s);
+        fs_list.push(src.to_string());
+    }
+    for ro in &cfg.ro_binds {
+        let src = ro.split_once(':').map_or(ro.as_str(), |(s, _)| s);
+        fs_list.push(format!("{src}:ro"));
+    }
+    let _ = writeln!(content, "filesystems={};", fs_list.join(";"));
+
     let _ = write!(
         content,
         "\n[Instance]\ninstance-id={instance_id}\napp-path=/app\nruntime-path=/usr\n"

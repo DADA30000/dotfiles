@@ -47,9 +47,10 @@ for pool in $(zpool list -H -o name 2>/dev/null || true); do
 
   chmod 1777 "/mnt/$pool" 2>/dev/null || true
 
-  for u in $(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd); do
+  for u in $(awk -F: '$6 ~ /^\/home\// && $3 >= 1000 && $3 < 30000 {print $1}' /etc/passwd); do
     mkdir -p "/mnt/$pool/$u"
     chown "$u:users" "/mnt/$pool/$u"
     chmod 0700 "/mnt/$pool/$u"
   done
+  rmdir "/mnt/$pool"/nixbld* 2>/dev/null || true
 done
