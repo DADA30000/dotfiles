@@ -159,9 +159,6 @@ unsafe extern "C" {
     fn syscall(number: i64, ...) -> i64;
     fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn close(fd: i32) -> i32;
-    fn pipe(pipefd: *mut i32) -> i32;
-    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
-    fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn fork() -> i32;
     fn execvp(file: *const i8, argv: *const *const i8) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
@@ -534,11 +531,6 @@ fn handle_connection(
     let is_helper = (header.flags & FLAG_HELPER) != 0;
     let is_cli = (header.flags & FLAG_WAIT_EXIT) != 0;
 
-    let mut sync_pipe = [0i32; 2];
-    if !is_helper {
-        unsafe { pipe(sync_pipe.as_mut_ptr()) };
-    }
-
     if !is_helper {
         ACTIVE_CHILDREN.fetch_add(1, Ordering::Release);
         HAS_LAUNCHED.store(true, Ordering::Release);
@@ -552,38 +544,14 @@ fn handle_connection(
         );
         if !is_helper {
             ACTIVE_CHILDREN.fetch_sub(1, Ordering::Release);
-            unsafe {
-                close(sync_pipe[0]);
-                close(sync_pipe[1]);
-            };
         }
         return;
     }
 
     if child_pid == 0 {
         unsafe { close(listener_fd) };
-        if !is_helper {
-            unsafe {
-                close(sync_pipe[1]);
-                let mut b = [0u8; 1];
-                read(sync_pipe[0], b.as_mut_ptr().cast(), 1);
-                close(sync_pipe[0]);
-            };
-        }
         drop(stream);
         run_child_process(&payload, &fds, is_cli, use_landlock);
-    }
-
-    if !is_helper {
-        unsafe { close(sync_pipe[0]) };
-        let _ = stream.write_all(&child_pid.to_le_bytes());
-        let _ = stream.flush();
-        let mut ack = [0u8; 1];
-        let _ = stream.read_exact(&mut ack);
-        unsafe {
-            let _ = write(sync_pipe[1], [1u8].as_ptr().cast(), 1);
-            close(sync_pipe[1]);
-        };
     }
 
     drop(fds);

@@ -1021,20 +1021,6 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
     }
     let _ = stream.flush();
 
-    let is_helper = (cfg.flags & FLAG_HELPER) != 0;
-    if !is_helper && let Ok(cgroup) = env::var("MY_CGROUP") {
-        let mut pid_bytes = [0u8; 4];
-        if stream.read_exact(&mut pid_bytes).is_ok() {
-            let child_pid = i32::from_le_bytes(pid_bytes);
-            if child_pid > 0 {
-                let inside_procs = format!("{cgroup}/inside/cgroup.procs");
-                let _ = fs::write(inside_procs, format!("{child_pid}\n"));
-            }
-            let _ = stream.write_all(&[1u8]);
-            let _ = stream.flush();
-        }
-    }
-
     if !is_cli {
         return Some(0);
     }
@@ -3002,18 +2988,6 @@ fn main() {
         let _ = fs::write(helpers_procs, format!("{runner_pid}\n"));
     }
 
-    if runner_pid > 0 {
-        let instance_id = format!("nixpak-app-{}", cfg.app_id);
-        let uid = libc_getuid();
-        let runtime_base =
-            env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
-        let flatpak_dir = PathBuf::from(format!("{runtime_base}/.flatpak/{instance_id}"));
-        let _ = fs::write(
-            flatpak_dir.join("bwrapinfo.json"),
-            format!("{{\"child-pid\": {runner_pid}}}\n"),
-        );
-    }
-
     let cgroup_opt = env::var("MY_CGROUP").ok().map(PathBuf::from);
     let bridge_pids = if cfg.bridges.is_empty() {
         Vec::new()
@@ -3031,6 +3005,13 @@ fn main() {
         let status = child.wait().map_or(1, |s| s.code().unwrap_or(1));
         cleanup_session(&cfg, &paths, &bridge_pids, helpers);
         exit(status);
+    }
+
+    if let Ok(cgroup) = env::var("MY_CGROUP")
+        && runner_pid > 0
+    {
+        let inside_procs = format!("{cgroup}/inside/cgroup.procs");
+        let _ = fs::write(inside_procs, format!("{runner_pid}\n"));
     }
 
     if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg)
