@@ -3244,13 +3244,14 @@ fn main() {
     }
 
     let cfg = parse_cli_args();
-    ensure_app2unit_scope(&cfg);
-    setup_cgroup_and_scope(&cfg);
     let paths = prepare_sandbox_paths(&cfg);
 
     if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg) {
         exit(exit_code);
     }
+
+    ensure_app2unit_scope(&cfg);
+    setup_cgroup_and_scope(&cfg);
 
     let mut helpers = spawn_initial_helpers(&cfg, &paths.runtime);
     let migrator_listener = setup_migrator_listener(&paths.runtime);
