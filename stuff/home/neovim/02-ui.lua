@@ -207,10 +207,6 @@ vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 				exit_term_insert()
 				pcall(vim.fn.winrestview, saved_view)
 			elseif vim.bo.buftype == "terminal" and not vim.b.is_pager then
-				local line_count = vim.api.nvim_buf_line_count(0)
-				local win_h = vim.api.nvim_win_get_height(win)
-				local bot_topline = math.max(1, line_count - win_h + 1)
-				pcall(vim.fn.winrestview, { topline = bot_topline, lnum = line_count, col = 0 })
 				if vim.b.last_mode == nil or vim.b.last_mode == "t" then
 					vim.cmd("startinsert")
 				end

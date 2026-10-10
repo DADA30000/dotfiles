@@ -66,7 +66,7 @@ awk -v tag="$KSU_TAG" -v ver="$KSU_VERSION" '
 
 TMP_DIR="$(mktemp -d)"
 SUSFS_DIR="$TMP_DIR/susfs"
-git clone 'https://gitlab.com/simonpunk/susfs4ksu' -b gki-android14-6.1 --depth 1 "$SUSFS_DIR"
+git clone 'https://gitlab.com/pershoot/susfs4ksu' -b gki-android14-6.1-dev --depth 1 "$SUSFS_DIR"
 cp -r "$SUSFS_DIR"/kernel_patches/fs/* "$GKI_ROOT"/fs
 cp -r "$SUSFS_DIR"/kernel_patches/include/linux/* "$GKI_ROOT"/include/linux
 cd "$GKI_ROOT"
