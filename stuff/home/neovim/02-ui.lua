@@ -206,12 +206,14 @@ vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "TermOpen" }, {
 			if saved_view then
 				exit_term_insert()
 				pcall(vim.fn.winrestview, saved_view)
-			elseif
-				vim.bo.buftype == "terminal"
-				and not vim.b.is_pager
-				and (vim.b.last_mode == nil or vim.b.last_mode == "t")
-			then
-				vim.cmd("startinsert")
+			elseif vim.bo.buftype == "terminal" and not vim.b.is_pager then
+				local line_count = vim.api.nvim_buf_line_count(0)
+				local win_h = vim.api.nvim_win_get_height(win)
+				local bot_topline = math.max(1, line_count - win_h + 1)
+				pcall(vim.fn.winrestview, { topline = bot_topline, lnum = line_count, col = 0 })
+				if vim.b.last_mode == nil or vim.b.last_mode == "t" then
+					vim.cmd("startinsert")
+				end
 			end
 		else
 			vim.o.laststatus = 2
@@ -250,7 +252,49 @@ _G.InstantTabSwitch = function(cmd)
 	vim.g.neovide_cursor_animation_length = 0
 	vim.g.neovide_position_animation_length = 0
 
-	pcall(vim.cmd, cmd)
+	if cmd == "tabclose" then
+		local current_tab = vim.api.nvim_get_current_tabpage()
+		local wins = vim.api.nvim_tabpage_list_wins(current_tab)
+		local bufs_to_kill = {}
+
+		for _, win in ipairs(wins) do
+			if vim.api.nvim_win_is_valid(win) then
+				local buf = vim.api.nvim_win_get_buf(win)
+				local in_other = false
+				for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+					if tab ~= current_tab then
+						for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+							if vim.api.nvim_win_is_valid(w) and vim.api.nvim_win_get_buf(w) == buf then
+								in_other = true
+								break
+							end
+						end
+					end
+					if in_other then
+						break
+					end
+				end
+
+				if not in_other and vim.api.nvim_buf_is_valid(buf) then
+					table.insert(bufs_to_kill, buf)
+				end
+			end
+		end
+
+		pcall(vim.cmd, "tabclose")
+
+		for _, buf in ipairs(bufs_to_kill) do
+			if vim.api.nvim_buf_is_valid(buf) then
+				local job_id = vim.b[buf].terminal_job_id
+				if job_id then
+					pcall(vim.fn.jobstop, job_id)
+				end
+				pcall(vim.api.nvim_buf_delete, buf, { force = true })
+			end
+		end
+	else
+		pcall(vim.cmd, cmd)
+	end
 
 	vim.defer_fn(function()
 		vim.g.neovide_scroll_animation_length = _G.OPTS.neovide.scroll_animation_length

@@ -77,9 +77,15 @@ vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave", "TabLeave" }, {
 		if not (vim.bo[buf].buftype == "terminal" or vim.b[buf].is_pager) then
 			return
 		end
+		local m = vim.fn.mode()
 		pcall(function()
-			vim.b[buf].last_mode = vim.fn.mode()
+			vim.b[buf].last_mode = m
 		end)
+
+		if m == "t" then
+			vim.w[win].saved_term_view = nil
+			return
+		end
 
 		local win_info = vim.fn.getwininfo(win)[1]
 		if win_info then

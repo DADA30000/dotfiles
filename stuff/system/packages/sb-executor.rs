@@ -474,6 +474,12 @@ fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
 }
 
 fn print_startup_timing(payload: &ExecPayload) {
+    let is_verbose = payload.env.iter().any(|e| e == "SB_RUN_VERBOSE=1")
+        || env::var("SB_RUN_VERBOSE").as_deref() == Ok("1");
+    if !is_verbose {
+        return;
+    }
+
     if !HAS_PRINTED_STARTUP.swap(true, Ordering::AcqRel) {
         let now_ms = u64::try_from(
             std::time::SystemTime::now()

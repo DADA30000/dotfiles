@@ -139,11 +139,15 @@ vim.diagnostic.config({
 
 local diag_float_win = nil
 
-local function close_all_floating_previews()
+local function close_diag_float()
 	if diag_float_win and vim.api.nvim_win_is_valid(diag_float_win) then
 		pcall(vim.api.nvim_win_close, diag_float_win, true)
 	end
 	diag_float_win = nil
+end
+
+local function close_all_floating_previews()
+	close_diag_float()
 
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 		if vim.api.nvim_win_is_valid(win) then
@@ -157,36 +161,40 @@ local function close_all_floating_previews()
 end
 _G.CloseAllFloatingPreviews = close_all_floating_previews
 
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
-	border = "rounded",
-	close_events = {
-		"CursorMoved",
-		"CursorMovedI",
-		"BufLeave",
-		"BufHidden",
-		"WinLeave",
-		"CmdlineEnter",
-		"InsertEnter",
-	},
-})
+local orig_hover = vim.lsp.handlers["textDocument/hover"] or vim.lsp.handlers.hover
+vim.lsp.handlers["textDocument/hover"] = function(err, result, ctx, config)
+	config = vim.tbl_extend("force", {
+		border = "rounded",
+		close_events = {
+			"CursorMoved",
+			"CursorMovedI",
+			"BufLeave",
+			"BufHidden",
+			"WinLeave",
+			"CmdlineEnter",
+			"InsertEnter",
+		},
+	}, config or {})
+	return orig_hover(err, result, ctx, config)
+end
 
 vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
 	group = vim.api.nvim_create_augroup("DiagnosticFloatHover", { clear = true }),
 	callback = function()
 		local mode = vim.api.nvim_get_mode().mode
 		if mode:match("^[ic]") or vim.bo.buftype ~= "" then
-			close_all_floating_previews()
+			close_diag_float()
 			return
 		end
 
 		local line = vim.fn.line(".") - 1
 		local diags = vim.diagnostic.get(0, { lnum = line })
 		if #diags == 0 then
-			close_all_floating_previews()
+			close_diag_float()
 			return
 		end
 
-		close_all_floating_previews()
+		close_diag_float()
 		local _, winid = vim.diagnostic.open_float(nil, {
 			focusable = false,
 			scope = "cursor",

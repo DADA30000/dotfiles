@@ -9,7 +9,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, exit};
+use std::process::{Child, Command, Stdio, exit};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 
@@ -425,6 +425,7 @@ struct SandboxConfig {
     custom_gid: Option<u32>,
     inside_init: Vec<String>,
     is_helper_request: bool,
+    verbose: bool,
     command: Vec<String>,
 }
 
@@ -896,6 +897,14 @@ fn parse_command_and_env_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut u
             *i += 2;
             true
         }
+        "-v" | "--verbose" => {
+            cfg.verbose = true;
+            unsafe {
+                env::set_var("SB_RUN_VERBOSE", "1");
+            }
+            *i += 1;
+            true
+        }
         "--cli" => {
             cfg.flags |= CFG_IS_CLI;
             *i += 1;
@@ -1070,6 +1079,7 @@ fn parse_cli_args() -> SandboxConfig {
         shm_mode: "sandboxed".into(),
         tmp_mode: "sandboxed".into(),
         flags: CFG_DBUS | CFG_LANDLOCK | CFG_PORTALS | CFG_FLATPAK_INFO | CFG_SCOPE,
+        verbose: env::var("SB_RUN_VERBOSE").as_deref() == Ok("1"),
         ..Default::default()
     };
 
@@ -1963,6 +1973,10 @@ fn build_bwrap_command(
         }
     }
 
+    if cfg.verbose {
+        cmd.arg("--setenv").arg("SB_RUN_VERBOSE").arg("1");
+    }
+
     add_custom_binds_and_env(&mut cmd, cfg);
 
     let in_sandbox_socket = format!("{runtime}/ipc.sock");
@@ -2237,6 +2251,10 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
     );
 
     let mut cmd = Command::new(bin_name);
+    if !cfg.verbose {
+        cmd.stdout(Stdio::null());
+        cmd.stderr(Stdio::null());
+    }
     cmd.arg("--socket-path")
         .arg(&sock_path)
         .arg("-a")
@@ -2367,6 +2385,10 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path)
         .arg("--filter");
 
     add_dbus_proxy_rules(&mut proxy_cmd, cfg);
+    if !cfg.verbose {
+        proxy_cmd.stdout(Stdio::null());
+        proxy_cmd.stderr(Stdio::null());
+    }
     unsafe {
         proxy_cmd.pre_exec(|| {
             prctl(1, 15, 0, 0, 0);
@@ -2464,6 +2486,10 @@ fn start_system_dbus_proxy(
         .arg("--filter");
 
     add_system_dbus_proxy_rules(&mut proxy_cmd, cfg);
+    if !cfg.verbose {
+        proxy_cmd.stdout(Stdio::null());
+        proxy_cmd.stderr(Stdio::null());
+    }
     unsafe {
         proxy_cmd.pre_exec(|| {
             prctl(1, 15, 0, 0, 0);
@@ -2504,6 +2530,10 @@ fn start_pasta(cfg: &SandboxConfig, child_pid: u32) -> Option<Child> {
     );
 
     let mut cmd = Command::new(pasta_bin);
+    if !cfg.verbose {
+        cmd.stdout(Stdio::null());
+        cmd.stderr(Stdio::null());
+    }
     cmd.args(PASTA_DEFAULT_ARGS);
     cmd.arg(child_pid.to_string());
     match cmd.spawn() {
@@ -3118,7 +3148,19 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
         return;
     };
 
-    let mut c_args = vec![c_app2unit.clone(), c_a, c_app_id, c_dashdash, c_exe];
+    let mut c_args = vec![c_app2unit.clone(), c_a, c_app_id.clone(), c_dashdash, c_exe];
+    if cfg.verbose
+        && !args.iter().any(|a| a == "-v" || a == "--verbose")
+        && let Ok(c_v_flag) = CString::new("-v")
+    {
+        c_args.push(c_v_flag);
+    }
+    if !args.iter().any(|a| a == "--id" || a.starts_with("--id="))
+        && let Ok(c_id_flag) = CString::new("--id")
+    {
+        c_args.push(c_id_flag);
+        c_args.push(c_app_id);
+    }
     for a in &args[1..] {
         if let Ok(ca) = CString::new(a.as_bytes()) {
             c_args.push(ca);
@@ -3239,11 +3281,10 @@ fn main() {
     ensure_start_time();
 
     let raw_args: Vec<String> = env::args().collect();
-    if raw_args.len() > 1 {
+    let cfg = parse_cli_args();
+    if cfg.verbose && raw_args.len() > 1 {
         eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
     }
-
-    let cfg = parse_cli_args();
     let paths = prepare_sandbox_paths(&cfg);
 
     if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg) {
