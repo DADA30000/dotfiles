@@ -273,6 +273,10 @@ _G.InstantTabSwitch = function(cmd)
 
 				if not in_other and vim.api.nvim_buf_is_valid(buf) then
 					table.insert(bufs_to_kill, buf)
+					local ot_buf = vim.b[buf].overtaken_term_buf
+					if ot_buf and vim.api.nvim_buf_is_valid(ot_buf) then
+						table.insert(bufs_to_kill, ot_buf)
+					end
 				end
 			end
 		end

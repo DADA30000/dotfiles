@@ -350,6 +350,9 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 	if inherited_title and target_buf and vim.api.nvim_buf_is_valid(target_buf) then
 		vim.b[target_buf].overtaken_title = inherited_title
 	end
+	if target_buf and vim.api.nvim_buf_is_valid(target_buf) and term_buf and vim.api.nvim_buf_is_valid(term_buf) then
+		vim.b[target_buf].overtaken_term_buf = term_buf
+	end
 
 	local restored = false
 	local function signal_fifo()
@@ -368,22 +371,18 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 		end
 	end
 
-	local function restore_terminal()
+	local function restore_terminal(skip_buf_delete)
 		if restored then
 			return
 		end
 		restored = true
 
-		if vim.api.nvim_buf_is_valid(term_buf) then
-			if vim.api.nvim_win_is_valid(win) then
-				vim.api.nvim_win_set_buf(win, term_buf)
-			else
-				vim.api.nvim_set_current_buf(term_buf)
-			end
+		if vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(term_buf) then
+			vim.api.nvim_win_set_buf(win, term_buf)
 			vim.cmd("startinsert")
 		end
 
-		if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
+		if not skip_buf_delete and target_buf and vim.api.nvim_buf_is_valid(target_buf) then
 			pcall(vim.api.nvim_buf_delete, target_buf, { force = true })
 		end
 
@@ -472,7 +471,7 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 		buffer = target_buf,
 		once = true,
 		callback = function()
-			restore_terminal()
+			restore_terminal(true)
 		end,
 	})
 end
