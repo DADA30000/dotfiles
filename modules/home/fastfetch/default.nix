@@ -90,7 +90,7 @@ in
             type = "zpool";
             key = "├─";
             keyColor = "blue";
-            format = "{4} / {6} ({8}, {7} frag)";
+            format = "{4} / {6} ({7}, {9} frag)";
           }
           {
             type = "memory";

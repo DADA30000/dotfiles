@@ -1179,11 +1179,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791647294,
-        "narHash": "sha256-iAQlIxNNG0HzCq/FxvBZ3vxKAjdPyT85gWpcxLn/fd8=",
+        "lastModified": 1791718328,
+        "narHash": "sha256-tRJVR7YCa4dMw6agvFne2+biMM9kXMGDGjadTbQCOKU=",
         "owner": "mastershifuishere77",
         "repo": "nom-rs",
-        "rev": "7bb2c00a659e31359561a7936d8fda57ca2e0c66",
+        "rev": "7e8109592a5d678bcd8e507317b226a7fb1b2807",
         "type": "github"
       },
       "original": {

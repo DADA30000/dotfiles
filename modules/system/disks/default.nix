@@ -253,8 +253,11 @@ in
           root = {
             type = "zfs_fs";
             mountpoint = "/";
-            options.mountpoint = "legacy";
             postCreateHook = "zfs snapshot nixos/root@blank";
+            options = {
+              mountpoint = "legacy";
+              reservation = "100M";
+            };
           };
           nix = {
             type = "zfs_fs";

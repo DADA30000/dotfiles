@@ -140,6 +140,10 @@ let
             "zen-twilight"
           ];
         }
+        {
+          inbound = [ "direct-in" ];
+          outbound = "direct";
+        }
       ];
       auto_detect_interface = true;
       final = "final-toggle";
