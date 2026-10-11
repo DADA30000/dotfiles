@@ -61,11 +61,11 @@ let
     autoUpdate = true;
     autoUpdateNotification = true;
     useQuickCss = true;
-    enabledThemes = [ ];
     frameless = true;
     transparent = true;
     disableMinSize = true;
     winNativeTitleBar = true;
+    enabledThemes = [ "transparent.css" ];
     plugins = {
       CommandsAPI.enabled = true;
       MessageAccessoriesAPI.enabled = true;
@@ -183,6 +183,7 @@ in
       };
       configFile = {
         "Vencord/settings/settings.json".source = vencord_settings;
+        "Vencord/themes/transparent.css".source = ../../../stuff/home/theming/transparent.css;
         "menus/applications.menu".source = ../../../stuff/home/theming/plasma-applications.menu;
         "GIMP_fake".source = "${inputs.photogimp}/.config/GIMP";
         "Kvantum".source = ../../../stuff/home/theming/Kvantum;

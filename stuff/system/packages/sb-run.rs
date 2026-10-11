@@ -1104,7 +1104,25 @@ fn parse_cli_args() -> SandboxConfig {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.subsec_nanos());
-        cfg.app_id = format!("tmp-{ts:x}");
+        let raw_name = cfg.command.first().map_or("app", |s| {
+            Path::new(s)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("app")
+        });
+        let safe_name: String = raw_name
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        cfg.app_id = format!("org.nixpak.{safe_name}_{ts:x}");
+    } else if !cfg.app_id.contains('.') {
+        cfg.app_id = format!("org.nixpak.{}", cfg.app_id);
     }
 
     validate_subsystem_modes(&cfg);
@@ -2310,6 +2328,10 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
 }
 
 fn add_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
+    if !cfg.app_id.is_empty() {
+        proxy_cmd.arg(format!("--own={}", cfg.app_id));
+        proxy_cmd.arg(format!("--own={}.*", cfg.app_id));
+    }
     for talk in DEFAULT_DBUS_TALKS {
         proxy_cmd.arg(format!("--talk={talk}"));
     }
