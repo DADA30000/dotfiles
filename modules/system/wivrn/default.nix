@@ -7,26 +7,16 @@
 }:
 let
   cfg = config.wivrn;
-  patchXrizer =
-    pkg: loader:
-    pkg.overrideAttrs (prev: {
-      buildInputs = (prev.buildInputs or [ ]) ++ [ loader ];
-      nativeBuildInputs = (prev.nativeBuildInputs or [ ]) ++ [ pkgs.patchelf ];
-      postFixup = (prev.postFixup or "") + ''
-        find $out -type f \( -name "*.so*" -o -name "xrizer" -o -executable \) -exec patchelf --add-rpath "${loader}/lib" {} \;
-      '';
-    });
   pkg_xrizer =
-    patchXrizer inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer
-      pkgs.openxr-loader;
+    inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer.overrideAttrs (prev: {
+      patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/xrizer-getposesforframe.patch ];
+    });
   pkg_opencomposite = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.opencomposite;
   xrizer_multilib = pkgs.symlinkJoin {
     name = "xrizer-multilib";
     paths = [
       pkg_xrizer
-      (patchXrizer (pkgs.pkgsi686Linux.callPackage pkg_xrizer.override
-        { }
-      ) pkgs.pkgsi686Linux.openxr-loader)
+      (pkgs.pkgsi686Linux.callPackage pkg_xrizer.override { })
     ];
   };
   opencomposite_multilib = pkgs.symlinkJoin {

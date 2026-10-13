@@ -1,0 +1,54 @@
+--- a/src/compositor.rs	2026-10-13 21:58:35.999960717 +0300
++++ b/src/compositor.rs	2026-10-13 21:58:52.736043433 +0300
+@@ -307,17 +307,32 @@
+     fn GetPosesForFrame(
+         &self,
+         _unPosePredictionID: u32,
+-        _pPoseArray: *mut vr::TrackedDevicePose_t,
+-        _unPoseArrayCount: u32,
++        pPoseArray: *mut vr::TrackedDevicePose_t,
++        unPoseArrayCount: u32,
+     ) -> vr::EVRCompositorError {
+-        todo!()
++        if pPoseArray.is_null() || unPoseArrayCount == 0 {
++            return vr::EVRCompositorError::RequestFailed;
++        }
++
++        self.GetLastPoses(pPoseArray, unPoseArrayCount, std::ptr::null_mut(), 0)
+     }
+     fn GetLastPosePredictionIDs(
+         &self,
+-        _pRenderPosePredictionID: *mut u32,
+-        _pGamePosePredictionID: *mut u32,
++        pRenderPosePredictionID: *mut u32,
++        pGamePosePredictionID: *mut u32,
+     ) -> vr::EVRCompositorError {
+-        crate::warn_unimplemented!("GetLastPosePredictionIDs");
++        let index = self.metrics.index.load(Ordering::Relaxed);
++        if !pRenderPosePredictionID.is_null() {
++            unsafe {
++                pRenderPosePredictionID.write(index);
++            }
++        }
++
++        if !pGamePosePredictionID.is_null() {
++            unsafe {
++                pGamePosePredictionID.write(index);
++            }
++        }
+         vr::EVRCompositorError::None
+     }
+     fn GetCompositorBenchmarkResults(
+@@ -343,10 +358,10 @@
+         false
+     }
+     fn IsMotionSmoothingSupported(&self) -> bool {
+-        todo!()
++        false
+     }
+     fn IsMotionSmoothingEnabled(&self) -> bool {
+-        todo!()
++        false
+     }
+     fn SubmitExplicitTimingData(&self) -> vr::EVRCompositorError {
+         if *self.timing_mode.lock().unwrap() == vr::EVRCompositorTimingMode::Implicit {
