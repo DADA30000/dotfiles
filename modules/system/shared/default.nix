@@ -662,11 +662,11 @@ in
         enable = true;
         settings = {
           initial_session = {
-            command = "uwsm start hyprland-uwsm.desktop > /dev/null 2>&1";
+            command = "env UWSM_WAIT_VARNAMES_SETTLETIME=0 uwsm start -g -1 hyprland-uwsm.desktop > /dev/null 2>&1";
             inherit user;
           };
           default_session = {
-            command = "${tuigreet-patched}/bin/tuigreet --user-menu --time --cmd \"uwsm start hyprland-uwsm.desktop > /dev/null 2>&1\"";
+            command = "${tuigreet-patched}/bin/tuigreet --user-menu --time --cmd \"env UWSM_WAIT_VARNAMES_SETTLETIME=0 uwsm start -g -1 hyprland-uwsm.desktop > /dev/null 2>&1\"";
             user = "greeter";
           };
         };

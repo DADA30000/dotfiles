@@ -36,6 +36,7 @@ let
       ".config/git"
       ".config/zen"
       ".config/flm"
+      ".config/wayvr"
       ".config/wivrn"
       ".config/gtk-3.0"
       ".config/sunshine"
