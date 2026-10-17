@@ -86,7 +86,7 @@ end
 local function term_scroll_down(buf, step_override)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "<ScrollWheelDown>"
+		return
 	end
 
 	local max_bottom = vim.fn.line("$")
@@ -103,17 +103,16 @@ local function term_scroll_down(buf, step_override)
 				end
 			end)
 		end
-		return to_scroll .. "\x05"
+		vim.cmd("normal! " .. to_scroll .. "\x05")
 	else
 		vim.cmd("startinsert")
-		return ""
 	end
 end
 
 local function term_scroll_up(buf, step_override)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "<ScrollWheelUp>"
+		return
 	end
 
 	local current_top = vim.fn.line("w0")
@@ -122,16 +121,14 @@ local function term_scroll_up(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		return to_scroll .. "\x19"
-	else
-		return ""
+		vim.cmd("normal! " .. to_scroll .. "\x19")
 	end
 end
 
 local function term_visual_scroll_down(buf, step_override)
 	local bufnr = buf or vim.api.nvim_get_current_buf()
 	if vim.b[bufnr].terminal_altscreen then
-		return "<ScrollWheelDown>"
+		return
 	end
 
 	local max_bottom = vim.fn.line("$")
@@ -141,74 +138,80 @@ local function term_visual_scroll_down(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		return to_scroll .. "\x05"
-	else
-		return ""
+		vim.cmd("normal! " .. to_scroll .. "\x05")
 	end
 end
 
 vim.keymap.set("n", "<ScrollWheelDown>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_down()
+		term_scroll_down()
+		return
 	end
-	return "<ScrollWheelDown>"
-end, { expr = true, silent = true, desc = "Scroll down in terminal, enter insert at bottom" })
+	vim.cmd("normal! " .. _G.OPTS.scroll.step .. "\x05")
+end, { silent = true, desc = "Scroll down in terminal, enter insert at bottom" })
 
 vim.keymap.set("n", "<ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
 		if vim.b.terminal_altscreen then
-			return "<ScrollWheelUp>"
+			return
 		end
-		return term_scroll_up()
+		term_scroll_up()
+		return
 	end
-	return "<ScrollWheelUp>"
-end, { expr = true, silent = true, desc = "Scroll up in terminal" })
+	vim.cmd("normal! " .. _G.OPTS.scroll.step .. "\x19")
+end, { silent = true, desc = "Scroll up in terminal" })
 
 vim.keymap.set("x", "<ScrollWheelDown>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_visual_scroll_down()
+		term_visual_scroll_down()
+		return
 	end
-	return "<ScrollWheelDown>"
-end, { expr = true, silent = true })
+	vim.cmd("normal! " .. _G.OPTS.scroll.step .. "\x05")
+end, { silent = true })
 
 vim.keymap.set("x", "<ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_up()
+		term_scroll_up()
+		return
 	end
-	return "<ScrollWheelUp>"
-end, { expr = true, silent = true })
+	vim.cmd("normal! " .. _G.OPTS.scroll.step .. "\x19")
+end, { silent = true })
 
 -- Fast Ctrl-Scroll mappings (whole-page scrolling clamped at prompt)
 vim.keymap.set("n", "<C-ScrollWheelDown>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_down(nil, get_fast_scroll_step())
+		term_scroll_down(nil, get_fast_scroll_step())
+		return
 	end
-	return "<C-ScrollWheelDown>"
-end, { expr = true, silent = true, desc = "Fast scroll down in terminal, clamp at bottom" })
+	vim.cmd("normal! " .. get_fast_scroll_step() .. "\x05")
+end, { silent = true, desc = "Fast scroll down in terminal, clamp at bottom" })
 
 vim.keymap.set("n", "<C-ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
 		if vim.b.terminal_altscreen then
-			return "<C-ScrollWheelUp>"
+			return
 		end
-		return term_scroll_up(nil, get_fast_scroll_step())
+		term_scroll_up(nil, get_fast_scroll_step())
+		return
 	end
-	return "<C-ScrollWheelUp>"
-end, { expr = true, silent = true, desc = "Fast scroll up in terminal" })
+	vim.cmd("normal! " .. get_fast_scroll_step() .. "\x19")
+end, { silent = true, desc = "Fast scroll up in terminal" })
 
 vim.keymap.set("x", "<C-ScrollWheelDown>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_visual_scroll_down(nil, get_fast_scroll_step())
+		term_visual_scroll_down(nil, get_fast_scroll_step())
+		return
 	end
-	return "<C-ScrollWheelDown>"
-end, { expr = true, silent = true })
+	vim.cmd("normal! " .. get_fast_scroll_step() .. "\x05")
+end, { silent = true })
 
 vim.keymap.set("x", "<C-ScrollWheelUp>", function()
 	if vim.bo.buftype == "terminal" then
-		return term_scroll_up(nil, get_fast_scroll_step())
+		term_scroll_up(nil, get_fast_scroll_step())
+		return
 	end
-	return "<C-ScrollWheelUp>"
-end, { expr = true, silent = true })
+	vim.cmd("normal! " .. get_fast_scroll_step() .. "\x19")
+end, { silent = true })
 
 -- === MOUSE DRAG AUTO-SCROLL SELECTION ===
 local drag_timer = nil
@@ -283,71 +286,72 @@ vim.api.nvim_create_autocmd("TermOpen", {
 
 		vim.keymap.set("t", "<ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<ScrollWheelUp>"
+				vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true), "n", false)
+				return
 			end
-			return vim.api.nvim_replace_termcodes("<C-\\><C-n>" .. _G.OPTS.scroll.step .. "<C-y>", true, false, true)
-		end, { buffer = bufnr, expr = true, silent = true })
+			vim.cmd("stopinsert")
+			term_scroll_up(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("t", "<ScrollWheelDown>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<ScrollWheelDown>"
+				vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<ScrollWheelDown>", true, false, true), "n", false)
 			end
-			return ""
-		end, { buffer = bufnr, expr = true, silent = true })
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("n", "<ScrollWheelDown>", function()
-			return term_scroll_down(bufnr)
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_down(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("n", "<ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<ScrollWheelUp>"
+				return
 			end
-			return _G.OPTS.scroll.step .. "\x19"
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_up(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("x", "<ScrollWheelDown>", function()
-			return term_visual_scroll_down(bufnr)
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_visual_scroll_down(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("x", "<ScrollWheelUp>", function()
-			return _G.OPTS.scroll.step .. "\x19"
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_up(bufnr)
+		end, { buffer = bufnr, silent = true })
 
 		-- Fast Ctrl-Scroll handlers
 		vim.keymap.set("t", "<C-ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<C-ScrollWheelUp>"
+				vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-ScrollWheelUp>", true, false, true), "n", false)
+				return
 			end
-			local fast_step = get_fast_scroll_step()
-			return vim.api.nvim_replace_termcodes("<C-\\><C-n>" .. fast_step .. "<C-y>", true, false, true)
-		end, { buffer = bufnr, expr = true, silent = true })
+			vim.cmd("stopinsert")
+			term_scroll_up(bufnr, get_fast_scroll_step())
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("t", "<C-ScrollWheelDown>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<C-ScrollWheelDown>"
+				vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-ScrollWheelDown>", true, false, true), "n", false)
 			end
-			return ""
-		end, { buffer = bufnr, expr = true, silent = true })
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("n", "<C-ScrollWheelDown>", function()
-			return term_scroll_down(bufnr, get_fast_scroll_step())
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_down(bufnr, get_fast_scroll_step())
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("n", "<C-ScrollWheelUp>", function()
 			if vim.b[bufnr].terminal_altscreen then
-				return "<C-ScrollWheelUp>"
+				return
 			end
-			return term_scroll_up(bufnr, get_fast_scroll_step())
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_up(bufnr, get_fast_scroll_step())
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("x", "<C-ScrollWheelDown>", function()
-			return term_visual_scroll_down(bufnr, get_fast_scroll_step())
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_visual_scroll_down(bufnr, get_fast_scroll_step())
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("x", "<C-ScrollWheelUp>", function()
-			return term_scroll_up(bufnr, get_fast_scroll_step())
-		end, { buffer = bufnr, expr = true, silent = true })
+			term_scroll_up(bufnr, get_fast_scroll_step())
+		end, { buffer = bufnr, silent = true })
 
 		vim.keymap.set("x", "y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })
 		vim.keymap.set("x", "Y", '"+y', { buffer = bufnr, silent = true, desc = "Copy selection to clipboard" })

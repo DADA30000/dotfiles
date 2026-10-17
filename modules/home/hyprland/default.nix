@@ -19,8 +19,8 @@ let
   hypr-session-lock-blur = pkgs.stdenv.mkDerivation {
     pname = "hypr-session-lock-blur";
     version = "0.1.0";
-    src = ../../../stuff/home/hyprland/hypr-session-lock-blur;
     nativeBuildInputs = [ pkgs.pkg-config ];
+    dontUnpack = true;
     buildInputs = [
       config.wayland.windowManager.hyprland.package
     ]
@@ -29,7 +29,7 @@ let
       export PKG_CONFIG_PATH="${config.wayland.windowManager.hyprland.package.dev}/share/pkgconfig:$PKG_CONFIG_PATH"
       $CXX -shared -fPIC --no-gnu-unique -std=c++23 \
         $(pkg-config --cflags hyprland) \
-        src/main.cpp -o libhypr-session-lock-blur.so
+        ${../../../stuff/home/hyprland/hypr-session-lock-blur.cpp} -o libhypr-session-lock-blur.so
     '';
     installPhase = ''
       mkdir -p $out/lib

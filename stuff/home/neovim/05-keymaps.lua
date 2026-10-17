@@ -8,7 +8,7 @@ vim.keymap.set("n", "!nn", ":silent! tabnew +Man! " .. _G.NIX.kekma_nix .. "<cr>
 
 -- Tab switching keymaps
 for _, mode in ipairs({ "n", "i", "t", "v", "x", "s" }) do
-	local prefix = (mode:match("[vxs]") and "<Esc>" or "")
+	local prefix = (mode == "t" and "<C-\\><C-n>" or (mode:match("[vxs]") and "<Esc>" or ""))
 	vim.keymap.set(
 		mode,
 		"<C-S-Right>",

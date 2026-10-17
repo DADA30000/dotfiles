@@ -298,12 +298,6 @@ in
     ];
     sing-box.processes_to_proxy = processes;
 
-    boot.kernel.sysctl = {
-      "net.ipv6.conf.all.forwarding" = 1;
-      "net.ipv4.ping_group_range" = "0 2147483647";
-      "net.ipv4.ip_forward" = 1;
-    };
-
     systemd.services = {
       sing-box = {
         description = "Sing-box Connection Supervisor and Physical Link Watcher";
@@ -480,12 +474,12 @@ in
     };
 
     networking = {
+      networkmanager.dns = "none";
       firewall.enable = false;
       nameservers = [
         "127.0.0.1"
         "::1"
       ];
-      networkmanager.dns = "none";
     };
   };
 }

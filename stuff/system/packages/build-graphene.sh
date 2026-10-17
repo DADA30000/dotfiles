@@ -1,8 +1,9 @@
 # vim: set ft=bash ts=2 sw=2 et:
+# shellcheck shell=bash
 
 DEVICE="tokay"
 KERNEL_CODENAME="caimito"
-TAG="2026100600"
+TAG="2026101600"
 UPDATE_URL="https://update.sanic.space/"
 OS_DIR="$HOME/Documents/grapheneos"
 KERNEL_DIR="$HOME/Downloads/kernel_pixel_6.1"
@@ -99,7 +100,7 @@ os_init_sync() {
 
 # Recurring tag update (every 1-2 weeks): reset config + init new tag + retry loop + smart GC + update URL
 tag_update() {
-  cd "$OS_DIR" && git -C packages/apps/Updater checkout -- res/values/config.xml && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 && patch_repo_tool && until repo sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" packages/apps/Updater/res/values/config.xml
+  cd "$OS_DIR" && git -C packages/apps/Updater checkout -- res/values/config.xml && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" checkout -- . 2>/dev/null && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" clean -fd 2>/dev/null && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 && patch_repo_tool && until repo sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" packages/apps/Updater/res/values/config.xml
 }
 
 # Unified smart GC: checks in 2ms and skips clean repos with 0 I/O; prunes dead refs, shallow-truncates, and repacks only dirty repos
