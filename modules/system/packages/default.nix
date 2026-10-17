@@ -101,6 +101,10 @@ let
     version = inputs.gigabyte-laptop-wmi.shortRev;
     src = inputs.gigabyte-laptop-wmi;
 
+    nativeBuildInputs = [
+      pkgs.pahole
+    ];
+
     makeFlags = [
       "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"
     ];

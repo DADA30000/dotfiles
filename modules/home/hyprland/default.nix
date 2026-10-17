@@ -16,7 +16,27 @@ let
     type = "plugin";
     mode = "allow";
   };
-  plugins = [ ];
+  hypr-session-lock-blur = pkgs.stdenv.mkDerivation {
+    pname = "hypr-session-lock-blur";
+    version = "0.1.0";
+    src = ../../../stuff/home/hyprland/hypr-session-lock-blur;
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [
+      config.wayland.windowManager.hyprland.package
+    ]
+    ++ config.wayland.windowManager.hyprland.package.buildInputs;
+    buildPhase = ''
+      export PKG_CONFIG_PATH="${config.wayland.windowManager.hyprland.package.dev}/share/pkgconfig:$PKG_CONFIG_PATH"
+      $CXX -shared -fPIC --no-gnu-unique -std=c++23 \
+        $(pkg-config --cflags hyprland) \
+        src/main.cpp -o libhypr-session-lock-blur.so
+    '';
+    installPhase = ''
+      mkdir -p $out/lib
+      cp libhypr-session-lock-blur.so $out/lib/
+    '';
+  };
+  plugins = [ hypr-session-lock-blur ];
 
   cargoDeps = pkgs.rustPlatform.importCargoLock {
     lockFile = "${inputs.oo7}/Cargo.lock";
@@ -738,6 +758,7 @@ in
     systemd.user.services = {
       noctalia.Service.Slice = "session-graphical.slice";
       oo7-daemon = {
+        Install.WantedBy = [ "graphical-session.target" ];
         Unit = {
           Description = "Secret service (oo7 implementation)";
           PartOf = [ "graphical-session.target" ];

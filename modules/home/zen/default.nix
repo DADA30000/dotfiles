@@ -380,12 +380,13 @@ in
           "xpinstall.signatures.required" = false;
           "browser.tabs.allow_transparent_browser" = true;
           "browser.tabs.unloadOnLowMemory" = true;
-          #"zen.mediacontrols.enabled" = false;
+          # "zen.mediacontrols.enabled" = false;
           "zen.widget.linux.transparency" = true;
           "zen.welcome-screen.seen" = true;
           "zen.view.use-single-toolbar" = false;
           "zen.view.sidebar-expanded" = true;
           "zen.view.compact.enable-at-startup" = true;
+          "zen.view.compact.toolbar-hide-after-hover.duration" = 2147483647;
         };
         extensions = {
           packages = with inputs.firefox-addons.packages.${pkgs.stdenv.hostPlatform.system}; [

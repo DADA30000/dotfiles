@@ -1,8 +1,8 @@
 diff --git a/assets/translations/en.json b/assets/translations/en.json
-index 57518b7..c58b89f 100644
+index 3dddac0..fb3942e 100644
 --- a/assets/translations/en.json
 +++ b/assets/translations/en.json
-@@ -483,8 +483,12 @@
+@@ -484,8 +484,12 @@
        "power": "Power",
        "screen-time": "Screen Time",
        "system": "System",
@@ -16,7 +16,7 @@ index 57518b7..c58b89f 100644
        "daily": {
          "tooltip": {
 diff --git a/assets/translations/ru.json b/assets/translations/ru.json
-index 76defeb..2514f9c 100644
+index 7ed612c..d551c23 100644
 --- a/assets/translations/ru.json
 +++ b/assets/translations/ru.json
 @@ -481,8 +481,12 @@
@@ -33,10 +33,10 @@ index 76defeb..2514f9c 100644
        "daily": {
          "tooltip": {
 diff --git a/meson.build b/meson.build
-index c5541d2..c2efc1b 100644
+index 392a104..425e438 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -662,6 +662,7 @@ _noctalia_sources = files(
+@@ -664,6 +664,7 @@ _noctalia_sources = files(
    'src/shell/control_center/tabs/notifications_tab.cpp',
    'src/shell/control_center/tabs/power_tab.cpp',
    'src/shell/control_center/tabs/screen_time_tab.cpp',
@@ -45,10 +45,10 @@ index c5541d2..c2efc1b 100644
    'src/shell/control_center/plugin_shortcut.cpp',
    'src/shell/control_center/shortcut_registry.cpp',
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index 31701cb..eec08bc 100644
+index e2f6110..9d2a27f 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
-@@ -533,8 +533,16 @@ void Application::initStyleThemeAndWayland() {
+@@ -552,8 +552,16 @@ void Application::initStyleThemeAndWayland() {
  
    auto applyMotionConfig = [this]() {
      auto& motion = MotionService::instance();
@@ -68,10 +68,10 @@ index 31701cb..eec08bc 100644
    auto applyStyleConfig = [this, lastCornerRadiusScale = std::numeric_limits<float>::quiet_NaN()]() mutable {
      const float corner = m_configService.config().shell.cornerRadiusScale;
 diff --git a/src/app/application_ui.cpp b/src/app/application_ui.cpp
-index e3fcf92..805fc92 100644
+index c13be23..9d8bdcb 100644
 --- a/src/app/application_ui.cpp
 +++ b/src/app/application_ui.cpp
-@@ -578,7 +578,7 @@ void Application::initPanelManagerAndPanels() {
+@@ -580,7 +580,7 @@ void Application::initPanelManagerAndPanels() {
      // the panel surface (and its keyboard focus) alive for the duration of the reveal animation, so
      // the keys would land on the closing panel instead of the target window. Close without animation
      // so focus returns to the toplevel before we paste, mirroring the launcher's app-launch close.
@@ -81,10 +81,10 @@ index e3fcf92..805fc92 100644
      m_clipboardAutoPasteTimer.stop();
      m_clipboardAutoPasteTimer.start(std::chrono::milliseconds(Style::animFast + 30), [this, isImage]() {
 diff --git a/src/config/config_overrides.cpp b/src/config/config_overrides.cpp
-index aebc648..a07f63a 100644
+index 1dafd47..f5eb5fa 100644
 --- a/src/config/config_overrides.cpp
 +++ b/src/config/config_overrides.cpp
-@@ -565,6 +565,18 @@ namespace {
+@@ -568,6 +568,18 @@ namespace {
                if (item.radius.has_value()) {
                  row.insert_or_assign("radius", static_cast<double>(*item.radius));
                }
@@ -137,7 +137,7 @@ index 6b03614..b2789ae 100644
    spec.accordion = group.accordion;
    spec.accordionDirection = group.accordionDirection;
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 6166b8a..9568e53 100644
+index 624d5ae..17e042e 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
 @@ -40,6 +40,10 @@ struct BarCapsuleGroupStyle {
@@ -151,7 +151,7 @@ index 6166b8a..9568e53 100644
    float opacity = 1.0F;
    // Collapse the group to its first member; hovering the capsule reveals the rest inline.
    bool accordion = false;
-@@ -389,6 +393,10 @@ struct WidgetBarCapsuleSpec {
+@@ -391,6 +395,10 @@ struct WidgetBarCapsuleSpec {
    float padding = Style::barCapsulePadding;
    // Corner radius in logical pixels before content-scale; unset means automatic pill radius.
    std::optional<float> radius;
@@ -162,7 +162,7 @@ index 6166b8a..9568e53 100644
    // Capsule background opacity multiplier (0.0–1.0).
    float opacity = 1.0F;
    bool hoverHighlight = true;
-@@ -569,6 +577,8 @@ struct LockscreenConfig {
+@@ -571,6 +579,8 @@ struct LockscreenConfig {
    bool fingerprint = true;
    bool allowEmptyPassword = false;
    bool blurredDesktop = false;
@@ -171,7 +171,7 @@ index 6166b8a..9568e53 100644
    std::vector<LockscreenTransition> transitions = {LockscreenTransition::Fade, LockscreenTransition::Wipe,
                                                     LockscreenTransition::Disc, LockscreenTransition::Stripes,
                                                     LockscreenTransition::Zoom, LockscreenTransition::Honeycomb};
-@@ -1050,6 +1060,13 @@ struct ShellConfig {
+@@ -1069,6 +1079,13 @@ struct ShellConfig {
    struct AnimationConfig {
      bool enabled = true;
      float speed = 1.0F;
@@ -185,7 +185,7 @@ index 6166b8a..9568e53 100644
  
      bool operator==(const AnimationConfig&) const = default;
    };
-@@ -1063,6 +1080,8 @@ struct ShellConfig {
+@@ -1082,6 +1099,8 @@ struct ShellConfig {
  
    struct PanelConfig {
      PanelTransparencyMode transparencyMode = PanelTransparencyMode::Solid;
@@ -195,7 +195,7 @@ index 6166b8a..9568e53 100644
      ColorSpec borderColor = colorSpecFromRole(ColorRole::Outline);
      float borderWidth = Style::borderWidth;
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index eb5c69b..d55dcfb 100644
+index b93a32c..b6530b5 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
 @@ -134,6 +134,8 @@ namespace noctalia::config::schema {
@@ -207,7 +207,7 @@ index eb5c69b..d55dcfb 100644
          enumArrayField(
              &LockscreenConfig::transitions, "transition", kLockscreenTransitions, std::optional<LockscreenTransition>{}
          ),
-@@ -1315,10 +1317,42 @@ namespace noctalia::config::schema {
+@@ -1316,10 +1318,42 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -250,7 +250,7 @@ index eb5c69b..d55dcfb 100644
        };
        return s;
      }
-@@ -1375,6 +1409,8 @@ namespace noctalia::config::schema {
+@@ -1376,6 +1410,8 @@ namespace noctalia::config::schema {
      const Schema<ShellConfig::PanelConfig>& shellPanelSchema() {
        static const Schema<ShellConfig::PanelConfig> s = {
            enumField(&ShellConfig::PanelConfig::transparencyMode, "transparency_mode", kPanelTransparencyModes),
@@ -259,7 +259,7 @@ index eb5c69b..d55dcfb 100644
            field(&ShellConfig::PanelConfig::borders, "borders"),
            colorField(&ShellConfig::PanelConfig::borderColor, "border_color"),
            field(&ShellConfig::PanelConfig::borderWidth, "border_width", kPanelBorderWidthRange),
-@@ -2098,29 +2134,6 @@ namespace noctalia::config::schema {
+@@ -2103,29 +2139,6 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -289,7 +289,7 @@ index eb5c69b..d55dcfb 100644
      template <typename Struct>
      Field<Struct> optionalDoubleField(
          std::optional<double> Struct::* member, std::string_view key, std::optional<Range<double>> range = std::nullopt
-@@ -2160,6 +2173,10 @@ namespace noctalia::config::schema {
+@@ -2165,6 +2178,10 @@ namespace noctalia::config::schema {
            optionalColorField(&BarCapsuleGroupStyle::foreground, "foreground"),
            field(&BarCapsuleGroupStyle::padding, "padding", kBarCapsulePaddingRange),
            optionalFloatField(&BarCapsuleGroupStyle::radius, "radius", kBarCapsuleRadiusRangeF),
@@ -301,7 +301,7 @@ index eb5c69b..d55dcfb 100644
            field(&BarCapsuleGroupStyle::accordion, "accordion"),
            enumField(&BarCapsuleGroupStyle::accordionDirection, "accordion_direction", kBarAccordionDirections),
 diff --git a/src/config/schema/ranges.h b/src/config/schema/ranges.h
-index f9caf13..852172d 100644
+index f43083e..7504f4d 100644
 --- a/src/config/schema/ranges.h
 +++ b/src/config/schema/ranges.h
 @@ -17,7 +17,7 @@ namespace noctalia::config::schema {
@@ -502,7 +502,7 @@ index f38b736..31d39d2 100644
    std::unordered_set<AnimationManager*> m_managers;
  };
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 60e6a97..9b2af81 100644
+index 46eadf6..af54a89 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
 @@ -898,6 +898,11 @@ namespace {
@@ -536,7 +536,7 @@ index 60e6a97..9b2af81 100644
          if (run.container == nullptr) {
            placeCapsuleHoverBoxes(
                run, isVertical, shellW, shellH, contentX, contentY, capsuleRadius, widgetHoverPadding
-@@ -3081,6 +3096,11 @@ void Bar::applyBackgroundPalette(BarInstance& instance) {
+@@ -3093,6 +3108,11 @@ void Bar::applyBackgroundPalette(BarInstance& instance) {
    if (instance.bg == nullptr) {
      return;
    }
@@ -549,7 +549,7 @@ index 60e6a97..9b2af81 100644
    style.fill = colorForRole(ColorRole::Surface, instance.barConfig.backgroundOpacity);
    style.border = resolveColorSpec(instance.barConfig.border);
 diff --git a/src/shell/bar/widget_factory.cpp b/src/shell/bar/widget_factory.cpp
-index 0b89670..b74d499 100644
+index 50e93a4..63b6c75 100644
 --- a/src/shell/bar/widget_factory.cpp
 +++ b/src/shell/bar/widget_factory.cpp
 @@ -349,6 +349,11 @@ std::unique_ptr<Widget> WidgetFactory::create(
@@ -1015,7 +1015,7 @@ index 45cec2b..a1cfc54 100644
  }
  
 diff --git a/src/shell/bar/widgets/workspaces_widget.cpp b/src/shell/bar/widgets/workspaces_widget.cpp
-index 329d73e..917c225 100644
+index 4a59161..9087dfa 100644
 --- a/src/shell/bar/widgets/workspaces_widget.cpp
 +++ b/src/shell/bar/widgets/workspaces_widget.cpp
 @@ -76,7 +76,8 @@ WorkspacesWidget::WorkspacesWidget(
@@ -1276,10 +1276,10 @@ index d1b369b..3a6be62 100644
  }
  
 diff --git a/src/shell/control_center/tabs/bluetooth_tab.cpp b/src/shell/control_center/tabs/bluetooth_tab.cpp
-index 539bd68..181efac 100644
+index 73f18cf..10a68fd 100644
 --- a/src/shell/control_center/tabs/bluetooth_tab.cpp
 +++ b/src/shell/control_center/tabs/bluetooth_tab.cpp
-@@ -143,7 +143,7 @@ public:
+@@ -144,7 +144,7 @@ public:
        : m_device(std::move(device)), m_service(service) {
      setScale(scale);
      setRadius(Style::scaledRadiusMd(scale));
@@ -2833,7 +2833,7 @@ index b4a300e..ac3f4eb 100644
        const float padding = getFloatSetting(settings, "background_padding", kDefaultBgPadding);
        widget.setBackgroundStyle(bgColor, radius, padding);
 diff --git a/src/shell/desktop/desktop_widget_settings_registry.cpp b/src/shell/desktop/desktop_widget_settings_registry.cpp
-index 8fd895e..e35c6e7 100644
+index b5f3df8..04a1b83 100644
 --- a/src/shell/desktop/desktop_widget_settings_registry.cpp
 +++ b/src/shell/desktop/desktop_widget_settings_registry.cpp
 @@ -172,7 +172,7 @@ namespace desktop_settings {
@@ -2881,10 +2881,10 @@ index 64530fb..018e5be 100644
          inst->inputDispatcher.syncPointerHover();
  
 diff --git a/src/shell/launcher/launcher_panel.cpp b/src/shell/launcher/launcher_panel.cpp
-index 7ff639f..ebf899e 100644
+index 555537c..9a934f8 100644
 --- a/src/shell/launcher/launcher_panel.cpp
 +++ b/src/shell/launcher/launcher_panel.cpp
-@@ -1448,7 +1448,8 @@ void LauncherPanel::finishActivation(LauncherProvider& provider, const std::stri
+@@ -1451,7 +1451,8 @@ void LauncherPanel::finishActivation(LauncherProvider& provider, const std::stri
    if (trackUsage && provider.trackUsage()) {
      m_usageTracker.record(provider.id(), resultId);
    }
@@ -2907,20 +2907,36 @@ index 164e010..bd70f13 100644
    void create() override;
    void onOpen(std::string_view context) override;
 diff --git a/src/shell/lockscreen/lock_screen.cpp b/src/shell/lockscreen/lock_screen.cpp
-index 80eb50c..90097ca 100644
+index ca37664..0f70042 100644
 --- a/src/shell/lockscreen/lock_screen.cpp
 +++ b/src/shell/lockscreen/lock_screen.cpp
-@@ -749,6 +749,9 @@ bool LockScreen::shouldCaptureDesktop() const {
+@@ -926,6 +926,9 @@ bool LockScreen::shouldCaptureDesktop() const {
      return false;
    }
    const auto& lockscreen = m_configService->config().lockscreen;
 +  if (lockscreen.transparent) {
 +    return false;
 +  }
-   return lockscreen.blurredDesktop || !lockscreen.transitions.empty();
+   return lockscreen.blurredDesktop || (!m_transitionSuppressed && !lockscreen.transitions.empty());
  }
  
-@@ -941,6 +944,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
+@@ -1081,11 +1084,14 @@ void LockScreen::chooseTransition() {
+   if (m_transitionSuppressed) {
+     return;
+   }
+-  if (m_configService == nullptr || m_wayland == nullptr || !m_wayland->hasScreencopy()) {
++  if (m_configService == nullptr || m_wayland == nullptr) {
+     return;
+   }
+ 
+   const auto& config = m_configService->config().lockscreen;
++  if (!config.transparent && !m_wayland->hasScreencopy()) {
++    return;
++  }
+   m_transitionDurationMs = config.transitionDurationMs;
+   if (config.transitions.empty()) {
+     return;
+@@ -1126,6 +1132,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
      return;
    }
    const auto& lockscreen = m_configService->config().lockscreen;
@@ -2929,7 +2945,7 @@ index 80eb50c..90097ca 100644
  }
  
 diff --git a/src/shell/lockscreen/lock_surface.cpp b/src/shell/lockscreen/lock_surface.cpp
-index f69b0cb..fe6dc99 100644
+index 20d3098..9da398b 100644
 --- a/src/shell/lockscreen/lock_surface.cpp
 +++ b/src/shell/lockscreen/lock_surface.cpp
 @@ -113,20 +113,18 @@ namespace {
@@ -2955,7 +2971,16 @@ index f69b0cb..fe6dc99 100644
    }
  
    [[nodiscard]] std::string weekdayAbbrev(const std::string& isoDate) {
-@@ -745,6 +743,24 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
+@@ -628,7 +626,7 @@ bool LockSurface::initialize(ext_session_lock_v1* lock, wl_output* output, std::
+ 
+   // Upload the immutable cover before the lock request is flushed. The first
+   // configured lock-surface frame can then be the captured desktop immediately.
+-  if (m_transitionPhase == TransitionPhase::Cover && !ensureTransitionCaptureTexture()) {
++  if (!m_isTransparent && m_transitionPhase == TransitionPhase::Cover && !ensureTransitionCaptureTexture()) {
+     m_transitionPhase = TransitionPhase::Disabled;
+     m_transitionProgress = 1.0F;
+     syncTransitionCover();
+@@ -746,6 +744,20 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
    requestLayout();
  }
  
@@ -2966,10 +2991,6 @@ index f69b0cb..fe6dc99 100644
 +  m_isTransparent = transparent;
 +  m_transparentOpacity = std::clamp(opacity, 0.0F, 1.0F);
 +  if (m_isTransparent) {
-+    m_transitionPhase = TransitionPhase::Disabled;
-+    if (m_wallpaper != nullptr) {
-+      m_wallpaper->setVisible(false);
-+    }
 +    if (m_tintOverlay != nullptr) {
 +      m_tintOverlay->setVisible(false);
 +    }
@@ -2980,7 +3001,87 @@ index f69b0cb..fe6dc99 100644
  void LockSurface::setWallpaperFillMode(WallpaperFillMode fillMode) {
    if (m_wallpaperFillMode == fillMode) {
      return;
-@@ -1255,34 +1271,51 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -808,7 +820,8 @@ void LockSurface::configureTransition(
+   m_transitionProgress = 1.0F;
+   m_enterTransitionRequested = false;
+ 
+-  if (!transition.has_value() || m_blackout || !m_desktopCapture.has_value() || m_desktopCapture->rgba.empty()) {
++  if (!transition.has_value() || m_blackout
++      || (!m_isTransparent && (!m_desktopCapture.has_value() || m_desktopCapture->rgba.empty()))) {
+     m_transitionPhase = TransitionPhase::Disabled;
+     syncTransitionCover();
+     return;
+@@ -837,10 +850,11 @@ void LockSurface::startExitTransition() {
+     return;
+   }
+ 
+-  if (m_transitionPhase != TransitionPhase::Disabled && m_transitionCaptureTexture.id == 0) {
++  if (m_transitionPhase != TransitionPhase::Disabled && !m_isTransparent && m_transitionCaptureTexture.id == 0) {
+     (void)ensureTransitionCaptureTexture();
+   }
+-  if (m_transitionPhase == TransitionPhase::Disabled || m_transitionCaptureTexture.id == 0) {
++  if (m_transitionPhase == TransitionPhase::Disabled
++      || (!m_isTransparent && m_transitionCaptureTexture.id == 0)) {
+     m_transitionPhase = TransitionPhase::ExitComplete;
+     notifyTransitionStateChanged();
+     return;
+@@ -1099,6 +1113,43 @@ void LockSurface::layoutTransitionCover() {
+ }
+ 
+ void LockSurface::syncTransitionCover() {
++  if (m_isTransparent) {
++    if (m_transitionCover != nullptr) {
++      m_transitionCover->setVisible(false);
++    }
++    if (m_wallpaper != nullptr) {
++      m_wallpaper->setVisible(true);
++      m_wallpaper->setPosition(0.0F, 0.0F);
++      m_wallpaper->setSize(static_cast<float>(width()), static_cast<float>(height()));
++      m_wallpaper->setSources(
++          WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, 0.0F),
++          WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
++          0.0F, 0.0F, 0.0F, 0.0F
++      );
++      TransitionParams tp{};
++      tp.direction = m_transitionParams.direction;
++      tp.centerX = m_transitionParams.centerX;
++      tp.centerY = m_transitionParams.centerY;
++      tp.stripeCount = m_transitionParams.stripeCount;
++      tp.angle = m_transitionParams.angle;
++      tp.cellSize = m_transitionParams.cellSize;
++      tp.smoothness = m_transitionParams.smoothness;
++      m_wallpaper->setTransition(
++          static_cast<WallpaperTransition>(m_transition),
++          m_transitionProgress,
++          tp
++      );
++    }
++    if (m_loginPanel != nullptr) {
++      m_loginPanel->setOpacity(m_transitionProgress);
++    }
++    if (m_widgetLayer != nullptr) {
++      m_widgetLayer->setOpacity(m_transitionProgress);
++    }
++    requestRedraw();
++    return;
++  }
++
+   if (m_transitionCover == nullptr) {
+     return;
+   }
+@@ -1165,6 +1216,11 @@ void LockSurface::prepareFrame(bool needsUpdate, bool needsLayout) {
+   Renderer& renderer = renderTarget().renderer();
+ 
+   if (m_transitionPhase == TransitionPhase::Cover) {
++    if (m_isTransparent) {
++      UiPhaseScope layoutPhase(UiPhase::Layout);
++      layoutScene(width(), height());
++      return;
++    }
+     if (ensureTransitionCaptureTexture()) {
+       UiPhaseScope layoutPhase(UiPhase::Layout);
+       layoutCoverOnly(width(), height());
+@@ -1293,34 +1349,69 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    m_backgroundLayer->setPosition(0.0F, 0.0F);
    m_backgroundLayer->setSize(sw, sh);
  
@@ -2999,18 +3100,36 @@ index f69b0cb..fe6dc99 100644
 -      }
 -  );
 +  if (m_isTransparent) {
-+    m_wallpaper->setVisible(false);
-+    m_backdrop->setPosition(0.0F, 0.0F);
-+    m_backdrop->setSize(sw, sh);
-+    m_backdrop->setVisible(m_transparentOpacity > 0.001F);
-+    m_backdrop->setStyle(
-+        RoundedRectStyle{
-+            .fill = rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
-+            .fillMode = FillMode::Solid,
-+        }
++    m_wallpaper->setVisible(true);
++    m_wallpaper->setPosition(0.0F, 0.0F);
++    m_wallpaper->setSize(sw, sh);
++    m_wallpaper->setSources(
++        WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, 0.0F),
++        WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
++        0.0F, 0.0F, 0.0F, 0.0F
 +    );
++    TransitionParams tp{};
++    tp.direction = m_transitionParams.direction;
++    tp.centerX = m_transitionParams.centerX;
++    tp.centerY = m_transitionParams.centerY;
++    tp.stripeCount = m_transitionParams.stripeCount;
++    tp.angle = m_transitionParams.angle;
++    tp.cellSize = m_transitionParams.cellSize;
++    tp.smoothness = m_transitionParams.smoothness;
++    m_wallpaper->setTransition(
++        static_cast<WallpaperTransition>(m_transition),
++        m_transitionProgress,
++        tp
++    );
++    m_backdrop->setVisible(false);
 +    if (m_tintOverlay != nullptr) {
 +      m_tintOverlay->setVisible(false);
++    }
++    if (m_loginPanel != nullptr) {
++      m_loginPanel->setOpacity(m_transitionProgress);
++    }
++    if (m_widgetLayer != nullptr) {
++      m_widgetLayer->setOpacity(m_transitionProgress);
 +    }
 +  } else {
 +    m_wallpaper->setVisible(true);
@@ -3059,8 +3178,27 @@ index f69b0cb..fe6dc99 100644
      }
    }
  
+@@ -1909,6 +2000,9 @@ std::string LockSurface::resolveStatusText(const lockscreen_login_box::LoginBoxS
+ }
+ 
+ void LockSurface::applyWallpaperTexture() {
++  if (m_isTransparent) {
++    return;
++  }
+   if (usesDesktopCaptureBackground()) {
+     applyBlurredDesktopTexture();
+     if (m_blurredDesktopTexture.id != 0) {
+@@ -2046,7 +2140,7 @@ void LockSurface::releaseCaptureTextures() {
+ }
+ 
+ void LockSurface::applyBlurredDesktopTexture() {
+-  if (!m_captureDirty || !usesDesktopCaptureBackground()) {
++  if (m_isTransparent || !m_captureDirty || !usesDesktopCaptureBackground()) {
+     return;
+   }
+ 
 diff --git a/src/shell/lockscreen/lock_surface.h b/src/shell/lockscreen/lock_surface.h
-index f174e06..1bfd0b0 100644
+index 5824692..ac42c0d 100644
 --- a/src/shell/lockscreen/lock_surface.h
 +++ b/src/shell/lockscreen/lock_surface.h
 @@ -59,6 +59,7 @@ public:
@@ -3071,7 +3209,7 @@ index f174e06..1bfd0b0 100644
    void setWallpaperFillMode(WallpaperFillMode fillMode);
    void setWallpaperCoverage(TextureCoverage coverage);
    void setWallpaperFillColor(Color fillColor);
-@@ -217,6 +218,8 @@ private:
+@@ -222,6 +223,8 @@ private:
    TextureCoverage m_wallpaperCoverage;
    Color m_wallpaperFillColor = rgba(0.0F, 0.0F, 0.0F, 0.0F);
    bool m_wallpaperDirty = false;
@@ -3081,7 +3219,7 @@ index f174e06..1bfd0b0 100644
    std::function<void()> m_onLogin;
    std::function<void()> m_onCycleLayout;
 diff --git a/src/shell/lockscreen/lockscreen_login_box.cpp b/src/shell/lockscreen/lockscreen_login_box.cpp
-index c1a1d1a..c4c4e83 100644
+index a2184e0..5f3589f 100644
 --- a/src/shell/lockscreen/lockscreen_login_box.cpp
 +++ b/src/shell/lockscreen/lockscreen_login_box.cpp
 @@ -308,13 +308,13 @@ namespace lockscreen_login_box {
@@ -3101,9 +3239,9 @@ index c1a1d1a..c4c4e83 100644
      style.inputRadius = std::clamp(readFloat(settings, kInputRadiusKey, style.inputRadius), 0.0F, 32.0F);
      style.centerPasswordText = readBool(settings, kCenterPasswordTextKey, style.centerPasswordText);
      style.showLoginButton = readBool(settings, kShowLoginButtonKey, style.showLoginButton);
-@@ -339,13 +339,13 @@ namespace lockscreen_login_box {
-       settings.insert_or_assign(std::string(kShowCapsLockKey), true);
+@@ -341,13 +341,13 @@ namespace lockscreen_login_box {
        settings.insert_or_assign(std::string(kShowKeyboardLayoutKey), true);
+       settings.insert_or_assign(std::string(kShowPasswordRevealKey), true);
        settings.insert_or_assign(std::string(kShowUnlockHintKey), true);
 -      settings.insert_or_assign(std::string(kInputOpacityKey), 1.0);
 +      settings.insert_or_assign(std::string(kInputOpacityKey), 0.25);
@@ -3119,10 +3257,10 @@ index c1a1d1a..c4c4e83 100644
      }
    }
 diff --git a/src/shell/lockscreen/lockscreen_login_box.h b/src/shell/lockscreen/lockscreen_login_box.h
-index 4281d27..a51d743 100644
+index b667889..5007278 100644
 --- a/src/shell/lockscreen/lockscreen_login_box.h
 +++ b/src/shell/lockscreen/lockscreen_login_box.h
-@@ -41,11 +41,11 @@ namespace lockscreen_login_box {
+@@ -42,11 +42,11 @@ namespace lockscreen_login_box {
  
    struct LoginBoxStyle {
      LayoutMode layout = LayoutMode::Regular;
@@ -3140,10 +3278,10 @@ index 4281d27..a51d743 100644
      bool showLoginButton = true;
      bool showCapsLock = true;
 diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
-index 192023b..47e3ed7 100644
+index 4a6c83f..3bf10a6 100644
 --- a/src/shell/panel/panel_manager.cpp
 +++ b/src/shell/panel/panel_manager.cpp
-@@ -1449,7 +1449,7 @@ void PanelManager::closePanel(bool animateClose) {
+@@ -1456,7 +1456,7 @@ void PanelManager::closePanel(bool animateClose) {
                }
              });
            },
@@ -3152,7 +3290,7 @@ index 192023b..47e3ed7 100644
        );
      } else {
        m_animations.cancelForOwner(m_sceneRoot.get());
-@@ -1463,7 +1463,7 @@ void PanelManager::closePanel(bool animateClose) {
+@@ -1470,7 +1470,7 @@ void PanelManager::closePanel(bool animateClose) {
                }
              });
            },
@@ -3161,7 +3299,7 @@ index 192023b..47e3ed7 100644
        );
      }
      m_surface->requestRedraw();
-@@ -2228,7 +2228,7 @@ void PanelManager::startAttachedOpenAnimation() {
+@@ -2311,7 +2311,7 @@ void PanelManager::startAttachedOpenAnimation() {
    m_attachedOpenAnimationPending = false;
    m_animations.animate(
        m_attachedRevealProgress, 1.0F, Style::animNormal, Easing::EaseOutCubic,
@@ -3170,7 +3308,7 @@ index 192023b..47e3ed7 100644
    );
  }
  
-@@ -2641,7 +2641,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2724,7 +2724,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
        applyDetachedReveal(0.0F);
        m_animations.animate(
            0.0F, 1.0F, Style::animNormal, Easing::EaseOutCubic, [this](float v) { applyDetachedReveal(v); }, {},
@@ -3180,10 +3318,10 @@ index 192023b..47e3ed7 100644
      }
  
 diff --git a/src/shell/panel/panel_manager.h b/src/shell/panel/panel_manager.h
-index d458d18..274a43b 100644
+index d349f07..9667d54 100644
 --- a/src/shell/panel/panel_manager.h
 +++ b/src/shell/panel/panel_manager.h
-@@ -112,6 +112,7 @@ public:
+@@ -115,6 +115,7 @@ public:
  
    [[nodiscard]] bool isOpen() const noexcept;
    [[nodiscard]] bool isOpenPanel(std::string_view panelId) const noexcept;
@@ -3229,10 +3367,10 @@ index 9c38f39..f7b3774 100644
                box.setRadius(0.0F);
              },
 diff --git a/src/shell/settings/settings_window_scene.cpp b/src/shell/settings/settings_window_scene.cpp
-index 309d61a..f405280 100644
+index 72b2997..a10a9b7 100644
 --- a/src/shell/settings/settings_window_scene.cpp
 +++ b/src/shell/settings/settings_window_scene.cpp
-@@ -2223,7 +2223,7 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2229,7 +2229,7 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
      m_sceneRoot->setPopupContext(m_selectPopup.get());
    }
  
