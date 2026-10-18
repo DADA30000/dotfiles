@@ -1,0 +1,1356 @@
+diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/meson.build /tmp/valent-test/src/plugins/gtk/meson.build
+--- a/src/plugins/gtk/meson.build	1970-01-01 03:00:01.000000000 +0300
++++ b/src/plugins/gtk/meson.build	2026-10-18 16:04:41.328232011 +0300
+@@ -6,9 +6,12 @@
+   error('"@0@" plugin requires gtk4 @1@'.format(plugin_name, gtk_version))
+ endif
+ 
++wayland_client_dep = dependency('wayland-client', required: false)
++
+ plugin_gtk_deps = [
+   libvalent_dep,
+   gtk_dep,
++  wayland_client_dep,
+ ]
+ 
+ # Sources
+@@ -16,6 +19,7 @@
+   'gtk-plugin.c',
+   'valent-gdk-clipboard.c',
+   'valent-gtk-notifications.c',
++  'wlr-data-control-protocol.c',
+ ])
+ 
+ plugin_gtk_include_directories = [include_directories('.')]
+@@ -50,4 +54,3 @@
+ )
+ 
+ plugins_static += [plugin_gtk]
+-
+diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/valent-gdk-clipboard.c /tmp/valent-test/src/plugins/gtk/valent-gdk-clipboard.c
+--- a/src/plugins/gtk/valent-gdk-clipboard.c	1970-01-01 03:00:01.000000000 +0300
++++ b/src/plugins/gtk/valent-gdk-clipboard.c	2026-10-18 16:04:31.992204003 +0300
+@@ -1,17 +1,76 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ // SPDX-FileCopyrightText: Andy Holmes <andrew.g.r.holmes@gmail.com>
+ 
++#define _GNU_SOURCE
+ #define G_LOG_DOMAIN "valent-gdk-clipboard"
+ 
+ #include "config.h"
+ 
++#include <fcntl.h>
++#include <unistd.h>
+ #include <gdk/gdk.h>
++#include <gdk/wayland/gdkwayland.h>
++#include <wayland-client.h>
+ #include <valent.h>
+ 
+ #include "valent-gdk-clipboard.h"
++#include "wlr-data-control-unstable-v1-client-protocol.h"
+ 
+ #define CLIPBOARD_MAXSIZE (16 * 1024)
+ 
++typedef struct {
++  GSource source;
++  struct wl_display *display;
++  GPollFD pfd;
++  gboolean reading;
++} ValentWaylandSource;
++
++static gboolean
++valent_wayland_source_prepare (GSource *source, int *timeout)
++{
++  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
++  *timeout = -1;
++  while (wl_display_prepare_read (wsource->display) != 0)
++    wl_display_dispatch_pending (wsource->display);
++  wsource->reading = TRUE;
++  wl_display_flush (wsource->display);
++  return FALSE;
++}
++
++static gboolean
++valent_wayland_source_check (GSource *source)
++{
++  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
++  if (wsource->reading)
++    {
++      wsource->reading = FALSE;
++      if (wsource->pfd.revents & G_IO_IN)
++        {
++          wl_display_read_events (wsource->display);
++          return TRUE;
++        }
++      else
++        {
++          wl_display_cancel_read (wsource->display);
++        }
++    }
++  return FALSE;
++}
++
++static gboolean
++valent_wayland_source_dispatch (GSource *source, GSourceFunc callback, gpointer user_data)
++{
++  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
++  wl_display_dispatch_pending (wsource->display);
++  return G_SOURCE_CONTINUE;
++}
++
++static GSourceFuncs valent_wayland_source_funcs = {
++  valent_wayland_source_prepare,
++  valent_wayland_source_check,
++  valent_wayland_source_dispatch,
++  NULL
++};
+ 
+ struct _ValentGdkClipboard
+ {
+@@ -19,6 +78,19 @@
+ 
+   GdkClipboard           *clipboard;
+   int64_t                 timestamp;
++
++  /* Wayland wlr-data-control */
++  struct wl_display      *wl_display;
++  struct wl_registry     *wl_registry;
++  struct wl_seat         *wl_seat;
++  struct zwlr_data_control_manager_v1 *wlr_manager;
++  struct zwlr_data_control_device_v1  *wlr_device;
++  GSource                *wl_source;
++
++  char                   *wlr_text;
++  struct zwlr_data_control_source_v1  *wlr_source;
++  GBytes                 *wlr_source_bytes;
++  gboolean                is_our_selection;
+ };
+ 
+ G_DEFINE_FINAL_TYPE (ValentGdkClipboard, valent_gdk_clipboard, VALENT_TYPE_CLIPBOARD_ADAPTER)
+@@ -33,6 +105,184 @@
+   NULL,
+ };
+ 
++static void
++offer_offer (void *data, struct zwlr_data_control_offer_v1 *offer, const char *mime)
++{
++}
++
++static const struct zwlr_data_control_offer_v1_listener offer_listener = {
++  .offer = offer_offer,
++};
++
++static void
++device_data_offer (void *data,
++                   struct zwlr_data_control_device_v1 *dev,
++                   struct zwlr_data_control_offer_v1 *offer)
++{
++  zwlr_data_control_offer_v1_add_listener (offer, &offer_listener, NULL);
++}
++
++static void
++device_selection (void *data,
++                  struct zwlr_data_control_device_v1 *dev,
++                  struct zwlr_data_control_offer_v1 *offer)
++{
++  ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (data);
++
++  if (self->is_our_selection)
++    {
++      self->is_our_selection = FALSE;
++      if (offer != NULL)
++        zwlr_data_control_offer_v1_destroy (offer);
++      return;
++    }
++
++  if (offer == NULL)
++    {
++      g_clear_pointer (&self->wlr_text, g_free);
++      return;
++    }
++
++  int p[2];
++  if (pipe2 (p, O_CLOEXEC) < 0)
++    {
++      zwlr_data_control_offer_v1_destroy (offer);
++      return;
++    }
++
++  zwlr_data_control_offer_v1_receive (offer, "text/plain;charset=utf-8", p[1]);
++  close (p[1]);
++  wl_display_flush (self->wl_display);
++
++  GByteArray *array = g_byte_array_new ();
++  char buf[4096];
++  ssize_t n;
++  while ((n = read (p[0], buf, sizeof (buf))) > 0)
++    {
++      g_byte_array_append (array, (const guint8 *)buf, n);
++      if (array->len > CLIPBOARD_MAXSIZE)
++        break;
++    }
++  close (p[0]);
++  zwlr_data_control_offer_v1_destroy (offer);
++
++  if (array->len > 0)
++    {
++      if (array->data[array->len - 1] != '\0')
++        {
++          guint8 zero = 0;
++          g_byte_array_append (array, &zero, 1);
++        }
++
++      char *new_text = (char *)g_byte_array_free (array, FALSE);
++
++      if (g_strcmp0 (self->wlr_text, new_text) != 0)
++        {
++          g_free (self->wlr_text);
++          self->wlr_text = new_text;
++          self->timestamp = valent_timestamp_ms ();
++          valent_clipboard_adapter_changed (VALENT_CLIPBOARD_ADAPTER (self));
++        }
++      else
++        {
++          g_free (new_text);
++        }
++    }
++  else
++    {
++      g_byte_array_free (array, TRUE);
++    }
++}
++
++static void
++device_finished (void *data, struct zwlr_data_control_device_v1 *dev)
++{
++}
++
++static void
++device_primary (void *data,
++                struct zwlr_data_control_device_v1 *dev,
++                struct zwlr_data_control_offer_v1 *offer)
++{
++  if (offer != NULL)
++    zwlr_data_control_offer_v1_destroy (offer);
++}
++
++static const struct zwlr_data_control_device_v1_listener device_listener = {
++  .data_offer = device_data_offer,
++  .selection = device_selection,
++  .finished = device_finished,
++  .primary_selection = device_primary,
++};
++
++static void
++source_send (void *data,
++             struct zwlr_data_control_source_v1 *src,
++             const char *mime,
++             int32_t fd)
++{
++  ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (data);
++
++  if (self->wlr_source_bytes != NULL)
++    {
++      gsize size = 0;
++      const char *buf = g_bytes_get_data (self->wlr_source_bytes, &size);
++      if (buf != NULL && size > 0)
++        {
++          if (size > 0 && buf[size - 1] == '\0')
++            size--;
++          ssize_t written = write (fd, buf, size);
++          (void)written;
++        }
++    }
++  close (fd);
++}
++
++static void
++source_cancelled (void *data,
++                  struct zwlr_data_control_source_v1 *src)
++{
++  ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (data);
++
++  if (self->wlr_source == src)
++    self->wlr_source = NULL;
++
++  zwlr_data_control_source_v1_destroy (src);
++}
++
++static const struct zwlr_data_control_source_v1_listener source_listener = {
++  .send = source_send,
++  .cancelled = source_cancelled,
++};
++
++static void
++registry_global (void *data,
++                 struct wl_registry *reg,
++                 uint32_t name,
++                 const char *interface,
++                 uint32_t version)
++{
++  ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (data);
++
++  if (strcmp (interface, zwlr_data_control_manager_v1_interface.name) == 0)
++    {
++      self->wlr_manager = wl_registry_bind (reg, name, &zwlr_data_control_manager_v1_interface, 1);
++    }
++  else if (strcmp (interface, "wl_seat") == 0 && self->wl_seat == NULL)
++    {
++      self->wl_seat = wl_registry_bind (reg, name, &wl_seat_interface, 1);
++    }
++}
++
++static void
++registry_remove (void *data, struct wl_registry *reg, uint32_t name)
++{
++}
++
++static const struct wl_registry_listener registry_listener = {
++  .global = registry_global,
++  .global_remove = registry_remove,
++};
+ 
+ /*
+  * GdkClipboard Callbacks
+@@ -46,7 +296,6 @@
+   g_assert (VALENT_IS_GDK_CLIPBOARD (self));
+   g_assert (VALENT_IS_CLIPBOARD_ADAPTER (adapter));
+ 
+-  // TODO: get the actual TIMESTAMP value
+   self->timestamp = valent_timestamp_ms ();
+   valent_clipboard_adapter_changed (adapter);
+ }
+@@ -136,6 +385,10 @@
+   const char * const *mimetypes = NULL;
+ 
+   g_assert (VALENT_IS_GDK_CLIPBOARD (self));
++
++  if (self->wlr_device != NULL)
++    return g_strdupv ((char **)text_mimetypes);
++
+   g_return_val_if_fail (GDK_IS_CLIPBOARD (self->clipboard), NULL);
+ 
+   if ((formats = gdk_clipboard_get_formats (self->clipboard)) == NULL)
+@@ -152,7 +405,6 @@
+   ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
+ 
+   g_assert (VALENT_IS_GDK_CLIPBOARD (self));
+-  g_return_val_if_fail (GDK_IS_CLIPBOARD (self->clipboard), 0);
+ 
+   return self->timestamp;
+ }
+@@ -171,6 +423,19 @@
+   g_assert (VALENT_IS_GDK_CLIPBOARD (self));
+   g_assert (mimetype != NULL && *mimetype != '\0');
+ 
++  if (self->wlr_device != NULL && g_strv_contains (text_mimetypes, mimetype))
++    {
++      if (self->wlr_text != NULL)
++        {
++          task = g_task_new (adapter, cancellable, callback, user_data);
++          g_task_set_source_tag (task, valent_gdk_clipboard_read_bytes);
++          g_task_return_pointer (task,
++                                 g_bytes_new (self->wlr_text, strlen (self->wlr_text) + 1),
++                                 (GDestroyNotify)g_bytes_unref);
++          return;
++        }
++    }
++
+   if G_UNLIKELY (!GDK_IS_CLIPBOARD (self->clipboard))
+     {
+       g_task_report_new_error (adapter, callback, user_data,
+@@ -181,7 +446,6 @@
+       return;
+     }
+ 
+-  /* Special case for text */
+   if (g_strv_contains (text_mimetypes, mimetype))
+     {
+       task = g_task_new (adapter, cancellable, callback, user_data);
+@@ -194,33 +458,22 @@
+       return;
+     }
+ 
+-  if ((formats = gdk_clipboard_get_formats (self->clipboard)) == NULL)
+-    {
+-      g_task_report_new_error (adapter, callback, user_data,
+-                               valent_gdk_clipboard_read_bytes,
+-                               G_IO_ERROR,
+-                               G_IO_ERROR_NOT_SUPPORTED,
+-                               "Clipboard empty");
+-      return;
+-    }
+-
+-  if (!gdk_content_formats_contain_mime_type (formats, mimetype))
++  formats = gdk_clipboard_get_formats (self->clipboard);
++  if G_UNLIKELY (!gdk_content_formats_contain_mime_type (formats, mimetype))
+     {
+       g_task_report_new_error (adapter, callback, user_data,
+                                valent_gdk_clipboard_read_bytes,
+                                G_IO_ERROR,
+                                G_IO_ERROR_NOT_SUPPORTED,
+-                               "%s format not available.",
+-                               mimetype);
++                               "Target MIME type not available");
+       return;
+     }
+ 
+   task = g_task_new (adapter, cancellable, callback, user_data);
+   g_task_set_source_tag (task, valent_gdk_clipboard_read_bytes);
+-  g_task_set_task_data (task, g_strdup (mimetype), g_free);
+ 
+   gdk_clipboard_read_async (self->clipboard,
+-                            (const char *[]){ mimetype, NULL },
++                            (const char * const *)text_mimetypes,
+                             G_PRIORITY_DEFAULT,
+                             cancellable,
+                             (GAsyncReadyCallback)gdk_clipboard_read_cb,
+@@ -236,24 +489,44 @@
+                                   gpointer                user_data)
+ {
+   ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
+-  g_autoptr (GdkContentProvider) content = NULL;
+   g_autoptr (GTask) task = NULL;
+ 
+   g_assert (VALENT_IS_GDK_CLIPBOARD (self));
+-  g_assert (bytes != NULL || (mimetype != NULL && *mimetype != '\0'));
+-  g_return_if_fail (GDK_IS_CLIPBOARD (self->clipboard));
+-
+-  if (bytes != NULL)
+-    content = gdk_content_provider_new_for_bytes (mimetype, bytes);
++  g_assert (mimetype != NULL && *mimetype != '\0');
++  g_assert (bytes != NULL);
+ 
+-  if (!gdk_clipboard_set_content (self->clipboard, content))
++  if (self->wlr_device != NULL && self->wlr_manager != NULL &&
++      g_strv_contains (text_mimetypes, mimetype))
+     {
+-      g_task_report_new_error (adapter, callback, user_data,
+-                               valent_gdk_clipboard_write_bytes,
+-                               G_IO_ERROR,
+-                               G_IO_ERROR_FAILED,
+-                               "Failed to set clipboard content");
+-      return;
++      if (self->wlr_source != NULL)
++        {
++          zwlr_data_control_source_v1_destroy (self->wlr_source);
++          self->wlr_source = NULL;
++        }
++
++      g_clear_pointer (&self->wlr_source_bytes, g_bytes_unref);
++      self->wlr_source_bytes = g_bytes_ref (bytes);
++      self->is_our_selection = TRUE;
++
++      self->wlr_source = zwlr_data_control_manager_v1_create_data_source (self->wlr_manager);
++      zwlr_data_control_source_v1_offer (self->wlr_source, "text/plain;charset=utf-8");
++      zwlr_data_control_source_v1_offer (self->wlr_source, "text/plain");
++      zwlr_data_control_source_v1_offer (self->wlr_source, "UTF8_STRING");
++      zwlr_data_control_source_v1_add_listener (self->wlr_source, &source_listener, self);
++
++      zwlr_data_control_device_v1_set_selection (self->wlr_device, self->wlr_source);
++      wl_display_flush (self->wl_display);
++    }
++
++  if (GDK_IS_CLIPBOARD (self->clipboard) && g_strv_contains (text_mimetypes, mimetype))
++    {
++      gsize size = 0;
++      const char *data = g_bytes_get_data (bytes, &size);
++      if (data != NULL)
++        {
++          g_autofree char *text = g_strndup (data, size);
++          gdk_clipboard_set_text (self->clipboard, text);
++        }
+     }
+ 
+   task = g_task_new (adapter, cancellable, callback, user_data);
+@@ -269,12 +542,52 @@
+ {
+   ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (object);
+ 
+-  if (self->clipboard != NULL)
++  if (self->wl_source != NULL)
++    {
++      g_source_destroy (self->wl_source);
++      g_source_unref (self->wl_source);
++      self->wl_source = NULL;
++    }
++
++  if (self->wlr_source != NULL)
+     {
+-      g_signal_handlers_disconnect_by_data (self->clipboard, self);
+-      self->clipboard = NULL;
++      zwlr_data_control_source_v1_destroy (self->wlr_source);
++      self->wlr_source = NULL;
+     }
+ 
++  if (self->wlr_device != NULL)
++    {
++      zwlr_data_control_device_v1_destroy (self->wlr_device);
++      self->wlr_device = NULL;
++    }
++
++  if (self->wlr_manager != NULL)
++    {
++      zwlr_data_control_manager_v1_destroy (self->wlr_manager);
++      self->wlr_manager = NULL;
++    }
++
++  if (self->wl_seat != NULL)
++    {
++      wl_seat_destroy (self->wl_seat);
++      self->wl_seat = NULL;
++    }
++
++  if (self->wl_registry != NULL)
++    {
++      wl_registry_destroy (self->wl_registry);
++      self->wl_registry = NULL;
++    }
++
++  if (self->wl_display != NULL)
++    {
++      wl_display_disconnect (self->wl_display);
++      self->wl_display = NULL;
++    }
++
++  g_clear_pointer (&self->wlr_text, g_free);
++  g_clear_pointer (&self->wlr_source_bytes, g_bytes_unref);
++
+   VALENT_OBJECT_CLASS (valent_gdk_clipboard_parent_class)->destroy (object);
+ }
+ 
+@@ -297,6 +610,33 @@
+                                G_CALLBACK (on_changed),
+                                self,
+                                G_CONNECT_DEFAULT);
++
++      if (GDK_IS_WAYLAND_DISPLAY (display))
++        {
++          self->wl_display = wl_display_connect (NULL);
++          if (self->wl_display != NULL)
++            {
++              self->wl_registry = wl_display_get_registry (self->wl_display);
++              wl_registry_add_listener (self->wl_registry, &registry_listener, self);
++              wl_display_roundtrip (self->wl_display);
++
++              if (self->wlr_manager != NULL && self->wl_seat != NULL)
++                {
++                  self->wlr_device = zwlr_data_control_manager_v1_get_data_device (self->wlr_manager, self->wl_seat);
++                  zwlr_data_control_device_v1_add_listener (self->wlr_device, &device_listener, self);
++                  wl_display_roundtrip (self->wl_display);
++
++                  GSource *source = g_source_new (&valent_wayland_source_funcs, sizeof (ValentWaylandSource));
++                  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
++                  wsource->display = self->wl_display;
++                  wsource->pfd.fd = wl_display_get_fd (self->wl_display);
++                  wsource->pfd.events = G_IO_IN;
++                  g_source_add_poll (source, &wsource->pfd);
++                  g_source_attach (source, NULL);
++                  self->wl_source = source;
++                }
++            }
++        }
+     }
+   else
+     {
+@@ -327,4 +667,3 @@
+ valent_gdk_clipboard_init (ValentGdkClipboard *self)
+ {
+ }
+-
+diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-protocol.c /tmp/valent-test/src/plugins/gtk/wlr-data-control-protocol.c
+--- a/src/plugins/gtk/wlr-data-control-protocol.c	1970-01-01 03:00:00.000000000 +0300
++++ b/src/plugins/gtk/wlr-data-control-protocol.c	2026-10-18 16:03:54.713910656 +0300
+@@ -0,0 +1,123 @@
++/* Generated by wayland-scanner 1.26.0 */
++
++/*
++ * Copyright © 2018 Simon Ser
++ * Copyright © 2019 Ivan Molodetskikh
++ *
++ * Permission to use, copy, modify, distribute, and sell this
++ * software and its documentation for any purpose is hereby granted
++ * without fee, provided that the above copyright notice appear in
++ * all copies and that both that copyright notice and this permission
++ * notice appear in supporting documentation, and that the name of
++ * the copyright holders not be used in advertising or publicity
++ * pertaining to distribution of the software without specific,
++ * written prior permission.  The copyright holders make no
++ * representations about the suitability of this software for any
++ * purpose.  It is provided "as is" without express or implied
++ * warranty.
++ *
++ * THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS
++ * SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
++ * FITNESS, IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
++ * SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
++ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
++ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
++ * THIS SOFTWARE.
++ */
++
++#include <stdbool.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include "wayland-util.h"
++
++#ifndef __has_attribute
++# define __has_attribute(x) 0  /* Compatibility with non-clang compilers. */
++#endif
++
++#if (__has_attribute(visibility) || defined(__GNUC__) && __GNUC__ >= 4)
++#define WL_PRIVATE __attribute__ ((visibility("hidden")))
++#else
++#define WL_PRIVATE
++#endif
++
++extern const struct wl_interface wl_seat_interface;
++extern const struct wl_interface zwlr_data_control_device_v1_interface;
++extern const struct wl_interface zwlr_data_control_offer_v1_interface;
++extern const struct wl_interface zwlr_data_control_source_v1_interface;
++
++static const struct wl_interface *wlr_data_control_unstable_v1_types[] = {
++	NULL,
++	NULL,
++	&zwlr_data_control_source_v1_interface,
++	&zwlr_data_control_device_v1_interface,
++	&wl_seat_interface,
++	&zwlr_data_control_source_v1_interface,
++	&zwlr_data_control_source_v1_interface,
++	&zwlr_data_control_offer_v1_interface,
++	&zwlr_data_control_offer_v1_interface,
++	&zwlr_data_control_offer_v1_interface,
++};
++
++static const struct wl_message zwlr_data_control_manager_v1_requests[] = {
++	{ "create_data_source", "n", wlr_data_control_unstable_v1_types + 2 },
++	{ "get_data_device", "no", wlr_data_control_unstable_v1_types + 3 },
++	{ "destroy", "", wlr_data_control_unstable_v1_types + 0 },
++};
++
++WL_PRIVATE const struct wl_interface zwlr_data_control_manager_v1_interface = {
++	"zwlr_data_control_manager_v1", 2,
++	3, zwlr_data_control_manager_v1_requests,
++	0, NULL,
++};
++
++static const struct wl_message zwlr_data_control_device_v1_requests[] = {
++	{ "set_selection", "?o", wlr_data_control_unstable_v1_types + 5 },
++	{ "destroy", "", wlr_data_control_unstable_v1_types + 0 },
++	{ "set_primary_selection", "2?o", wlr_data_control_unstable_v1_types + 6 },
++};
++
++static const struct wl_message zwlr_data_control_device_v1_events[] = {
++	{ "data_offer", "n", wlr_data_control_unstable_v1_types + 7 },
++	{ "selection", "?o", wlr_data_control_unstable_v1_types + 8 },
++	{ "finished", "", wlr_data_control_unstable_v1_types + 0 },
++	{ "primary_selection", "2?o", wlr_data_control_unstable_v1_types + 9 },
++};
++
++WL_PRIVATE const struct wl_interface zwlr_data_control_device_v1_interface = {
++	"zwlr_data_control_device_v1", 2,
++	3, zwlr_data_control_device_v1_requests,
++	4, zwlr_data_control_device_v1_events,
++};
++
++static const struct wl_message zwlr_data_control_source_v1_requests[] = {
++	{ "offer", "s", wlr_data_control_unstable_v1_types + 0 },
++	{ "destroy", "", wlr_data_control_unstable_v1_types + 0 },
++};
++
++static const struct wl_message zwlr_data_control_source_v1_events[] = {
++	{ "send", "sh", wlr_data_control_unstable_v1_types + 0 },
++	{ "cancelled", "", wlr_data_control_unstable_v1_types + 0 },
++};
++
++WL_PRIVATE const struct wl_interface zwlr_data_control_source_v1_interface = {
++	"zwlr_data_control_source_v1", 1,
++	2, zwlr_data_control_source_v1_requests,
++	2, zwlr_data_control_source_v1_events,
++};
++
++static const struct wl_message zwlr_data_control_offer_v1_requests[] = {
++	{ "receive", "sh", wlr_data_control_unstable_v1_types + 0 },
++	{ "destroy", "", wlr_data_control_unstable_v1_types + 0 },
++};
++
++static const struct wl_message zwlr_data_control_offer_v1_events[] = {
++	{ "offer", "s", wlr_data_control_unstable_v1_types + 0 },
++};
++
++WL_PRIVATE const struct wl_interface zwlr_data_control_offer_v1_interface = {
++	"zwlr_data_control_offer_v1", 1,
++	2, zwlr_data_control_offer_v1_requests,
++	1, zwlr_data_control_offer_v1_events,
++};
++
+diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h /tmp/valent-test/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h
+--- a/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	1970-01-01 03:00:00.000000000 +0300
++++ b/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	2026-10-18 16:03:54.713052094 +0300
+@@ -0,0 +1,665 @@
++/* Generated by wayland-scanner 1.26.0 */
++
++#ifndef WLR_DATA_CONTROL_UNSTABLE_V1_CLIENT_PROTOCOL_H
++#define WLR_DATA_CONTROL_UNSTABLE_V1_CLIENT_PROTOCOL_H
++
++#include <stdint.h>
++#include <stddef.h>
++#include "wayland-client.h"
++
++#ifdef  __cplusplus
++extern "C" {
++#endif
++
++/**
++ * @page page_wlr_data_control_unstable_v1 The wlr_data_control_unstable_v1 protocol
++ * control data devices
++ *
++ * @section page_desc_wlr_data_control_unstable_v1 Description
++ *
++ * This protocol allows a privileged client to control data devices. In
++ * particular, the client will be able to manage the current selection and take
++ * the role of a clipboard manager.
++ *
++ * Warning! The protocol described in this file is experimental and
++ * backward incompatible changes may be made. Backward compatible changes
++ * may be added together with the corresponding interface version bump.
++ * Backward incompatible changes are done by bumping the version number in
++ * the protocol and interface names and resetting the interface version.
++ * Once the protocol is to be declared stable, the 'z' prefix and the
++ * version number in the protocol and interface names are removed and the
++ * interface version number is reset.
++ *
++ * @section page_ifaces_wlr_data_control_unstable_v1 Interfaces
++ * - @subpage page_iface_zwlr_data_control_manager_v1 - manager to control data devices
++ * - @subpage page_iface_zwlr_data_control_device_v1 - manage a data device for a seat
++ * - @subpage page_iface_zwlr_data_control_source_v1 - offer to transfer data
++ * - @subpage page_iface_zwlr_data_control_offer_v1 - offer to transfer data
++ * @section page_copyright_wlr_data_control_unstable_v1 Copyright
++ * <pre>
++ *
++ * Copyright © 2018 Simon Ser
++ * Copyright © 2019 Ivan Molodetskikh
++ *
++ * Permission to use, copy, modify, distribute, and sell this
++ * software and its documentation for any purpose is hereby granted
++ * without fee, provided that the above copyright notice appear in
++ * all copies and that both that copyright notice and this permission
++ * notice appear in supporting documentation, and that the name of
++ * the copyright holders not be used in advertising or publicity
++ * pertaining to distribution of the software without specific,
++ * written prior permission.  The copyright holders make no
++ * representations about the suitability of this software for any
++ * purpose.  It is provided "as is" without express or implied
++ * warranty.
++ *
++ * THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS
++ * SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
++ * FITNESS, IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
++ * SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
++ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
++ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
++ * THIS SOFTWARE.
++ * </pre>
++ */
++struct wl_seat;
++struct zwlr_data_control_device_v1;
++struct zwlr_data_control_manager_v1;
++struct zwlr_data_control_offer_v1;
++struct zwlr_data_control_source_v1;
++
++#ifndef ZWLR_DATA_CONTROL_MANAGER_V1_INTERFACE
++#define ZWLR_DATA_CONTROL_MANAGER_V1_INTERFACE
++/**
++ * @page page_iface_zwlr_data_control_manager_v1 zwlr_data_control_manager_v1
++ * @section page_iface_zwlr_data_control_manager_v1_desc Description
++ *
++ * This interface is a manager that allows creating per-seat data device
++ * controls.
++ * @section page_iface_zwlr_data_control_manager_v1_api API
++ * See @ref iface_zwlr_data_control_manager_v1.
++ */
++/**
++ * @defgroup iface_zwlr_data_control_manager_v1 The zwlr_data_control_manager_v1 interface
++ *
++ * This interface is a manager that allows creating per-seat data device
++ * controls.
++ */
++extern const struct wl_interface zwlr_data_control_manager_v1_interface;
++#endif
++#ifndef ZWLR_DATA_CONTROL_DEVICE_V1_INTERFACE
++#define ZWLR_DATA_CONTROL_DEVICE_V1_INTERFACE
++/**
++ * @page page_iface_zwlr_data_control_device_v1 zwlr_data_control_device_v1
++ * @section page_iface_zwlr_data_control_device_v1_desc Description
++ *
++ * This interface allows a client to manage a seat's selection.
++ *
++ * When the seat is destroyed, this object becomes inert.
++ * @section page_iface_zwlr_data_control_device_v1_api API
++ * See @ref iface_zwlr_data_control_device_v1.
++ */
++/**
++ * @defgroup iface_zwlr_data_control_device_v1 The zwlr_data_control_device_v1 interface
++ *
++ * This interface allows a client to manage a seat's selection.
++ *
++ * When the seat is destroyed, this object becomes inert.
++ */
++extern const struct wl_interface zwlr_data_control_device_v1_interface;
++#endif
++#ifndef ZWLR_DATA_CONTROL_SOURCE_V1_INTERFACE
++#define ZWLR_DATA_CONTROL_SOURCE_V1_INTERFACE
++/**
++ * @page page_iface_zwlr_data_control_source_v1 zwlr_data_control_source_v1
++ * @section page_iface_zwlr_data_control_source_v1_desc Description
++ *
++ * The wlr_data_control_source object is the source side of a
++ * wlr_data_control_offer. It is created by the source client in a data
++ * transfer and provides a way to describe the offered data and a way to
++ * respond to requests to transfer the data.
++ * @section page_iface_zwlr_data_control_source_v1_api API
++ * See @ref iface_zwlr_data_control_source_v1.
++ */
++/**
++ * @defgroup iface_zwlr_data_control_source_v1 The zwlr_data_control_source_v1 interface
++ *
++ * The wlr_data_control_source object is the source side of a
++ * wlr_data_control_offer. It is created by the source client in a data
++ * transfer and provides a way to describe the offered data and a way to
++ * respond to requests to transfer the data.
++ */
++extern const struct wl_interface zwlr_data_control_source_v1_interface;
++#endif
++#ifndef ZWLR_DATA_CONTROL_OFFER_V1_INTERFACE
++#define ZWLR_DATA_CONTROL_OFFER_V1_INTERFACE
++/**
++ * @page page_iface_zwlr_data_control_offer_v1 zwlr_data_control_offer_v1
++ * @section page_iface_zwlr_data_control_offer_v1_desc Description
++ *
++ * A wlr_data_control_offer represents a piece of data offered for transfer
++ * by another client (the source client). The offer describes the different
++ * MIME types that the data can be converted to and provides the mechanism
++ * for transferring the data directly from the source client.
++ * @section page_iface_zwlr_data_control_offer_v1_api API
++ * See @ref iface_zwlr_data_control_offer_v1.
++ */
++/**
++ * @defgroup iface_zwlr_data_control_offer_v1 The zwlr_data_control_offer_v1 interface
++ *
++ * A wlr_data_control_offer represents a piece of data offered for transfer
++ * by another client (the source client). The offer describes the different
++ * MIME types that the data can be converted to and provides the mechanism
++ * for transferring the data directly from the source client.
++ */
++extern const struct wl_interface zwlr_data_control_offer_v1_interface;
++#endif
++
++#define ZWLR_DATA_CONTROL_MANAGER_V1_CREATE_DATA_SOURCE 0
++#define ZWLR_DATA_CONTROL_MANAGER_V1_GET_DATA_DEVICE 1
++#define ZWLR_DATA_CONTROL_MANAGER_V1_DESTROY 2
++
++
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ */
++#define ZWLR_DATA_CONTROL_MANAGER_V1_CREATE_DATA_SOURCE_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ */
++#define ZWLR_DATA_CONTROL_MANAGER_V1_GET_DATA_DEVICE_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ */
++#define ZWLR_DATA_CONTROL_MANAGER_V1_DESTROY_SINCE_VERSION 1
++
++/** @ingroup iface_zwlr_data_control_manager_v1 */
++static inline void
++zwlr_data_control_manager_v1_set_user_data(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1, void *user_data)
++{
++	wl_proxy_set_user_data((struct wl_proxy *) zwlr_data_control_manager_v1, user_data);
++}
++
++/** @ingroup iface_zwlr_data_control_manager_v1 */
++static inline void *
++zwlr_data_control_manager_v1_get_user_data(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1)
++{
++	return wl_proxy_get_user_data((struct wl_proxy *) zwlr_data_control_manager_v1);
++}
++
++static inline uint32_t
++zwlr_data_control_manager_v1_get_version(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1)
++{
++	return wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_manager_v1);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ *
++ * Create a new data source.
++ */
++static inline struct zwlr_data_control_source_v1 *
++zwlr_data_control_manager_v1_create_data_source(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1)
++{
++	struct wl_proxy *id;
++
++	id = wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_manager_v1,
++			 ZWLR_DATA_CONTROL_MANAGER_V1_CREATE_DATA_SOURCE, &zwlr_data_control_source_v1_interface, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_manager_v1), 0, NULL);
++
++	return (struct zwlr_data_control_source_v1 *) id;
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ *
++ * Create a data device that can be used to manage a seat's selection.
++ */
++static inline struct zwlr_data_control_device_v1 *
++zwlr_data_control_manager_v1_get_data_device(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1, struct wl_seat *seat)
++{
++	struct wl_proxy *id;
++
++	id = wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_manager_v1,
++			 ZWLR_DATA_CONTROL_MANAGER_V1_GET_DATA_DEVICE, &zwlr_data_control_device_v1_interface, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_manager_v1), 0, NULL, seat);
++
++	return (struct zwlr_data_control_device_v1 *) id;
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_manager_v1
++ *
++ * All objects created by the manager will still remain valid, until their
++ * appropriate destroy request has been called.
++ */
++static inline void
++zwlr_data_control_manager_v1_destroy(struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_manager_v1,
++			 ZWLR_DATA_CONTROL_MANAGER_V1_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_manager_v1), WL_MARSHAL_FLAG_DESTROY);
++}
++
++#ifndef ZWLR_DATA_CONTROL_DEVICE_V1_ERROR_ENUM
++#define ZWLR_DATA_CONTROL_DEVICE_V1_ERROR_ENUM
++enum zwlr_data_control_device_v1_error {
++	/**
++	 * source given to set_selection or set_primary_selection was already used before
++	 */
++	ZWLR_DATA_CONTROL_DEVICE_V1_ERROR_USED_SOURCE = 1,
++};
++#endif /* ZWLR_DATA_CONTROL_DEVICE_V1_ERROR_ENUM */
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ * @struct zwlr_data_control_device_v1_listener
++ */
++struct zwlr_data_control_device_v1_listener {
++	/**
++	 * introduce a new wlr_data_control_offer
++	 *
++	 * The data_offer event introduces a new wlr_data_control_offer
++	 * object, which will subsequently be used in either the
++	 * wlr_data_control_device.selection event (for the regular
++	 * clipboard selections) or the
++	 * wlr_data_control_device.primary_selection event (for the primary
++	 * clipboard selections). Immediately following the
++	 * wlr_data_control_device.data_offer event, the new data_offer
++	 * object will send out wlr_data_control_offer.offer events to
++	 * describe the MIME types it offers.
++	 */
++	void (*data_offer)(void *data,
++			   struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1,
++			   struct zwlr_data_control_offer_v1 *id);
++	/**
++	 * advertise new selection
++	 *
++	 * The selection event is sent out to notify the client of a new
++	 * wlr_data_control_offer for the selection for this device. The
++	 * wlr_data_control_device.data_offer and the
++	 * wlr_data_control_offer.offer events are sent out immediately
++	 * before this event to introduce the data offer object. The
++	 * selection event is sent to a client when a new selection is set.
++	 * The wlr_data_control_offer is valid until a new
++	 * wlr_data_control_offer or NULL is received. The client must
++	 * destroy the previous selection wlr_data_control_offer, if any,
++	 * upon receiving this event.
++	 *
++	 * The first selection event is sent upon binding the
++	 * wlr_data_control_device object.
++	 */
++	void (*selection)(void *data,
++			  struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1,
++			  struct zwlr_data_control_offer_v1 *id);
++	/**
++	 * this data control is no longer valid
++	 *
++	 * This data control object is no longer valid and should be
++	 * destroyed by the client.
++	 */
++	void (*finished)(void *data,
++			 struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1);
++	/**
++	 * advertise new primary selection
++	 *
++	 * The primary_selection event is sent out to notify the client
++	 * of a new wlr_data_control_offer for the primary selection for
++	 * this device. The wlr_data_control_device.data_offer and the
++	 * wlr_data_control_offer.offer events are sent out immediately
++	 * before this event to introduce the data offer object. The
++	 * primary_selection event is sent to a client when a new primary
++	 * selection is set. The wlr_data_control_offer is valid until a
++	 * new wlr_data_control_offer or NULL is received. The client must
++	 * destroy the previous primary selection wlr_data_control_offer,
++	 * if any, upon receiving this event.
++	 *
++	 * If the compositor supports primary selection, the first
++	 * primary_selection event is sent upon binding the
++	 * wlr_data_control_device object.
++	 * @since 2
++	 */
++	void (*primary_selection)(void *data,
++				  struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1,
++				  struct zwlr_data_control_offer_v1 *id);
++};
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++static inline int
++zwlr_data_control_device_v1_add_listener(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1,
++					 const struct zwlr_data_control_device_v1_listener *listener, void *data)
++{
++	return wl_proxy_add_listener((struct wl_proxy *) zwlr_data_control_device_v1,
++				     (void (**)(void)) listener, data);
++}
++
++#define ZWLR_DATA_CONTROL_DEVICE_V1_SET_SELECTION 0
++#define ZWLR_DATA_CONTROL_DEVICE_V1_DESTROY 1
++#define ZWLR_DATA_CONTROL_DEVICE_V1_SET_PRIMARY_SELECTION 2
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_DATA_OFFER_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_SELECTION_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_FINISHED_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_PRIMARY_SELECTION_SINCE_VERSION 2
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_SET_SELECTION_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_DESTROY_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ */
++#define ZWLR_DATA_CONTROL_DEVICE_V1_SET_PRIMARY_SELECTION_SINCE_VERSION 2
++
++/** @ingroup iface_zwlr_data_control_device_v1 */
++static inline void
++zwlr_data_control_device_v1_set_user_data(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1, void *user_data)
++{
++	wl_proxy_set_user_data((struct wl_proxy *) zwlr_data_control_device_v1, user_data);
++}
++
++/** @ingroup iface_zwlr_data_control_device_v1 */
++static inline void *
++zwlr_data_control_device_v1_get_user_data(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1)
++{
++	return wl_proxy_get_user_data((struct wl_proxy *) zwlr_data_control_device_v1);
++}
++
++static inline uint32_t
++zwlr_data_control_device_v1_get_version(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1)
++{
++	return wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_device_v1);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ *
++ * This request asks the compositor to set the selection to the data from
++ * the source on behalf of the client.
++ *
++ * The given source may not be used in any further set_selection or
++ * set_primary_selection requests. Attempting to use a previously used
++ * source is a protocol error.
++ *
++ * To unset the selection, set the source to NULL.
++ */
++static inline void
++zwlr_data_control_device_v1_set_selection(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1, struct zwlr_data_control_source_v1 *source)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_device_v1,
++			 ZWLR_DATA_CONTROL_DEVICE_V1_SET_SELECTION, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_device_v1), 0, source);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ *
++ * Destroys the data device object.
++ */
++static inline void
++zwlr_data_control_device_v1_destroy(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_device_v1,
++			 ZWLR_DATA_CONTROL_DEVICE_V1_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_device_v1), WL_MARSHAL_FLAG_DESTROY);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_device_v1
++ *
++ * This request asks the compositor to set the primary selection to the
++ * data from the source on behalf of the client.
++ *
++ * The given source may not be used in any further set_selection or
++ * set_primary_selection requests. Attempting to use a previously used
++ * source is a protocol error.
++ *
++ * To unset the primary selection, set the source to NULL.
++ *
++ * The compositor will ignore this request if it does not support primary
++ * selection.
++ */
++static inline void
++zwlr_data_control_device_v1_set_primary_selection(struct zwlr_data_control_device_v1 *zwlr_data_control_device_v1, struct zwlr_data_control_source_v1 *source)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_device_v1,
++			 ZWLR_DATA_CONTROL_DEVICE_V1_SET_PRIMARY_SELECTION, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_device_v1), 0, source);
++}
++
++#ifndef ZWLR_DATA_CONTROL_SOURCE_V1_ERROR_ENUM
++#define ZWLR_DATA_CONTROL_SOURCE_V1_ERROR_ENUM
++enum zwlr_data_control_source_v1_error {
++	/**
++	 * offer sent after wlr_data_control_device.set_selection
++	 */
++	ZWLR_DATA_CONTROL_SOURCE_V1_ERROR_INVALID_OFFER = 1,
++};
++#endif /* ZWLR_DATA_CONTROL_SOURCE_V1_ERROR_ENUM */
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ * @struct zwlr_data_control_source_v1_listener
++ */
++struct zwlr_data_control_source_v1_listener {
++	/**
++	 * send the data
++	 *
++	 * Request for data from the client. Send the data as the
++	 * specified MIME type over the passed file descriptor, then close
++	 * it.
++	 * @param mime_type MIME type for the data
++	 * @param fd file descriptor for the data
++	 */
++	void (*send)(void *data,
++		     struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1,
++		     const char *mime_type,
++		     int32_t fd);
++	/**
++	 * selection was cancelled
++	 *
++	 * This data source is no longer valid. The data source has been
++	 * replaced by another data source.
++	 *
++	 * The client should clean up and destroy this data source.
++	 */
++	void (*cancelled)(void *data,
++			  struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1);
++};
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ */
++static inline int
++zwlr_data_control_source_v1_add_listener(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1,
++					 const struct zwlr_data_control_source_v1_listener *listener, void *data)
++{
++	return wl_proxy_add_listener((struct wl_proxy *) zwlr_data_control_source_v1,
++				     (void (**)(void)) listener, data);
++}
++
++#define ZWLR_DATA_CONTROL_SOURCE_V1_OFFER 0
++#define ZWLR_DATA_CONTROL_SOURCE_V1_DESTROY 1
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ */
++#define ZWLR_DATA_CONTROL_SOURCE_V1_SEND_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ */
++#define ZWLR_DATA_CONTROL_SOURCE_V1_CANCELLED_SINCE_VERSION 1
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ */
++#define ZWLR_DATA_CONTROL_SOURCE_V1_OFFER_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ */
++#define ZWLR_DATA_CONTROL_SOURCE_V1_DESTROY_SINCE_VERSION 1
++
++/** @ingroup iface_zwlr_data_control_source_v1 */
++static inline void
++zwlr_data_control_source_v1_set_user_data(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1, void *user_data)
++{
++	wl_proxy_set_user_data((struct wl_proxy *) zwlr_data_control_source_v1, user_data);
++}
++
++/** @ingroup iface_zwlr_data_control_source_v1 */
++static inline void *
++zwlr_data_control_source_v1_get_user_data(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1)
++{
++	return wl_proxy_get_user_data((struct wl_proxy *) zwlr_data_control_source_v1);
++}
++
++static inline uint32_t
++zwlr_data_control_source_v1_get_version(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1)
++{
++	return wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_source_v1);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ *
++ * This request adds a MIME type to the set of MIME types advertised to
++ * targets. Can be called several times to offer multiple types.
++ *
++ * Calling this after wlr_data_control_device.set_selection is a protocol
++ * error.
++ */
++static inline void
++zwlr_data_control_source_v1_offer(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1, const char *mime_type)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_source_v1,
++			 ZWLR_DATA_CONTROL_SOURCE_V1_OFFER, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_source_v1), 0, mime_type);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_source_v1
++ *
++ * Destroys the data source object.
++ */
++static inline void
++zwlr_data_control_source_v1_destroy(struct zwlr_data_control_source_v1 *zwlr_data_control_source_v1)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_source_v1,
++			 ZWLR_DATA_CONTROL_SOURCE_V1_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_source_v1), WL_MARSHAL_FLAG_DESTROY);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ * @struct zwlr_data_control_offer_v1_listener
++ */
++struct zwlr_data_control_offer_v1_listener {
++	/**
++	 * advertise offered MIME type
++	 *
++	 * Sent immediately after creating the wlr_data_control_offer
++	 * object. One event per offered MIME type.
++	 * @param mime_type offered MIME type
++	 */
++	void (*offer)(void *data,
++		      struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1,
++		      const char *mime_type);
++};
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ */
++static inline int
++zwlr_data_control_offer_v1_add_listener(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1,
++					const struct zwlr_data_control_offer_v1_listener *listener, void *data)
++{
++	return wl_proxy_add_listener((struct wl_proxy *) zwlr_data_control_offer_v1,
++				     (void (**)(void)) listener, data);
++}
++
++#define ZWLR_DATA_CONTROL_OFFER_V1_RECEIVE 0
++#define ZWLR_DATA_CONTROL_OFFER_V1_DESTROY 1
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ */
++#define ZWLR_DATA_CONTROL_OFFER_V1_OFFER_SINCE_VERSION 1
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ */
++#define ZWLR_DATA_CONTROL_OFFER_V1_RECEIVE_SINCE_VERSION 1
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ */
++#define ZWLR_DATA_CONTROL_OFFER_V1_DESTROY_SINCE_VERSION 1
++
++/** @ingroup iface_zwlr_data_control_offer_v1 */
++static inline void
++zwlr_data_control_offer_v1_set_user_data(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1, void *user_data)
++{
++	wl_proxy_set_user_data((struct wl_proxy *) zwlr_data_control_offer_v1, user_data);
++}
++
++/** @ingroup iface_zwlr_data_control_offer_v1 */
++static inline void *
++zwlr_data_control_offer_v1_get_user_data(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1)
++{
++	return wl_proxy_get_user_data((struct wl_proxy *) zwlr_data_control_offer_v1);
++}
++
++static inline uint32_t
++zwlr_data_control_offer_v1_get_version(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1)
++{
++	return wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_offer_v1);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ *
++ * To transfer the offered data, the client issues this request and
++ * indicates the MIME type it wants to receive. The transfer happens
++ * through the passed file descriptor (typically created with the pipe
++ * system call). The source client writes the data in the MIME type
++ * representation requested and then closes the file descriptor.
++ *
++ * The receiving client reads from the read end of the pipe until EOF and
++ * then closes its end, at which point the transfer is complete.
++ *
++ * This request may happen multiple times for different MIME types.
++ */
++static inline void
++zwlr_data_control_offer_v1_receive(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1, const char *mime_type, int32_t fd)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_offer_v1,
++			 ZWLR_DATA_CONTROL_OFFER_V1_RECEIVE, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_offer_v1), 0, mime_type, fd);
++}
++
++/**
++ * @ingroup iface_zwlr_data_control_offer_v1
++ *
++ * Destroys the data offer object.
++ */
++static inline void
++zwlr_data_control_offer_v1_destroy(struct zwlr_data_control_offer_v1 *zwlr_data_control_offer_v1)
++{
++	wl_proxy_marshal_flags((struct wl_proxy *) zwlr_data_control_offer_v1,
++			 ZWLR_DATA_CONTROL_OFFER_V1_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *) zwlr_data_control_offer_v1), WL_MARSHAL_FLAG_DESTROY);
++}
++
++#ifdef  __cplusplus
++}
++#endif
++
++#endif

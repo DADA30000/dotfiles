@@ -570,6 +570,13 @@ let
     '';
   };
 
+  valent = pkgs.valent.overrideAttrs (oldAttrs: {
+    buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ pkgs.wayland ];
+    patches = (oldAttrs.patches or [ ]) ++ [
+      ../../../stuff/patches/valent-wayland-clipboard.patch
+    ];
+  });
+
 in
 {
   home.extraOutputsToInstall = osConfig.environment.extraOutputsToInstall;
@@ -580,7 +587,7 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
-      pkgs.valent
+      valent
       pkgs.git-repo
       pkgs.gpu-screen-recorder-gtk
       pkgs.qdiskinfo
@@ -747,7 +754,6 @@ in
       pkgs.kdePackages.qtstyleplugin-kvantum
       pkgs.kdePackages.qtdeclarative
       pkgs.kdePackages.kdenlive
-      pkgs.kdePackages.kdeconnect-kde
       pkgs.yad
       pkgs.rsync
       pkgs.strace
@@ -806,4 +812,27 @@ in
       steamSandbox.run
     ]
     ++ steamExtraPackages;
+
+  systemd.user.services.valent = {
+    Install.WantedBy = [ "graphical-session.target" ];
+
+    Unit = {
+      Description = "Valent KDE Connect Service";
+      PartOf = [ "graphical-session.target" ];
+      Requires = [ "ssh-agent.service" ];
+      After = [
+        "graphical-session.target"
+        "ssh-agent.service"
+      ];
+    };
+
+    Service = {
+      Type = "dbus";
+      BusName = "ca.andyholmes.Valent";
+      ExecStart = "${valent}/bin/valent --gapplication-service";
+      Environment = "SSH_AUTH_SOCK=%t/ssh-agent";
+      Restart = "on-failure";
+      RestartSec = 3;
+    };
+  };
 }
