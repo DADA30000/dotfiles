@@ -401,7 +401,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
    gdk_clipboard_read_async (self->clipboard,
 -                            (const char *[]){ mimetype, NULL },
-+                            (const char * const *)text_mimetypes,
++                            (const char **)text_mimetypes,
                              G_PRIORITY_DEFAULT,
                              cancellable,
                              (GAsyncReadyCallback)gdk_clipboard_read_cb,
