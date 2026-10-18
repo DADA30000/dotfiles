@@ -118,7 +118,7 @@ in
     filesystems.enable = false;
     settings = {
       debug.debugfs = true;
-      etc.kicksecure-gitconfig = false;
+      etc.harden-gitconfig = false;
       network = {
         random-mac = false;
         tcp-sack = true;
