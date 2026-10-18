@@ -143,7 +143,7 @@ keys_generate() {
 
 os_build() {
   # shellcheck disable=SC1091
-  cd "$OS_DIR" && export BUILD_NUMBER="$TAG" && export OFFICIAL_BUILD=true && source build/envsetup.sh && lunch "$DEVICE-cur-user" && m installclean && m vendorbootimage vendorkernelbootimage target-files-package otatools-package && script/finalize.sh && export TMPDIR="$PWD/out/tmp" && mkdir -p "$TMPDIR" && script/generate-release.sh "$DEVICE" "$TAG"
+  cd "$OS_DIR" && export BUILD_NUMBER="$TAG" && export OFFICIAL_BUILD=true && source build/envsetup.sh && lunch "$DEVICE-cur-user" && m installclean && m -j4 vendorbootimage vendorkernelbootimage target-files-package otatools-package && script/finalize.sh && export TMPDIR="$PWD/out/tmp" && mkdir -p "$TMPDIR" && script/generate-release.sh "$DEVICE" "$TAG"
 }
 
 # ==============================================================================

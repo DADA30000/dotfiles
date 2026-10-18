@@ -122,6 +122,7 @@ in
       network = {
         random-mac = false;
         tcp-sack = true;
+        icmp.ignore-all = false;
       };
       kernel = {
         amd-iommu-force-isolation = false;

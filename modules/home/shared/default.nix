@@ -44,7 +44,32 @@
     NOM_HOST_CAP = 5;
   };
 
-  systemd.user.services.easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
+  systemd.user.services = {
+    easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
+
+    valent = {
+      Install.WantedBy = [ "graphical-session.target" ];
+
+      Unit = {
+        Description = "Valent KDE Connect Service";
+        PartOf = [ "graphical-session.target" ];
+        Requires = [ "ssh-agent.service" ];
+        After = [
+          "graphical-session.target"
+          "ssh-agent.service"
+        ];
+      };
+
+      Service = {
+        Type = "dbus";
+        BusName = "ca.andyholmes.Valent";
+        ExecStart = "${pkgs.valent}/bin/valent --gapplication-service";
+        Environment = "SSH_AUTH_SOCK=%t/ssh-agent";
+        Restart = "on-failure";
+        RestartSec = 3;
+      };
+    };
+  };
 
   sandboxing.enable = true;
 
@@ -89,12 +114,9 @@
 
   services = {
 
-    easyeffects.enable = true;
+    ssh-agent.enable = true;
 
-    kdeconnect = {
-      enable = true;
-      indicator = true;
-    };
+    easyeffects.enable = true;
 
   };
 

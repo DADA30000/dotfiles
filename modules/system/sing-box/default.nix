@@ -293,9 +293,6 @@ in
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [
-      pkgs.nftables
-    ];
     sing-box.processes_to_proxy = processes;
 
     systemd.services = {
