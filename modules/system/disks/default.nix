@@ -8,7 +8,9 @@ let
   cfg = config.disks;
   normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
   commonUserPersistence = {
-    files = [ ];
+    files = [
+      ".config/dconf/user"
+    ];
     directories = [
       "Music"
       "Videos"

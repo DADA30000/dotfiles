@@ -6,96 +6,9 @@
   orig,
   config,
   inputs,
-  evalAndSubstitute,
-  mkPyApp,
   ...
 }:
 let
-  disableServices =
-    list:
-    let
-      parsed = map (
-        item:
-        let
-          parts = lib.splitString "/" item;
-          type = lib.elemAt parts 0;
-          name = lib.elemAt parts 1;
-        in
-        {
-          inherit type name;
-        }
-      ) list;
-
-      systemServicesList = lib.filter (x: x.type == "system") parsed;
-      userServicesList = lib.filter (x: x.type == "user") parsed;
-
-      systemdServices = lib.listToAttrs (
-        map (x: {
-          inherit (x) name;
-          value = {
-            wantedBy = lib.mkForce [ ];
-          };
-        }) systemServicesList
-      );
-
-      systemdUserServices = lib.listToAttrs (
-        map (x: {
-          inherit (x) name;
-          value = {
-            wantedBy = lib.mkForce [ ];
-          };
-        }) userServicesList
-      );
-
-      servicesJson = pkgs.writeText "services.json" (builtins.toJSON list);
-
-      installScript = pkgs.writeShellScript "install-script" ''
-        neovide-term zsh -c 'nix-install; exec zsh -i'
-      '';
-
-      servicePrompterApp = mkPyApp {
-        name = "service-prompter";
-        src = evalAndSubstitute {
-          string = builtins.readFile ../../stuff/prompt.py;
-          scope = { inherit pkgs servicesJson installScript; };
-        };
-      };
-
-      prompterService = {
-        service-prompter = {
-          wantedBy = [ config.home-manager.users.${user}.wayland.systemd.target ];
-          description = "Graphical service manager and installer prompt";
-          after = [ config.home-manager.users.${user}.wayland.systemd.target ];
-          partOf = [ config.home-manager.users.${user}.wayland.systemd.target ];
-          unitConfig.ConditionEnvironment = "WAYLAND_DISPLAY";
-          serviceConfig = {
-            ExecStart = "${pkgs.bash}/bin/bash -c 'PATH=\"$PATH:/run/wrappers/bin:/run/current-system/sw/bin\" ${servicePrompterApp}/bin/service-prompter'";
-            Restart = "on-failure";
-            RestartSec = "10";
-          };
-        };
-      };
-    in
-    {
-      systemd = {
-        services = systemdServices;
-        user.services = systemdUserServices // prompterService;
-      };
-
-      home-manager.sharedModules = [
-        {
-          systemd.user.services = lib.listToAttrs (
-            map (x: {
-              inherit (x) name;
-              value = {
-                Install.WantedBy = lib.mkForce [ ];
-              };
-            }) userServicesList
-          );
-        }
-      ];
-    };
-
   patchGrubDir =
     dir:
     pkgs.runCommand "patched-efi-dir" { } ''
@@ -209,68 +122,6 @@ let
         '';
       });
 
-  nix-install = /* bash */ ''
-    if [[ $EUID -ne 0 ]]; then
-      exec sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY HOME=$HOME GTK_THEME=$GTK_THEME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR nix-install
-    fi
-    setfont cyr-sun16
-    clear
-
-    offline_flag=""
-    if gum confirm "Провести оффлайн установку?"; then
-      offline_flag="offline"
-    else
-      echo -e "\e[34mПроверка наличия соединения с интернетом...\e[0m"
-      if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
-        echo -e "\e[31mСоединение не установлено :(\e[0m"
-        if gum confirm "Настроить подключение?"; then
-          nmtui
-          if ! nc -zw1 google.com 443 > /dev/null 2>&1; then
-            echo -e "\e[34mСоединение не было установлено, перезапуск...\e[0m"
-            sleep 2; exec nix-install
-          fi
-        fi
-      fi
-      echo -e "\e[32mСоединение установлено!\e[0m"
-    fi
-    sleep 1
-    url="https://github.com/DADA30000/dotfiles"
-    clear
-
-    if gum confirm --default=false "Использовать встроенный в ISO репозиторий?"; then
-      cd /repo
-      exec ./start.sh $offline_flag
-    else
-      if [ "$offline_flag" = "offline" ]; then
-         echo -e "\e[31mОффлайн установка требует использования встроенного репозитория!\e[0m"
-         sleep 2; exec nix-install
-      fi
-      if gum confirm --default=false "Поменять URL репозитория с файлами конфигурации?"; then
-        url=$(gum input --placeholder "Пример: https://github.com/DADA30000/dotfiles")
-      fi
-      if GIT_ASKPASS=true git ls-remote "$url" > /dev/null 2>&1; then
-        clear
-        echo -e "\e[34mКлонирование репозитория...\e[0m"
-        rm -rf /mnt2
-        mkdir /mnt2
-        if git clone "$url" --depth 1 /mnt2/dotfiles; then
-          cd /mnt2/dotfiles
-          echo -e "\e[34mЗапуск start.sh...\e[0m"
-          exec ./start.sh
-        else
-          echo -e "\e[31mОшибка клонирования репозитория, перезапуск скрипта...\e[0m"
-          sleep 3
-          rm -rf /mnt2
-          exec nix-install
-        fi
-      else
-        echo -e "\e[31mURL репозитория неверный или приватный, перезапуск скрипта...\e[0m"
-        sleep 3
-        exec nix-install
-      fi
-    fi
-  '';
-
 in
 {
   config = lib.mkMerge [
@@ -312,7 +163,6 @@ in
         '';
       };
 
-      boot.kernel.sysctl."vm.swappiness" = lib.mkForce 200;
       disks.enable = lib.mkForce false;
       boot.loader.timeout = lib.mkForce 0;
       fonts.fontconfig.enable = true;
@@ -325,10 +175,6 @@ in
 
       networking.wireless.enable = false;
 
-      environment.systemPackages = [
-        (pkgs.writeShellScriptBin "nix-install" nix-install)
-      ];
-
       environment.etc."nixos-toplevel-reference".source = orig.config.system.build.toplevel;
 
       lib.isoFileSystems."/nix/.ro-store" = lib.mkImageMediaOverride {
@@ -339,24 +185,6 @@ in
 
       boot.initrd.availableKernelModules = [ "erofs" ];
     })
-
-    (lib.mkIf wrapped (disableServices [
-      "user/replays"
-      "user/opentabletdriver"
-      "user/sunshine"
-      "user/kdeconnect-indicator"
-      "user/kdeconnect"
-      "user/wivrn"
-      "user/easyeffects"
-      "system/zerotierone"
-      "system/tailscaled"
-      "system/sing-box"
-      "system/sshd"
-      "system/cups"
-      "system/cups-browsed"
-      "system/openrgb"
-      "system/ydotool"
-    ]))
 
     {
       nixpkgs.hostPlatform = "x86_64-linux";
