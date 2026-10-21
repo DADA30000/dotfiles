@@ -447,16 +447,6 @@ let
     chmod +x "$out/bin/nom"
   '';
 
-  nixAlienPkg = inputs.nix-alien.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-    python3 = pkgs.python3.override {
-      packageOverrides = _: pyPrev: {
-        dpcontracts = pyPrev.dpcontracts.overridePythonAttrs (_: {
-          doCheck = false;
-        });
-      };
-    };
-  };
-
   nixSearchPkg = inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default;
   heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
@@ -792,7 +782,6 @@ in
       nhPkg
       app2unitPkg
       pythonPkg
-      nixAlienPkg
       nixSearchPkg
       heliumPkg
       qt6ctPkg

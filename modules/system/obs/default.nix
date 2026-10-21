@@ -26,7 +26,14 @@ in
       pkgs.obs-studio-plugins.obs-vaapi
     ];
     boot = mkIf cfg.virt-cam {
-      extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
+      extraModulePackages = with config.boot.kernelPackages; [
+        (v4l2loopback.overrideAttrs (old: {
+          makeFlags = (old.makeFlags or [ ]) ++ [ "DEPMOD=true" ];
+          postInstall = (old.postInstall or "") + ''
+            rm -f $out/lib/modules/*/modules.*
+          '';
+        }))
+      ];
       extraModprobeConfig = ''
         options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
       '';

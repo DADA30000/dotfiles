@@ -308,13 +308,24 @@ let
 
       chmod +x run-wineboot-stage.sh
 
+      # Prepare a complete /etc for nested bwrap/pressure-vessel inside the nix sandbox
+      mkdir -p fake-etc
+      if [ -d /etc ]; then
+        cp -a /etc/* fake-etc/ 2>/dev/null || true
+      fi
+      ln -s "${pkgs.tzdata}/share/zoneinfo" fake-etc/zoneinfo
+      ln -s "${pkgs.tzdata}/share/zoneinfo/UTC" fake-etc/localtime
+      touch fake-etc/resolv.conf
+      touch fake-etc/machine-id
+      echo "127.0.0.1 localhost" > fake-etc/hosts
+
       # Run stage 1 inside bwrap to provide /sys, /proc, /dev and FHS root
       bwrap \
         --tmpfs / \
         --dir /sys \
         --ro-bind /nix /nix \
         --ro-bind /bin /bin \
-        --ro-bind /etc /etc \
+        --ro-bind "$(pwd)/fake-etc" /etc \
         --dev /dev \
         --proc /proc \
         --bind /tmp /tmp \
@@ -322,6 +333,7 @@ let
         ./run-wineboot-stage.sh
 
       rm -f run-wineboot-stage.sh
+      rm -rf fake-etc
 
       # =========================================================================
       # STAGE 2: Assemble clean EROFS filesystem with runtime & base prefixes

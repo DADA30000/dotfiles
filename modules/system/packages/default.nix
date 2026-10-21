@@ -103,16 +103,20 @@ let
 
     nativeBuildInputs = [
       pkgs.pahole
-    ];
+    ] ++ config.boot.kernelPackages.kernel.moduleBuildDependencies;
 
-    makeFlags = [
+    makeFlags = config.boot.kernelPackages.kernelModuleMakeFlags ++ [
       "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"
     ];
 
     installPhase = ''
-      dir=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/platform/x86
-      mkdir -p $dir
-      cp aorus-laptop.ko $dir/
+      make -C "${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build" \
+        M="$PWD" \
+        INSTALL_MOD_PATH="$out" \
+        DEPMOD=true \
+        modules_install
+      rm -f $out/lib/modules/*/modules.*
+      touch "$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/updates/aorus-laptop.ko.cer"
     '';
   };
 

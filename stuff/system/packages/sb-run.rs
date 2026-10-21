@@ -1874,10 +1874,6 @@ fn add_bwrap_executor_args(
         }
     }
 
-    if (cfg.flags & CFG_LANDLOCK) == 0 {
-        cmd.arg("--no-landlock");
-    }
-
     for init_cmd in &cfg.inside_init {
         cmd.arg("--inside-init").arg(init_cmd);
     }
@@ -3056,6 +3052,43 @@ fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperP
     helpers
 }
 
+const SYS_LANDLOCK_CREATE_RULESET: i64 = 444;
+const SYS_LANDLOCK_RESTRICT_SELF: i64 = 446;
+const LANDLOCK_SCOPE_SIGNAL: u64 = 1 << 0;
+const PR_SET_NO_NEW_PRIVS: i32 = 38;
+
+#[repr(C)]
+struct LandlockRulesetAttr {
+    handled_access_fs: u64,
+    handled_access_net: u64,
+    scoped: u64,
+}
+
+fn apply_landlock_signal_scoping() {
+    let attr = LandlockRulesetAttr {
+        handled_access_fs: 0,
+        handled_access_net: 0,
+        scoped: LANDLOCK_SCOPE_SIGNAL,
+    };
+    let fd = unsafe {
+        syscall(
+            SYS_LANDLOCK_CREATE_RULESET,
+            (&raw const attr as usize).cast_signed(),
+            size_of::<LandlockRulesetAttr>(),
+            0,
+        )
+    };
+    if fd >= 0
+        && let Ok(fd_i32) = i32::try_from(fd)
+    {
+        unsafe {
+            let _ = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+            let _ = syscall(SYS_LANDLOCK_RESTRICT_SELF, fd, 0);
+            close(fd_i32);
+        }
+    }
+}
+
 fn spawn_bwrap_and_get_runner(
     cfg: &SandboxConfig,
     paths: &SandboxPaths,
@@ -3072,6 +3105,16 @@ fn spawn_bwrap_and_get_runner(
         pasta_sync_pass,
         extra_info_w,
     );
+
+    if (cfg.flags & CFG_LANDLOCK) != 0 {
+        unsafe {
+            bwrap.pre_exec(|| {
+                apply_landlock_signal_scoping();
+                Ok(())
+            });
+        }
+    }
+
     let child = match bwrap.spawn() {
         Ok(c) => c,
         Err(err) => {
@@ -3419,7 +3462,7 @@ unsafe extern "C" {
     fn getuid() -> u32;
     fn getgid() -> u32;
     fn getpid() -> i32;
-    fn open(path: *const i8, flags: i32) -> i32;
+    fn open(path: *const i8, flags: i32, ...) -> i32;
     fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn close(fd: i32) -> i32;
     fn lseek(fd: i32, offset: i64, whence: i32) -> i64;

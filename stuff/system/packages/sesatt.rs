@@ -82,7 +82,7 @@ unsafe extern "C" {
     fn cfmakeraw(termios_p: *mut Termios);
     fn ioctl(fd: CInt, request: CLong, ...) -> CInt;
     fn signal(sig: CInt, handler: usize) -> CVoid;
-    fn open(path: *const CChar, flags: CInt) -> CInt;
+    fn open(path: *const CChar, flags: CInt, ...) -> CInt;
     fn dup2(oldfd: CInt, newfd: CInt) -> CInt;
     fn isatty(fd: CInt) -> CInt;
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -79,7 +79,7 @@ unsafe extern "C" {
     fn epoll_create1(flags: i32) -> i32;
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
     fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
-    fn read(fd: i32, buf: *mut u8, count: usize) -> isize;
+    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
     fn close(fd: i32) -> i32;
     fn getuid() -> u32;
 }
@@ -352,7 +352,7 @@ fn run_event_loop(epfd: i32, sfd: i32, inotify_fd: i32, mut watcher: CgroupWatch
                 let s = unsafe {
                     read(
                         sfd,
-                        fdsi.as_mut_ptr().cast::<u8>(),
+                        fdsi.as_mut_ptr().cast::<c_void>(),
                         size_of::<SignalfdSiginfo>(),
                     )
                 };
@@ -364,7 +364,7 @@ fn run_event_loop(epfd: i32, sfd: i32, inotify_fd: i32, mut watcher: CgroupWatch
                     let len = unsafe {
                         read(
                             inotify_fd,
-                            aligned_buf.data.as_mut_ptr(),
+                            aligned_buf.data.as_mut_ptr().cast::<c_void>(),
                             aligned_buf.data.len(),
                         )
                     };

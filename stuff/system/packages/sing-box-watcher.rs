@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::fs;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,7 +37,7 @@ unsafe extern "C" {
     fn socket(domain: i32, sock_type: i32, protocol: i32) -> i32;
     fn bind(sockfd: i32, addr: *const SockAddrNl, addrlen: u32) -> i32;
     fn poll(fds: *mut PollFd, nfds: u64, timeout: i32) -> i32;
-    fn recv(sockfd: i32, buf: *mut u8, len: usize, flags: i32) -> isize;
+    fn recv(sockfd: i32, buf: *mut c_void, len: usize, flags: i32) -> isize;
     fn close(fd: i32) -> i32;
     fn signal(signum: i32, handler: extern "C" fn(i32)) -> usize;
 }
@@ -122,7 +123,7 @@ fn has_physical_carrier() -> bool {
 fn drain_netlink(fd: i32) {
     const MSG_DONTWAIT: i32 = 0x40;
     let mut buf = [0u8; 4096];
-    while unsafe { recv(fd, buf.as_mut_ptr(), buf.len(), MSG_DONTWAIT) } > 0 {}
+    while unsafe { recv(fd, buf.as_mut_ptr().cast(), buf.len(), MSG_DONTWAIT) } > 0 {}
 }
 
 fn debounce_link_events(nl_fd: i32) {

@@ -109,53 +109,7 @@ const POLLERR: i16 = 0x0008;
 const WNOHANG: i32 = 1;
 const TIOCSWINSZ: usize = 0x5414;
 
-const SYS_LANDLOCK_CREATE_RULESET: i64 = 444;
-const SYS_LANDLOCK_RESTRICT_SELF: i64 = 446;
-const LANDLOCK_SCOPE_SIGNAL: u64 = 1 << 0;
-const LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET: u64 = 1 << 1;
-const PR_SET_NO_NEW_PRIVS: i32 = 38;
-
-#[repr(C)]
-struct LandlockRulesetAttr {
-    handled_access_fs: u64,
-    handled_access_net: u64,
-    scoped: u64,
-}
-
-fn apply_landlock() {
-    let mut attr = LandlockRulesetAttr {
-        handled_access_fs: 0,
-        handled_access_net: 0,
-        scoped: LANDLOCK_SCOPE_SIGNAL | LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET,
-    };
-    unsafe {
-        let mut fd = syscall(
-            SYS_LANDLOCK_CREATE_RULESET,
-            (&raw const attr as usize).cast_signed(),
-            size_of::<LandlockRulesetAttr>(),
-            0,
-        );
-        if fd < 0 {
-            attr.scoped = LANDLOCK_SCOPE_SIGNAL;
-            fd = syscall(
-                SYS_LANDLOCK_CREATE_RULESET,
-                (&raw const attr as usize).cast_signed(),
-                size_of::<LandlockRulesetAttr>(),
-                0,
-            );
-        }
-        if fd >= 0
-            && let Ok(fd_i32) = i32::try_from(fd)
-        {
-            let _ = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-            let _ = syscall(SYS_LANDLOCK_RESTRICT_SELF, fd, 0);
-            close(fd_i32);
-        }
-    }
-}
-
 unsafe extern "C" {
-    fn syscall(number: i64, ...) -> i64;
     fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn close(fd: i32) -> i32;
     fn fork() -> i32;
@@ -321,12 +275,7 @@ fn parse_exec_payload(buf: &[u8]) -> Option<ExecPayload> {
     Some(ExecPayload { cwd, args, env })
 }
 
-fn run_child_process(
-    payload: &ExecPayload,
-    fds: &[OwnedFd],
-    is_cli: bool,
-    use_landlock: bool,
-) -> ! {
+fn run_child_process(payload: &ExecPayload, fds: &[OwnedFd], is_cli: bool) -> ! {
     if fds.len() >= 3 {
         unsafe {
             dup2(fds[0].as_raw_fd(), 0);
@@ -368,10 +317,6 @@ fn run_child_process(
     };
     let mut c_ptrs: Vec<*const i8> = c_argv.iter().map(|cs| cs.as_ptr()).collect();
     c_ptrs.push(std::ptr::null());
-
-    if use_landlock {
-        apply_landlock();
-    }
 
     if let Some(first) = c_argv.first() {
         unsafe {
@@ -514,7 +459,6 @@ fn print_startup_timing(payload: &ExecPayload) {
 
 fn handle_connection(
     mut stream: UnixStream,
-    use_landlock: bool,
     listener_fd: RawFd,
     auth_token: Option<[u8; 16]>,
     migrator_socket: &str,
@@ -584,7 +528,7 @@ fn handle_connection(
         if !is_helper && !migrator_socket.is_empty() {
             migrate_to_inside(migrator_socket);
         }
-        run_child_process(&payload, &fds, is_cli, use_landlock);
+        run_child_process(&payload, &fds, is_cli);
     }
 
     drop(fds);
@@ -683,7 +627,6 @@ struct ExecutorCli {
     ready_pipe: String,
     migrator_socket: String,
     inside_init: Vec<String>,
-    use_landlock: bool,
     auth_token: Option<[u8; 16]>,
     singbox_bin: String,
     singbox_config: String,
@@ -700,7 +643,6 @@ fn parse_executor_cli() -> ExecutorCli {
     let mut ready_pipe = String::new();
     let mut migrator_socket = String::new();
     let mut inside_init = Vec::new();
-    let mut use_landlock = true;
     let mut auth_token = None;
     let mut singbox_bin = String::new();
     let mut singbox_config = String::new();
@@ -713,10 +655,6 @@ fn parse_executor_cli() -> ExecutorCli {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--no-landlock" => {
-                use_landlock = false;
-                i += 1;
-            }
             "--socket" if i + 1 < args.len() => {
                 socket_path.clone_from(&args[i + 1]);
                 i += 2;
@@ -780,7 +718,6 @@ fn parse_executor_cli() -> ExecutorCli {
         ready_pipe,
         migrator_socket,
         inside_init,
-        use_landlock,
         auth_token,
         singbox_bin,
         singbox_config,
@@ -858,13 +795,7 @@ fn main() {
         if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
             match listener.accept() {
                 Ok((s, _)) => {
-                    handle_connection(
-                        s,
-                        cli.use_landlock,
-                        listener_fd,
-                        cli.auth_token,
-                        &cli.migrator_socket,
-                    );
+                    handle_connection(s, listener_fd, cli.auth_token, &cli.migrator_socket);
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(err) => {

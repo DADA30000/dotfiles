@@ -1,6 +1,6 @@
 #![forbid(unsafe_op_in_unsafe_fn)]
 
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 use std::fmt::Write as _;
 use std::fs;
 use std::io;
@@ -126,9 +126,9 @@ unsafe extern "C" {
     fn pause() -> i32;
     fn kill(pid: i32, sig: i32) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
-    fn read(fd: i32, buf: *mut u8, count: usize) -> isize;
-    fn pread(fd: i32, buf: *mut u8, count: usize, offset: i64) -> isize;
-    fn write(fd: i32, buf: *const u8, count: usize) -> isize;
+    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
+    fn pread(fd: i32, buf: *mut c_void, count: usize, offset: i64) -> isize;
+    fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
     fn getpwuid(uid: u32) -> *mut Passwd;
     fn exit(status: i32) -> !;
 }
@@ -209,7 +209,7 @@ fn create_userns(map: &UidGidMap) -> Result<Fd, io::Error> {
     if pid == 0 {
         unsafe {
             close(pipefd[0]);
-            if unshare(CLONE_NEWUSER) != 0 || write(pipefd[1], b"1".as_ptr(), 1) != 1 {
+            if unshare(CLONE_NEWUSER) != 0 || write(pipefd[1], b"1".as_ptr().cast(), 1) != 1 {
                 exit(1);
             }
             close(pipefd[1]);
@@ -221,7 +221,7 @@ fn create_userns(map: &UidGidMap) -> Result<Fd, io::Error> {
     unsafe { close(pipefd[1]) };
 
     let mut sync_byte = [0u8; 1];
-    let n = unsafe { read(pipefd[0], sync_byte.as_mut_ptr(), 1) };
+    let n = unsafe { read(pipefd[0], sync_byte.as_mut_ptr().cast(), 1) };
     unsafe { close(pipefd[0]) };
 
     if n <= 0 {
@@ -306,7 +306,7 @@ fn sanitize_and_open_image(path: &Path, target_uid: u32) -> Result<Fd, io::Error
             "EROFS offset overflow",
         ));
     };
-    let n = unsafe { pread(img_fd.raw(), magic_buf.as_mut_ptr(), 4, offset) };
+    let n = unsafe { pread(img_fd.raw(), magic_buf.as_mut_ptr().cast(), 4, offset) };
     if n != 4 {
         return Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
