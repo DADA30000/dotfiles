@@ -121,6 +121,13 @@ let
     '';
   };
 
+  # WORKAROUND: Nixpkgs issue #575192 - aggregateModules fails if out-of-tree kernel modules lack .ko.cer files
+  fixed-ryzen-smu = config.boot.kernelPackages.ryzen-smu.overrideAttrs (old: {
+    postInstall = (old.postInstall or "") + ''
+      touch "$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/ryzen_smu/ryzen_smu.ko.cer"
+    '';
+  });
+
   # ---------------------------------------------------------------------------
   # Dynamic Script Handler Processing (stuff/system/packages)
   # Provides: run-exe, cgroup-executioner, hardware-control-daemon,
@@ -275,10 +282,14 @@ in
   environment = {
     defaultPackages = [ ];
     pathsToLink = extra-paths;
-    systemPackages = system-package-list ++ [ pkgs.xdg-dbus-proxy ];
+    systemPackages = system-package-list ++ [
+      pkgs.xdg-dbus-proxy
+      fixed-ryzen-smu
+    ];
   };
 
   boot.extraModulePackages = [
     gigabyte-laptop-wmi
+    fixed-ryzen-smu
   ];
 }

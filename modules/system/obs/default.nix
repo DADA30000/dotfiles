@@ -26,6 +26,7 @@ in
       pkgs.obs-studio-plugins.obs-vaapi
     ];
     boot = mkIf cfg.virt-cam {
+      # WORKAROUND: Nixpkgs issue #575861 - v4l2loopback install step runs depmod, generating index files that collide with kernel modules.builtin.alias.bin
       extraModulePackages = with config.boot.kernelPackages; [
         (v4l2loopback.overrideAttrs (old: {
           makeFlags = (old.makeFlags or [ ]) ++ [ "DEPMOD=true" ];

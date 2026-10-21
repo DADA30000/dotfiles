@@ -75,7 +75,6 @@ in
 
     cpu.amd = {
       updateMicrocode = true;
-      ryzen-smu.enable = true;
     };
 
     bluetooth = {
@@ -264,6 +263,10 @@ in
   };
 
   boot = {
+
+    kernelModules = [
+      "ryzen-smu"
+    ];
 
     blacklistedKernelModules = [
       "hid-uclogic"
