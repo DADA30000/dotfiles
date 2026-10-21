@@ -73,8 +73,12 @@ in
 
     uinput.enable = true;
 
+    xpadneo.enable = true;
+    xone.enable = true;
+
     cpu.amd = {
       updateMicrocode = true;
+      ryzen-smu.enable = true;
     };
 
     bluetooth = {
@@ -263,10 +267,6 @@ in
   };
 
   boot = {
-
-    kernelModules = [
-      "ryzen-smu"
-    ];
 
     blacklistedKernelModules = [
       "hid-uclogic"

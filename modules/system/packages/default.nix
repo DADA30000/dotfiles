@@ -103,30 +103,18 @@ let
 
     nativeBuildInputs = [
       pkgs.pahole
-    ]
-    ++ config.boot.kernelPackages.kernel.moduleBuildDependencies;
+    ];
 
-    makeFlags = config.boot.kernelPackages.kernelModuleMakeFlags ++ [
+    makeFlags = [
       "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"
     ];
 
     installPhase = ''
-      make -C "${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build" \
-        M="$PWD" \
-        INSTALL_MOD_PATH="$out" \
-        DEPMOD=true \
-        modules_install
-      rm -f $out/lib/modules/*/modules.*
-      touch "$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/updates/aorus-laptop.ko.cer"
+      dir=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/platform/x86
+      mkdir -p $dir
+      cp aorus-laptop.ko $dir/
     '';
   };
-
-  # WORKAROUND: Nixpkgs issue #575192 - aggregateModules fails if out-of-tree kernel modules lack .ko.cer files
-  fixed-ryzen-smu = config.boot.kernelPackages.ryzen-smu.overrideAttrs (old: {
-    postInstall = (old.postInstall or "") + ''
-      touch "$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/ryzen_smu/ryzen_smu.ko.cer"
-    '';
-  });
 
   # ---------------------------------------------------------------------------
   # Dynamic Script Handler Processing (stuff/system/packages)
@@ -282,14 +270,10 @@ in
   environment = {
     defaultPackages = [ ];
     pathsToLink = extra-paths;
-    systemPackages = system-package-list ++ [
-      pkgs.xdg-dbus-proxy
-      fixed-ryzen-smu
-    ];
+    systemPackages = system-package-list ++ [ pkgs.xdg-dbus-proxy ];
   };
 
   boot.extraModulePackages = [
     gigabyte-laptop-wmi
-    fixed-ryzen-smu
   ];
 }
