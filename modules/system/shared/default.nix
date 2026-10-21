@@ -116,8 +116,11 @@ in
     preset = "performance";
     filesystems.enable = false;
     settings = {
-      debug.debugfs = true;
       etc.harden-gitconfig = false;
+      debug = {
+        debugfs = true;
+        panic-reboot = false;
+      };
       network = {
         random-mac = false;
         tcp-sack = true;
@@ -129,6 +132,7 @@ in
         binfmt-misc = true;
         io-uring = true;
         sysrq = "none";
+        kfence = false;
       };
       system = {
         multilib = true;
@@ -295,7 +299,8 @@ in
       );
 
     kernelParams = [
-      "panic=0"
+      "audit=0"
+      "workqueue.power_efficient=Y"
       "drm.panic_screen=qr_code"
       "iommu=pt"
       "iommu.passthrough=1"
@@ -704,39 +709,27 @@ in
       enable = true;
       pd.enable = true;
       settings = {
-        # 1. iGPU Priority Tweaks (Default is: auto / auto / low)
         RADEON_DPM_PERF_LEVEL_ON_AC = "high";
-        RADEON_DPM_PERF_LEVEL_ON_BAT = "auto";
-        RADEON_DPM_PERF_LEVEL_ON_SAV = "low";
+        CPU_ENERGY_PERF_POLICY_ON_AC = "performance";
 
-        # 2. Required because TLP's default is <none>
         CPU_DRIVER_OPMODE_ON_AC = "active";
         CPU_DRIVER_OPMODE_ON_BAT = "active";
         CPU_DRIVER_OPMODE_ON_SAV = "active";
 
-        # 3. Required because TLP's default is <none>
-        CPU_SCALING_GOVERNOR_ON_AC = "powersave";
+        CPU_SCALING_GOVERNOR_ON_AC = "performance";
         CPU_SCALING_GOVERNOR_ON_BAT = "powersave";
         CPU_SCALING_GOVERNOR_ON_SAV = "powersave";
 
-        # 4. Stop CPU from stealing iGPU watts (Default is <none>, which leaves boost on)
-        CPU_BOOST_ON_AC = 0;
+        CPU_BOOST_ON_AC = 1;
         CPU_BOOST_ON_BAT = 0;
         CPU_BOOST_ON_SAV = 0;
 
-        # 5. Your custom changes (Different from TLP defaults)
-        AMDGPU_ABM_LEVEL_ON_AC = 0; # Default: 0 (Needed so it doesn't inherit BAT/SAV)
-        AMDGPU_ABM_LEVEL_ON_BAT = 0; # Default: 1
-        AMDGPU_ABM_LEVEL_ON_SAV = 0; # Default: 3
+        PCIE_ASPM_ON_SAV = "powersupersave";
 
-        PCIE_ASPM_ON_AC = "default"; # Default: default
-        PCIE_ASPM_ON_BAT = "powersupersave"; # Default: default
-        PCIE_ASPM_ON_SAV = "powersupersave"; # Default: default
-
-        SOUND_POWER_SAVE_ON_AC = 0; # Default: 1
-        SOUND_POWER_SAVE_ON_BAT = 1; # Default: 1
-
-        USB_EXCLUDE_AUDIO = 0; # Default: 1
+        AMDGPU_ABM_LEVEL_ON_BAT = 0;
+        AMDGPU_ABM_LEVEL_ON_SAV = 0;
+        SOUND_POWER_SAVE_ON_AC = 0;
+        USB_EXCLUDE_AUDIO = 0;
       };
     };
 
