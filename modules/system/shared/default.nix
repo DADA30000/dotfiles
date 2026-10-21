@@ -721,11 +721,10 @@ in
         CPU_SCALING_GOVERNOR_ON_SAV = "powersave";
 
         CPU_BOOST_ON_AC = 1;
-        CPU_BOOST_ON_BAT = 0;
+        CPU_BOOST_ON_BAT = 1;
         CPU_BOOST_ON_SAV = 0;
 
         PCIE_ASPM_ON_SAV = "powersupersave";
-
         AMDGPU_ABM_LEVEL_ON_BAT = 0;
         AMDGPU_ABM_LEVEL_ON_SAV = 0;
         SOUND_POWER_SAVE_ON_AC = 0;
