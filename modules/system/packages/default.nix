@@ -103,7 +103,8 @@ let
 
     nativeBuildInputs = [
       pkgs.pahole
-    ] ++ config.boot.kernelPackages.kernel.moduleBuildDependencies;
+    ]
+    ++ config.boot.kernelPackages.kernel.moduleBuildDependencies;
 
     makeFlags = config.boot.kernelPackages.kernelModuleMakeFlags ++ [
       "KDIR=${config.boot.kernelPackages.kernel.dev}/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/build"

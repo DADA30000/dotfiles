@@ -154,8 +154,6 @@ let
     ];
   });
 
-
-
   way-secure-pkg = pkgs.rustPlatform.buildRustPackage {
     pname = "way-secure";
     version = "unstable";
@@ -378,7 +376,11 @@ let
 
           ${additional_outside_commands}
           exec sb-run ${lib.escapeShellArgs sbRunFlags} \
-            ${lib.optionalString (additional_inside_commands != "") "--inside-init ${lib.escapeShellArg additional_inside_commands}"} \
+            ${
+              lib.optionalString (
+                additional_inside_commands != ""
+              ) "--inside-init ${lib.escapeShellArg additional_inside_commands}"
+            } \
             -- "$TARGET" "$@"
         else
           exec "$TARGET" "$@"

@@ -8,9 +8,10 @@
 let
   cfg = config.wivrn;
   pkg_xrizer =
-    inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer.overrideAttrs (prev: {
-      patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/xrizer-getposesforframe.patch ];
-    });
+    inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.xrizer.overrideAttrs
+      (prev: {
+        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/xrizer-getposesforframe.patch ];
+      });
   pkg_opencomposite = inputs.nixpkgs-xr.packages.${pkgs.stdenv.hostPlatform.system}.opencomposite;
   xrizer_multilib = pkgs.symlinkJoin {
     name = "xrizer-multilib";
