@@ -40,7 +40,10 @@ let
     };
     route = {
       rules = [
-        { action = "sniff"; }
+        {
+          ip_version = 6;
+          action = "reject";
+        }
         {
           inbound = [ "vless-in" ];
           outbound = "proxy";
@@ -56,6 +59,7 @@ let
           outbound = "proxy";
           process_name = processes;
         }
+        { action = "sniff"; }
         {
           outbound = "proxy";
           domain_suffix = [

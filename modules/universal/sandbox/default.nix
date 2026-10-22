@@ -9,6 +9,12 @@
 }:
 let
   staticBwrap = pkgs.pkgsStatic.bubblewrap;
+  patchedStaticDbusProxy = pkgs.pkgsStatic.xdg-dbus-proxy.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ../../../stuff/patches/xdg-dbus-proxy-unicast-signals.patch
+    ];
+  });
+
   staticDbusProxy =
     pkgs.runCommand "xdg-dbus-proxy"
       {
@@ -19,7 +25,7 @@ let
       }
       ''
         mkdir -p $out/bin
-        cp ${pkgs.pkgsStatic.xdg-dbus-proxy}/bin/xdg-dbus-proxy $out/bin/
+        cp ${patchedStaticDbusProxy}/bin/xdg-dbus-proxy $out/bin/
         remove-references-to -t ${pkgs.pkgsStatic.glib.dev} $out/bin/xdg-dbus-proxy
         remove-references-to -t ${pkgs.pkgsStatic.glib.out} $out/bin/xdg-dbus-proxy
         ${pkgs.nukeReferences}/bin/nuke-refs $out/bin/xdg-dbus-proxy

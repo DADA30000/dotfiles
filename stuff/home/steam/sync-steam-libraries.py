@@ -35,7 +35,13 @@ def main():
 
             modified = False
             for lib_path in extra_libs:
-                os.makedirs(lib_path, exist_ok=True)
+                # Only process libraries whose parent mount exists
+                if not os.path.exists(os.path.dirname(lib_path)):
+                    continue
+                try:
+                    os.makedirs(lib_path, exist_ok=True)
+                except OSError:
+                    continue
 
                 if lib_path not in content:
                     cid = "0"
