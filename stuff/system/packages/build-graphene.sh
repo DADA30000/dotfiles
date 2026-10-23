@@ -3,7 +3,7 @@
 
 DEVICE="tokay"
 KERNEL_CODENAME="caimito"
-TAG="2026101600"
+TAG="2026102100"
 UPDATE_URL="https://update.sanic.space/"
 OS_DIR="$HOME/Documents/grapheneos"
 KERNEL_DIR="$HOME/Downloads/kernel_pixel_6.1"
@@ -95,12 +95,12 @@ EOF
 
 # Initial shallow OS clone + auto-retry loop + smart GC + update server URL
 os_init_sync() {
-  mkdir -p "$OS_DIR" && cd "$OS_DIR" && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 --no-clone-bundle -p linux && patch_repo_tool && until repo sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" "$OS_DIR/packages/apps/Updater/res/values/config.xml"
+  mkdir -p "$OS_DIR" && cd "$OS_DIR" && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 --no-clone-bundle -p linux && patch_repo_tool && until repo sync --force-sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" "$OS_DIR/packages/apps/Updater/res/values/config.xml"
 }
 
 # Recurring tag update (every 1-2 weeks): reset config + init new tag + retry loop + smart GC + update URL
 tag_update() {
-  cd "$OS_DIR" && git -C packages/apps/Updater checkout -- res/values/config.xml && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" checkout -- . 2>/dev/null && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" clean -fd 2>/dev/null && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 && patch_repo_tool && until repo sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" packages/apps/Updater/res/values/config.xml
+  cd "$OS_DIR" && git -C packages/apps/Updater checkout -- res/values/config.xml && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" checkout -- . 2>/dev/null && git -C "device/google/${KERNEL_CODENAME}-kernels/6.1" clean -fd 2>/dev/null && repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$TAG" --depth=1 && patch_repo_tool && until repo sync --force-sync -c --no-tags --optimized-fetch -j4; do echo "Sync dropped, retrying in 3s..." && sleep 3; done && gc && sed -i "s|https://releases.grapheneos.org/|$UPDATE_URL|g" packages/apps/Updater/res/values/config.xml
 }
 
 # Unified smart GC: checks in 2ms and skips clean repos with 0 I/O; prunes dead refs, shallow-truncates, and repacks only dirty repos
