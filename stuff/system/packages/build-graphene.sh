@@ -113,8 +113,20 @@ repo_check_clean() {
   cd "$OS_DIR" && repo status
 }
 
-repo_repair_offline() {
-  cd "$OS_DIR" && repo sync -l
+# Automatically detects and repairs missing files or corrupted/interrupted repositories
+repo_repair() {
+  cd "$OS_DIR" || return 1
+  local resync_list=()
+  # shellcheck disable=SC2016
+  while IFS= read -r line; do
+    [ -n "$line" ] && resync_list+=("$line")
+  done < <(repo forall -c 'if git status -s 2>&1 | grep -q "^ D\|^.D"; then if ! git checkout -- . 2>/dev/null; then echo "Corrupted: $REPO_PATH (missing blobs). Wiping broken cache..." >&2; rm -rf "$REPO_PATH" "$OS_DIR/.repo/projects/$REPO_PATH.git" "$OS_DIR/.repo/project-objects/$REPO_PROJECT.git"; echo "$REPO_PATH"; else echo "Restored missing files: $REPO_PATH" >&2; fi; fi')
+  if [ "${#resync_list[@]}" -gt 0 ]; then
+    echo "[*] Re-syncing ${#resync_list[@]} repaired repositories..."
+    repo sync --force-sync -c --no-tags --optimized-fetch "${resync_list[@]}"
+  else
+    echo "[+] All repositories are intact. No repairs needed."
+  fi
 }
 
 distrobox_create() {
@@ -154,7 +166,7 @@ os-init-sync) os_init_sync ;;
 tag-update) tag_update ;;
 gc) gc ;;
 check-clean) repo_check_clean ;;
-repair-offline) repo_repair_offline ;;
+repair|repair-offline) repo_repair ;;
 distrobox-create) distrobox_create ;;
 distrobox-enter) distrobox_enter ;;
 distrobox-provision) distrobox_provision ;;
@@ -163,6 +175,6 @@ kernel-build) kernel_build ;;
 keys-generate) keys_generate ;;
 os-build) os_build ;;
 *)
-  echo "Usage: $0 {os-init-sync|tag-update|gc|check-clean|repair-offline|distrobox-create|distrobox-enter|distrobox-provision|vendor-blobs|kernel-build|keys-generate|os-build}"
+  echo "Usage: $0 {os-init-sync|tag-update|gc|check-clean|repair|distrobox-create|distrobox-enter|distrobox-provision|vendor-blobs|kernel-build|keys-generate|os-build}"
   ;;
 esac
