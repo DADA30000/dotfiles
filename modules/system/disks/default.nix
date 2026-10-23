@@ -8,9 +8,7 @@ let
   cfg = config.disks;
   normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
   commonUserPersistence = {
-    files = [
-      ".config/dconf/user"
-    ];
+    files = [ ];
     directories = [
       "Music"
       "Videos"
@@ -40,6 +38,7 @@ let
       ".config/flm"
       ".config/wayvr"
       ".config/wivrn"
+      ".config/dconf"
       ".config/valent"
       ".config/gtk-3.0"
       ".config/sunshine"
