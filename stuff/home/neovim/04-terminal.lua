@@ -96,13 +96,6 @@ local function term_scroll_down(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		if can_scroll <= to_scroll then
-			vim.schedule(function()
-				if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "terminal" then
-					vim.cmd("startinsert")
-				end
-			end)
-		end
 		return to_scroll .. "\x05"
 	else
 		vim.cmd("startinsert")
@@ -122,6 +115,15 @@ local function term_scroll_up(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
+		local win = vim.api.nvim_get_current_win()
+		local win_info = vim.fn.getwininfo(win)[1]
+		if win_info then
+			local cur_lnum = vim.api.nvim_win_get_cursor(win)[1]
+			local new_bot = win_info.botline - to_scroll
+			if cur_lnum > new_bot then
+				pcall(vim.api.nvim_win_set_cursor, win, { math.max(1, new_bot), 0 })
+			end
+		end
 		return to_scroll .. "\x19"
 	else
 		return ""
@@ -403,6 +405,41 @@ end
 
 vim.api.nvim_create_user_command("Hh", open_nos_terminal, { desc = "Open `nos` in a smart terminal" })
 vim.keymap.set("n", "!nos", ":Hh<CR>", { desc = "Open nos terminal", noremap = true, silent = true })
+
+-- === SAFE OVERRIDE FOR BUGGY UPSTREAM OSC 133 TERMREQUEST ===
+local nvim_terminal_prompt_ns = vim.api.nvim_create_namespace("nvim.terminal.prompt")
+local ok_au, augroup_term = pcall(vim.api.nvim_create_augroup, "nvim.terminal", { clear = false })
+if ok_au then
+	local autocmds = vim.api.nvim_get_autocmds({ group = augroup_term, event = "TermRequest" })
+	for _, ac in ipairs(autocmds) do
+		if ac.desc and ac.desc:match("OSC 133") then
+			pcall(vim.api.nvim_del_autocmd, ac.id)
+		end
+	end
+
+	vim.api.nvim_create_autocmd("TermRequest", {
+		group = augroup_term,
+		desc = "Mark shell prompts indicated by OSC 133 sequences for navigation (safe)",
+		callback = function(ev)
+			if ev.data and ev.data.sequence and string.match(ev.data.sequence, "^\027]133;A") then
+				local lnum = ev.data.cursor and ev.data.cursor[1]
+				if lnum and lnum >= 1 and vim.api.nvim_buf_is_valid(ev.buf) then
+					local line_count = vim.api.nvim_buf_line_count(ev.buf)
+					if lnum <= line_count then
+						pcall(
+							vim.api.nvim_buf_set_extmark,
+							ev.buf,
+							nvim_terminal_prompt_ns,
+							lnum - 1,
+							0,
+							{ right_gravity = false }
+						)
+					end
+				end
+			end
+		end,
+	})
+end
 
 -- === TERMINAL AUTOMATIC SCROLLBACK PRUNING (VIEW-PRESERVING) ===
 vim.api.nvim_create_autocmd({ "TextChangedT", "TextChanged" }, {

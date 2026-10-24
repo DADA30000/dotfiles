@@ -1,0 +1,193 @@
+diff -Naur a/dns/transport/fakeip/fakeip.go b/dns/transport/fakeip/fakeip.go
+--- a/dns/transport/fakeip/fakeip.go	1970-01-01 03:00:01.000000000 +0300
++++ b/dns/transport/fakeip/fakeip.go	2026-10-23 22:39:17.953736492 +0300
+@@ -27,6 +27,7 @@
+ 	store        adapter.FakeIPStore
+ 	inet4Enabled bool
+ 	inet6Enabled bool
++	ttl          uint32
+ }
+ 
+ func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.FakeIPDNSServerOptions) (adapter.DNSTransport, error) {
+@@ -36,12 +37,17 @@
+ 		return nil, E.New("at least one of inet4_range or inet6_range must be set")
+ 	}
+ 	store := NewStore(ctx, logger, inet4Range, inet6Range)
++	ttl := uint32(C.DefaultDNSTTL)
++	if options.TTL != nil {
++		ttl = *options.TTL
++	}
+ 	return &Transport{
+ 		TransportAdapter: dns.NewTransportAdapter(C.DNSTypeFakeIP, tag, nil),
+ 		logger:           logger,
+ 		store:            store,
+ 		inet4Enabled:     inet4Range.IsValid(),
+ 		inet6Enabled:     inet6Range.IsValid(),
++		ttl:              ttl,
+ 	}, nil
+ }
+ 
+@@ -76,7 +82,7 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	return dns.FixedResponse(message.Id, question, []netip.Addr{address}, C.DefaultDNSTTL), nil
++	return dns.FixedResponse(message.Id, question, []netip.Addr{address}, t.ttl), nil
+ }
+ 
+ func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+diff -Naur a/option/dns.go b/option/dns.go
+--- a/option/dns.go	1970-01-01 03:00:01.000000000 +0300
++++ b/option/dns.go	2026-10-23 22:38:52.953886854 +0300
+@@ -211,6 +211,7 @@
+ type FakeIPDNSServerOptions struct {
+ 	Inet4Range *badoption.Prefix `json:"inet4_range,omitempty" examples:"198.18.0.0/15"`
+ 	Inet6Range *badoption.Prefix `json:"inet6_range,omitempty" examples:"fc00::/18"`
++	TTL        *uint32           `json:"ttl,omitempty"`
+ }
+ 
+ type DHCPDNSServerOptions struct {
+diff -Naur a/option/rule_dns.go b/option/rule_dns.go
+--- a/option/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
++++ b/option/rule_dns.go	2026-10-23 22:38:39.792173962 +0300
+@@ -162,6 +162,7 @@
+ 	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
+ 	Outbound                 badoption.Listable[string]                                                  `json:"outbound,omitempty" reference:"outbound" schema:"omit"`
+ 	ClashMode                string                                                                      `json:"clash_mode,omitempty"`
++	OutboundSelected         *badjson.TypedMap[string, badoption.Listable[string]]                       `json:"outbound_selected,omitempty"`
+ 	NetworkType              badoption.Listable[InterfaceType]                                           `json:"network_type,omitempty"`
+ 	NetworkIsExpensive       bool                                                                        `json:"network_is_expensive,omitempty"`
+ 	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
+diff -Naur a/option/rule.go b/option/rule.go
+--- a/option/rule.go	1970-01-01 03:00:01.000000000 +0300
++++ b/option/rule.go	2026-10-23 22:38:39.792238373 +0300
+@@ -167,6 +167,7 @@
+ 	User                     badoption.Listable[string]                                                  `json:"user,omitempty"`
+ 	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
+ 	ClashMode                string                                                                      `json:"clash_mode,omitempty"`
++	OutboundSelected         *badjson.TypedMap[string, badoption.Listable[string]]                       `json:"outbound_selected,omitempty"`
+ 	NetworkType              badoption.Listable[InterfaceType]                                           `json:"network_type,omitempty"`
+ 	NetworkIsExpensive       bool                                                                        `json:"network_is_expensive,omitempty"`
+ 	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
+diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
+--- a/route/rule/rule_default.go	1970-01-01 03:00:01.000000000 +0300
++++ b/route/rule/rule_default.go	2026-10-23 22:38:39.792276595 +0300
+@@ -228,6 +228,11 @@
+ 		rule.items = append(rule.items, item)
+ 		rule.allItems = append(rule.allItems, item)
+ 	}
++	if options.OutboundSelected != nil && options.OutboundSelected.Size() > 0 {
++		item := NewOutboundSelectedItem(ctx, options.OutboundSelected)
++		rule.items = append(rule.items, item)
++		rule.allItems = append(rule.allItems, item)
++	}
+ 	if len(options.NetworkType) > 0 {
+ 		item := NewNetworkTypeItem(networkManager, common.Map(options.NetworkType, option.InterfaceType.Build))
+ 		rule.items = append(rule.items, item)
+diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
+--- a/route/rule/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
++++ b/route/rule/rule_dns.go	2026-10-23 22:38:39.792314246 +0300
+@@ -322,6 +322,11 @@
+ 		rule.items = append(rule.items, item)
+ 		rule.allItems = append(rule.allItems, item)
+ 	}
++	if options.OutboundSelected != nil && options.OutboundSelected.Size() > 0 {
++		item := NewOutboundSelectedItem(ctx, options.OutboundSelected)
++		rule.items = append(rule.items, item)
++		rule.allItems = append(rule.allItems, item)
++	}
+ 	if len(options.NetworkType) > 0 {
+ 		item := NewNetworkTypeItem(networkManager, common.Map(options.NetworkType, option.InterfaceType.Build))
+ 		rule.items = append(rule.items, item)
+diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
+--- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300
++++ b/route/rule/rule_item_outbound_selected.go	2026-10-23 22:38:39.792344032 +0300
+@@ -0,0 +1,88 @@
++package rule
++
++import (
++	"context"
++	"strings"
++
++	"github.com/sagernet/sing-box/adapter"
++	"github.com/sagernet/sing/common/json/badjson"
++	"github.com/sagernet/sing/common/json/badoption"
++	"github.com/sagernet/sing/service"
++)
++
++var _ RuleItem = (*OutboundSelectedItem)(nil)
++
++type OutboundSelectedItem struct {
++	ctx             context.Context
++	outboundManager adapter.OutboundManager
++	selections      map[string][]string
++	description     string
++}
++
++func NewOutboundSelectedItem(ctx context.Context, selections *badjson.TypedMap[string, badoption.Listable[string]]) *OutboundSelectedItem {
++	item := &OutboundSelectedItem{
++		ctx:        ctx,
++		selections: make(map[string][]string, selections.Size()),
++	}
++	var descriptions []string
++	for _, entry := range selections.Entries() {
++		item.selections[entry.Key] = entry.Value
++		descriptions = append(descriptions, entry.Key+"="+strings.Join(entry.Value, ","))
++	}
++	item.description = "outbound_selected=[" + strings.Join(descriptions, " ") + "]"
++	return item
++}
++
++func (r *OutboundSelectedItem) Start() error {
++	r.outboundManager = service.FromContext[adapter.OutboundManager](r.ctx)
++	return nil
++}
++
++func (r *OutboundSelectedItem) Match(metadata *adapter.InboundContext) bool {
++	if r.outboundManager == nil {
++		r.outboundManager = service.FromContext[adapter.OutboundManager](r.ctx)
++		if r.outboundManager == nil {
++			return false
++		}
++	}
++	for groupTag, expectedTags := range r.selections {
++		outbound, loaded := r.outboundManager.Outbound(groupTag)
++		if !loaded {
++			return false
++		}
++		group, isGroup := outbound.(adapter.OutboundGroup)
++		if !isGroup {
++			return false
++		}
++		currentTag := group.Now()
++		realTag := currentTag
++		detour := outbound
++		for {
++			g, ok := detour.(adapter.OutboundGroup)
++			if !ok {
++				break
++			}
++			realTag = g.Now()
++			var ok2 bool
++			detour, ok2 = r.outboundManager.Outbound(realTag)
++			if !ok2 {
++				break
++			}
++		}
++		matched := false
++		for _, expected := range expectedTags {
++			if expected == currentTag || expected == realTag {
++				matched = true
++				break
++			}
++		}
++		if !matched {
++			return false
++		}
++	}
++	return true
++}
++
++func (r *OutboundSelectedItem) String() string {
++	return r.description
++}

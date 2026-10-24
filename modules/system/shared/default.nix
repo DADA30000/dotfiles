@@ -309,7 +309,28 @@ in
 
     initrd = {
       supportedFilesystems.zfs = true;
-      systemd.enable = true;
+      systemd = {
+        enable = true;
+        services.ttm-dynamic-limit = {
+          description = "Configure 75% TTM memory limit in modprobe.d";
+          wantedBy = [ "systemd-udev-trigger.service" ];
+          before = [ "systemd-udev-trigger.service" ];
+          unitConfig.DefaultDependencies = false;
+          serviceConfig.Type = "oneshot";
+
+          path = with pkgs; [
+            gawk
+            coreutils
+          ];
+
+          script = ''
+            mkdir -p /run/modprobe.d
+            LIMIT=$(awk '/MemTotal/ {printf "%d\n", ($2 / 4) * 0.75}' /proc/meminfo)
+            echo "options ttm pages_limit=$LIMIT" > /run/modprobe.d/ttm.conf
+          '';
+        };
+
+      };
     };
 
     kernel.sysctl = {

@@ -339,18 +339,26 @@
           modules = modules-list ++ [
             ./machines/${hostname}/configuration.nix
             ./machines/${hostname}/hardware-configuration.nix
-            { networking.hostName = hostname; }
+            {
+              networking.hostName = hostname;
+              home-manager.users = {
+                ${user} = import ./machines/${hostname}/home.nix;
+                guest = import ./machines/${hostname}/home.nix;
+              };
+            }
           ];
         };
 
       user = "l0lk3k";
       user-hash = "$y$j9T$mmnKVCySRsfjJQ66A1Gp30$Hj6IS7y9eDJ4DYDrSjxF.5IsBxuF7.FbhZAxloKnteC";
       user_iso = "nixos";
+
+      machineNames = builtins.filter (name: !builtins.elem name [ "iso" ]) (
+        map baseNameOf (listFiles [ ./machines ])
+      );
     in
     {
-      nixosConfigurations = {
-        nixos = mkMachine "nixos";
-        laptop = mkMachine "laptop";
+      nixosConfigurations = (inputs.nixpkgs.lib.genAttrs machineNames mkMachine) // {
         iso = iso-wrapper { modules = modules-list ++ [ ./machines/iso/configuration.nix ]; };
       };
     };

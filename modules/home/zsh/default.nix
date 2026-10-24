@@ -409,6 +409,7 @@ in
           ns-repl() { nix repl --no-use-registries --expr "$NIX_FLAKE_PREAMBLE" "$@" }
           nsl-bin() { nix-locate "$@" }
           cps() { rsync -ahr --progress "$@" }
+          reenroll-tpm() { sudo systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=0+1+2+3+5+6+7 --tpm2-with-pin=yes /dev/disk/by-label/nixos-encrypted }
           c() { 
             clear 
             printf '\n%.0s' {1..100}

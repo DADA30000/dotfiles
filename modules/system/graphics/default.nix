@@ -34,10 +34,10 @@ in
         (mkIf cfg.amdgpu.enable { initrd.enable = true; })
         (mkIf cfg.amdgpu.pro {
           opencl.enable = true;
-          overdrive = {
-            enable = true;
-            ppfeaturemask = "0xffffffff";
-          };
+          #overdrive = {
+          #  enable = true;
+          #  ppfeaturemask = "0xffffffff";
+          #};
         })
       ];
       nvidia = mkIf cfg.nvidia.enable {

@@ -34,125 +34,226 @@ let
     builtins.readFile ../../../stuff/system/sing-box/build-config.py
   );
 
+  patched-sing-box = pkgs.sing-box.overrideAttrs (prev: {
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/sing-box.patch ];
+  });
+
+  # sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
+  #   log = {
+  #     level = "debug";
+  #   };
+  #   route = {
+  #     rules = [
+  #       {
+  #         ip_version = 6;
+  #         action = "reject";
+  #       }
+  #       {
+  #         inbound = [ "vless-in" ];
+  #         outbound = "proxy";
+  #       }
+  #       {
+  #         outbound = "proxy";
+  #         source_ip_cidr = [
+  #           "10.200.0.0/24"
+  #           "fd00:200::/126"
+  #         ];
+  #       }
+  #       {
+  #         outbound = "proxy";
+  #         process_name = processes;
+  #       }
+  #       { action = "sniff"; }
+  #       {
+  #         outbound = "proxy";
+  #         domain_suffix = [
+  #           "dis.gd"
+  #           "discord.co"
+  #           "discord.com"
+  #           "discord.design"
+  #           "discord.dev"
+  #           "discord.gg"
+  #           "discord.gift"
+  #           "discord.gifts"
+  #           "discord.media"
+  #           "discord.new"
+  #           "discord.store"
+  #           "discord.tools"
+  #           "discordapp.com"
+  #           "discordapp.net"
+  #           "discordmerch.com"
+  #           "discordpartygames.com"
+  #           "discord-activities.com"
+  #           "discordactivities.com"
+  #           "discordsays.com"
+  #           "discordstatus.com"
+  #           "googlevideo.com"
+  #           "youtu.be"
+  #           "youtube.com"
+  #           "ytimg.com"
+  #           "ggpht.com"
+  #           "animego.org"
+  #           "animego.one"
+  #           "animego.bz"
+  #           "aniboom.one"
+  #           "ya-ligh.com"
+  #           "jut.su"
+  #           "aistudio.google.com"
+  #           "chatgpt.com"
+  #           "ai.google.dev"
+  #           "generativelanguage.googleapis.com"
+  #           "content-generativelanguage.googleapis.com"
+  #           "makersuite.google.com"
+  #           "alkalimakersuite-pa.clients6.google.com"
+  #           "cachix.org"
+  #           "garnix.io"
+  #           "gemini.google.com"
+  #           "s3.dualstack.us-east-2.amazonaws.com"
+  #           "beatsaver.com"
+  #           "sagernet.com"
+  #           "cloudflare-ech.com"
+  #           "aiplatform.googleapis.com"
+  #           "oauth2.googleapis.com"
+  #           "apis.google.com"
+  #           "googleapis.com"
+  #           "cloudfront.net"
+  #           "flakehub.com"
+  #           "votv.dev"
+  #           "itch.io"
+  #           "itch.zone"
+  #           "spotify.com"
+  #           "quora.com"
+  #           "geekbench.com"
+  #           "website-files.com"
+  #           "localizeapi.com"
+  #           "steamcmd.net"
+  #           "tonelib.vip"
+  #           "exa.ai"
+  #           "rutracker.org"
+  #           "rutracker.cc"
+  #           "cache.nixos.org"
+  #           "bitwarden.com"
+  #         ];
+  #       }
+  #       {
+  #         outbound = "zen-toggle";
+  #         process_name = [
+  #           "zen"
+  #           ".zen-wrapped"
+  #           "zen-bin"
+  #           "zen.bin"
+  #           ".zen-twilight-wrapped"
+  #           "zen-twilight"
+  #           ".zen-twilight-wrapper"
+  #           "zen-twilight"
+  #         ];
+  #       }
+  #       {
+  #         inbound = [ "direct-in" ];
+  #         outbound = "direct";
+  #       }
+  #     ];
+  #     auto_detect_interface = true;
+  #     final = "final-toggle";
+  #   };
+  #   inbounds = [
+  #     {
+  #       type = "vless";
+  #       tag = "direct-in";
+  #       listen = "127.0.0.1";
+  #       listen_port = 2121;
+  #       users = [
+  #         {
+  #           uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+  #           name = "sandbox-user";
+  #         }
+  #       ];
+  #     }
+  #     {
+  #       type = "vless";
+  #       tag = "vless-in";
+  #       listen = "127.0.0.1";
+  #       listen_port = 1919;
+  #       users = [
+  #         {
+  #           uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+  #           name = "sandbox-user";
+  #         }
+  #       ];
+  #     }
+  #     {
+  #       type = "tun";
+  #       interface_name = "tun0";
+  #       mtu = MTU;
+  #       strict_route = true;
+  #       auto_route = true;
+  #       auto_redirect = true;
+  #       address = [
+  #         "172.19.0.1/30"
+  #         "fd00::1/126"
+  #       ];
+  #       route_exclude_address = [
+  #         "${dns}/32"
+  #         "${dns-ipv6}/128"
+  #         "192.168.0.0/16"
+  #       ];
+  #     }
+  #   ];
+  #   outbounds = [
+  #     {
+  #       outbounds = [
+  #         "direct"
+  #         "proxy"
+  #       ];
+  #       tag = "zen-toggle";
+  #       type = "selector";
+  #     }
+  #     {
+  #       tag = "final-toggle";
+  #       type = "selector";
+  #       outbounds = [
+  #         "direct"
+  #         "proxy"
+  #       ];
+  #     }
+  #     {
+  #       type = "direct";
+  #       tag = "zapret";
+  #       inet4_bind_address = "10.201.0.1";
+  #       inet6_bind_address = "fd00:201::1";
+  #     }
+  #     {
+  #       type = "selector";
+  #       tag = "proxy";
+  #       outbounds = [
+  #         "zapret"
+  #         "direct"
+  #       ];
+  #     }
+  #     {
+  #       tag = "direct";
+  #       type = "direct";
+  #     }
+  #   ];
+  #   experimental = {
+  #     clash_api = {
+  #       external_controller = "127.0.0.1:9090";
+  #     };
+  #   };
+  # };
+
   sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
-    log = {
-      level = "debug";
-    };
-    route = {
-      rules = [
-        {
-          ip_version = 6;
-          action = "reject";
-        }
-        {
-          inbound = [ "vless-in" ];
-          outbound = "proxy";
-        }
-        {
-          outbound = "proxy";
-          source_ip_cidr = [
-            "10.200.0.0/24"
-            "fd00:200::/126"
-          ];
-        }
-        {
-          outbound = "proxy";
-          process_name = processes;
-        }
-        { action = "sniff"; }
-        {
-          outbound = "proxy";
-          domain_suffix = [
-            "dis.gd"
-            "discord.co"
-            "discord.com"
-            "discord.design"
-            "discord.dev"
-            "discord.gg"
-            "discord.gift"
-            "discord.gifts"
-            "discord.media"
-            "discord.new"
-            "discord.store"
-            "discord.tools"
-            "discordapp.com"
-            "discordapp.net"
-            "discordmerch.com"
-            "discordpartygames.com"
-            "discord-activities.com"
-            "discordactivities.com"
-            "discordsays.com"
-            "discordstatus.com"
-            "googlevideo.com"
-            "youtu.be"
-            "youtube.com"
-            "ytimg.com"
-            "ggpht.com"
-            "animego.org"
-            "animego.one"
-            "animego.bz"
-            "aniboom.one"
-            "ya-ligh.com"
-            "jut.su"
-            "aistudio.google.com"
-            "chatgpt.com"
-            "ai.google.dev"
-            "generativelanguage.googleapis.com"
-            "content-generativelanguage.googleapis.com"
-            "makersuite.google.com"
-            "alkalimakersuite-pa.clients6.google.com"
-            "cachix.org"
-            "garnix.io"
-            "gemini.google.com"
-            "s3.dualstack.us-east-2.amazonaws.com"
-            "beatsaver.com"
-            "sagernet.com"
-            "cloudflare-ech.com"
-            "aiplatform.googleapis.com"
-            "oauth2.googleapis.com"
-            "apis.google.com"
-            "googleapis.com"
-            "cloudfront.net"
-            "flakehub.com"
-            "votv.dev"
-            "itch.io"
-            "itch.zone"
-            "spotify.com"
-            "quora.com"
-            "geekbench.com"
-            "website-files.com"
-            "localizeapi.com"
-            "steamcmd.net"
-            "tonelib.vip"
-            "exa.ai"
-            "rutracker.org"
-            "rutracker.cc"
-            "cache.nixos.org"
-            "bitwarden.com"
-          ];
-        }
-        {
-          outbound = "zen-toggle";
-          process_name = [
-            "zen"
-            ".zen-wrapped"
-            "zen-bin"
-            "zen.bin"
-            ".zen-twilight-wrapped"
-            "zen-twilight"
-            ".zen-twilight-wrapper"
-            "zen-twilight"
-          ];
-        }
-        {
-          inbound = [ "direct-in" ];
-          outbound = "direct";
-        }
-      ];
-      auto_detect_interface = true;
-      final = "final-toggle";
-    };
+    experimental.clash_api.external_controller = "127.0.0.1:9090";
+    log.level = "debug";
+
     inbounds = [
+      {
+        type = "direct";
+        tag = "dns-in";
+        listen = "127.0.0.1";
+        listen_port = 5354;
+        network = "udp";
+      }
       {
         type = "vless";
         tag = "direct-in";
@@ -188,21 +289,222 @@ let
           "172.19.0.1/30"
           "fd00::1/126"
         ];
-        route_exclude_address = [
-          "${dns}/32"
-          "${dns-ipv6}/128"
-          "192.168.0.0/16"
-        ];
+        route_exclude_address = "192.168.0.0/16";
       }
     ];
+
+    route = {
+      auto_detect_interface = true;
+      final = "final-toggle";
+      default_domain_resolver = "dns-local";
+
+      rule_set = [
+        {
+          tag = "zen-rules";
+          type = "inline";
+          rules = [
+            {
+              process_name = [
+                "zen"
+                ".zen-wrapped"
+                "zen-bin"
+                "zen.bin"
+                ".zen-twilight-wrapped"
+                "zen-twilight"
+                ".zen-twilight-wrapper"
+                "zen-twilight"
+              ];
+            }
+          ];
+        }
+        {
+          tag = "proxy-rules";
+          type = "inline";
+          rules = [
+            {
+              domain_suffix = [
+                "dis.gd"
+                "discord.co"
+                "discord.com"
+                "discord.design"
+                "discord.dev"
+                "discord.gg"
+                "discord.gift"
+                "discord.gifts"
+                "discord.media"
+                "discord.new"
+                "discord.store"
+                "discord.tools"
+                "discordapp.com"
+                "discordapp.net"
+                "discordmerch.com"
+                "discordpartygames.com"
+                "discord-activities.com"
+                "discordactivities.com"
+                "discordsays.com"
+                "discordstatus.com"
+                "googlevideo.com"
+                "youtu.be"
+                "youtube.com"
+                "ytimg.com"
+                "ggpht.com"
+                "animego.org"
+                "animego.one"
+                "animego.bz"
+                "aniboom.one"
+                "ya-ligh.com"
+                "jut.su"
+                "aistudio.google.com"
+                "chatgpt.com"
+                "ai.google.dev"
+                "generativelanguage.googleapis.com"
+                "content-generativelanguage.googleapis.com"
+                "makersuite.google.com"
+                "alkalimakersuite-pa.clients6.google.com"
+                "cachix.org"
+                "garnix.io"
+                "gemini.google.com"
+                "s3.dualstack.us-east-2.amazonaws.com"
+                "beatsaver.com"
+                "sagernet.com"
+                "cloudflare-ech.com"
+                "aiplatform.googleapis.com"
+                "oauth2.googleapis.com"
+                "apis.google.com"
+                "googleapis.com"
+                "cloudfront.net"
+                "flakehub.com"
+                "votv.dev"
+                "itch.io"
+                "itch.zone"
+                "spotify.com"
+                "quora.com"
+                "geekbench.com"
+                "website-files.com"
+                "localizeapi.com"
+                "steamcmd.net"
+                "tonelib.vip"
+                "exa.ai"
+                "rutracker.org"
+                "rutracker.cc"
+                "cache.nixos.org"
+                "bitwarden.com"
+              ];
+            }
+            {
+              process_name = processes;
+            }
+          ];
+        }
+      ];
+
+      rules = [
+        { action = "sniff"; }
+        {
+          inbound = [ "dns-in" ];
+          action = "hijack-dns";
+        }
+
+        {
+          outbound = "proxy";
+          ip_cidr = [
+            "198.18.0.0/15"
+            "${dns}/32"
+            "${dns-ipv6}/128"
+          ];
+        }
+
+        {
+          outbound_selected.proxy = "proxy-vless";
+          rule_set = "proxy-rules";
+          ip_version = 6;
+          action = "reject";
+        }
+        {
+          rule_set = "proxy-rules";
+          outbound = "proxy";
+        }
+
+        {
+          outbound_selected.zen-toggle = "proxy-vless";
+          rule_set = "zen-rules";
+          ip_version = 6;
+          action = "reject";
+        }
+        {
+          rule_set = "zen-rules";
+          outbound = "zen-toggle";
+        }
+
+        {
+          source_ip_cidr = [
+            "10.200.0.0/24"
+            "fd00:200::/126"
+          ];
+          outbound = "proxy";
+        }
+
+        {
+          outbound_selected.proxy = "proxy-vless";
+          inbound = [ "vless-in" ];
+          ip_version = 6;
+          action = "reject";
+        }
+        {
+          inbound = [ "vless-in" ];
+          outbound = "proxy";
+        }
+
+        {
+          inbound = [ "direct-in" ];
+          outbound = "direct";
+        }
+      ];
+    };
+
+    dns = {
+      servers = [
+        {
+          tag = "dns-local";
+          type = "local";
+        }
+        {
+          tag = "fake-dns";
+          type = "fakeip";
+          inet4_range = "198.18.0.0/15";
+          ttl = 0;
+        }
+      ];
+      rules = [
+        {
+          inbound = [ "dns-in" ];
+          outbound_selected.proxy = "proxy-vless";
+          rule_set = "proxy-rules";
+          server = "fake-dns";
+        }
+        {
+          inbound = [ "dns-in" ];
+          action = "reject";
+        }
+      ];
+    };
+
     outbounds = [
       {
+        tag = "zen-toggle";
+        type = "selector";
         outbounds = [
           "direct"
           "proxy"
         ];
-        tag = "zen-toggle";
+      }
+      {
+        tag = "proxy";
         type = "selector";
+        outbounds = [
+          "zapret"
+          "direct"
+        ];
       }
       {
         tag = "final-toggle";
@@ -219,23 +521,10 @@ let
         inet6_bind_address = "fd00:201::1";
       }
       {
-        type = "selector";
-        tag = "proxy";
-        outbounds = [
-          "zapret"
-          "direct"
-        ];
-      }
-      {
         tag = "direct";
         type = "direct";
       }
     ];
-    experimental = {
-      clash_api = {
-        external_controller = "127.0.0.1:9090";
-      };
-    };
   };
 
   vpnifyBin = pkgs.stdenv.mkDerivation {
@@ -346,7 +635,7 @@ in
         bindsTo = [ "sing-box-init.service" ];
         after = [ "sing-box-init.service" ];
         serviceConfig = {
-          ExecStart = "${pkgs.sing-box}/bin/sing-box run -c /run/sing-box/config.json";
+          ExecStart = "${patched-sing-box}/bin/sing-box run -c /run/sing-box/config.json";
 
           DynamicUser = true;
           RuntimeDirectory = "sing-box-daemon";
@@ -458,6 +747,7 @@ in
         enable = true;
         resolveLocalQueries = false;
         settings = {
+          strict-order = true;
           bind-dynamic = true;
           interface = [
             "lo"
@@ -465,6 +755,7 @@ in
             "tun-sb"
           ];
           server = [
+            "127.0.0.1#5354"
             dns
             dns-ipv6
           ];
