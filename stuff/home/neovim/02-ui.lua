@@ -22,6 +22,11 @@ require("cord").setup({
 	text = {
 		terminal = false,
 	},
+	advanced = {
+		server = {
+			timeout = 2000,
+		},
+	},
 	hooks = {
 		post_activity = function(opts, activity)
 			if vim.bo.buftype == "terminal" or opts.type == "terminal" then
@@ -30,6 +35,17 @@ require("cord").setup({
 			end
 		end,
 	},
+})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+	callback = function()
+		pcall(function()
+			local server = require("cord.server")
+			if server and server.cleanup then
+				server:cleanup()
+			end
+		end)
+	end,
 })
 
 require("fidget").setup({
