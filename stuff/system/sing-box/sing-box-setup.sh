@@ -1,4 +1,4 @@
-PATH="$PATH:%{{{pkgs.iproute2}}}/bin:%{{{pkgs.nftables}}}/bin"
+PATH="$PATH:%{{{pkgs.iproute2}}}/bin:%{{{pkgs.nftables}}}/bin:%{{{pkgs.procps}}}/bin"
 %{{{cleanup_script}}}
 set -e
 
@@ -24,6 +24,11 @@ ip netns exec vpn_wrapper ip -6 route add default via fd00:200::1
 
 ip rule add to 10.200.0.0/24 lookup main priority 2
 ip -6 rule add to fd00:200::/126 lookup main priority 2 2>/dev/null || true
+
+ip netns exec vpn_wrapper sysctl -q net.ipv4.conf.all.route_localnet=1
+ip netns exec vpn_wrapper nft add table inet nat
+ip netns exec vpn_wrapper nft add chain inet nat output '{ type nat hook output priority dstnat; policy accept; }'
+ip netns exec vpn_wrapper nft add rule inet nat output ip daddr 127.0.0.1 meta l4proto '{ tcp, udp }' th dport 53 dnat to 10.200.0.1:53
 
 mkdir -p /etc/netns/vpn_wrapper
 echo "nameserver 10.200.0.1" >/etc/netns/vpn_wrapper/resolv.conf

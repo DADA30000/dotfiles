@@ -1,55 +1,106 @@
-diff -Naur a/dns/transport/fakeip/fakeip.go b/dns/transport/fakeip/fakeip.go
---- a/dns/transport/fakeip/fakeip.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/dns/transport/fakeip/fakeip.go	2026-10-23 22:39:17.953736492 +0300
-@@ -27,6 +27,7 @@
- 	store        adapter.FakeIPStore
- 	inet4Enabled bool
- 	inet6Enabled bool
-+	ttl          uint32
+diff -Naur a/dns/client.go b/dns/client.go
+--- a/dns/client.go	1970-01-01 03:00:01.000000000 +0300
++++ b/dns/client.go	2026-10-29 22:07:12.632896328 +0300
+@@ -40,6 +40,7 @@
+ 	disableExpire     bool
+ 	optimisticTimeout time.Duration
+ 	cacheCapacity     uint32
++	negTTL            *uint32
+ 	clientSubnet      netip.Prefix
+ 	rdrc              adapter.RDRCStore
+ 	initRDRCFunc      func() adapter.RDRCStore
+@@ -59,6 +60,7 @@
+ 	DisableExpire     bool
+ 	OptimisticTimeout time.Duration
+ 	CacheCapacity     uint32
++	NegTTL            *uint32
+ 	ClientSubnet      netip.Prefix
+ 	RDRC              func() adapter.RDRCStore
+ 	DNSCache          func() adapter.DNSCacheStore
+@@ -74,6 +76,7 @@
+ 		disableExpire:     options.DisableExpire,
+ 		optimisticTimeout: options.OptimisticTimeout,
+ 		cacheCapacity:     cacheCapacity,
++		negTTL:            options.NegTTL,
+ 		clientSubnet:      options.ClientSubnet,
+ 		initRDRCFunc:      options.RDRC,
+ 		initDNSCacheFunc:  options.DNSCache,
+@@ -197,9 +200,12 @@
+ 	return 0, false
  }
  
- func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, options option.FakeIPDNSServerOptions) (adapter.DNSTransport, error) {
-@@ -36,12 +37,17 @@
- 		return nil, E.New("at least one of inet4_range or inet6_range must be set")
+-func computeTimeToLive(response *dns.Msg) uint32 {
++func computeTimeToLive(response *dns.Msg, negTTL *uint32) uint32 {
+ 	var timeToLive uint32
+-	if len(response.Answer) == 0 {
++	if len(response.Answer) == 0 || response.Rcode != dns.RcodeSuccess {
++		if negTTL != nil {
++			return *negTTL
++		}
+ 		if soaTTL, hasSOA := extractNegativeTTL(response); hasSOA {
+ 			return soaTTL
+ 		}
+@@ -375,7 +381,7 @@
+ 			return response, ErrResponseRejected
+ 		}
  	}
- 	store := NewStore(ctx, logger, inet4Range, inet6Range)
-+	ttl := uint32(C.DefaultDNSTTL)
-+	if options.TTL != nil {
-+		ttl = *options.TTL
-+	}
- 	return &Transport{
- 		TransportAdapter: dns.NewTransportAdapter(C.DNSTypeFakeIP, tag, nil),
- 		logger:           logger,
- 		store:            store,
- 		inet4Enabled:     inet4Range.IsValid(),
- 		inet6Enabled:     inet6Range.IsValid(),
-+		ttl:              ttl,
- 	}, nil
+-	timeToLive := applyResponseOptions(question, response, operation.options)
++	timeToLive := c.applyResponseOptions(question, response, operation.options)
+ 	if !disableCache {
+ 		cacheKey, storable := c.finishCacheKey(transport, operation.cacheKey)
+ 		if storable {
+@@ -644,7 +650,7 @@
+ 	return response, nowTTL, false
  }
  
-@@ -76,7 +82,7 @@
- 	if err != nil {
- 		return nil, err
+-func applyResponseOptions(question dns.Question, response *dns.Msg, options adapter.DNSQueryOptions) uint32 {
++func (c *Client) applyResponseOptions(question dns.Question, response *dns.Msg, options adapter.DNSQueryOptions) uint32 {
+ 	if question.Qtype == dns.TypeHTTPS && (options.Strategy == C.DomainStrategyIPv4Only || options.Strategy == C.DomainStrategyIPv6Only) {
+ 		for _, rr := range response.Answer {
+ 			https, isHTTPS := rr.(*dns.HTTPS)
+@@ -661,7 +667,7 @@
+ 			https.SVCB = content
+ 		}
  	}
--	return dns.FixedResponse(message.Id, question, []netip.Addr{address}, C.DefaultDNSTTL), nil
-+	return dns.FixedResponse(message.Id, question, []netip.Addr{address}, t.ttl), nil
- }
- 
- func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+-	timeToLive := computeTimeToLive(response)
++	timeToLive := computeTimeToLive(response, c.negTTL)
+ 	if options.RewriteTTL != nil {
+ 		timeToLive = *options.RewriteTTL
+ 	}
+@@ -713,7 +719,7 @@
+ 		if !storable {
+ 			return
+ 		}
+-		timeToLive := applyResponseOptions(key.Question, response, options)
++		timeToLive := c.applyResponseOptions(key.Question, response, options)
+ 		c.storeCache(storeKey, response, timeToLive)
+ 		logRefreshedResponse(c.logger, ctx, response, timeToLive)
+ 	}()
+diff -Naur a/dns/router.go b/dns/router.go
+--- a/dns/router.go	1970-01-01 03:00:01.000000000 +0300
++++ b/dns/router.go	2026-10-29 22:07:03.470980284 +0300
+@@ -88,6 +88,7 @@
+ 		DisableExpire:     options.DNSClientOptions.DisableExpire,
+ 		OptimisticTimeout: optimisticTimeout,
+ 		CacheCapacity:     options.DNSClientOptions.CacheCapacity,
++		NegTTL:            options.DNSClientOptions.NegTTL,
+ 		ClientSubnet:      options.DNSClientOptions.ClientSubnet.Build(netip.Prefix{}),
+ 		RDRC: func() adapter.RDRCStore {
+ 			cacheFile := service.FromContext[adapter.CacheFile](ctx)
 diff -Naur a/option/dns.go b/option/dns.go
 --- a/option/dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/dns.go	2026-10-23 22:38:52.953886854 +0300
-@@ -211,6 +211,7 @@
- type FakeIPDNSServerOptions struct {
- 	Inet4Range *badoption.Prefix `json:"inet4_range,omitempty" examples:"198.18.0.0/15"`
- 	Inet6Range *badoption.Prefix `json:"inet6_range,omitempty" examples:"fc00::/18"`
-+	TTL        *uint32           `json:"ttl,omitempty"`
++++ b/option/dns.go	2026-10-29 22:06:59.778014145 +0300
+@@ -66,6 +66,7 @@
+ 	DisableExpire    bool                  `json:"disable_expire,omitempty"`
+ 	IndependentCache bool                  `json:"independent_cache,omitempty" schema:"omit"`
+ 	CacheCapacity    uint32                `json:"cache_capacity,omitempty"`
++	NegTTL           *uint32               `json:"neg_ttl,omitempty"`
+ 	Optimistic       *OptimisticDNSOptions `json:"optimistic,omitempty"`
+ 	ClientSubnet     *badoption.Prefixable `json:"client_subnet,omitempty"`
  }
- 
- type DHCPDNSServerOptions struct {
 diff -Naur a/option/rule_dns.go b/option/rule_dns.go
 --- a/option/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/rule_dns.go	2026-10-23 22:38:39.792173962 +0300
++++ b/option/rule_dns.go	2026-10-29 22:06:38.504169920 +0300
 @@ -162,6 +162,7 @@
  	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
  	Outbound                 badoption.Listable[string]                                                  `json:"outbound,omitempty" reference:"outbound" schema:"omit"`
@@ -60,7 +111,7 @@ diff -Naur a/option/rule_dns.go b/option/rule_dns.go
  	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
 diff -Naur a/option/rule.go b/option/rule.go
 --- a/option/rule.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/rule.go	2026-10-23 22:38:39.792238373 +0300
++++ b/option/rule.go	2026-10-29 22:06:38.504250872 +0300
 @@ -167,6 +167,7 @@
  	User                     badoption.Listable[string]                                                  `json:"user,omitempty"`
  	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
@@ -71,7 +122,7 @@ diff -Naur a/option/rule.go b/option/rule.go
  	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
 diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
 --- a/route/rule/rule_default.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/route/rule/rule_default.go	2026-10-23 22:38:39.792276595 +0300
++++ b/route/rule/rule_default.go	2026-10-29 22:06:38.504300595 +0300
 @@ -228,6 +228,11 @@
  		rule.items = append(rule.items, item)
  		rule.allItems = append(rule.allItems, item)
@@ -86,7 +137,7 @@ diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
  		rule.items = append(rule.items, item)
 diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
 --- a/route/rule/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/route/rule/rule_dns.go	2026-10-23 22:38:39.792314246 +0300
++++ b/route/rule/rule_dns.go	2026-10-29 22:06:38.504347303 +0300
 @@ -322,6 +322,11 @@
  		rule.items = append(rule.items, item)
  		rule.allItems = append(rule.allItems, item)
@@ -101,7 +152,7 @@ diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
  		rule.items = append(rule.items, item)
 diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
 --- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300
-+++ b/route/rule/rule_item_outbound_selected.go	2026-10-23 22:38:39.792344032 +0300
++++ b/route/rule/rule_item_outbound_selected.go	2026-10-29 22:06:38.504382218 +0300
 @@ -0,0 +1,88 @@
 +package rule
 +

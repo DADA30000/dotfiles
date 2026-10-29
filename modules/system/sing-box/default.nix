@@ -249,10 +249,17 @@ let
     inbounds = [
       {
         type = "direct";
-        tag = "dns-in";
+        tag = "dns-in-udp";
         listen = "127.0.0.1";
-        listen_port = 5354;
+        listen_port = 53;
         network = "udp";
+      }
+      {
+        type = "direct";
+        tag = "dns-in-tcp";
+        listen = "127.0.0.1";
+        listen_port = 53;
+        network = "tcp";
       }
       {
         type = "vless";
@@ -289,14 +296,13 @@ let
           "172.19.0.1/30"
           "fd00::1/126"
         ];
-        route_exclude_address = "192.168.0.0/16";
       }
     ];
 
     route = {
       auto_detect_interface = true;
       final = "final-toggle";
-      default_domain_resolver = "dns-local";
+      default_domain_resolver = "dns-v4";
 
       rule_set = [
         {
@@ -389,6 +395,7 @@ let
                 "rutracker.cc"
                 "cache.nixos.org"
                 "bitwarden.com"
+                "klipy.com"
               ];
             }
             {
@@ -401,28 +408,47 @@ let
       rules = [
         { action = "sniff"; }
         {
-          inbound = [ "dns-in" ];
+          inbound = [
+            "dns-in-udp"
+            "dns-in-tcp"
+          ];
           action = "hijack-dns";
+        }
+
+        {
+          ip_cidr = [
+            "192.168.0.0/16"
+            "10.200.0.0/24"
+            "fd00:200::/126"
+          ];
+          outbound = "direct";
+        }
+
+        {
+          outbound_selected.proxy = "proxy-vless";
+          inbound = [ "vless-in" ];
+          ip_version = 6;
+          action = "reject";
+        }
+        {
+          inbound = [ "vless-in" ];
+          outbound = "proxy";
+        }
+
+        {
+          source_ip_cidr = [
+            "10.200.0.0/24"
+            "fd00:200::/126"
+          ];
+          outbound = "proxy";
         }
 
         {
           outbound = "proxy";
           ip_cidr = [
-            "198.18.0.0/15"
             "${dns}/32"
             "${dns-ipv6}/128"
           ];
-        }
-
-        {
-          outbound_selected.proxy = "proxy-vless";
-          rule_set = "proxy-rules";
-          ip_version = 6;
-          action = "reject";
-        }
-        {
-          rule_set = "proxy-rules";
-          outbound = "proxy";
         }
 
         {
@@ -437,53 +463,50 @@ let
         }
 
         {
-          source_ip_cidr = [
-            "10.200.0.0/24"
-            "fd00:200::/126"
-          ];
-          outbound = "proxy";
-        }
-
-        {
           outbound_selected.proxy = "proxy-vless";
-          inbound = [ "vless-in" ];
+          rule_set = "proxy-rules";
           ip_version = 6;
           action = "reject";
         }
         {
-          inbound = [ "vless-in" ];
+          rule_set = "proxy-rules";
           outbound = "proxy";
         }
 
         {
           inbound = [ "direct-in" ];
+          port = 53;
           outbound = "direct";
         }
       ];
     };
 
     dns = {
+      cache_capacity = 10000;
+      neg_ttl = 1;
       servers = [
         {
-          tag = "dns-local";
-          type = "local";
+          tag = "dns-v4";
+          type = "udp";
+          server = dns;
         }
         {
-          tag = "fake-dns";
-          type = "fakeip";
-          inet4_range = "198.18.0.0/15";
-          ttl = 0;
+          tag = "dns-v6";
+          type = "udp";
+          server = dns-ipv6;
         }
       ];
       rules = [
         {
-          inbound = [ "dns-in" ];
           outbound_selected.proxy = "proxy-vless";
           rule_set = "proxy-rules";
-          server = "fake-dns";
+          query_type = [ "AAAA" ];
+          action = "reject";
         }
         {
-          inbound = [ "dns-in" ];
+          outbound_selected.zen-toggle = "proxy-vless";
+          rule_set = "zen-rules";
+          query_type = [ "AAAA" ];
           action = "reject";
         }
       ];
@@ -589,6 +612,8 @@ in
     sing-box.processes_to_proxy = processes;
 
     systemd.services = {
+      dnsmasq.wantedBy = lib.mkForce [ ];
+
       sing-box = {
         description = "Sing-box Connection Supervisor and Physical Link Watcher";
         wantedBy = [ "multi-user.target" ];
@@ -633,8 +658,14 @@ in
       sing-box-core = {
         description = "Sing-box Core Daemon";
         bindsTo = [ "sing-box-init.service" ];
-        after = [ "sing-box-init.service" ];
+        conflicts = [ "dnsmasq.service" ];
+        after = [
+          "sing-box-init.service"
+          "dnsmasq.service"
+        ];
+        unitConfig.OnFailure = [ "dnsmasq.service" ];
         serviceConfig = {
+          ExecStopPost = "+${pkgs.systemd}/bin/systemctl start dnsmasq.service";
           ExecStart = "${patched-sing-box}/bin/sing-box run -c /run/sing-box/config.json";
 
           DynamicUser = true;
@@ -747,7 +778,6 @@ in
         enable = true;
         resolveLocalQueries = false;
         settings = {
-          strict-order = true;
           bind-dynamic = true;
           interface = [
             "lo"
@@ -755,7 +785,6 @@ in
             "tun-sb"
           ];
           server = [
-            "127.0.0.1#5354"
             dns
             dns-ipv6
           ];
