@@ -615,7 +615,10 @@ let
     };
   });
 
-  stop_script = pkgs.writeShellScript "sing-box-stop" "${cleanup_script}";
+  stop_script = pkgs.writeShellScript "sing-box-stop" ''
+    ${cleanup_script}
+    ${pkgs.systemd}/bin/systemctl start dnsmasq.service 2>/dev/null || true
+  '';
 
 in
 {
