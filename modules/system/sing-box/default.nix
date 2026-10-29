@@ -249,31 +249,9 @@ let
     inbounds = [
       {
         type = "direct";
-        tag = "dns-in-udp";
-        listen = "0.0.0.0";
-        listen_port = 53;
-        network = "udp";
-      }
-      {
-        type = "direct";
-        tag = "dns-in-tcp";
-        listen = "0.0.0.0";
-        listen_port = 53;
-        network = "tcp";
-      }
-      {
-        type = "direct";
-        tag = "dns-in-udp6";
+        tag = "dns-in";
         listen = "::";
         listen_port = 53;
-        network = "udp";
-      }
-      {
-        type = "direct";
-        tag = "dns-in-tcp6";
-        listen = "::";
-        listen_port = 53;
-        network = "tcp";
       }
       {
         type = "vless";
@@ -316,7 +294,7 @@ let
     route = {
       auto_detect_interface = true;
       final = "final-toggle";
-      default_domain_resolver = "dns-v4";
+      default_domain_resolver = "dns-v6";
 
       rule_set = [
         {
@@ -422,12 +400,7 @@ let
       rules = [
         { action = "sniff"; }
         {
-          inbound = [
-            "dns-in-udp"
-            "dns-in-tcp"
-            "dns-in-udp6"
-            "dns-in-tcp6"
-          ];
+          inbound = [ "dns-in" ];
           action = "hijack-dns";
         }
 
@@ -508,16 +481,17 @@ let
     dns = {
       cache_capacity = 10000;
       neg_ttl = 1;
+      final = "dns-v6";
       servers = [
-        {
-          tag = "dns-v4";
-          type = "udp";
-          server = dns;
-        }
         {
           tag = "dns-v6";
           type = "udp";
           server = dns-ipv6;
+        }
+        {
+          tag = "dns-v4";
+          type = "udp";
+          server = dns;
         }
       ];
       rules = [
@@ -532,6 +506,28 @@ let
           rule_set = "zen-rules";
           query_type = [ "AAAA" ];
           action = "reject";
+        }
+
+        # Happy Eyeballs: параллельный опрос IPv6 и IPv4, первый ответивший побеждает
+        {
+          action = "evaluate";
+          server = "dns-v6";
+          tag = "v6";
+        }
+        {
+          action = "evaluate";
+          server = "dns-v4";
+          tag = "v4";
+        }
+        {
+          action = "respond";
+          match_response = "v6";
+          race = true;
+        }
+        {
+          action = "respond";
+          match_response = "v4";
+          race = true;
         }
       ];
     };
