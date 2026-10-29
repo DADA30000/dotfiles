@@ -26,6 +26,7 @@ ip rule add to 10.200.0.0/24 lookup main priority 2
 ip -6 rule add to fd00:200::/126 lookup main priority 2 2>/dev/null || true
 
 ip netns exec vpn_wrapper sysctl -q net.ipv4.conf.all.route_localnet=1
+ip netns exec vpn_wrapper sysctl -q net.ipv4.ping_group_range="0 2147483647"
 ip netns exec vpn_wrapper nft add table inet nat
 ip netns exec vpn_wrapper nft add chain inet nat output '{ type nat hook output priority dstnat; policy accept; }'
 ip netns exec vpn_wrapper nft add rule inet nat output ip daddr 127.0.0.1 meta l4proto '{ tcp, udp }' th dport 53 dnat to 10.200.0.1:53

@@ -250,14 +250,28 @@ let
       {
         type = "direct";
         tag = "dns-in-udp";
-        listen = "127.0.0.1";
+        listen = "0.0.0.0";
         listen_port = 53;
         network = "udp";
       }
       {
         type = "direct";
         tag = "dns-in-tcp";
-        listen = "127.0.0.1";
+        listen = "0.0.0.0";
+        listen_port = 53;
+        network = "tcp";
+      }
+      {
+        type = "direct";
+        tag = "dns-in-udp6";
+        listen = "::";
+        listen_port = 53;
+        network = "udp";
+      }
+      {
+        type = "direct";
+        tag = "dns-in-tcp6";
+        listen = "::";
         listen_port = 53;
         network = "tcp";
       }
@@ -411,6 +425,8 @@ let
           inbound = [
             "dns-in-udp"
             "dns-in-tcp"
+            "dns-in-udp6"
+            "dns-in-tcp6"
           ];
           action = "hijack-dns";
         }
@@ -435,6 +451,14 @@ let
           outbound = "proxy";
         }
 
+        {
+          source_ip_cidr = [
+            "10.200.0.0/24"
+            "fd00:200::/126"
+          ];
+          network = "icmp";
+          outbound = "direct";
+        }
         {
           source_ip_cidr = [
             "10.200.0.0/24"
