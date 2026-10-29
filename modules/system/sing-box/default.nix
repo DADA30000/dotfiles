@@ -449,17 +449,6 @@ let
         }
 
         {
-          outbound_selected.zen-toggle = "proxy-vless";
-          rule_set = "zen-rules";
-          ip_version = 6;
-          action = "reject";
-        }
-        {
-          rule_set = "zen-rules";
-          outbound = "zen-toggle";
-        }
-
-        {
           outbound_selected.proxy = "proxy-vless";
           rule_set = "proxy-rules";
           ip_version = 6;
@@ -468,6 +457,17 @@ let
         {
           rule_set = "proxy-rules";
           outbound = "proxy";
+        }
+
+        {
+          outbound_selected.zen-toggle = "proxy-vless";
+          rule_set = "zen-rules";
+          ip_version = 6;
+          action = "reject";
+        }
+        {
+          rule_set = "zen-rules";
+          outbound = "zen-toggle";
         }
 
         {
@@ -685,7 +685,6 @@ in
         ];
         unitConfig.OnFailure = [ "dnsmasq.service" ];
         serviceConfig = {
-          ExecStopPost = "+${pkgs.systemd}/bin/systemctl start dnsmasq.service";
           ExecStart = "${patched-sing-box}/bin/sing-box run -c /run/sing-box/config.json";
 
           DynamicUser = true;

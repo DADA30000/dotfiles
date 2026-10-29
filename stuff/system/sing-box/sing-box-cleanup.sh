@@ -12,3 +12,5 @@ ip -6 addr del fd00:201::1/112 dev lo 2>/dev/null || true
 
 ip rule del to 10.200.0.0/24 lookup main priority 2 2>/dev/null || true
 ip -6 rule del to fd00:200::/126 lookup main priority 2 2>/dev/null || true
+
+%{{{pkgs.systemd}}}/bin/systemctl --no-block start dnsmasq.service 2>/dev/null || true
