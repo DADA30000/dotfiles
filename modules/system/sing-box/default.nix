@@ -420,6 +420,13 @@ let
           action = "reject";
         }
         {
+          outbound_selected.proxy = "proxy-vless";
+          inbound = [ "vless-in" ];
+          port = 443;
+          network = "udp";
+          action = "reject";
+        }
+        {
           inbound = [ "vless-in" ];
           outbound = "proxy";
         }
@@ -455,6 +462,13 @@ let
           action = "reject";
         }
         {
+          outbound_selected.proxy = "proxy-vless";
+          rule_set = "proxy-rules";
+          port = 443;
+          network = "udp";
+          action = "reject";
+        }
+        {
           rule_set = "proxy-rules";
           outbound = "proxy";
         }
@@ -463,6 +477,13 @@ let
           outbound_selected.zen-toggle = "proxy-vless";
           rule_set = "zen-rules";
           ip_version = 6;
+          action = "reject";
+        }
+        {
+          outbound_selected.zen-toggle = "proxy-vless";
+          rule_set = "zen-rules";
+          port = 443;
+          network = "udp";
           action = "reject";
         }
         {
