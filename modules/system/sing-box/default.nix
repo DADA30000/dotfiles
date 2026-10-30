@@ -249,8 +249,26 @@ let
     inbounds = [
       {
         type = "direct";
-        tag = "dns-in";
-        listen = "::";
+        tag = "dns-in-lo4";
+        listen = "127.0.0.1";
+        listen_port = 53;
+      }
+      {
+        type = "direct";
+        tag = "dns-in-lo6";
+        listen = "::1";
+        listen_port = 53;
+      }
+      {
+        type = "direct";
+        tag = "dns-in-veth4";
+        listen = "10.200.0.1";
+        listen_port = 53;
+      }
+      {
+        type = "direct";
+        tag = "dns-in-veth6";
+        listen = "fd00:200::1";
         listen_port = 53;
       }
       {
@@ -400,7 +418,12 @@ let
       rules = [
         { action = "sniff"; }
         {
-          inbound = [ "dns-in" ];
+          inbound = [
+            "dns-in-lo4"
+            "dns-in-lo6"
+            "dns-in-veth4"
+            "dns-in-veth6"
+          ];
           action = "hijack-dns";
         }
 
