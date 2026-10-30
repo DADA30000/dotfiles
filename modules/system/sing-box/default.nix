@@ -9,8 +9,9 @@
 with lib;
 let
   cfg = config.sing-box;
-  dns = "94.140.14.14";
-  dns-ipv6 = "2a10:50c0::ad1:ff";
+  dns = "1.1.1.1";
+  dns-ipv6 = "2606:4700:4700::1111";
+  dns-tls-name = "cloudflare-dns.com";
   zapret-qnum = "210";
   MTU = 1480;
   CREDENTIAL_DIR = "/etc/credstore";
@@ -244,7 +245,7 @@ let
 
   sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
     experimental.clash_api.external_controller = "127.0.0.1:9090";
-    log.level = "debug";
+    log.level = "info";
 
     inbounds = [
       {
@@ -294,7 +295,7 @@ let
     route = {
       auto_detect_interface = true;
       final = "final-toggle";
-      default_domain_resolver = "dns-v6";
+      default_domain_resolver = "dns-v6-dot";
 
       rule_set = [
         {
@@ -409,6 +410,8 @@ let
             "192.168.0.0/16"
             "10.200.0.0/24"
             "fd00:200::/126"
+            "${dns}/32"
+            "${dns-ipv6}/128"
           ];
           outbound = "direct";
         }
@@ -445,14 +448,6 @@ let
             "fd00:200::/126"
           ];
           outbound = "proxy";
-        }
-
-        {
-          outbound = "proxy";
-          ip_cidr = [
-            "${dns}/32"
-            "${dns-ipv6}/128"
-          ];
         }
 
         {
@@ -502,17 +497,37 @@ let
     dns = {
       cache_capacity = 10000;
       neg_ttl = 1;
-      final = "dns-v6";
+      final = "dns-v6-dot";
       servers = [
         {
-          tag = "dns-v6";
-          type = "udp";
+          tag = "dns-v6-dot";
+          type = "tls";
           server = dns-ipv6;
+          server_port = 853;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
         }
         {
-          tag = "dns-v4";
-          type = "udp";
+          tag = "dns-v4-dot";
+          type = "tls";
           server = dns;
+          server_port = 853;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
+        }
+        {
+          tag = "dns-doh";
+          type = "https";
+          server = dns;
+          server_port = 443;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
         }
       ];
       rules = [
@@ -536,25 +551,35 @@ let
           action = "reject";
         }
 
-        # Happy Eyeballs: параллельный опрос IPv6 и IPv4, первый ответивший побеждает
+        # Happy Eyeballs: параллельная гонка (DoT IPv6, DoT IPv4 и DoH 443)
         {
           action = "evaluate";
-          server = "dns-v6";
-          tag = "v6";
+          server = "dns-v6-dot";
+          tag = "v6-dot";
         }
         {
           action = "evaluate";
-          server = "dns-v4";
-          tag = "v4";
+          server = "dns-v4-dot";
+          tag = "v4-dot";
+        }
+        {
+          action = "evaluate";
+          server = "dns-doh";
+          tag = "doh";
         }
         {
           action = "respond";
-          match_response = "v6";
+          match_response = "v6-dot";
           race = true;
         }
         {
           action = "respond";
-          match_response = "v4";
+          match_response = "v4-dot";
+          race = true;
+        }
+        {
+          action = "respond";
+          match_response = "doh";
           race = true;
         }
       ];
@@ -663,7 +688,13 @@ in
     sing-box.processes_to_proxy = processes;
 
     systemd.services = {
-      dnsmasq.wantedBy = lib.mkForce [ ];
+      stubby.wantedBy = lib.mkForce [ ];
+
+      dnsmasq = {
+        wantedBy = lib.mkForce [ ];
+        wants = [ "stubby.service" ];
+        after = [ "stubby.service" ];
+      };
 
       sing-box = {
         description = "Sing-box Connection Supervisor and Physical Link Watcher";
@@ -824,6 +855,27 @@ in
 
     services = {
       resolved.enable = false;
+      stubby = {
+        enable = true;
+        settings = {
+          resolution_type = "GETDNS_RESOLUTION_STUB";
+          dns_transport_list = [ "GETDNS_TRANSPORT_TLS" ];
+          tls_authentication = "GETDNS_AUTHENTICATION_REQUIRED";
+          tls_query_padding_blocksize = 128;
+          idle_timeout = 10000;
+          listen_addresses = [ "127.0.0.1@8053" ];
+          upstream_recursive_servers = [
+            {
+              address_data = dns-ipv6;
+              tls_auth_name = dns-tls-name;
+            }
+            {
+              address_data = dns;
+              tls_auth_name = dns-tls-name;
+            }
+          ];
+        };
+      };
       dnsmasq = {
         enable = true;
         resolveLocalQueries = false;
@@ -834,10 +886,7 @@ in
             "veth_host"
             "tun-sb"
           ];
-          server = [
-            dns
-            dns-ipv6
-          ];
+          server = [ "127.0.0.1#8053" ];
           neg-ttl = 1;
           cache-size = 10000;
         };
