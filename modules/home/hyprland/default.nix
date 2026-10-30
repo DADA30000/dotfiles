@@ -1053,6 +1053,8 @@ in
           };
 
           widget = {
+            tray.hide_passive = false;
+
             control-center = {
               custom_image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-snowflake-white.svg";
               custom_image_colorize = true;
