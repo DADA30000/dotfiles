@@ -494,7 +494,7 @@ let
         {
           inbound = [ "direct-in" ];
           port = 53;
-          outbound = "direct";
+          action = "hijack-dns";
         }
       ];
     };
@@ -525,6 +525,13 @@ let
         {
           outbound_selected.zen-toggle = "proxy-vless";
           rule_set = "zen-rules";
+          query_type = [ "AAAA" ];
+          action = "reject";
+        }
+
+        {
+          outbound_selected.proxy = "proxy-vless";
+          inbound = [ "direct-in" ];
           query_type = [ "AAAA" ];
           action = "reject";
         }
