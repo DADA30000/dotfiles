@@ -1,4 +1,9 @@
 table inet vpn_routing {
+  chain prerouting {
+    type nat hook prerouting priority dstnat; policy accept;
+    iifname "veth_host" meta l4proto { tcp, udp } th dport 53 redirect to :53
+  }
+
   chain output {
     type route hook output priority mangle; policy accept;
     meta mark 0x40000000 meta mark set 0x2024 accept
