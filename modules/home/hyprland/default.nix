@@ -918,7 +918,10 @@ in
           audio.enable_overdrive = true;
           control_center.calendar.show_events_card = false;
           location.auto_locate = true;
-          osd.background_opacity = 0.25;
+          osd = {
+            background_opacity = 0.25;
+            border = false;
+          };
           system.monitor.gpu_poll_seconds = 1;
 
           lockscreen = {
