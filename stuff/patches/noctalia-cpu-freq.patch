@@ -1,8 +1,8 @@
 diff --git a/src/shell/bar/widgets/sysmon_widget.cpp b/src/shell/bar/widgets/sysmon_widget.cpp
-index a1cfc54..c596985 100644
+index 720b13f..9a9b4d5 100644
 --- a/src/shell/bar/widgets/sysmon_widget.cpp
 +++ b/src/shell/bar/widgets/sysmon_widget.cpp
-@@ -1027,6 +1027,9 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+@@ -1135,6 +1135,9 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
      return std::nullopt;
    case SysmonStat::CpuFreq:
      if (stats.cpuFreqAvailable) {
@@ -58,10 +58,10 @@ index c4dcb3a..b2d2204 100644
    };
  
 diff --git a/src/system/system_monitor_service.cpp b/src/system/system_monitor_service.cpp
-index 00e95b9..7c0d144 100644
+index fa73cf2..dcc8ade 100644
 --- a/src/system/system_monitor_service.cpp
 +++ b/src/system/system_monitor_service.cpp
-@@ -1361,6 +1361,7 @@ void SystemMonitorService::samplingLoop() {
+@@ -1353,6 +1353,7 @@ void SystemMonitorService::samplingLoop() {
          std::scoped_lock lock{m_statsMutex};
          m_latest.cpuFreqAvailable = freq.curMhz.has_value();
          m_latest.cpuFreqMhz = freq.curMhz.value_or(0.0);
@@ -70,7 +70,7 @@ index 00e95b9..7c0d144 100644
        }
        statsTouched = true;
 diff --git a/src/system/system_monitor_service.h b/src/system/system_monitor_service.h
-index c6a5982..2e05e1a 100644
+index db9e80a..5334293 100644
 --- a/src/system/system_monitor_service.h
 +++ b/src/system/system_monitor_service.h
 @@ -37,6 +37,7 @@ struct SystemStats {

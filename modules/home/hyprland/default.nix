@@ -40,6 +40,7 @@ let
 
   cargoDeps = pkgs.rustPlatform.importCargoLock {
     lockFile = "${inputs.oo7}/Cargo.lock";
+    allowBuiltinFetchGit = true;
   };
 
   oo7 = pkgs.oo7.overrideAttrs (_: {

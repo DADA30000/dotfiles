@@ -1,8 +1,8 @@
 diff --git a/assets/translations/en.json b/assets/translations/en.json
-index 3dddac0..fb3942e 100644
+index 5796e26..c675759 100644
 --- a/assets/translations/en.json
 +++ b/assets/translations/en.json
-@@ -484,8 +484,12 @@
+@@ -539,8 +539,12 @@
        "power": "Power",
        "screen-time": "Screen Time",
        "system": "System",
@@ -16,10 +16,10 @@ index 3dddac0..fb3942e 100644
        "daily": {
          "tooltip": {
 diff --git a/assets/translations/ru.json b/assets/translations/ru.json
-index 7ed612c..d551c23 100644
+index 5d8b774..75ad337 100644
 --- a/assets/translations/ru.json
 +++ b/assets/translations/ru.json
-@@ -481,8 +481,12 @@
+@@ -538,8 +538,12 @@
        "power": "Питание",
        "screen-time": "Экранное время",
        "system": "Система",
@@ -33,10 +33,10 @@ index 7ed612c..d551c23 100644
        "daily": {
          "tooltip": {
 diff --git a/meson.build b/meson.build
-index 392a104..425e438 100644
+index b63f41e..21cffe7 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -664,6 +664,7 @@ _noctalia_sources = files(
+@@ -699,6 +699,7 @@ _noctalia_sources = files(
    'src/shell/control_center/tabs/notifications_tab.cpp',
    'src/shell/control_center/tabs/power_tab.cpp',
    'src/shell/control_center/tabs/screen_time_tab.cpp',
@@ -45,12 +45,12 @@ index 392a104..425e438 100644
    'src/shell/control_center/plugin_shortcut.cpp',
    'src/shell/control_center/shortcut_registry.cpp',
 diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
-index e2f6110..9d2a27f 100644
+index 75ed65b..b4c0d52 100644
 --- a/src/app/application_services.cpp
 +++ b/src/app/application_services.cpp
-@@ -552,8 +552,16 @@ void Application::initStyleThemeAndWayland() {
+@@ -535,8 +535,16 @@ void Application::initStyleThemeAndWayland() {
  
-   auto applyMotionConfig = [this]() {
+   auto applyMotionConfig = [this] {
      auto& motion = MotionService::instance();
 -    motion.setSpeed(m_configService.config().shell.animation.speed);
 -    motion.setEnabled(m_configService.config().shell.animation.enabled);
@@ -65,13 +65,13 @@ index e2f6110..9d2a27f 100644
 +    if (anim.windowSwitcherSpeed) motion.setSpeed(AnimationKind::WindowSwitcher, *anim.windowSwitcherSpeed);
 +    if (anim.toastSpeed) motion.setSpeed(AnimationKind::Toast, *anim.toastSpeed);
    };
-   auto applyStyleConfig = [this, lastCornerRadiusScale = std::numeric_limits<float>::quiet_NaN()]() mutable {
+   auto applyStyleConfig = [this, lastCornerRadiusScale = std::numeric_limits<float>::quiet_NaN()] mutable {
      const float corner = m_configService.config().shell.cornerRadiusScale;
 diff --git a/src/app/application_ui.cpp b/src/app/application_ui.cpp
-index c13be23..9d8bdcb 100644
+index e814ff5..9d0398a 100644
 --- a/src/app/application_ui.cpp
 +++ b/src/app/application_ui.cpp
-@@ -580,7 +580,7 @@ void Application::initPanelManagerAndPanels() {
+@@ -569,7 +569,7 @@ void Application::initPanelManagerAndPanels() {
      // the panel surface (and its keyboard focus) alive for the duration of the reveal animation, so
      // the keys would land on the closing panel instead of the target window. Close without animation
      // so focus returns to the toplevel before we paste, mirroring the launcher's app-launch close.
@@ -79,12 +79,12 @@ index c13be23..9d8bdcb 100644
 +    m_panelManager.closePanel(true);
      const bool isImage = entry.isImage();
      m_clipboardAutoPasteTimer.stop();
-     m_clipboardAutoPasteTimer.start(std::chrono::milliseconds(Style::animFast + 30), [this, isImage]() {
+     m_clipboardAutoPasteTimer.start(std::chrono::milliseconds(Style::animFast + 30), [this, isImage] {
 diff --git a/src/config/config_overrides.cpp b/src/config/config_overrides.cpp
-index 1dafd47..f5eb5fa 100644
+index 6307cbb..4c84751 100644
 --- a/src/config/config_overrides.cpp
 +++ b/src/config/config_overrides.cpp
-@@ -568,6 +568,18 @@ namespace {
+@@ -569,6 +569,18 @@ namespace {
                if (item.radius.has_value()) {
                  row.insert_or_assign("radius", static_cast<double>(*item.radius));
                }
@@ -104,10 +104,10 @@ index 1dafd47..f5eb5fa 100644
                row.insert_or_assign("accordion", item.accordion);
                row.insert_or_assign(
 diff --git a/src/config/config_types.cpp b/src/config/config_types.cpp
-index 6b03614..b2789ae 100644
+index c0b4132..78591f2 100644
 --- a/src/config/config_types.cpp
 +++ b/src/config/config_types.cpp
-@@ -197,7 +197,7 @@ float panelCardOpacityForTransparencyMode(PanelTransparencyMode mode, float pane
+@@ -198,7 +198,7 @@ float panelCardOpacityForTransparencyMode(PanelTransparencyMode mode, float pane
    case PanelTransparencyMode::Soft:
      return std::clamp(backgroundOpacity + 0.08F, 0.82F, 0.92F);
    case PanelTransparencyMode::Glass:
@@ -116,7 +116,7 @@ index 6b03614..b2789ae 100644
    }
    return 1.0F;
  }
-@@ -209,7 +209,7 @@ float detachedPanelBackgroundOpacityForTransparencyMode(PanelTransparencyMode mo
+@@ -210,7 +210,7 @@ float detachedPanelBackgroundOpacityForTransparencyMode(PanelTransparencyMode mo
    case PanelTransparencyMode::Soft:
      return 0.80F;
    case PanelTransparencyMode::Glass:
@@ -125,7 +125,7 @@ index 6b03614..b2789ae 100644
    }
    return 1.0F;
  }
-@@ -501,6 +501,10 @@ WidgetBarCapsuleSpec capsuleSpecFromGroup(const BarConfig& bar, const BarCapsule
+@@ -502,6 +502,10 @@ WidgetBarCapsuleSpec capsuleSpecFromGroup(const BarConfig& bar, const BarCapsule
    } else {
      spec.radius = std::nullopt;
    }
@@ -137,7 +137,7 @@ index 6b03614..b2789ae 100644
    spec.accordion = group.accordion;
    spec.accordionDirection = group.accordionDirection;
 diff --git a/src/config/config_types.h b/src/config/config_types.h
-index 624d5ae..17e042e 100644
+index 88ed7cf..0eac725 100644
 --- a/src/config/config_types.h
 +++ b/src/config/config_types.h
 @@ -40,6 +40,10 @@ struct BarCapsuleGroupStyle {
@@ -151,7 +151,7 @@ index 624d5ae..17e042e 100644
    float opacity = 1.0F;
    // Collapse the group to its first member; hovering the capsule reveals the rest inline.
    bool accordion = false;
-@@ -391,6 +395,10 @@ struct WidgetBarCapsuleSpec {
+@@ -401,6 +405,10 @@ struct WidgetBarCapsuleSpec {
    float padding = Style::barCapsulePadding;
    // Corner radius in logical pixels before content-scale; unset means automatic pill radius.
    std::optional<float> radius;
@@ -162,16 +162,16 @@ index 624d5ae..17e042e 100644
    // Capsule background opacity multiplier (0.0–1.0).
    float opacity = 1.0F;
    bool hoverHighlight = true;
-@@ -571,6 +579,8 @@ struct LockscreenConfig {
+@@ -599,6 +607,8 @@ struct LockscreenConfig {
    bool fingerprint = true;
    bool allowEmptyPassword = false;
    bool blurredDesktop = false;
 +  bool transparent = false;
 +  float backgroundOpacity = 0.05F;
-   std::vector<LockscreenTransition> transitions = {LockscreenTransition::Fade, LockscreenTransition::Wipe,
-                                                    LockscreenTransition::Disc, LockscreenTransition::Stripes,
-                                                    LockscreenTransition::Zoom, LockscreenTransition::Honeycomb};
-@@ -1069,6 +1079,13 @@ struct ShellConfig {
+   std::vector<LockscreenTransition> transitions = {LockscreenTransition::Fade,    LockscreenTransition::Wipe,
+                                                    LockscreenTransition::Disc,    LockscreenTransition::Stripes,
+                                                    LockscreenTransition::Zoom,    LockscreenTransition::Honeycomb,
+@@ -1129,6 +1139,13 @@ struct ShellConfig {
    struct AnimationConfig {
      bool enabled = true;
      float speed = 1.0F;
@@ -185,20 +185,20 @@ index 624d5ae..17e042e 100644
  
      bool operator==(const AnimationConfig&) const = default;
    };
-@@ -1082,6 +1099,8 @@ struct ShellConfig {
+@@ -1142,6 +1159,8 @@ struct ShellConfig {
  
    struct PanelConfig {
      PanelTransparencyMode transparencyMode = PanelTransparencyMode::Solid;
 +    std::optional<float> backgroundOpacity;
 +    std::optional<float> cardOpacity;
      bool borders = true; // outline on floating panel surfaces
-     ColorSpec borderColor = colorSpecFromRole(ColorRole::Outline);
+     ColorSpec borderColor = colorSpecFromRole(ColorRole::OutlineVariant);
      float borderWidth = Style::borderWidth;
 diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
-index b93a32c..b6530b5 100644
+index fe28d5f..d68ef4c 100644
 --- a/src/config/schema/config_schema.cpp
 +++ b/src/config/schema/config_schema.cpp
-@@ -134,6 +134,8 @@ namespace noctalia::config::schema {
+@@ -136,6 +136,8 @@ namespace noctalia::config::schema {
          field(&LockscreenConfig::fingerprint, "fingerprint"),
          field(&LockscreenConfig::allowEmptyPassword, "allow_empty_password"),
          field(&LockscreenConfig::blurredDesktop, "blurred_desktop"),
@@ -207,7 +207,7 @@ index b93a32c..b6530b5 100644
          enumArrayField(
              &LockscreenConfig::transitions, "transition", kLockscreenTransitions, std::optional<LockscreenTransition>{}
          ),
-@@ -1316,10 +1318,42 @@ namespace noctalia::config::schema {
+@@ -1416,10 +1418,44 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -217,13 +217,15 @@ index b93a32c..b6530b5 100644
 +    ) {
 +      return custom<Struct>(
 +          key,
-+          [member, key, range](const toml::table& tbl, Struct& out, std::string_view, Diagnostics&) {
++          [member, key, range](const toml::table& tbl, Struct& out, std::string_view parentPath, Diagnostics& diag) {
 +            if (auto v = finiteDouble(tbl[key])) {
 +              auto value = static_cast<float>(*v);
 +              if (range) {
 +                value = applyRange(value, *range);
 +              }
 +              out.*member = value;
++            } else {
++              warnUnusableNumber(tbl, key, parentPath, diag);
 +            }
 +          },
 +          [member, key](toml::table& tbl, const Struct& in) {
@@ -250,7 +252,7 @@ index b93a32c..b6530b5 100644
        };
        return s;
      }
-@@ -1376,6 +1410,8 @@ namespace noctalia::config::schema {
+@@ -1478,6 +1514,8 @@ namespace noctalia::config::schema {
      const Schema<ShellConfig::PanelConfig>& shellPanelSchema() {
        static const Schema<ShellConfig::PanelConfig> s = {
            enumField(&ShellConfig::PanelConfig::transparencyMode, "transparency_mode", kPanelTransparencyModes),
@@ -259,7 +261,7 @@ index b93a32c..b6530b5 100644
            field(&ShellConfig::PanelConfig::borders, "borders"),
            colorField(&ShellConfig::PanelConfig::borderColor, "border_color"),
            field(&ShellConfig::PanelConfig::borderWidth, "border_width", kPanelBorderWidthRange),
-@@ -2103,29 +2139,6 @@ namespace noctalia::config::schema {
+@@ -2266,31 +2304,6 @@ namespace noctalia::config::schema {
        );
      }
  
@@ -269,13 +271,15 @@ index b93a32c..b6530b5 100644
 -    ) {
 -      return custom<Struct>(
 -          key,
--          [member, key, range](const toml::table& tbl, Struct& out, std::string_view, Diagnostics&) {
+-          [member, key, range](const toml::table& tbl, Struct& out, std::string_view parentPath, Diagnostics& diag) {
 -            if (auto v = finiteDouble(tbl[key])) {
 -              auto value = static_cast<float>(*v);
 -              if (range) {
 -                value = applyRange(value, *range);
 -              }
 -              out.*member = value;
+-            } else {
+-              warnUnusableNumber(tbl, key, parentPath, diag);
 -            }
 -          },
 -          [member, key](toml::table& tbl, const Struct& in) {
@@ -289,7 +293,7 @@ index b93a32c..b6530b5 100644
      template <typename Struct>
      Field<Struct> optionalDoubleField(
          std::optional<double> Struct::* member, std::string_view key, std::optional<Range<double>> range = std::nullopt
-@@ -2165,6 +2178,10 @@ namespace noctalia::config::schema {
+@@ -2334,6 +2347,10 @@ namespace noctalia::config::schema {
            optionalColorField(&BarCapsuleGroupStyle::foreground, "foreground"),
            field(&BarCapsuleGroupStyle::padding, "padding", kBarCapsulePaddingRange),
            optionalFloatField(&BarCapsuleGroupStyle::radius, "radius", kBarCapsuleRadiusRangeF),
@@ -301,11 +305,11 @@ index b93a32c..b6530b5 100644
            field(&BarCapsuleGroupStyle::accordion, "accordion"),
            enumField(&BarCapsuleGroupStyle::accordionDirection, "accordion_direction", kBarAccordionDirections),
 diff --git a/src/config/schema/ranges.h b/src/config/schema/ranges.h
-index f43083e..7504f4d 100644
+index cb3acac..5ffa696 100644
 --- a/src/config/schema/ranges.h
 +++ b/src/config/schema/ranges.h
-@@ -17,7 +17,7 @@ namespace noctalia::config::schema {
-   inline constexpr Range<std::int64_t> kReminderLeadMinutesRange{0, 1440, 5};
+@@ -18,7 +18,7 @@ namespace noctalia::config::schema {
+   inline constexpr Range<std::int64_t> kPastEventsThresholdMinutesRange{0, 1440, 5};
  
    // Shell.
 -  inline constexpr Range<float> kAnimationSpeedRange{0.1F, 4.0F, 0.05F};
@@ -314,7 +318,7 @@ index f43083e..7504f4d 100644
    inline constexpr Range<std::int64_t> kControlCenterWidthRange{600, 1200, 10};
    inline constexpr Range<std::int64_t> kLauncherWidthRange{560, 1100, 10};
 diff --git a/src/launcher/dmenu_ipc.cpp b/src/launcher/dmenu_ipc.cpp
-index c135fc9..5b13b9d 100644
+index 6072e29..5b13b9d 100644
 --- a/src/launcher/dmenu_ipc.cpp
 +++ b/src/launcher/dmenu_ipc.cpp
 @@ -205,7 +205,7 @@ void DmenuIpcService::finalizeSession(Session& session) {
@@ -350,7 +354,7 @@ index c135fc9..5b13b9d 100644
  
    // The provider is being iterated by LauncherPanel during activate()/reset(); mutate
    // the panel after this event completes.
--  DeferredCall::callLater([this]() {
+-  DeferredCall::callLater([this] {
 -    if (m_launcherPanel != nullptr) {
 +  DeferredCall::callLater([this, sessionProviderId]() {
 +    if (m_launcherPanel != nullptr && m_launcherPanel->scopedProviderId() == sessionProviderId) {
@@ -502,10 +506,10 @@ index f38b736..31d39d2 100644
    std::unordered_set<AnimationManager*> m_managers;
  };
 diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
-index 46eadf6..af54a89 100644
+index bfcd7da..ab3ed0e 100644
 --- a/src/shell/bar/bar.cpp
 +++ b/src/shell/bar/bar.cpp
-@@ -898,6 +898,11 @@ namespace {
+@@ -933,6 +933,11 @@ namespace {
        return;
      }
  
@@ -517,7 +521,7 @@ index 46eadf6..af54a89 100644
      const auto concave = barConcaveShape(instance.barConfig);
      const float innerSurfaceExtension =
          barInnerSurfaceExtension(instance.barConfig, shadowConfig, surfaceWidth, surfaceHeight);
-@@ -1110,7 +1115,17 @@ namespace {
+@@ -1147,7 +1152,17 @@ namespace {
          const Widget* radiusSource = !run.widgets.empty() ? run.widgets.front() : nullptr;
          const float capsuleRadius = radiusSource != nullptr ? radiusSource->resolvedBarCapsuleRadius(shellW, shellH)
                                                              : std::max(0.0F, std::min(shellW, shellH) * 0.5F);
@@ -536,7 +540,7 @@ index 46eadf6..af54a89 100644
          if (run.container == nullptr) {
            placeCapsuleHoverBoxes(
                run, isVertical, shellW, shellH, contentX, contentY, capsuleRadius, widgetHoverPadding
-@@ -3093,6 +3108,11 @@ void Bar::applyBackgroundPalette(BarInstance& instance) {
+@@ -3198,6 +3213,11 @@ void Bar::applyBackgroundPalette(BarInstance& instance) {
    if (instance.bg == nullptr) {
      return;
    }
@@ -549,10 +553,10 @@ index 46eadf6..af54a89 100644
    style.fill = colorForRole(ColorRole::Surface, instance.barConfig.backgroundOpacity);
    style.border = resolveColorSpec(instance.barConfig.border);
 diff --git a/src/shell/bar/widget_factory.cpp b/src/shell/bar/widget_factory.cpp
-index 50e93a4..63b6c75 100644
+index 2234fff..5e45db0 100644
 --- a/src/shell/bar/widget_factory.cpp
 +++ b/src/shell/bar/widget_factory.cpp
-@@ -349,6 +349,11 @@ std::unique_ptr<Widget> WidgetFactory::create(
+@@ -345,6 +345,11 @@ std::unique_ptr<Widget> WidgetFactory::create(
                  volumeWidgetDefinition().resolve(context.config, context.settingContext)
              );
            }},
@@ -588,10 +592,10 @@ index 802fb5f..8359d01 100644
          {"weather", kWeather},
          {"workspaces", kWorkspaces},
 diff --git a/src/shell/bar/widgets/active_window_widget.cpp b/src/shell/bar/widgets/active_window_widget.cpp
-index 6d6c2dd..1b46d31 100644
+index 04016b7..7b37a93 100644
 --- a/src/shell/bar/widgets/active_window_widget.cpp
 +++ b/src/shell/bar/widgets/active_window_widget.cpp
-@@ -96,26 +96,27 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
+@@ -95,26 +95,27 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
      m_icon->setPosition(0.0F, 0.0F);
      rootNode->setSize(m_icon->width(), m_icon->height());
    } else {
@@ -626,9 +630,9 @@ index 6d6c2dd..1b46d31 100644
  
      const float contentWidth = showTitle ? m_title->x() + m_title->width() : iconWidth;
      rootNode->setSize(std::clamp(contentWidth, minLength, maxLength), contentHeight);
-@@ -255,6 +256,24 @@ void ActiveWindowWidget::syncState(Renderer& renderer) {
+@@ -260,6 +261,24 @@ int ActiveWindowWidget::iconTargetSize() const noexcept {
  
- std::string ActiveWindowWidget::resolveIconPath(const std::string& appId) {
+ std::string ActiveWindowWidget::resolveIconPath(const std::string& appId, float renderScale) {
    if (appId.empty()) {
 +    if (!m_lastTitle.empty()) {
 +      if (m_lastTitle.starts_with("AyuGram") || m_lastTitle.starts_with("Telegram")) {
@@ -652,7 +656,7 @@ index 6d6c2dd..1b46d31 100644
    }
  
 diff --git a/src/shell/bar/widgets/network_widget.cpp b/src/shell/bar/widgets/network_widget.cpp
-index 1c81c77..0746f73 100644
+index 97679a8..5c852e7 100644
 --- a/src/shell/bar/widgets/network_widget.cpp
 +++ b/src/shell/bar/widgets/network_widget.cpp
 @@ -69,7 +69,7 @@ NetworkWidget::NetworkWidget(
@@ -702,7 +706,8 @@ index 1c81c77..0746f73 100644
    if (m_isVertical) {
      // Vertical: stack everything centered, top to bottom
 -    // VPN glyph → VPN label → network glyph → network label
-     const float w = [&]() {
+-    const float w = [&] {
++    const float w = [&]() {
        float maxW = icon->width();
        if (vpnVisible) {
          maxW = std::max(maxW, m_vpnGlyph->width());
@@ -861,7 +866,7 @@ index c59bd5c..150fb3a 100644
    };
    return definition;
 diff --git a/src/shell/bar/widgets/sysmon_widget.cpp b/src/shell/bar/widgets/sysmon_widget.cpp
-index 45cec2b..a1cfc54 100644
+index de7fa32..720b13f 100644
 --- a/src/shell/bar/widgets/sysmon_widget.cpp
 +++ b/src/shell/bar/widgets/sysmon_widget.cpp
 @@ -5,6 +5,7 @@
@@ -880,7 +885,7 @@ index 45cec2b..a1cfc54 100644
  
  #include <algorithm>
  #include <array>
-@@ -113,11 +115,11 @@ namespace {
+@@ -114,11 +116,11 @@ namespace {
          || stat == SysmonStat::DiskFree;
    }
  
@@ -897,7 +902,7 @@ index 45cec2b..a1cfc54 100644
    };
  
    [[nodiscard]] double netRxFromStats(const SystemStats& stats, std::string_view interfaceName) {
-@@ -196,15 +198,9 @@ SysmonWidget::SysmonWidget(SystemMonitorService* monitor, ConfigService& configS
+@@ -199,15 +201,9 @@ SysmonWidget::SysmonWidget(SystemMonitorService* monitor, ConfigService& configS
      if (needsCpuTemp(m_stat)) {
        m_monitor->retainCpuTemp();
      }
@@ -916,7 +921,7 @@ index 45cec2b..a1cfc54 100644
      if (isDiskStat(m_stat) && !m_diskPath.empty()) {
        m_monitor->retainDiskPath(m_diskPath);
      }
-@@ -216,15 +212,9 @@ SysmonWidget::~SysmonWidget() {
+@@ -222,15 +218,9 @@ SysmonWidget::~SysmonWidget() {
      if (needsCpuTemp(m_stat)) {
        m_monitor->releaseCpuTemp();
      }
@@ -935,7 +940,7 @@ index 45cec2b..a1cfc54 100644
      if (isDiskStat(m_stat) && !m_diskPath.empty()) {
        m_monitor->releaseDiskPath(m_diskPath);
      }
-@@ -327,6 +317,13 @@ void SysmonWidget::create() {
+@@ -340,6 +330,13 @@ void SysmonWidget::create() {
      }
    }
  
@@ -949,7 +954,7 @@ index 45cec2b..a1cfc54 100644
    setRoot(std::move(container));
  
    syncVisualPalette();
-@@ -1047,10 +1044,8 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+@@ -1155,10 +1152,8 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
  
    case SysmonStat::GpuVram:
      if (stats.gpuVramUsedBytes.has_value() && stats.gpuVramTotalBytes.has_value() && *stats.gpuVramTotalBytes > 0) {
@@ -962,7 +967,7 @@ index 45cec2b..a1cfc54 100644
      }
      return std::nullopt;
  
-@@ -1061,7 +1056,7 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+@@ -1169,7 +1164,7 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
      return std::nullopt;
  
    case SysmonStat::RamUsed:
@@ -971,7 +976,7 @@ index 45cec2b..a1cfc54 100644
  
    case SysmonStat::RamPct:
      return std::format("{:.0F}%", stats.ramUsagePercent);
-@@ -1138,6 +1133,10 @@ bool SysmonWidget::statAvailableForTooltip(SysmonStat stat, const SystemStats& s
+@@ -1248,6 +1243,10 @@ bool SysmonWidget::statAvailableForTooltip(SysmonStat stat, const SystemStats& s
    return false;
  }
  
@@ -982,7 +987,7 @@ index 45cec2b..a1cfc54 100644
  std::vector<TooltipRow> SysmonWidget::buildTooltipRows(const std::string& currentValue) const {
    std::vector<TooltipRow> rows;
    rows.push_back({statDisplayName(m_stat), currentValue});
-@@ -1159,6 +1158,31 @@ std::vector<TooltipRow> SysmonWidget::buildTooltipRows(const std::string& curren
+@@ -1269,6 +1268,31 @@ std::vector<TooltipRow> SysmonWidget::buildTooltipRows(const std::string& curren
      }
    }
  
@@ -1015,7 +1020,7 @@ index 45cec2b..a1cfc54 100644
  }
  
 diff --git a/src/shell/bar/widgets/workspaces_widget.cpp b/src/shell/bar/widgets/workspaces_widget.cpp
-index 4a59161..9087dfa 100644
+index 7f10d23..96cbafa 100644
 --- a/src/shell/bar/widgets/workspaces_widget.cpp
 +++ b/src/shell/bar/widgets/workspaces_widget.cpp
 @@ -76,7 +76,8 @@ WorkspacesWidget::WorkspacesWidget(
@@ -1079,16 +1084,16 @@ index 4a59161..9087dfa 100644
          structuralChange = true;
          break;
        }
-@@ -1021,7 +1053,7 @@ void WorkspacesWidget::startAnimation() {
+@@ -1022,7 +1054,7 @@ void WorkspacesWidget::startAnimation() {
            root()->markPaintDirty();
          }
        },
--      [this]() { finishAnimation(); }, this
+-      [this] { finishAnimation(); }, this
 +      [this]() { finishAnimation(); }, this, AnimationKind::Workspace
    );
  
    // Reserve final bounds before the first animated frame to avoid one-frame overflow.
-@@ -1124,6 +1156,17 @@ void WorkspacesWidget::applyItemLayout(Item& it) {
+@@ -1125,6 +1157,17 @@ void WorkspacesWidget::applyItemLayout(Item& it) {
        it.indicator->setPosition(dotX, dotY);
        it.indicator->setFrameSize(dotSize, dotSize);
        it.indicator->setRadius(dotSize * 0.5F);
@@ -1144,7 +1149,7 @@ index 815cee1..d5fd775 100644
                    .key = "focused_output_only",
                    .presentation =
 diff --git a/src/shell/control_center/control_center_panel.cpp b/src/shell/control_center/control_center_panel.cpp
-index b5634ee..206342d 100644
+index 19a2c6e..9b5f182 100644
 --- a/src/shell/control_center/control_center_panel.cpp
 +++ b/src/shell/control_center/control_center_panel.cpp
 @@ -10,6 +10,7 @@
@@ -1163,7 +1168,7 @@ index b5634ee..206342d 100644
    m_tabButtons.fill(nullptr);
    m_tabContainers.fill(nullptr);
    m_tabHeaderActions.fill(nullptr);
-@@ -732,7 +734,8 @@ void ControlCenterPanel::startTabTransition(TabId from, TabId to) {
+@@ -735,7 +737,8 @@ void ControlCenterPanel::startTabTransition(TabId from, TabId to) {
          PanelManager::instance().requestLayout();
          PanelManager::instance().requestRedraw();
        },
@@ -1194,10 +1199,10 @@ index 9b0dc84..2b7dc24 100644
  
    void selectTab(TabId tab, bool animated = false);
 diff --git a/src/shell/control_center/tabs/audio_tab.cpp b/src/shell/control_center/tabs/audio_tab.cpp
-index d1b369b..3a6be62 100644
+index 95532c0..5a305d1 100644
 --- a/src/shell/control_center/tabs/audio_tab.cpp
 +++ b/src/shell/control_center/tabs/audio_tab.cpp
-@@ -877,7 +877,7 @@ namespace {
+@@ -864,7 +864,7 @@ namespace {
        setPadding(Style::spaceSm * scale, Style::spaceMd * scale);
        setMinHeight(Style::controlHeightLg * scale);
        setRadius(Style::scaledRadiusMd(scale));
@@ -1206,7 +1211,7 @@ index d1b369b..3a6be62 100644
        clearBorder();
  
        addChild(
-@@ -964,7 +964,7 @@ namespace {
+@@ -951,7 +951,7 @@ namespace {
          return;
        }
  
@@ -1215,7 +1220,7 @@ index d1b369b..3a6be62 100644
        if (hovered()) {
          setBorder(colorSpecFromRole(ColorRole::Primary), Style::borderWidth);
        } else {
-@@ -1001,7 +1001,7 @@ namespace {
+@@ -988,7 +988,7 @@ namespace {
        setPadding(Style::spaceSm * scale, Style::spaceMd * scale);
        setMinHeight((Style::controlHeightLg + Style::spaceSm) * scale);
        setRadius(Style::scaledRadiusMd(scale));
@@ -1224,7 +1229,7 @@ index d1b369b..3a6be62 100644
        clearBorder();
  
        constexpr float kIconSizeSm = 28.0F;
-@@ -1275,12 +1275,12 @@ namespace {
+@@ -1261,12 +1261,12 @@ namespace {
        if (m_muteButton != nullptr) {
          m_muteButton->setEnabled(nodeEnabled);
          m_muteButton->setGlyph(m_muted ? "volume-mute" : "volume-high");
@@ -1239,7 +1244,7 @@ index d1b369b..3a6be62 100644
        }
  
        if (shouldSetSlider) {
-@@ -1428,7 +1428,7 @@ namespace {
+@@ -1414,7 +1414,7 @@ namespace {
                  .configure =
                      [scale](Flex& card) {
                        card.setRadius(Style::scaledRadiusMd(scale));
@@ -1248,7 +1253,7 @@ index d1b369b..3a6be62 100644
                        card.clearBorder();
                      },
              },
-@@ -1797,7 +1797,7 @@ std::unique_ptr<Flex> AudioTab::createDeviceVolumeCard(DeviceVolumeCardSpec card
+@@ -1779,7 +1779,7 @@ std::unique_ptr<Flex> AudioTab::createDeviceVolumeCard(DeviceVolumeCardSpec card
                    .out = &card.state.muteButton,
                    .glyph = std::string(card.muteGlyph),
                    .glyphSize = Style::fontSizeBody * scale,
@@ -1257,7 +1262,7 @@ index d1b369b..3a6be62 100644
                    .minWidth = Style::controlHeightSm * scale,
                    .minHeight = Style::controlHeightSm * scale,
                    .padding = Style::spaceXs * scale,
-@@ -2053,7 +2053,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
+@@ -2038,7 +2038,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
      const bool outputMuted = sink != nullptr && sink->muted;
      m_outputDeviceVolume.muteButton->setEnabled(sink != nullptr);
      m_outputDeviceVolume.muteButton->setGlyph(outputMuted ? "volume-mute" : "volume-high");
@@ -1266,7 +1271,7 @@ index d1b369b..3a6be62 100644
    }
  
    if (m_inputDeviceVolume.slider != nullptr) {
-@@ -2073,7 +2073,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
+@@ -2060,7 +2060,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
      const bool inputMuted = source != nullptr && source->muted;
      m_inputDeviceVolume.muteButton->setEnabled(source != nullptr);
      m_inputDeviceVolume.muteButton->setGlyph(inputMuted ? "microphone-mute" : "microphone");
@@ -1276,10 +1281,10 @@ index d1b369b..3a6be62 100644
  }
  
 diff --git a/src/shell/control_center/tabs/bluetooth_tab.cpp b/src/shell/control_center/tabs/bluetooth_tab.cpp
-index 73f18cf..10a68fd 100644
+index b2ebec9..49a29a4 100644
 --- a/src/shell/control_center/tabs/bluetooth_tab.cpp
 +++ b/src/shell/control_center/tabs/bluetooth_tab.cpp
-@@ -144,7 +144,7 @@ public:
+@@ -152,7 +152,7 @@ public:
        : m_device(std::move(device)), m_service(service) {
      setScale(scale);
      setRadius(Style::scaledRadiusMd(scale));
@@ -1289,7 +1294,7 @@ index 73f18cf..10a68fd 100644
  
      auto header = ui::row(
 diff --git a/src/shell/control_center/tabs/monitor_tab.cpp b/src/shell/control_center/tabs/monitor_tab.cpp
-index cb0c4b1..b348625 100644
+index a634dbb..ecefb26 100644
 --- a/src/shell/control_center/tabs/monitor_tab.cpp
 +++ b/src/shell/control_center/tabs/monitor_tab.cpp
 @@ -1,18 +1,26 @@
@@ -1454,7 +1459,7 @@ index cb0c4b1..b348625 100644
    }
  
    std::string formatBrightnessValue(const BrightnessDisplay& display, float brightness) {
-@@ -413,6 +522,43 @@ void MonitorTab::rebuildCards(Renderer& /*renderer*/) {
+@@ -410,6 +519,43 @@ void MonitorTab::rebuildCards(Renderer& /*renderer*/) {
  
      card->addChild(std::move(sliderRow));
  
@@ -1499,14 +1504,14 @@ index cb0c4b1..b348625 100644
      m_cardsLayout->addChild(std::move(card));
  
 diff --git a/src/shell/control_center/tabs/network_tab.cpp b/src/shell/control_center/tabs/network_tab.cpp
-index d3c2096..46486cd 100644
+index 699f22b..0085a4f 100644
 --- a/src/shell/control_center/tabs/network_tab.cpp
 +++ b/src/shell/control_center/tabs/network_tab.cpp
 @@ -199,7 +199,7 @@ namespace {
          .align = FlexAlign::Center,
          .paddingV = Style::spaceXs * 0.5F * scale,
          .paddingH = Style::spaceSm * scale,
--        .fill = colorSpecFromRole(ColorRole::SurfaceVariant, 0.8F),
+-        .fill = colorSpecFromRole(ColorRole::SurfaceContainer),
 +        .fill = clearColorSpec(),
          .radius = Style::scaledRadiusSm(scale),
      });
@@ -1539,7 +1544,7 @@ index d3c2096..46486cd 100644
          setBorder(colorSpecFromRole(ColorRole::Hover), Style::borderWidth);
        } else {
 diff --git a/src/shell/control_center/tabs/power_tab.cpp b/src/shell/control_center/tabs/power_tab.cpp
-index b18b3e7..aaaa3d4 100644
+index 56781d1..004ed44 100644
 --- a/src/shell/control_center/tabs/power_tab.cpp
 +++ b/src/shell/control_center/tabs/power_tab.cpp
 @@ -1,21 +1,38 @@
@@ -2076,7 +2081,7 @@ index 0d8e000..486e9fa 100644
    Flex* m_peripheralsCard = nullptr;
    Flex* m_peripheralsList = nullptr;
 diff --git a/src/shell/control_center/tabs/system_tab.cpp b/src/shell/control_center/tabs/system_tab.cpp
-index 0cdd282..610491a 100644
+index b49500d..e9c6a3d 100644
 --- a/src/shell/control_center/tabs/system_tab.cpp
 +++ b/src/shell/control_center/tabs/system_tab.cpp
 @@ -5,10 +5,13 @@
@@ -2183,14 +2188,14 @@ index 0cdd282..610491a 100644
    m_diskLabels.clear();
    m_diskMountPoints.clear();
    m_graphInitialized = false;
-@@ -488,15 +539,15 @@ void SystemTab::onFrameTick(float deltaMs) {
+@@ -488,15 +539,16 @@ void SystemTab::onFrameTick(float deltaMs) {
      return;
    }
  
--  if (!m_redrawLimiter.shouldStep([]() { PanelManager::instance().requestRedraw(); })) {
+-  if (!m_redrawLimiter.shouldStep([] { PanelManager::instance().requestRedraw(); })) {
 -    return;
 -  }
--
+ 
    const auto latestSampleAt = m_monitor->latest().sampledAt;
    if (latestSampleAt != std::chrono::steady_clock::time_point{} && latestSampleAt != m_lastSampleAt) {
      PanelManager::instance().requestUpdateOnly();
@@ -2203,7 +2208,7 @@ index 0cdd282..610491a 100644
    m_scrollProgress = scrollProgressForSample(m_lastSampleAt);
  
    if (m_cpuGraph != nullptr) {
-@@ -651,6 +702,83 @@ void SystemTab::doUpdate(Renderer& renderer) {
+@@ -651,6 +703,83 @@ void SystemTab::doUpdate(Renderer& renderer) {
    syncLabels();
  }
  
@@ -2287,7 +2292,7 @@ index 0cdd282..610491a 100644
  void SystemTab::updateGraphs(Renderer& renderer) {
    if (m_monitor == nullptr || !m_monitor->isRunning()) {
      return;
-@@ -702,42 +830,8 @@ void SystemTab::updateGraphs(Renderer& renderer) {
+@@ -702,42 +831,8 @@ void SystemTab::updateGraphs(Renderer& renderer) {
  
    // GPU: usage (primary) + VRAM (secondary) + temperature (tertiary)
    if (m_gpuGraph != nullptr) {
@@ -2331,7 +2336,7 @@ index 0cdd282..610491a 100644
    }
  
    // Network
-@@ -832,25 +926,50 @@ void SystemTab::syncLabels() {
+@@ -832,25 +927,50 @@ void SystemTab::syncLabels() {
        m_cpuTempLabel->setText("--");
      }
    }
@@ -2399,7 +2404,7 @@ index 0cdd282..610491a 100644
      }
    }
    if (m_ramLabel != nullptr) {
-@@ -907,6 +1026,33 @@ void SystemTab::syncLabels() {
+@@ -907,6 +1027,33 @@ void SystemTab::syncLabels() {
        m_swapLabel->setText(FormatUnits::formatBinaryMibUsageAsGib(stats.swapUsedMb, stats.swapTotalMb));
      }
    }
@@ -2820,7 +2825,7 @@ index 3973820..fb2fdcc 100644
    m_bgRadius = getFloat("background_radius", 12.0F);
    m_bgPadding = getFloat("background_padding", 10.0F);
 diff --git a/src/shell/desktop/desktop_widget_factory.cpp b/src/shell/desktop/desktop_widget_factory.cpp
-index b4a300e..ac3f4eb 100644
+index 7a4be37..3139821 100644
 --- a/src/shell/desktop/desktop_widget_factory.cpp
 +++ b/src/shell/desktop/desktop_widget_factory.cpp
 @@ -170,7 +170,7 @@ namespace {
@@ -2833,12 +2838,12 @@ index b4a300e..ac3f4eb 100644
        const float padding = getFloatSetting(settings, "background_padding", kDefaultBgPadding);
        widget.setBackgroundStyle(bgColor, radius, padding);
 diff --git a/src/shell/desktop/desktop_widget_settings_registry.cpp b/src/shell/desktop/desktop_widget_settings_registry.cpp
-index b5f3df8..04a1b83 100644
+index cbdec47..34363f6 100644
 --- a/src/shell/desktop/desktop_widget_settings_registry.cpp
 +++ b/src/shell/desktop/desktop_widget_settings_registry.cpp
 @@ -172,7 +172,7 @@ namespace desktop_settings {
      if (type == "login_box") {
-       auto bgColor = colorSpec("background_color", "surface_variant");
+       auto bgColor = colorSpec("background_color", "surface_container");
        auto bgRadius = intSpec("background_radius", 12.0, 0.0, 32.0, 1.0);
 -      auto bgOpacity = doubleSpec("background_opacity", 0.88, 0.0, 1.0, 0.01);
 +      auto bgOpacity = doubleSpec("background_opacity", 0.25, 0.0, 1.0, 0.01);
@@ -2855,7 +2860,7 @@ index b5f3df8..04a1b83 100644
  
      return {
 diff --git a/src/shell/desktop/desktop_widgets_controller.cpp b/src/shell/desktop/desktop_widgets_controller.cpp
-index 9f95059..0f41c63 100644
+index 5aef3b4..40264da 100644
 --- a/src/shell/desktop/desktop_widgets_controller.cpp
 +++ b/src/shell/desktop/desktop_widgets_controller.cpp
 @@ -36,7 +36,7 @@ namespace {
@@ -2868,10 +2873,10 @@ index 9f95059..0f41c63 100644
      if (widget.type == "sticker" || widget.type == "label") {
        const auto opacityIt = widget.settings.find("opacity");
 diff --git a/src/shell/dock/dock_instance.cpp b/src/shell/dock/dock_instance.cpp
-index 64530fb..018e5be 100644
+index c1f4b2f..95da872 100644
 --- a/src/shell/dock/dock_instance.cpp
 +++ b/src/shell/dock/dock_instance.cpp
-@@ -270,7 +270,7 @@ namespace shell::dock {
+@@ -268,7 +268,7 @@ namespace shell::dock {
            return false;
          }
  
@@ -2881,10 +2886,10 @@ index 64530fb..018e5be 100644
          inst->inputDispatcher.syncPointerHover();
  
 diff --git a/src/shell/launcher/launcher_panel.cpp b/src/shell/launcher/launcher_panel.cpp
-index 555537c..9a934f8 100644
+index 1a75342..c73d521 100644
 --- a/src/shell/launcher/launcher_panel.cpp
 +++ b/src/shell/launcher/launcher_panel.cpp
-@@ -1451,7 +1451,8 @@ void LauncherPanel::finishActivation(LauncherProvider& provider, const std::stri
+@@ -1515,7 +1515,8 @@ void LauncherPanel::finishActivation(
    if (trackUsage && provider.trackUsage()) {
      m_usageTracker.record(provider.id(), resultId);
    }
@@ -2895,7 +2900,7 @@ index 555537c..9a934f8 100644
      m_onCopiedActivation();
    }
 diff --git a/src/shell/launcher/launcher_panel.h b/src/shell/launcher/launcher_panel.h
-index 164e010..bd70f13 100644
+index 4ebf3b5..f2be194 100644
 --- a/src/shell/launcher/launcher_panel.h
 +++ b/src/shell/launcher/launcher_panel.h
 @@ -47,6 +47,7 @@ public:
@@ -2907,10 +2912,10 @@ index 164e010..bd70f13 100644
    void create() override;
    void onOpen(std::string_view context) override;
 diff --git a/src/shell/lockscreen/lock_screen.cpp b/src/shell/lockscreen/lock_screen.cpp
-index ca37664..0f70042 100644
+index afe02be..436e8d7 100644
 --- a/src/shell/lockscreen/lock_screen.cpp
 +++ b/src/shell/lockscreen/lock_screen.cpp
-@@ -926,6 +926,9 @@ bool LockScreen::shouldCaptureDesktop() const {
+@@ -982,6 +982,9 @@ bool LockScreen::shouldCaptureDesktop() const {
      return false;
    }
    const auto& lockscreen = m_configService->config().lockscreen;
@@ -2920,7 +2925,7 @@ index ca37664..0f70042 100644
    return lockscreen.blurredDesktop || (!m_transitionSuppressed && !lockscreen.transitions.empty());
  }
  
-@@ -1081,11 +1084,14 @@ void LockScreen::chooseTransition() {
+@@ -1137,11 +1140,14 @@ void LockScreen::chooseTransition() {
    if (m_transitionSuppressed) {
      return;
    }
@@ -2936,7 +2941,7 @@ index ca37664..0f70042 100644
    m_transitionDurationMs = config.transitionDurationMs;
    if (config.transitions.empty()) {
      return;
-@@ -1126,6 +1132,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
+@@ -1204,6 +1210,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
      return;
    }
    const auto& lockscreen = m_configService->config().lockscreen;
@@ -2945,15 +2950,16 @@ index ca37664..0f70042 100644
  }
  
 diff --git a/src/shell/lockscreen/lock_surface.cpp b/src/shell/lockscreen/lock_surface.cpp
-index 20d3098..9da398b 100644
+index f0f6b18..0a855e5 100644
 --- a/src/shell/lockscreen/lock_surface.cpp
 +++ b/src/shell/lockscreen/lock_surface.cpp
-@@ -113,20 +113,18 @@ namespace {
+@@ -113,20 +113,19 @@ namespace {
      return ButtonVariant::Default;
    }
  
--  // Default/Ghost use SurfaceVariant or clear fills that disappear on the
--  // SurfaceVariant login panel — Outline gives a readable Surface chip.
+-  // Default/Ghost use SurfaceContainer or clear fills that disappear on the
+-  // SurfaceContainer login panel; Outline gives a readable Surface chip.
++
    [[nodiscard]] ButtonVariant lockscreenSessionVariant(SessionActionButtonVariant variant) {
      switch (variant) {
      case SessionActionButtonVariant::Default:
@@ -2971,7 +2977,7 @@ index 20d3098..9da398b 100644
    }
  
    [[nodiscard]] std::string weekdayAbbrev(const std::string& isoDate) {
-@@ -628,7 +626,7 @@ bool LockSurface::initialize(ext_session_lock_v1* lock, wl_output* output, std::
+@@ -628,7 +627,7 @@ bool LockSurface::initialize(ext_session_lock_v1* lock, wl_output* output, std::
  
    // Upload the immutable cover before the lock request is flushed. The first
    // configured lock-surface frame can then be the captured desktop immediately.
@@ -2980,7 +2986,7 @@ index 20d3098..9da398b 100644
      m_transitionPhase = TransitionPhase::Disabled;
      m_transitionProgress = 1.0F;
      syncTransitionCover();
-@@ -746,6 +744,20 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
+@@ -746,6 +745,20 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
    requestLayout();
  }
  
@@ -3001,7 +3007,7 @@ index 20d3098..9da398b 100644
  void LockSurface::setWallpaperFillMode(WallpaperFillMode fillMode) {
    if (m_wallpaperFillMode == fillMode) {
      return;
-@@ -808,7 +820,8 @@ void LockSurface::configureTransition(
+@@ -808,7 +821,8 @@ void LockSurface::configureTransition(
    m_transitionProgress = 1.0F;
    m_enterTransitionRequested = false;
  
@@ -3011,7 +3017,7 @@ index 20d3098..9da398b 100644
      m_transitionPhase = TransitionPhase::Disabled;
      syncTransitionCover();
      return;
-@@ -837,10 +850,11 @@ void LockSurface::startExitTransition() {
+@@ -837,10 +851,11 @@ void LockSurface::startExitTransition() {
      return;
    }
  
@@ -3025,7 +3031,7 @@ index 20d3098..9da398b 100644
      m_transitionPhase = TransitionPhase::ExitComplete;
      notifyTransitionStateChanged();
      return;
-@@ -1099,6 +1113,43 @@ void LockSurface::layoutTransitionCover() {
+@@ -1099,6 +1114,43 @@ void LockSurface::layoutTransitionCover() {
  }
  
  void LockSurface::syncTransitionCover() {
@@ -3069,7 +3075,7 @@ index 20d3098..9da398b 100644
    if (m_transitionCover == nullptr) {
      return;
    }
-@@ -1165,6 +1216,11 @@ void LockSurface::prepareFrame(bool needsUpdate, bool needsLayout) {
+@@ -1165,6 +1217,11 @@ void LockSurface::prepareFrame(bool needsUpdate, bool needsLayout) {
    Renderer& renderer = renderTarget().renderer();
  
    if (m_transitionPhase == TransitionPhase::Cover) {
@@ -3081,7 +3087,7 @@ index 20d3098..9da398b 100644
      if (ensureTransitionCaptureTexture()) {
        UiPhaseScope layoutPhase(UiPhase::Layout);
        layoutCoverOnly(width(), height());
-@@ -1293,34 +1349,69 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -1294,34 +1351,69 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    m_backgroundLayer->setPosition(0.0F, 0.0F);
    m_backgroundLayer->setSize(sw, sh);
  
@@ -3178,7 +3184,7 @@ index 20d3098..9da398b 100644
      }
    }
  
-@@ -1909,6 +2000,9 @@ std::string LockSurface::resolveStatusText(const lockscreen_login_box::LoginBoxS
+@@ -1931,6 +2023,9 @@ std::string LockSurface::resolveStatusText(const lockscreen_login_box::LoginBoxS
  }
  
  void LockSurface::applyWallpaperTexture() {
@@ -3188,7 +3194,7 @@ index 20d3098..9da398b 100644
    if (usesDesktopCaptureBackground()) {
      applyBlurredDesktopTexture();
      if (m_blurredDesktopTexture.id != 0) {
-@@ -2046,7 +2140,7 @@ void LockSurface::releaseCaptureTextures() {
+@@ -2068,7 +2163,7 @@ void LockSurface::releaseCaptureTextures() {
  }
  
  void LockSurface::applyBlurredDesktopTexture() {
@@ -3219,17 +3225,17 @@ index 5824692..ac42c0d 100644
    std::function<void()> m_onLogin;
    std::function<void()> m_onCycleLayout;
 diff --git a/src/shell/lockscreen/lockscreen_login_box.cpp b/src/shell/lockscreen/lockscreen_login_box.cpp
-index a2184e0..5f3589f 100644
+index fe3a40e..73cd606 100644
 --- a/src/shell/lockscreen/lockscreen_login_box.cpp
 +++ b/src/shell/lockscreen/lockscreen_login_box.cpp
-@@ -308,13 +308,13 @@ namespace lockscreen_login_box {
+@@ -302,13 +302,13 @@ namespace lockscreen_login_box {
    LoginBoxStyle resolveStyle(const std::unordered_map<std::string, WidgetSettingValue>& settings) {
      LoginBoxStyle style;
      style.layout = resolveLayout(settings);
 -    style.panelOpacity = std::clamp(readFloat(settings, "background_opacity", style.panelOpacity), 0.0F, 1.0F);
 +    style.panelOpacity = std::clamp(readFloat(settings, "background_opacity", 0.25F), 0.0F, 1.0F);
      ColorSpec panelFill =
--        colorSpecFromConfigString(readString(settings, "background_color", "surface_variant"), "background_color");
+-        colorSpecFromConfigString(readString(settings, "background_color", "surface_container"), "background_color");
 +        colorSpecFromConfigString(readString(settings, "background_color", "surface"), "background_color");
      panelFill.alpha *= style.panelOpacity;
      style.panelFill = panelFill;
@@ -3239,7 +3245,7 @@ index a2184e0..5f3589f 100644
      style.inputRadius = std::clamp(readFloat(settings, kInputRadiusKey, style.inputRadius), 0.0F, 32.0F);
      style.centerPasswordText = readBool(settings, kCenterPasswordTextKey, style.centerPasswordText);
      style.showLoginButton = readBool(settings, kShowLoginButtonKey, style.showLoginButton);
-@@ -341,13 +341,13 @@ namespace lockscreen_login_box {
+@@ -335,13 +335,13 @@ namespace lockscreen_login_box {
        settings.insert_or_assign(std::string(kShowKeyboardLayoutKey), true);
        settings.insert_or_assign(std::string(kShowPasswordRevealKey), true);
        settings.insert_or_assign(std::string(kShowUnlockHintKey), true);
@@ -3249,7 +3255,7 @@ index a2184e0..5f3589f 100644
        settings.insert_or_assign(std::string(kCenterPasswordTextKey), false);
      }
      if (scope == desktop_settings::DesktopWidgetSettingsScope::Background) {
--      settings.insert_or_assign("background_color", std::string("surface_variant"));
+-      settings.insert_or_assign("background_color", std::string("surface_container"));
 -      settings.insert_or_assign("background_opacity", 0.88);
 +      settings.insert_or_assign("background_color", std::string("surface"));
 +      settings.insert_or_assign("background_opacity", 0.25);
@@ -3257,14 +3263,14 @@ index a2184e0..5f3589f 100644
      }
    }
 diff --git a/src/shell/lockscreen/lockscreen_login_box.h b/src/shell/lockscreen/lockscreen_login_box.h
-index b667889..5007278 100644
+index 76bfb5a..194cf11 100644
 --- a/src/shell/lockscreen/lockscreen_login_box.h
 +++ b/src/shell/lockscreen/lockscreen_login_box.h
-@@ -42,11 +42,11 @@ namespace lockscreen_login_box {
+@@ -43,11 +43,11 @@ namespace lockscreen_login_box {
  
    struct LoginBoxStyle {
      LayoutMode layout = LayoutMode::Regular;
--    ColorSpec panelFill = colorSpecFromRole(ColorRole::SurfaceVariant, 0.88F);
+-    ColorSpec panelFill = colorSpecFromRole(ColorRole::SurfaceContainer, 0.88F);
 -    float panelOpacity = 0.88F;
 -    float panelRadius = 12.0F;
 -    float inputOpacity = 1.0F;
@@ -3278,10 +3284,10 @@ index b667889..5007278 100644
      bool showLoginButton = true;
      bool showCapsLock = true;
 diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
-index 4a6c83f..3bf10a6 100644
+index f9858ae..be0a8d6 100644
 --- a/src/shell/panel/panel_manager.cpp
 +++ b/src/shell/panel/panel_manager.cpp
-@@ -1456,7 +1456,7 @@ void PanelManager::closePanel(bool animateClose) {
+@@ -1536,7 +1536,7 @@ void PanelManager::closePanel(bool animateClose) {
                }
              });
            },
@@ -3290,7 +3296,7 @@ index 4a6c83f..3bf10a6 100644
        );
      } else {
        m_animations.cancelForOwner(m_sceneRoot.get());
-@@ -1470,7 +1470,7 @@ void PanelManager::closePanel(bool animateClose) {
+@@ -1550,7 +1550,7 @@ void PanelManager::closePanel(bool animateClose) {
                }
              });
            },
@@ -3299,7 +3305,7 @@ index 4a6c83f..3bf10a6 100644
        );
      }
      m_surface->requestRedraw();
-@@ -2311,7 +2311,7 @@ void PanelManager::startAttachedOpenAnimation() {
+@@ -2340,7 +2340,7 @@ void PanelManager::startAttachedOpenAnimation() {
    m_attachedOpenAnimationPending = false;
    m_animations.animate(
        m_attachedRevealProgress, 1.0F, Style::animNormal, Easing::EaseOutCubic,
@@ -3308,7 +3314,7 @@ index 4a6c83f..3bf10a6 100644
    );
  }
  
-@@ -2724,7 +2724,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2753,7 +2753,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
        applyDetachedReveal(0.0F);
        m_animations.animate(
            0.0F, 1.0F, Style::animNormal, Easing::EaseOutCubic, [this](float v) { applyDetachedReveal(v); }, {},
@@ -3318,7 +3324,7 @@ index 4a6c83f..3bf10a6 100644
      }
  
 diff --git a/src/shell/panel/panel_manager.h b/src/shell/panel/panel_manager.h
-index d349f07..9667d54 100644
+index ce3fe2f..62ad84f 100644
 --- a/src/shell/panel/panel_manager.h
 +++ b/src/shell/panel/panel_manager.h
 @@ -115,6 +115,7 @@ public:
@@ -3330,7 +3336,7 @@ index d349f07..9667d54 100644
    [[nodiscard]] bool isAttachedOpen() const noexcept;
    // Output the active panel is on; null when none is open.
 diff --git a/src/shell/panel/panel_surface_style.h b/src/shell/panel/panel_surface_style.h
-index 8c925eb..6f96867 100644
+index 2778722..d2c40ba 100644
 --- a/src/shell/panel/panel_surface_style.h
 +++ b/src/shell/panel/panel_surface_style.h
 @@ -43,6 +43,9 @@ namespace shell::panel_surface {
@@ -3354,7 +3360,7 @@ index 8c925eb..6f96867 100644
          configService != nullptr ? configService->config().shell.panel.transparencyMode : PanelTransparencyMode::Solid;
      return panelCardOpacityForTransparencyMode(mode, panelBackgroundOpacity);
 diff --git a/src/shell/settings/settings_modal_host.cpp b/src/shell/settings/settings_modal_host.cpp
-index 9c38f39..f7b3774 100644
+index e63c535..1a82b17 100644
 --- a/src/shell/settings/settings_modal_host.cpp
 +++ b/src/shell/settings/settings_modal_host.cpp
 @@ -32,7 +32,7 @@ namespace settings {
@@ -3367,10 +3373,10 @@ index 9c38f39..f7b3774 100644
                box.setRadius(0.0F);
              },
 diff --git a/src/shell/settings/settings_window_scene.cpp b/src/shell/settings/settings_window_scene.cpp
-index 72b2997..a10a9b7 100644
+index eb410ef..5b025d8 100644
 --- a/src/shell/settings/settings_window_scene.cpp
 +++ b/src/shell/settings/settings_window_scene.cpp
-@@ -2229,7 +2229,7 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
+@@ -2238,7 +2238,7 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
      m_sceneRoot->setPopupContext(m_selectPopup.get());
    }
  
@@ -3380,10 +3386,10 @@ index 72b2997..a10a9b7 100644
    auto bg = ui::box({
        .width = w,
 diff --git a/src/shell/tooltip/tooltip_manager.cpp b/src/shell/tooltip/tooltip_manager.cpp
-index 6144f06..a302502 100644
+index 987faef..f03a7ab 100644
 --- a/src/shell/tooltip/tooltip_manager.cpp
 +++ b/src/shell/tooltip/tooltip_manager.cpp
-@@ -693,11 +693,11 @@ void TooltipManager::buildScene(const TooltipContent& content, float w, float h,
+@@ -692,11 +692,11 @@ void TooltipManager::buildScene(const TooltipContent& content, float w, float h,
  
    m_sceneRoot->addChild(
        ui::box({
@@ -3392,21 +3398,21 @@ index 6144f06..a302502 100644
            .radius = Style::scaledRadiusMd(),
            .width = w,
            .height = h,
--          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::Outline), kBorder); },
-+          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::Outline, 0.15F), kBorder); },
+-          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::OutlineVariant), kBorder); },
++          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::OutlineVariant, 0.15F), kBorder); }
        })
    );
  
 diff --git a/src/shell/wallpaper/panel/wallpaper_tile.cpp b/src/shell/wallpaper/panel/wallpaper_tile.cpp
-index 74a2d13..d1d836c 100644
+index 0234171..aa796a8 100644
 --- a/src/shell/wallpaper/panel/wallpaper_tile.cpp
 +++ b/src/shell/wallpaper/panel/wallpaper_tile.cpp
 @@ -641,7 +641,7 @@ void WallpaperTile::applyVisualState() {
-                                      : colorSpecFromRole(ColorRole::Outline);
+                                      : colorSpecFromRole(ColorRole::OutlineVariant);
    ColorSpec labelColor =
        m_current ? colorSpecFromRole(ColorRole::Secondary) : colorSpecFromRole(ColorRole::OnSurfaceVariant);
--  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceVariant);
-+  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceVariant, 0.25F);
+-  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceContainer);
++  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceContainer, 0.25F);
    m_label->setColor(labelColor);
  
    m_thumbHost->setFill(frameBg);
@@ -3589,10 +3595,10 @@ index 0000000..ac9c0cf
 +
 +} // namespace noctalia::system
 diff --git a/src/system/system_monitor_service.cpp b/src/system/system_monitor_service.cpp
-index e651e96..af9062a 100644
+index 94e883b..fa73cf2 100644
 --- a/src/system/system_monitor_service.cpp
 +++ b/src/system/system_monitor_service.cpp
-@@ -394,12 +394,24 @@ namespace {
+@@ -386,12 +386,24 @@ namespace {
          continue;
        }
  
@@ -3618,7 +3624,7 @@ index e651e96..af9062a 100644
        );
      }
  
-@@ -1287,10 +1299,10 @@ void SystemMonitorService::samplingLoop() {
+@@ -1279,10 +1291,10 @@ void SystemMonitorService::samplingLoop() {
      }
      cpuCoresWasEnabled = cpuCoresEnabled;
  
@@ -3633,7 +3639,7 @@ index e651e96..af9062a 100644
  
      if (!gpuEnabled) {
        releaseGpuReaders();
-@@ -1331,7 +1343,7 @@ void SystemMonitorService::samplingLoop() {
+@@ -1323,7 +1335,7 @@ void SystemMonitorService::samplingLoop() {
          m_latest.loadAvg15 = (*la)[2];
        }
  
@@ -3642,7 +3648,7 @@ index e651e96..af9062a 100644
          std::optional<double> cpuTemp = readCpuTempCelsius(pollCfg);
          std::scoped_lock lock{m_statsMutex};
          if (cpuTemp.has_value()) {
-@@ -1691,6 +1703,11 @@ SystemMonitorService::IntelGpuReader& SystemMonitorService::ensureIntelGpuReader
+@@ -1683,6 +1695,11 @@ SystemMonitorService::IntelGpuReader& SystemMonitorService::ensureIntelGpuReader
  }
  
  SystemMonitorService::GpuTempData SystemMonitorService::readGpuTempData(NvidiaDisplayDeviceState nvidiaDisplayState) {
@@ -3654,7 +3660,7 @@ index e651e96..af9062a 100644
    switch (nvidiaDisplayState) {
    case NvidiaDisplayDeviceState::Active: {
      const auto nvml = ensureNvmlReader().readGpuTempSensor();
-@@ -1768,6 +1785,9 @@ SystemMonitorService::GpuTempData SystemMonitorService::readGpuTempData(NvidiaDi
+@@ -1760,6 +1777,9 @@ SystemMonitorService::GpuTempData SystemMonitorService::readGpuTempData(NvidiaDi
  }
  
  SystemMonitorService::GpuUsageData SystemMonitorService::readGpuUsageData(NvidiaDisplayDeviceState nvidiaDisplayState) {
@@ -3664,7 +3670,7 @@ index e651e96..af9062a 100644
    switch (nvidiaDisplayState) {
    case NvidiaDisplayDeviceState::Active:
      if (const auto gpuUsage = ensureNvmlReader().readGpuUsagePercent(); gpuUsage.has_value()) {
-@@ -1838,6 +1858,11 @@ std::optional<SystemMonitorService::GpuVramData> SystemMonitorService::readIntel
+@@ -1830,6 +1850,11 @@ std::optional<SystemMonitorService::GpuVramData> SystemMonitorService::readIntel
  
  std::optional<SystemMonitorService::GpuVramData>
  SystemMonitorService::readGpuVramData(NvidiaDisplayDeviceState nvidiaDisplayState) {
@@ -3677,23 +3683,28 @@ index e651e96..af9062a 100644
    case NvidiaDisplayDeviceState::Active: {
      const auto nvml = ensureNvmlReader().readGpuVram();
 diff --git a/src/theme/theme_service.cpp b/src/theme/theme_service.cpp
-index d111990..b249e5b 100644
+index be030f7..236d4ed 100644
 --- a/src/theme/theme_service.cpp
 +++ b/src/theme/theme_service.cpp
-@@ -221,9 +221,10 @@ namespace noctalia::theme {
+@@ -91,9 +91,15 @@ namespace noctalia::theme {
            .light = parsed.light,
        };
        const GeneratedPalette generated = expandBuiltinPalette(bp);
++      Palette pal = mapGeneratedPaletteMode(shellMode == "light" ? generated.light : generated.dark);
 +      const auto& modeFixed = shellMode == "light" ? parsed.light : parsed.dark;
++      pal.outlineVariant = modeFixed.palette.outlineVariant;
++      pal.surface = modeFixed.palette.surface;
++      pal.surfaceContainer = modeFixed.palette.surfaceContainer;
++      pal.hover = modeFixed.palette.hover;
        return {
            .generated = generated,
 -          .palette = mapGeneratedPaletteMode(shellMode == "light" ? generated.light : generated.dark),
-+          .palette = modeFixed.palette,
++          .palette = pal,
            .mode = std::string(mode),
            .shellMode = std::string(shellMode),
        };
 diff --git a/src/ui/builders.cpp b/src/ui/builders.cpp
-index 0ac0c4a..eacb6fe 100644
+index 8e1850a..14c4a7b 100644
 --- a/src/ui/builders.cpp
 +++ b/src/ui/builders.cpp
 @@ -390,9 +390,7 @@ namespace ui {
@@ -3708,7 +3719,7 @@ index 0ac0c4a..eacb6fe 100644
      if (props.configure) {
        props.configure(*control);
 diff --git a/src/ui/controls/box.cpp b/src/ui/controls/box.cpp
-index e72d160..d173379 100644
+index 15d52e0..1b6fbe0 100644
 --- a/src/ui/controls/box.cpp
 +++ b/src/ui/controls/box.cpp
 @@ -118,7 +118,7 @@ void Box::setFlatStyle() {
@@ -3718,7 +3729,7 @@ index e72d160..d173379 100644
 -  m_fill = colorSpecFromRole(ColorRole::Surface);
 +  m_fill = colorSpecFromRole(ColorRole::Surface, 0.25F);
    if (showBorder) {
-     m_border = colorSpecFromRole(ColorRole::Outline);
+     m_border = colorSpecFromRole(ColorRole::OutlineVariant);
      m_borderWidth = Style::borderWidth;
 @@ -139,7 +139,21 @@ void Box::setPanelStyle(bool showBorder) {
    syncStyle();
@@ -3733,7 +3744,7 @@ index e72d160..d173379 100644
 +    solidBg = Color{0.07F, 0.09F, 0.13F, 1.0F};
 +  }
 +  m_fill = fixedColorSpec(solidBg);
-+  m_border = colorSpecFromRole(ColorRole::Outline, 0.50F);
++  m_border = colorSpecFromRole(ColorRole::OutlineVariant, 0.50F);
 +  m_borderWidth = Style::borderWidth;
 +  m_style.fill = resolveColorSpec(m_fill);
 +  m_style.border = resolveColorSpec(m_border);
@@ -3742,17 +3753,17 @@ index e72d160..d173379 100644
 +}
  
  void Box::setCardStyle(float scale, float fillOpacity, bool showBorder) {
-   setFill(colorSpecFromRole(ColorRole::SurfaceVariant, fillOpacity));
+   setFill(colorSpecFromRole(ColorRole::SurfaceContainer, fillOpacity));
 diff --git a/src/ui/controls/button.cpp b/src/ui/controls/button.cpp
-index 8ad2653..11b5369 100644
+index 4e52750..eb55843 100644
 --- a/src/ui/controls/button.cpp
 +++ b/src/ui/controls/button.cpp
-@@ -36,18 +36,18 @@ namespace {
+@@ -37,18 +37,18 @@ namespace {
        return Button::ButtonPalette{
            .borderWidth = Style::borderWidth,
            .normal = makeState(
--              colorSpecFromRole(ColorRole::SurfaceVariant), colorSpecFromRole(ColorRole::Outline),
-+              colorSpecFromRole(ColorRole::SurfaceVariant, 0.35F), colorSpecFromRole(ColorRole::Outline, 0.20F),
+-              colorSpecFromRole(ColorRole::SurfaceContainer), colorSpecFromRole(ColorRole::OutlineVariant),
++              colorSpecFromRole(ColorRole::SurfaceContainer, 0.35F), colorSpecFromRole(ColorRole::OutlineVariant, 0.20F),
                colorSpecFromRole(ColorRole::OnSurface)
            ),
            .hover =
@@ -3765,98 +3776,50 @@ index 8ad2653..11b5369 100644
 +              colorSpecFromRole(ColorRole::OnHover)
            ),
            .disabled = makeState(
--              colorSpecFromRole(ColorRole::SurfaceVariant, kDisabledAlpha),
--              colorSpecFromRole(ColorRole::Outline, Style::disabledOutlineAlpha),
-+              colorSpecFromRole(ColorRole::SurfaceVariant, 0.15F),
-+              colorSpecFromRole(ColorRole::Outline, 0.10F),
+-              colorSpecFromRole(ColorRole::SurfaceContainer, kDisabledAlpha),
+-              colorSpecFromRole(ColorRole::OutlineVariant, Style::disabledOutlineAlpha),
++              colorSpecFromRole(ColorRole::SurfaceContainer, 0.15F),
++              colorSpecFromRole(ColorRole::OutlineVariant, 0.10F),
                colorSpecFromRole(ColorRole::OnSurface, kDisabledAlpha)
            ),
            .selected = selectedState(),
-@@ -56,12 +56,12 @@ namespace {
-       return Button::ButtonPalette{
-           .borderWidth = 0.0F,
-           .normal = makeState(
--              colorSpecFromRole(ColorRole::Primary), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-+              colorSpecFromRole(ColorRole::Primary, 0.85F), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-           ),
-           .hover =
-               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
-           .pressed = makeState(
--              colorSpecFromRole(ColorRole::Primary), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-+              colorSpecFromRole(ColorRole::Primary, 0.95F), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-           ),
-           .disabled = makeState(
-               colorSpecFromRole(ColorRole::Primary, kDisabledAlpha), clearColorSpec(),
-@@ -79,8 +79,8 @@ namespace {
-           .hover =
-               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
-           .pressed = makeState(
--              colorSpecFromRole(ColorRole::Primary), colorSpecFromRole(ColorRole::Primary),
--              colorSpecFromRole(ColorRole::OnPrimary)
-+              colorSpecFromRole(ColorRole::Hover, 0.85F), colorSpecFromRole(ColorRole::Secondary),
-+              colorSpecFromRole(ColorRole::OnHover)
-           ),
-           .disabled = makeState(
-               colorSpecFromRole(ColorRole::Secondary, kDisabledAlpha),
-@@ -99,7 +99,7 @@ namespace {
-           .hover =
-               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
-           .pressed = makeState(
--              colorSpecFromRole(ColorRole::Error), colorSpecFromRole(ColorRole::Error),
-+              colorSpecFromRole(ColorRole::Error, 0.85F), colorSpecFromRole(ColorRole::Error),
-               colorSpecFromRole(ColorRole::OnError)
-           ),
-           .disabled = makeState(
-@@ -112,17 +112,17 @@ namespace {
+@@ -114,7 +114,7 @@ namespace {
        return Button::ButtonPalette{
            .borderWidth = Style::borderWidth,
            .normal = makeState(
--              colorSpecFromRole(ColorRole::Surface), colorSpecFromRole(ColorRole::Outline),
-+              clearColorSpec(), colorSpecFromRole(ColorRole::Outline),
+-              colorSpecFromRole(ColorRole::Surface), colorSpecFromRole(ColorRole::OutlineVariant),
++              clearColorSpec(), colorSpecFromRole(ColorRole::OutlineVariant),
                colorSpecFromRole(ColorRole::OnSurface)
            ),
            .hover =
-               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
-           .pressed = makeState(
--              colorSpecFromRole(ColorRole::Primary), colorSpecFromRole(ColorRole::Primary),
--              colorSpecFromRole(ColorRole::OnPrimary)
-+              colorSpecFromRole(ColorRole::Hover, 0.85F), colorSpecFromRole(ColorRole::Primary, 0.50F),
-+              colorSpecFromRole(ColorRole::OnHover)
+@@ -124,7 +124,7 @@ namespace {
+               colorSpecFromRole(ColorRole::OnPrimary)
            ),
            .disabled = makeState(
 -              colorSpecFromRole(ColorRole::Surface, kDisabledAlpha),
 +              clearColorSpec(),
-               colorSpecFromRole(ColorRole::Outline, Style::disabledOutlineAlpha),
+               colorSpecFromRole(ColorRole::OutlineVariant, Style::disabledOutlineAlpha),
                colorSpecFromRole(ColorRole::OnSurface, kDisabledAlpha)
            ),
-@@ -135,7 +135,7 @@ namespace {
+@@ -137,7 +137,7 @@ namespace {
            .hover =
                makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
            .pressed = makeState(
--              colorSpecFromRole(ColorRole::SurfaceVariant), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
+-              colorSpecFromRole(ColorRole::SurfaceContainer), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
 +              colorSpecFromRole(ColorRole::Hover, 0.80F), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)
            ),
            .disabled =
                makeState(clearColorSpec(), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface, kDisabledAlpha)),
-@@ -148,7 +148,7 @@ namespace {
+@@ -150,7 +150,7 @@ namespace {
            .hover =
                makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
            .pressed = makeState(
--              colorSpecFromRole(ColorRole::SurfaceVariant), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
+-              colorSpecFromRole(ColorRole::SurfaceContainer), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
 +              colorSpecFromRole(ColorRole::Hover, 0.80F), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)
            ),
            .disabled = makeState(clearColorSpec(), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)),
            .selected = std::nullopt,
-@@ -163,7 +163,7 @@ namespace {
-               colorSpecFromRole(ColorRole::Primary), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-           ),
-           .pressed = makeState(
--              colorSpecFromRole(ColorRole::Primary), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-+              colorSpecFromRole(ColorRole::Primary, 0.85F), clearColorSpec(), colorSpecFromRole(ColorRole::OnPrimary)
-           ),
-           .disabled = makeState(
-               colorSpecFromRole(ColorRole::Primary, kDisabledAlpha), clearColorSpec(),
-@@ -184,7 +184,7 @@ Button::Button() {
+@@ -186,7 +186,7 @@ Button::Button() {
    setAlign(FlexAlign::Center);
    setMinHeight(Style::controlHeightSm);
    setPadding(Style::spaceSm);
@@ -3865,33 +3828,44 @@ index 8ad2653..11b5369 100644
  
    auto area = std::make_unique<InputArea>();
    area->setOnEnter([this](const InputArea::PointerData& /*data*/) {
-@@ -592,9 +592,9 @@ void Button::applyColors(const Color& bg, const Color& border, const Color& labe
+@@ -597,20 +597,9 @@ void Button::applyColors(const Color& bg, const Color& border, const Color& labe
      }
    }
    if (m_badge != nullptr) {
 -    m_badge->setFill(Color{label.r, label.g, label.b, label.a * 0.85F});
 +    m_badge->setFill(Color{0.0F, 0.0F, 0.0F, 0.65F});
      if (m_badgeLabel != nullptr) {
--      m_badgeLabel->setColor(bg);
+-      // The badge sits on the button, so its text inverts the button colors. A translucent or clear background
+-      // (Ghost, panel transparency) would make the text vanish; composite it over Surface to keep it opaque.
+-      const Color surface = resolveColorSpec(colorSpecFromRole(ColorRole::Surface));
+-      const float a = std::clamp(bg.a, 0.0F, 1.0F);
+-      m_badgeLabel->setColor(
+-          Color{
+-              surface.r + (bg.r - surface.r) * a,
+-              surface.g + (bg.g - surface.g) * a,
+-              surface.b + (bg.b - surface.b) * a,
+-              1.0F,
+-          }
+-      );
 +      m_badgeLabel->setColor(Color{1.0F, 1.0F, 1.0F, 1.0F});
      }
    }
-   m_visualStateInitialized = true;
+ }
 diff --git a/src/ui/controls/input.h b/src/ui/controls/input.h
-index 43a0a49..f969b88 100644
+index 79320cd..4372915 100644
 --- a/src/ui/controls/input.h
 +++ b/src/ui/controls/input.h
-@@ -247,7 +247,7 @@ private:
+@@ -259,7 +259,7 @@ private:
    bool m_frameVisible = true;
    bool m_embeddedOnSolidPrimary = false;
-   ColorRole m_surfaceRole = ColorRole::SurfaceVariant;
+   ColorRole m_surfaceRole = ColorRole::SurfaceContainer;
 -  float m_surfaceOpacity = 1.0F;
 +  float m_surfaceOpacity = 0.30F;
    float m_frameRadius = Style::radiusMd;
    bool m_enabled = true;
    TextInputService* m_textInputService = nullptr;
 diff --git a/src/ui/controls/scroll_view.cpp b/src/ui/controls/scroll_view.cpp
-index 41584c4..cd1a4bc 100644
+index 39063cd..82128b8 100644
 --- a/src/ui/controls/scroll_view.cpp
 +++ b/src/ui/controls/scroll_view.cpp
 @@ -113,7 +113,7 @@ ScrollView::ScrollView() {
@@ -3907,7 +3881,7 @@ index 41584c4..cd1a4bc 100644
  
    m_scrollAnimId = animationManager()->animate(
        m_scrollOffset, clampedTarget, resolvedDuration, Easing::EaseOutCubic,
--      [this](float value) { applyScrollOffsetValue(value); }, [this]() { m_scrollAnimId = 0; }, this
+-      [this](float value) { applyScrollOffsetValue(value); }, [this] { m_scrollAnimId = 0; }, this
 +      [this](float value) { applyScrollOffsetValue(value); }, [this]() { m_scrollAnimId = 0; }, this,
 +      AnimationKind::Scroll
    );
@@ -3927,7 +3901,7 @@ index 183e810..317f365 100644
    float m_dragStartOffset = 0.0F;
    float m_lastDragPosition = 0.0F;
 diff --git a/src/ui/controls/scrollbar.cpp b/src/ui/controls/scrollbar.cpp
-index 8565657..2cb11ab 100644
+index d9c5bba..902625b 100644
 --- a/src/ui/controls/scrollbar.cpp
 +++ b/src/ui/controls/scrollbar.cpp
 @@ -52,7 +52,7 @@ Scrollbar::Scrollbar() {
@@ -3949,7 +3923,7 @@ index 8565657..2cb11ab 100644
    });
    thumbArea->setOnEnter([this](const InputArea::PointerData&) { updateExpanded(); });
 diff --git a/src/ui/controls/segmented.h b/src/ui/controls/segmented.h
-index 0e5d125..e3063f5 100644
+index b23c894..e4559f5 100644
 --- a/src/ui/controls/segmented.h
 +++ b/src/ui/controls/segmented.h
 @@ -70,7 +70,7 @@ private:
@@ -3958,7 +3932,7 @@ index 0e5d125..e3063f5 100644
    float m_outerPadding = 0.0F;
 -  float m_surfaceOpacity = 1.0F;
 +  float m_surfaceOpacity = 0.30F;
-   ColorRole m_surfaceRole = ColorRole::SurfaceVariant;
+   ColorRole m_surfaceRole = ColorRole::SurfaceContainer;
    bool m_enabled = true;
  };
 diff --git a/src/ui/controls/select.h b/src/ui/controls/select.h
@@ -3975,7 +3949,7 @@ index 60a63ec..92a6c6f 100644
    bool m_open = false;
    float m_caretProgress = 0.0F;
 diff --git a/src/ui/controls/stepper.h b/src/ui/controls/stepper.h
-index 065df54..9a518db 100644
+index 1df7f45..2343f05 100644
 --- a/src/ui/controls/stepper.h
 +++ b/src/ui/controls/stepper.h
 @@ -67,7 +67,7 @@ private:
@@ -3988,28 +3962,28 @@ index 065df54..9a518db 100644
    float m_scale = 1.0F;
    int m_repeatDirection = 0;
 diff --git a/src/ui/controls/toggle.cpp b/src/ui/controls/toggle.cpp
-index 515dee9..61c3bd5 100644
+index 182610e..527e8cf 100644
 --- a/src/ui/controls/toggle.cpp
 +++ b/src/ui/controls/toggle.cpp
 @@ -175,7 +175,7 @@ void Toggle::applyState() { applyAnimatedState(m_checked ? 1.0F : 0.0F); }
  
  void Toggle::applyAnimatedState(float t) {
    m_animationProgress = t;
--  const Color trackColor = lerpColor(colorForRole(ColorRole::Outline), colorForRole(ColorRole::Primary), t);
-+  const Color trackColor = lerpColor(colorForRole(ColorRole::SurfaceVariant), colorForRole(ColorRole::Primary), t);
+-  const Color trackColor = lerpColor(colorForRole(ColorRole::OutlineVariant), colorForRole(ColorRole::Primary), t);
++  const Color trackColor = lerpColor(colorForRole(ColorRole::SurfaceContainer), colorForRole(ColorRole::Primary), t);
    const Color thumbColor = lerpColor(colorForRole(ColorRole::OnPrimary), colorForRole(ColorRole::OnPrimary), t);
    const float thumbX = m_inset + m_travel * (Style::rtl() ? 1.0F - t : t);
-   ColorSpec borderColor = colorSpecFromRole(ColorRole::Outline);
+   ColorSpec borderColor = colorSpecFromRole(ColorRole::OutlineVariant);
 diff --git a/src/ui/dialogs/file_dialog_view.cpp b/src/ui/dialogs/file_dialog_view.cpp
-index e5db051..990f98b 100644
+index ba1be21..556f889 100644
 --- a/src/ui/dialogs/file_dialog_view.cpp
 +++ b/src/ui/dialogs/file_dialog_view.cpp
 @@ -263,8 +263,8 @@ void FileDialogView::create() {
        .gap = Style::spaceXs * scale,
        .flexGrow = 1.0F,
        .configure = [scale](Flex& card) {
--        card.setFill(colorSpecFromRole(ColorRole::SurfaceVariant));
--        card.setBorder(colorSpecFromRole(ColorRole::Outline), Style::borderWidth);
+-        card.setFill(colorSpecFromRole(ColorRole::SurfaceContainer));
+-        card.setBorder(colorSpecFromRole(ColorRole::OutlineVariant), Style::borderWidth);
 +        card.setFill(clearColorSpec());
 +        card.clearBorder();
          card.setRadius(Style::scaledRadiusXl(scale));
@@ -4024,7 +3998,7 @@ index e5db051..990f98b 100644
            .flexGrow = 1.0F,
            .onSelectionChanged = [this](std::optional<std::size_t>) { syncGridSelection(); },
 diff --git a/src/ui/dialogs/file_entry_tile.cpp b/src/ui/dialogs/file_entry_tile.cpp
-index 3cd0106..d4651f8 100644
+index 741839c..1c9eb54 100644
 --- a/src/ui/dialogs/file_entry_tile.cpp
 +++ b/src/ui/dialogs/file_entry_tile.cpp
 @@ -50,6 +50,7 @@ FileEntryTile::FileEntryTile(float scale, ThumbnailService* thumbnails) : m_scal
@@ -4072,10 +4046,10 @@ index 8689880..8f3ebd8 100644
  
    void setButtonBordersEnabled(bool enabled) {
 diff --git a/src/ui/style.h b/src/ui/style.h
-index b1c6b91..c2a890c 100644
+index 04ea6db..a0b1d67 100644
 --- a/src/ui/style.h
 +++ b/src/ui/style.h
-@@ -41,7 +41,7 @@ namespace Style {
+@@ -42,7 +42,7 @@ namespace Style {
    inline constexpr float controlHeightSm = 32.0F;
    inline constexpr float controlHeight = 38.0F;
    inline constexpr float controlHeightLg = 44.0F;
@@ -4084,7 +4058,7 @@ index b1c6b91..c2a890c 100644
    // Pointer distance in logical px before an armed drag becomes active.
    inline constexpr float dragStartThreshold = 6.0F;
  
-@@ -97,6 +97,9 @@ namespace Style {
+@@ -100,6 +100,9 @@ namespace Style {
    [[nodiscard]] float cornerRadiusScale() noexcept;
    void setCornerRadiusScale(float scale) noexcept;
  
