@@ -12,6 +12,7 @@ let
     (pkgs.btop.override { cudaSupport = if kekma.nvidia then true else false; }).overrideAttrs
       {
         src = inputs.btop;
+        doInstallCheck = false;
       };
   cfg = config.btop;
 in

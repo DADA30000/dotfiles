@@ -3683,18 +3683,16 @@ index 94e883b..fa73cf2 100644
    case NvidiaDisplayDeviceState::Active: {
      const auto nvml = ensureNvmlReader().readGpuVram();
 diff --git a/src/theme/theme_service.cpp b/src/theme/theme_service.cpp
-index be030f7..236d4ed 100644
+index be030f7..f590d06 100644
 --- a/src/theme/theme_service.cpp
 +++ b/src/theme/theme_service.cpp
-@@ -91,9 +91,15 @@ namespace noctalia::theme {
+@@ -91,9 +91,13 @@ namespace noctalia::theme {
            .light = parsed.light,
        };
        const GeneratedPalette generated = expandBuiltinPalette(bp);
 +      Palette pal = mapGeneratedPaletteMode(shellMode == "light" ? generated.light : generated.dark);
 +      const auto& modeFixed = shellMode == "light" ? parsed.light : parsed.dark;
 +      pal.outlineVariant = modeFixed.palette.outlineVariant;
-+      pal.surface = modeFixed.palette.surface;
-+      pal.surfaceContainer = modeFixed.palette.surfaceContainer;
 +      pal.hover = modeFixed.palette.hover;
        return {
            .generated = generated,
