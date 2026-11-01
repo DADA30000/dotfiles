@@ -406,6 +406,119 @@
         "type": "github"
       }
     },
+    "fptn-base64-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1763856781,
+        "narHash": "sha256-wIKw70H42UuKbQGUmclG0XQVgVB1WODr2WCyBBYQeQ4=",
+        "owner": "tobiaslocker",
+        "repo": "base64",
+        "rev": "8d96a2a737ac1396304b1de289beb3a5ea0cb752",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tobiaslocker",
+        "repo": "base64",
+        "type": "github"
+      }
+    },
+    "fptn-boringssl-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1770589323,
+        "narHash": "sha256-FRHICeC5/DXyQSnAkiTwG8Vk+hwi2bNhFh5BmELA2cQ=",
+        "owner": "batchar2",
+        "repo": "boringssl",
+        "rev": "0a77b4f6e83e5621d772db0d4157f50cb26c6784",
+        "type": "github"
+      },
+      "original": {
+        "owner": "batchar2",
+        "ref": "working-russia-tls-handshake",
+        "repo": "boringssl",
+        "type": "github"
+      }
+    },
+    "fptn-camouflagetls-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788330678,
+        "narHash": "sha256-o/b2HKO0ZFi38cZtuRdqrj3mtRRjjQiWmDe5DvaGW2M=",
+        "owner": "fptn-project",
+        "repo": "camouflage-tls",
+        "rev": "c4b054b741ab1fe8ac5d153c9c024231f8d22449",
+        "type": "github"
+      },
+      "original": {
+        "owner": "fptn-project",
+        "repo": "camouflage-tls",
+        "type": "github"
+      }
+    },
+    "fptn-libtuntap-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1780994237,
+        "narHash": "sha256-QpBv6F9G61S1CFHHsB9BzsJhedfKCChFMyw/wLP28zg=",
+        "owner": "LaKabane",
+        "repo": "libtuntap",
+        "rev": "370a05eb8f7b601924785ade62c7f95fdc630b2c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "LaKabane",
+        "repo": "libtuntap",
+        "type": "github"
+      }
+    },
+    "fptn-ntpclient-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1763179449,
+        "narHash": "sha256-m0yIVI6TZKO4SvXO5/+e2v1xQR4m4Yjbu+9a3kOOUL8=",
+        "owner": "batchar2",
+        "repo": "NTP-client",
+        "rev": "7278762eaecccd865fd8502a7c93f7e0116fa830",
+        "type": "github"
+      },
+      "original": {
+        "owner": "batchar2",
+        "repo": "NTP-client",
+        "type": "github"
+      }
+    },
+    "fptn-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793334818,
+        "narHash": "sha256-nQi0jKMZ8xte/qaOHj8V+sNEXlFKqAXVChz3+5P1MNc=",
+        "owner": "fptn-project",
+        "repo": "fptn",
+        "rev": "9c095428522e4b763cc1e5beeaa692079ae5f2b6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "fptn-project",
+        "repo": "fptn",
+        "type": "github"
+      }
+    },
+    "fptn-yaff-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782320784,
+        "narHash": "sha256-mZZgb1tNyXSVJM0WBj+CO2ffjsrZX8JISBWLxKwzvcc=",
+        "owner": "fptn-project",
+        "repo": "yaff",
+        "rev": "d6f74675374b587ce24112c284abd54a92090221",
+        "type": "github"
+      },
+      "original": {
+        "owner": "fptn-project",
+        "repo": "yaff",
+        "type": "github"
+      }
+    },
     "gigabyte-laptop-wmi": {
       "flake": false,
       "locked": {
@@ -1403,6 +1516,13 @@
         "disko": "disko",
         "firefox-addons": "firefox-addons",
         "fluent-gtk-theme": "fluent-gtk-theme",
+        "fptn-base64-src": "fptn-base64-src",
+        "fptn-boringssl-src": "fptn-boringssl-src",
+        "fptn-camouflagetls-src": "fptn-camouflagetls-src",
+        "fptn-libtuntap-src": "fptn-libtuntap-src",
+        "fptn-ntpclient-src": "fptn-ntpclient-src",
+        "fptn-src": "fptn-src",
+        "fptn-yaff-src": "fptn-yaff-src",
         "gigabyte-laptop-wmi": "gigabyte-laptop-wmi",
         "gtkshutdown": "gtkshutdown",
         "hazy": "hazy",

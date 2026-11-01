@@ -600,6 +600,7 @@ let
         outbounds = [
           "zapret"
           "direct"
+          "fptn"
         ];
       }
       {
@@ -620,6 +621,15 @@ let
         tag = "direct";
         type = "direct";
       }
+      {
+        type = "vless";
+        tag = "fptn";
+        server = "127.0.0.1";
+        server_port = 10808;
+        uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+        packet_encoding = "xudp";
+      }
+
     ];
   };
 
@@ -673,6 +683,28 @@ let
     ${pkgs.systemd}/bin/systemctl start dnsmasq.service 2>/dev/null || true
   '';
 
+  fptnClientCli = import ../../../stuff/system/sing-box/fptn-client-cli.nix { inherit pkgs inputs; };
+  fptn-port = 10808;
+  fptn-uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
+  fptn-server = cfg.fptn.server;
+  fptn-sni = cfg.fptn.sni;
+  fptn-bypass-method = cfg.fptn.bypassMethod;
+  fptn-bridge = pkgs.writeShellScriptBin "fptn-bridge" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/fptn-bridge.sh;
+    scope = {
+      inherit
+        pkgs
+        fptnClientCli
+        patched-sing-box
+        fptn-port
+        fptn-uuid
+        fptn-server
+        fptn-sni
+        fptn-bypass-method
+        ;
+    };
+  });
+
 in
 {
   options.sing-box = {
@@ -681,6 +713,28 @@ in
       type = lib.types.listOf lib.types.str;
       internal = true;
       visible = false;
+    };
+    fptn = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable FPTN bridge service";
+      };
+      server = mkOption {
+        type = types.str;
+        default = "Germany-Premium";
+        description = "Preferred FPTN server name";
+      };
+      sni = mkOption {
+        type = types.str;
+        default = "rutube.ru";
+        description = "FPTN TLS SNI disguise domain";
+      };
+      bypassMethod = mkOption {
+        type = types.str;
+        default = "obfuscation";
+        description = "FPTN censorship bypass method";
+      };
     };
   };
 
@@ -833,6 +887,59 @@ in
           LockPersonality = true;
           MemoryDenyWriteExecute = true;
           ProtectProc = "invisible";
+          RestrictAddressFamilies = [
+            "AF_INET"
+            "AF_INET6"
+            "AF_NETLINK"
+            "AF_UNIX"
+          ];
+          SystemCallArchitectures = "native";
+          SystemCallFilter = "@system-service";
+          SystemCallErrorNumber = "EPERM";
+        };
+      };
+
+      fptn = mkIf cfg.fptn.enable {
+        description = "FPTN VPN Bridge for sing-box";
+        bindsTo = [ "sing-box-core.service" ];
+        partOf = [ "sing-box-core.service" ];
+        after = [ "sing-box-core.service" ];
+        wantedBy = [ "sing-box-core.service" ];
+        serviceConfig = {
+          DynamicUser = true;
+          RuntimeDirectory = "fptn";
+          WorkingDirectory = "/run/fptn";
+          EnvironmentFile = "-/etc/credstore/fptn.env";
+          ExecStart = "${fptn-bridge}/bin/fptn-bridge";
+          Restart = "always";
+          RestartSec = 5;
+
+          PrivateDevices = false;
+          DeviceAllow = "/dev/net/tun rwm";
+          NoNewPrivileges = true;
+          RemoveIPC = true;
+
+          CapabilityBoundingSet = [
+            "CAP_NET_ADMIN"
+            "CAP_NET_RAW"
+            "CAP_SYS_ADMIN"
+            "CAP_SETUID"
+            "CAP_SETGID"
+          ];
+          AmbientCapabilities = [
+            "CAP_NET_ADMIN"
+            "CAP_NET_RAW"
+          ];
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ProtectControlGroups = true;
+          ProtectKernelTunables = true;
+          ProtectKernelModules = true;
+          ProtectClock = true;
+          ProtectKernelLogs = true;
+          RestrictRealtime = true;
+          LockPersonality = true;
+          ProtectProc = "default";
           RestrictAddressFamilies = [
             "AF_INET"
             "AF_INET6"

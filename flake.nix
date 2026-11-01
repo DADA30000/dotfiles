@@ -29,6 +29,34 @@
       url = "github:Flowseal/zapret-discord-youtube";
       flake = false;
     };
+    fptn-src = {
+      url = "github:fptn-project/fptn";
+      flake = false;
+    };
+    fptn-boringssl-src = {
+      url = "github:batchar2/boringssl/working-russia-tls-handshake";
+      flake = false;
+    };
+    fptn-yaff-src = {
+      url = "github:fptn-project/yaff";
+      flake = false;
+    };
+    fptn-libtuntap-src = {
+      url = "github:LaKabane/libtuntap";
+      flake = false;
+    };
+    fptn-camouflagetls-src = {
+      url = "github:fptn-project/camouflage-tls";
+      flake = false;
+    };
+    fptn-ntpclient-src = {
+      url = "github:batchar2/NTP-client";
+      flake = false;
+    };
+    fptn-base64-src = {
+      url = "github:tobiaslocker/base64";
+      flake = false;
+    };
     my-internet = {
       url = "github:sameerasw/my-internet";
       flake = false;

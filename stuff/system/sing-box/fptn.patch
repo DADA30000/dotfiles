@@ -1,0 +1,292 @@
+diff -ruN '--exclude=.git' a/cmake/Findbrotli.cmake b/cmake/Findbrotli.cmake
+--- a/cmake/Findbrotli.cmake	1970-01-01 03:00:00.000000000 +0300
++++ b/cmake/Findbrotli.cmake	2026-11-01 21:27:51.074294848 +0300
+@@ -0,0 +1,6 @@
++find_path(BROTLI_INCLUDE_DIR "brotli/decode.h")
++find_library(BROTLI_DEC_LIB NAMES brotlidec)
++find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
++find_library(BROTLI_ENC_LIB NAMES brotlienc)
++include(FindPackageHandleStandardArgs)
++find_package_handle_standard_args(brotli DEFAULT_MSG BROTLI_INCLUDE_DIR BROTLI_DEC_LIB BROTLI_COMMON_LIB)
+diff -ruN '--exclude=.git' a/cmake/Findlibidn2.cmake b/cmake/Findlibidn2.cmake
+--- a/cmake/Findlibidn2.cmake	1970-01-01 03:00:00.000000000 +0300
++++ b/cmake/Findlibidn2.cmake	2026-11-01 21:27:51.073294870 +0300
+@@ -0,0 +1,10 @@
++find_path(LIBIDN2_INCLUDE_DIR idn2.h)
++find_library(LIBIDN2_LIBRARY NAMES idn2)
++include(FindPackageHandleStandardArgs)
++find_package_handle_standard_args(libidn2 DEFAULT_MSG LIBIDN2_LIBRARY LIBIDN2_INCLUDE_DIR)
++if(libidn2_FOUND AND NOT TARGET libidn2::libidn2)
++  add_library(libidn2::libidn2 UNKNOWN IMPORTED)
++  set_target_properties(libidn2::libidn2 PROPERTIES
++    IMPORTED_LOCATION "${LIBIDN2_LIBRARY}"
++    INTERFACE_INCLUDE_DIRECTORIES "${LIBIDN2_INCLUDE_DIR}")
++endif()
+diff -ruN '--exclude=.git' a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-11-01 21:27:50.987097132 +0300
++++ b/CMakeLists.txt	2026-11-01 21:27:51.039988416 +0300
+@@ -5,6 +5,7 @@
+ set(CMAKE_INCLUDE_CURRENT_DIR ON)
+ set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
++list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+ 
+ if (APPLE)
+   set(CMAKE_CXX_STANDARD 20)
+@@ -15,6 +16,7 @@
+   set(CMAKE_INCLUDE_CURRENT_DIR ON)
+   set(CMAKE_CXX_STANDARD 20)
+   set(CMAKE_CXX_STANDARD_REQUIRED ON)
++list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+   if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
+   endif ()
+@@ -105,12 +107,12 @@
+ endif ()
+ 
+ # --- project ---
+-set(CMAKE_COMPILE_WARNING_AS_ERROR ON) # check all warnings!
++set(CMAKE_COMPILE_WARNING_AS_ERROR OFF) # check all warnings!
+ if (MSVC)
+     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+     add_compile_options(/W4 /WX /utf-8)
+ else ()
+-    add_compile_options(-Wall -Werror -pedantic)
++    add_compile_options(-Wall -pedantic)
+ endif ()
+ 
+ # --- clang-tidy setup ---
+@@ -164,21 +166,9 @@
+ 
+ # --- build ---
+ add_subdirectory(src/fptn-protocol-lib)
+-if (NOT FPTN_BUILD_ONLY_FPTN_LIB)
+-    if (APPLE OR UNIX)
+-        add_subdirectory(src/fptn-server)
+-        add_subdirectory(src/fptn-passwd)
+-    endif ()
+-    add_subdirectory(src/fptn-client)
+-    if (FPTN_OPENWRT)
+-        add_subdirectory(deploy/openwrt/fptn-tcp-probe)
+-    endif ()
+-    # --- install ---
+-    install(TARGETS fptn-client-cli DESTINATION bin)
+-    if (APPLE OR UNIX)
+-        install(TARGETS fptn-server DESTINATION bin)
+-        install(TARGETS fptn-passwd DESTINATION bin)
+-    endif ()
++add_subdirectory(src/fptn-client)
++install(TARGETS fptn-client-cli DESTINATION bin)
++if (FALSE)
+     # --- packaging ---
+     if (CMAKE_SYSTEM_NAME STREQUAL "Linux") # deb
+         add_custom_target(
+diff -ruN '--exclude=.git' a/depends/cmake/FetchBase64.cmake b/depends/cmake/FetchBase64.cmake
+--- a/depends/cmake/FetchBase64.cmake	2026-11-01 21:27:50.987630409 +0300
++++ b/depends/cmake/FetchBase64.cmake	2026-11-01 21:27:51.044295505 +0300
+@@ -1,19 +1,23 @@
+ include(FetchContent)
+ 
+-FetchContent_Declare(Base64 URL https://github.com/tobiaslocker/base64/archive/refs/heads/master.zip)
+-
+-FetchContent_GetProperties(Base64)
+-if(NOT Base64_POPULATED)
+-  FetchContent_Populate(Base64)
++if(DEFINED FETCHCONTENT_SOURCE_DIR_BASE64)
++  set(Base64_SOURCE_DIR "${FETCHCONTENT_SOURCE_DIR_BASE64}")
++else()
++  FetchContent_Declare(Base64 URL https://github.com/tobiaslocker/base64/archive/refs/heads/master.zip)
++  FetchContent_GetProperties(Base64)
++  if(NOT Base64_POPULATED)
++    FetchContent_Populate(Base64)
++  endif()
++  set(Base64_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/base64-src")
+ endif()
+ 
+-set(Base64_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/base64-src")
+-set(Base64_INCLUDE_DIR "${Base64_SOURCE_DIR}/include")
+-set(Base64_INCLUDE_DIRS
+-    ${Base64_INCLUDE_DIR}
+-    CACHE PATH "Base64 Include Directories")
++if(EXISTS "${Base64_SOURCE_DIR}/include")
++  set(Base64_INCLUDE_DIR "${Base64_SOURCE_DIR}/include")
++else()
++  set(Base64_INCLUDE_DIR "${Base64_SOURCE_DIR}")
++endif()
+ 
++set(Base64_INCLUDE_DIRS ${Base64_INCLUDE_DIR} CACHE PATH "Base64 Include Directories")
+ add_library(Base64 INTERFACE)
+ target_include_directories(Base64 INTERFACE "${Base64_INCLUDE_DIR}")
+-
+ include_directories(${Base64_INCLUDE_DIR})
+diff -ruN '--exclude=.git' a/depends/cmake/FetchBlocklist.cmake b/depends/cmake/FetchBlocklist.cmake
+--- a/depends/cmake/FetchBlocklist.cmake	2026-11-01 21:27:50.987641429 +0300
++++ b/depends/cmake/FetchBlocklist.cmake	2026-11-01 21:27:51.043295527 +0300
+@@ -1,65 +1,7 @@
+-if(NOT EXISTS "${GZ}")
+-  set(HOSTS_LIST
+-      "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts")
+-  set(WILDCARD_LIST
+-      "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/ultimate-onlydomains.txt")
+-
+-  if(FPTN_OPENWRT)
+-    set(SOURCES "${HOSTS_LIST}")
+-  else()
+-    set(SOURCES "${WILDCARD_LIST}" "${HOSTS_LIST}")
+-  endif()
+-
+-  set(MAX_ATTEMPTS 10)
+-  set(RETRY_DELAY 5)
+-
+-  set(combined "${GZ}.txt")
+-  file(WRITE "${combined}" "")
+-
+-  foreach(src IN LISTS SOURCES)
+-    set(part "${GZ}.part")
+-    set(downloaded FALSE)
+-    foreach(attempt RANGE 1 ${MAX_ATTEMPTS})
+-      message(STATUS "[blocklist] downloading ${src} (attempt ${attempt}/${MAX_ATTEMPTS})")
+-      file(DOWNLOAD "${src}" "${part}" STATUS status TLS_VERIFY ON)
+-      list(GET status 0 code)
+-      if(code EQUAL 0)
+-        set(downloaded TRUE)
+-        break()
+-      endif()
+-      list(GET status 1 msg)
+-      message(STATUS "[blocklist] attempt ${attempt} failed: ${msg}")
+-      file(REMOVE "${part}")
+-      if(NOT attempt EQUAL MAX_ATTEMPTS)
+-        execute_process(COMMAND ${CMAKE_COMMAND} -E sleep ${RETRY_DELAY})
+-      endif()
+-    endforeach()
+-    if(NOT downloaded)
+-      file(REMOVE "${part}" "${combined}")
+-      message(FATAL_ERROR
+-              "[blocklist] failed ${src} after ${MAX_ATTEMPTS} attempts")
+-    endif()
+-    file(READ "${part}" content)
+-    file(APPEND "${combined}" "${content}")
+-    file(REMOVE "${part}")
+-  endforeach()
+-
+-  file(ARCHIVE_CREATE OUTPUT "${GZ}" PATHS "${combined}"
+-       FORMAT raw COMPRESSION GZip)
+-  file(REMOVE "${combined}")
+-  message(STATUS "[blocklist] saved ${GZ}")
+-endif()
+-
+-file(READ "${GZ}" hex HEX)
+-string(LENGTH "${hex}" hex_len)
+-math(EXPR num_bytes "${hex_len} / 2")
+-string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," bytes "${hex}")
+-
+ file(WRITE "${OUTPUT}"
+ "namespace fptn::plugin {
+-extern const unsigned char ${SYMBOL}[] = {
+-${bytes}
+-};
+-extern const unsigned int ${SYMBOL}Len = ${num_bytes};
++extern const unsigned char ${SYMBOL}[] = { 0 };
++extern const unsigned int ${SYMBOL}Len = 0;
+ }  // namespace fptn::plugin
+ ")
++return()
+diff -ruN '--exclude=.git' a/depends/cmake/FetchLibTunTap.cmake b/depends/cmake/FetchLibTunTap.cmake
+--- a/depends/cmake/FetchLibTunTap.cmake	2026-11-01 21:27:50.987653652 +0300
++++ b/depends/cmake/FetchLibTunTap.cmake	2026-11-01 21:27:51.045295483 +0300
+@@ -1,26 +1,26 @@
+ cmake_minimum_required(VERSION 3.16)
+-
+ option(BUILD_TESTING "Build tests" OFF)
+-
+ include(FetchContent)
+-FetchContent_Declare(Libtuntap URL https://github.com/LaKabane/libtuntap/archive/ec1213733eb2e66e033ff8864d9fd476f9e35ffe.zip)
+-#FetchContent_Declare(Libtuntap URL https://github.com/LaKabane/libtuntap/archive/refs/heads/master.zip)
+ 
+-FetchContent_GetProperties(Libtuntap)
+-if(NOT Libtuntap_POPULATED)
+-  FetchContent_Populate(Libtuntap)
++if(DEFINED FETCHCONTENT_SOURCE_DIR_LIBTUNTAP)
++  set(Libtuntap_SOURCE_DIR "${FETCHCONTENT_SOURCE_DIR_LIBTUNTAP}")
++else()
++  FetchContent_Declare(Libtuntap URL https://github.com/LaKabane/libtuntap/archive/refs/heads/master.zip)
++  FetchContent_GetProperties(Libtuntap)
++  if(NOT Libtuntap_POPULATED)
++    FetchContent_Populate(Libtuntap)
++  endif()
++  set(Libtuntap_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/libtuntap-src")
+ endif()
+ 
+-set(Libtuntap_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/libtuntap-src")
+ set(Libtuntap_BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/libtuntap-build")
+ set(Libtuntap_INCLUDE_DIR "${Libtuntap_BINARY_DIR}/include")
+-
+ set(BUILD_TESTING OFF)
+-set(LIBTUNTAP_BUILD_TESTS
+-    OFF
+-    CACHE BOOL "Disable libtuntap tests")
+-add_subdirectory("${Libtuntap_SOURCE_DIR}" "${Libtuntap_BINARY_DIR}" EXCLUDE_FROM_ALL)
+-include_directories("${Libtuntap_SOURCE_DIR}/libtuntap/")
+-include_directories("${Libtuntap_SOURCE_DIR}/libtuntap/bindings/cpp")
++set(LIBTUNTAP_BUILD_TESTS OFF CACHE BOOL "Disable libtuntap tests")
+ 
++add_subdirectory("${Libtuntap_SOURCE_DIR}" "${Libtuntap_BINARY_DIR}" EXCLUDE_FROM_ALL)
++include_directories("${Libtuntap_SOURCE_DIR}")
++include_directories("${Libtuntap_SOURCE_DIR}/libtuntap")
++include_directories("${Libtuntap_SOURCE_DIR}/bindings/cpp")
++include_directories("${Libtuntap_BINARY_DIR}")
+ link_directories("${Libtuntap_BINARY_DIR}/lib/")
+diff -ruN '--exclude=.git' a/src/common/network/tun/linux_tun_device.h b/src/common/network/tun/linux_tun_device.h
+--- a/src/common/network/tun/linux_tun_device.h	2026-11-01 21:27:50.982910557 +0300
++++ b/src/common/network/tun/linux_tun_device.h	2026-11-01 21:27:51.055290750 +0300
+@@ -19,7 +19,7 @@
+ class LinuxTunDevice {
+  public:
+   bool Open(const std::string& name) {
+-    tun_ = std::make_unique<tuntap::tun>();
++    tun_ = std::make_unique<tuntap::tuntap>(TUNTAP_MODE_TUNNEL);
+     tun_->name(name);
+     name_ = tun_->name();
+     DisableKernelMessages();
+@@ -80,7 +80,7 @@
+   }
+ 
+  private:
+-  std::unique_ptr<tuntap::tun> tun_;
++  std::unique_ptr<tuntap::tuntap> tun_;
+   std::string name_;
+ };
+ 
+diff -ruN '--exclude=.git' a/src/fptn-protocol-lib/CMakeLists.txt b/src/fptn-protocol-lib/CMakeLists.txt
+--- a/src/fptn-protocol-lib/CMakeLists.txt	2026-11-01 21:27:50.984890200 +0300
++++ b/src/fptn-protocol-lib/CMakeLists.txt	2026-11-01 21:27:51.067097188 +0300
+@@ -1,3 +1,19 @@
++function(protobuf_generate_cpp SRCS HDRS)
++  set(SOURCES)
++  set(HEADERS)
++  foreach(FIL ${ARGN})
++    get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
++    get_filename_component(FIL_WE ${FIL} NAME_WE)
++    list(APPEND SOURCES "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.pb.cc")
++    list(APPEND HEADERS "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.pb.h")
++    add_custom_command(
++      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.pb.cc" "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.pb.h"
++      COMMAND protobuf::protoc ARGS --cpp_out "${CMAKE_CURRENT_BINARY_DIR}" -I "${CMAKE_CURRENT_SOURCE_DIR}/protocol" "${ABS_FIL}"
++      DEPENDS "${ABS_FIL}" VERBATIM)
++  endforeach()
++  set(${SRCS} ${SOURCES} PARENT_SCOPE)
++  set(${HDRS} ${HEADERS} PARENT_SCOPE)
++endfunction()
+ project(fptn-protocol-lib LANGUAGES CXX)
+ 
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+@@ -25,6 +41,9 @@
+ 
+ find_package(absl REQUIRED)
+ find_package(protobuf REQUIRED)
++if(NOT TARGET protobuf::protobuf)
++  add_library(protobuf::protobuf ALIAS protobuf::libprotobuf)
++endif()
+ find_package(OpenSSL REQUIRED)
+ find_package(spdlog REQUIRED)
+ find_package(fmt REQUIRED)
