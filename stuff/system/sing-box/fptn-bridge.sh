@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-PATH="$PATH:%{{{pkgs.iproute2}}}/bin:%{{{pkgs.procps}}}/bin:%{{{pkgs.util-linux}}}/bin:%{{{pkgs.coreutils}}}/bin:%{{{pkgs.passt}}}/bin"
+PATH="$PATH:%{{{pkgs.iproute2}}}/bin:%{{{pkgs.procps}}}/bin:%{{{pkgs.util-linux}}}/bin:%{{{pkgs.coreutils}}}/bin:%{{{pkgs.gawk}}}/bin:%{{{pkgs.gnugrep}}}/bin:%{{{pkgs.passt}}}/bin"
 
 # 1. Source credentials / environment overrides from credstore if present
 if [ -f "/etc/credstore/fptn.env" ]; then
