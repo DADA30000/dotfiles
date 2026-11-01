@@ -13,17 +13,17 @@ if [ -f "/etc/credstore/fptn.env" ]; then
   # shellcheck disable=SC1091
   source "/etc/credstore/fptn.env"
 fi
-if [ -z "''${ACCESS_TOKEN:-}" ] && [ -f "/etc/credstore/fptn-token" ]; then
+if [ -z "${ACCESS_TOKEN:-}" ] && [ -f "/etc/credstore/fptn-token" ]; then
   ACCESS_TOKEN="$(tr -d '\r\n' < /etc/credstore/fptn-token)"
 fi
 
 # 2. Configuration with fallbacks to Nix-evaluated module defaults
-PORT="''${PORT:-%{{{toString fptn-port}}}}"
-UUID="''${UUID:-%{{{fptn-uuid}}}}"
-PREFERRED_SERVER="''${PREFERRED_SERVER:-%{{{fptn-server}}}}"
-SNI="''${SNI:-%{{{fptn-sni}}}}"
-BYPASS_METHOD="''${BYPASS_METHOD:-%{{{fptn-bypass-method}}}}"
-ACCESS_TOKEN="''${ACCESS_TOKEN:-}"
+PORT="${PORT:-%{{{toString fptn-port}}}}"
+UUID="${UUID:-%{{{fptn-uuid}}}}"
+PREFERRED_SERVER="${PREFERRED_SERVER:-%{{{fptn-server}}}}"
+SNI="${SNI:-%{{{fptn-sni}}}}"
+BYPASS_METHOD="${BYPASS_METHOD:-%{{{fptn-bypass-method}}}}"
+ACCESS_TOKEN="${ACCESS_TOKEN:-}"
 
 if [ -z "$ACCESS_TOKEN" ]; then
   echo "Error: ACCESS_TOKEN is missing. Provide it via environment or /etc/credstore/fptn.env" >&2
@@ -36,7 +36,7 @@ SING_BOX_BIN="%{{{patched-sing-box}}}/bin/sing-box"
 # -----------------------------------------------------------------------------
 # Internal Stage (Runs inside pasta network + user namespace)
 # -----------------------------------------------------------------------------
-if [ "''${1:-}" = "__STAGE_MOUNT__" ]; then
+if [ "${1:-}" = "__STAGE_MOUNT__" ]; then
   WORK_DIR="$(mktemp -d /tmp/fptn-bridge.XXXXXX)"
   FPTN_PID=""
   BRIDGE_PID=""
