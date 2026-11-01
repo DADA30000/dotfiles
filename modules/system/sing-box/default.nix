@@ -929,11 +929,14 @@ in
           AmbientCapabilities = [
             "CAP_NET_ADMIN"
             "CAP_NET_RAW"
+            "CAP_SYS_ADMIN"
+            "CAP_SETUID"
+            "CAP_SETGID"
           ];
-          ProtectSystem = "strict";
+          ProtectSystem = true;
           ProtectHome = true;
           ProtectControlGroups = true;
-          ProtectKernelTunables = true;
+          ProtectKernelTunables = false;
           ProtectKernelModules = true;
           ProtectClock = true;
           ProtectKernelLogs = true;
@@ -947,7 +950,13 @@ in
             "AF_UNIX"
           ];
           SystemCallArchitectures = "native";
-          SystemCallFilter = "@system-service";
+          SystemCallFilter = [
+            "@system-service"
+            "mount"
+            "umount2"
+            "pivot_root"
+            "chroot"
+          ];
           SystemCallErrorNumber = "EPERM";
         };
       };
