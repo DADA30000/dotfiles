@@ -68,16 +68,7 @@ EOF
   chmod +x "$SHIM_DIR/chattr"
   export PATH="$SHIM_DIR:$PATH"
 
-  # 3. Private /etc/resolv.conf
-  TMP_RESOLV="$WORK_DIR/resolv.conf"
-  cat > "$TMP_RESOLV" << 'EOF'
-nameserver 1.1.1.1
-nameserver 8.8.8.8
-nameserver 2606:4700:4700::1111
-EOF
-  mount --bind "$TMP_RESOLV" /etc/resolv.conf
-
-  # 4. Detect gateway & interface
+  # 3. Detect gateway & interface
   OUT_IF=""
   for ip in 8.8.8.8 8.8.4.4 77.88.8.8; do
     r=$(ip route get "$ip" 2>/dev/null | awk '{print $5; exit}')
@@ -179,6 +170,9 @@ fi
 exec pasta \
   --config-net \
   --chroot-fallback \
+  --host-lo-to-ns-lo \
+  -U 53 \
+  -T 53 \
   -t "127.0.0.1/$PORT" \
   -u "127.0.0.1/$PORT" \
-  -- unshare -m -- "$0" __STAGE_MOUNT__
+  -- "$0" __STAGE_MOUNT__
