@@ -1,6 +1,6 @@
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/meson.build /tmp/valent-test/src/plugins/gtk/meson.build
 --- a/src/plugins/gtk/meson.build	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/plugins/gtk/meson.build	2026-10-18 16:04:41.328232011 +0300
++++ b/src/plugins/gtk/meson.build	2026-11-01 15:23:00.917699652 +0300
 @@ -6,9 +6,12 @@
    error('"@0@" plugin requires gtk4 @1@'.format(plugin_name, gtk_version))
  endif
@@ -29,7 +29,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 -
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/valent-gdk-clipboard.c /tmp/valent-test/src/plugins/gtk/valent-gdk-clipboard.c
 --- a/src/plugins/gtk/valent-gdk-clipboard.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/plugins/gtk/valent-gdk-clipboard.c	2026-10-18 16:04:31.992204003 +0300
++++ b/src/plugins/gtk/valent-gdk-clipboard.c	2026-11-01 15:23:39.792968207 +0300
 @@ -1,17 +1,76 @@
  // SPDX-License-Identifier: GPL-3.0-or-later
  // SPDX-FileCopyrightText: Andy Holmes <andrew.g.r.holmes@gmail.com>
@@ -107,7 +107,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
  struct _ValentGdkClipboard
  {
-@@ -19,6 +78,19 @@
+@@ -19,6 +78,23 @@
  
    GdkClipboard           *clipboard;
    int64_t                 timestamp;
@@ -124,16 +124,28 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +  struct zwlr_data_control_source_v1  *wlr_source;
 +  GBytes                 *wlr_source_bytes;
 +  gboolean                is_our_selection;
++
++  guint                   pipe_watch_id;
++  GIOChannel             *pipe_channel;
++  GByteArray             *pipe_buffer;
  };
  
  G_DEFINE_FINAL_TYPE (ValentGdkClipboard, valent_gdk_clipboard, VALENT_TYPE_CLIPBOARD_ADAPTER)
-@@ -33,6 +105,184 @@
+@@ -33,6 +109,309 @@
    NULL,
  };
  
++typedef struct {
++  struct zwlr_data_control_offer_v1 *offer;
++  GPtrArray *mimetypes;
++} OfferData;
++
 +static void
 +offer_offer (void *data, struct zwlr_data_control_offer_v1 *offer, const char *mime)
 +{
++  OfferData *odata = (OfferData *)data;
++  if (odata != NULL && odata->mimetypes != NULL && mime != NULL)
++    g_ptr_array_add (odata->mimetypes, g_strdup (mime));
 +}
 +
 +static const struct zwlr_data_control_offer_v1_listener offer_listener = {
@@ -145,7 +157,115 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +                   struct zwlr_data_control_device_v1 *dev,
 +                   struct zwlr_data_control_offer_v1 *offer)
 +{
-+  zwlr_data_control_offer_v1_add_listener (offer, &offer_listener, NULL);
++  OfferData *odata = g_new0 (OfferData, 1);
++  odata->offer = offer;
++  odata->mimetypes = g_ptr_array_new_with_free_func (g_free);
++  zwlr_data_control_offer_v1_add_listener (offer, &offer_listener, odata);
++}
++
++static const char *
++pick_best_text_mime (GPtrArray *mimetypes)
++{
++  if (mimetypes == NULL)
++    return NULL;
++
++  for (guint m = 0; text_mimetypes[m] != NULL; m++)
++    {
++      for (guint i = 0; i < mimetypes->len; i++)
++        {
++          const char *offered = g_ptr_array_index (mimetypes, i);
++          if (g_ascii_strcasecmp (offered, text_mimetypes[m]) == 0)
++            return offered;
++        }
++    }
++  return NULL;
++}
++
++static void
++cancel_pending_pipe_read (ValentGdkClipboard *self)
++{
++  if (self->pipe_watch_id != 0)
++    {
++      g_source_remove (self->pipe_watch_id);
++      self->pipe_watch_id = 0;
++    }
++
++  if (self->pipe_channel != NULL)
++    {
++      int fd = g_io_channel_unix_get_fd (self->pipe_channel);
++      g_io_channel_shutdown (self->pipe_channel, FALSE, NULL);
++      g_io_channel_unref (self->pipe_channel);
++      self->pipe_channel = NULL;
++      if (fd >= 0)
++        close (fd);
++    }
++
++  g_clear_pointer (&self->pipe_buffer, g_byte_array_unref);
++}
++
++static gboolean
++on_pipe_readable (GIOChannel   *channel,
++                  GIOCondition  condition,
++                  gpointer      user_data)
++{
++  ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (user_data);
++  int fd = g_io_channel_unix_get_fd (channel);
++  char buf[4096];
++  ssize_t n = -1;
++
++  if (condition & (G_IO_IN | G_IO_PRI))
++    {
++      while ((n = read (fd, buf, sizeof (buf))) > 0)
++        {
++          if (self->pipe_buffer == NULL)
++            self->pipe_buffer = g_byte_array_new ();
++
++          g_byte_array_append (self->pipe_buffer, (const guint8 *)buf, n);
++          if (self->pipe_buffer->len > CLIPBOARD_MAXSIZE)
++            break;
++        }
++    }
++
++  if ((condition & (G_IO_HUP | G_IO_ERR)) || n == 0)
++    {
++      self->pipe_watch_id = 0;
++      g_io_channel_shutdown (channel, FALSE, NULL);
++      g_io_channel_unref (channel);
++      self->pipe_channel = NULL;
++      close (fd);
++
++      if (self->pipe_buffer != NULL && self->pipe_buffer->len > 0)
++        {
++          if (self->pipe_buffer->data[self->pipe_buffer->len - 1] != '\0')
++            {
++              guint8 zero = 0;
++              g_byte_array_append (self->pipe_buffer, &zero, 1);
++            }
++
++          char *new_text = (char *)g_byte_array_free (self->pipe_buffer, FALSE);
++          self->pipe_buffer = NULL;
++
++          if (g_strcmp0 (self->wlr_text, new_text) != 0)
++            {
++              g_free (self->wlr_text);
++              self->wlr_text = new_text;
++              self->timestamp = valent_timestamp_ms ();
++              valent_clipboard_adapter_changed (VALENT_CLIPBOARD_ADAPTER (self));
++            }
++          else
++            {
++              g_free (new_text);
++            }
++        }
++      else
++        {
++          g_clear_pointer (&self->pipe_buffer, g_byte_array_unref);
++        }
++
++      return G_SOURCE_REMOVE;
++    }
++
++  return G_SOURCE_CONTINUE;
 +}
 +
 +static void
@@ -163,61 +283,62 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +      return;
 +    }
 +
++  cancel_pending_pipe_read (self);
++
 +  if (offer == NULL)
 +    {
 +      g_clear_pointer (&self->wlr_text, g_free);
 +      return;
 +    }
 +
-+  int p[2];
-+  if (pipe2 (p, O_CLOEXEC) < 0)
++  OfferData *odata = wl_proxy_get_user_data ((struct wl_proxy *)offer);
++  const char *mime = odata ? pick_best_text_mime (odata->mimetypes) : NULL;
++
++  if (mime == NULL)
 +    {
++      if (odata != NULL)
++        {
++          g_ptr_array_unref (odata->mimetypes);
++          g_free (odata);
++        }
 +      zwlr_data_control_offer_v1_destroy (offer);
 +      return;
 +    }
 +
-+  zwlr_data_control_offer_v1_receive (offer, "text/plain;charset=utf-8", p[1]);
++  int p[2];
++  if (pipe2 (p, O_CLOEXEC | O_NONBLOCK) < 0)
++    {
++      if (odata != NULL)
++        {
++          g_ptr_array_unref (odata->mimetypes);
++          g_free (odata);
++        }
++      zwlr_data_control_offer_v1_destroy (offer);
++      return;
++    }
++
++  zwlr_data_control_offer_v1_receive (offer, mime, p[1]);
 +  close (p[1]);
 +  wl_display_flush (self->wl_display);
 +
-+  GByteArray *array = g_byte_array_new ();
-+  char buf[4096];
-+  ssize_t n;
-+  while ((n = read (p[0], buf, sizeof (buf))) > 0)
++  if (odata != NULL)
 +    {
-+      g_byte_array_append (array, (const guint8 *)buf, n);
-+      if (array->len > CLIPBOARD_MAXSIZE)
-+        break;
++      g_ptr_array_unref (odata->mimetypes);
++      g_free (odata);
 +    }
-+  close (p[0]);
 +  zwlr_data_control_offer_v1_destroy (offer);
 +
-+  if (array->len > 0)
-+    {
-+      if (array->data[array->len - 1] != '\0')
-+        {
-+          guint8 zero = 0;
-+          g_byte_array_append (array, &zero, 1);
-+        }
++  GIOChannel *channel = g_io_channel_unix_new (p[0]);
++  g_io_channel_set_encoding (channel, NULL, NULL);
++  g_io_channel_set_buffered (channel, FALSE);
++  g_io_channel_set_close_on_unref (channel, FALSE);
 +
-+      char *new_text = (char *)g_byte_array_free (array, FALSE);
-+
-+      if (g_strcmp0 (self->wlr_text, new_text) != 0)
-+        {
-+          g_free (self->wlr_text);
-+          self->wlr_text = new_text;
-+          self->timestamp = valent_timestamp_ms ();
-+          valent_clipboard_adapter_changed (VALENT_CLIPBOARD_ADAPTER (self));
-+        }
-+      else
-+        {
-+          g_free (new_text);
-+        }
-+    }
-+  else
-+    {
-+      g_byte_array_free (array, TRUE);
-+    }
++  self->pipe_channel = channel;
++  self->pipe_buffer = g_byte_array_new ();
++  self->pipe_watch_id = g_io_add_watch (channel,
++                                        G_IO_IN | G_IO_PRI | G_IO_HUP | G_IO_ERR,
++                                        on_pipe_readable,
++                                        self);
 +}
 +
 +static void
@@ -231,7 +352,15 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +                struct zwlr_data_control_offer_v1 *offer)
 +{
 +  if (offer != NULL)
-+    zwlr_data_control_offer_v1_destroy (offer);
++    {
++      OfferData *odata = wl_proxy_get_user_data ((struct wl_proxy *)offer);
++      if (odata != NULL)
++        {
++          g_ptr_array_unref (odata->mimetypes);
++          g_free (odata);
++        }
++      zwlr_data_control_offer_v1_destroy (offer);
++    }
 +}
 +
 +static const struct zwlr_data_control_device_v1_listener device_listener = {
@@ -312,7 +441,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
  /*
   * GdkClipboard Callbacks
-@@ -46,7 +296,6 @@
+@@ -46,7 +425,6 @@
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
    g_assert (VALENT_IS_CLIPBOARD_ADAPTER (adapter));
  
@@ -320,7 +449,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    self->timestamp = valent_timestamp_ms ();
    valent_clipboard_adapter_changed (adapter);
  }
-@@ -136,6 +385,10 @@
+@@ -136,6 +514,10 @@
    const char * const *mimetypes = NULL;
  
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
@@ -331,7 +460,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    g_return_val_if_fail (GDK_IS_CLIPBOARD (self->clipboard), NULL);
  
    if ((formats = gdk_clipboard_get_formats (self->clipboard)) == NULL)
-@@ -152,7 +405,6 @@
+@@ -152,7 +534,6 @@
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
  
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
@@ -339,27 +468,34 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
    return self->timestamp;
  }
-@@ -171,6 +423,19 @@
+@@ -171,6 +552,26 @@
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
    g_assert (mimetype != NULL && *mimetype != '\0');
  
 +  if (self->wlr_device != NULL && g_strv_contains (text_mimetypes, mimetype))
 +    {
++      task = g_task_new (adapter, cancellable, callback, user_data);
++      g_task_set_source_tag (task, valent_gdk_clipboard_read_bytes);
++
 +      if (self->wlr_text != NULL)
 +        {
-+          task = g_task_new (adapter, cancellable, callback, user_data);
-+          g_task_set_source_tag (task, valent_gdk_clipboard_read_bytes);
 +          g_task_return_pointer (task,
 +                                 g_bytes_new (self->wlr_text, strlen (self->wlr_text) + 1),
 +                                 (GDestroyNotify)g_bytes_unref);
-+          return;
 +        }
++      else
++        {
++          g_task_return_pointer (task,
++                                 g_bytes_new_static ("", 1),
++                                 (GDestroyNotify)g_bytes_unref);
++        }
++      return;
 +    }
 +
    if G_UNLIKELY (!GDK_IS_CLIPBOARD (self->clipboard))
      {
        g_task_report_new_error (adapter, callback, user_data,
-@@ -181,7 +446,6 @@
+@@ -181,7 +582,6 @@
        return;
      }
  
@@ -367,7 +503,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    if (g_strv_contains (text_mimetypes, mimetype))
      {
        task = g_task_new (adapter, cancellable, callback, user_data);
-@@ -194,33 +458,22 @@
+@@ -194,33 +594,22 @@
        return;
      }
  
@@ -405,7 +541,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
                              G_PRIORITY_DEFAULT,
                              cancellable,
                              (GAsyncReadyCallback)gdk_clipboard_read_cb,
-@@ -236,24 +489,44 @@
+@@ -236,24 +625,44 @@
                                    gpointer                user_data)
  {
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
@@ -463,11 +599,13 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
      }
  
    task = g_task_new (adapter, cancellable, callback, user_data);
-@@ -269,12 +542,52 @@
+@@ -269,12 +678,54 @@
  {
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (object);
  
 -  if (self->clipboard != NULL)
++  cancel_pending_pipe_read (self);
++
 +  if (self->wl_source != NULL)
 +    {
 +      g_source_destroy (self->wl_source);
@@ -519,7 +657,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    VALENT_OBJECT_CLASS (valent_gdk_clipboard_parent_class)->destroy (object);
  }
  
-@@ -297,6 +610,33 @@
+@@ -297,6 +748,33 @@
                                 G_CALLBACK (on_changed),
                                 self,
                                 G_CONNECT_DEFAULT);
@@ -553,14 +691,14 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
      }
    else
      {
-@@ -327,4 +667,3 @@
+@@ -327,4 +805,3 @@
  valent_gdk_clipboard_init (ValentGdkClipboard *self)
  {
  }
 -
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-protocol.c /tmp/valent-test/src/plugins/gtk/wlr-data-control-protocol.c
 --- a/src/plugins/gtk/wlr-data-control-protocol.c	1970-01-01 03:00:00.000000000 +0300
-+++ b/src/plugins/gtk/wlr-data-control-protocol.c	2026-10-18 16:03:54.713910656 +0300
++++ b/src/plugins/gtk/wlr-data-control-protocol.c	2026-11-01 15:23:00.914434737 +0300
 @@ -0,0 +1,123 @@
 +/* Generated by wayland-scanner 1.26.0 */
 +
@@ -687,7 +825,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h /tmp/valent-test/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h
 --- a/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	1970-01-01 03:00:00.000000000 +0300
-+++ b/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	2026-10-18 16:03:54.713052094 +0300
++++ b/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	2026-11-01 15:23:00.911699612 +0300
 @@ -0,0 +1,665 @@
 +/* Generated by wayland-scanner 1.26.0 */
 +
