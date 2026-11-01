@@ -54,9 +54,9 @@ if [ "${1:-}" = "__STAGE_MOUNT__" ]; then
   }
   trap inner_cleanup EXIT INT TERM
 
-  # 1. Mount private tmpfs over /var/log for fptn-client-cli logging
-  mount -t tmpfs tmpfs /var/log
-  mkdir -p /var/log/fptn
+  # 1. Configure private log directory for fptn-client-cli
+  export FPTN_LOG_DIR="$WORK_DIR/fptn-log"
+  mkdir -p "$FPTN_LOG_DIR"
 
   # 2. Dummy chattr shim for fptn-client-cli
   SHIM_DIR="$WORK_DIR/shims"
