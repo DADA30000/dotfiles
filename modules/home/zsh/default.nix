@@ -6,6 +6,7 @@
   ...
 }:
 let
+  #dasdasdsda
   cfg = config.zsh;
   flake-stuff = pkgs.runCommand "flake-stuff" { } ''
     mkdir $out
@@ -429,9 +430,9 @@ in
                 export VISUAL="sesatt --editor"
                 export EDITOR="sesatt --editor"
               elif [[ -n "$NVIM" && -e "$NVIM" ]]; then
-                export SUDO_EDITOR="nvr-remote-editor"
-                export VISUAL="nvr-remote-editor"
-                export EDITOR="nvr-remote-editor"
+                export SUDO_EDITOR="nvim"
+                export VISUAL="nvim"
+                export EDITOR="nvim"
               fi
 
               alias v="nvim"

@@ -296,15 +296,37 @@
      win_T *save_curwin = curwin;
      // switch window/buffer to perform the scroll
      curwin = mouse_win;
-@@ -2665,7 +2688,7 @@
+@@ -2375,7 +2398,8 @@ static void refresh_cursor(Terminal *ter
+
+   switch (term->cursor.shape) {
+   case VTERM_PROP_CURSORSHAPE_BLOCK:
+-    shape_table[SHAPE_IDX_TERM].shape = SHAPE_BLOCK;
++    shape_table[SHAPE_IDX_TERM].shape = SHAPE_VER;
++    shape_table[SHAPE_IDX_TERM].percentage = 25;
+     break;
+   case VTERM_PROP_CURSORSHAPE_UNDERLINE:
+     shape_table[SHAPE_IDX_TERM].shape = SHAPE_HOR;
+@@ -2579,12 +2603,19 @@ static void adjust_topline_cursor(Termin
          continue;
        }
- 
+
 -      bool following = ml_end == wp->w_cursor.lnum + added;  // cursor at end?
-+      bool following = (wp->w_cursor.lnum == ml_end - added) && (wp->w_topline + wp->w_view_height >= ml_end - added);
++      bool following = (wp->w_cursor.lnum >= ml_end - added) && (wp->w_topline + wp->w_view_height >= ml_end - added);
        if (following) {
          // "Follow" the terminal output
          wp->w_cursor.lnum = ml_end;
+         set_topline(wp, MAX(wp->w_cursor.lnum - wp->w_view_height + 1, 1));
+       } else {
++        int split_index = (int)ml_end - term->old_height;
++        if (wp->w_topline > split_index) {
++          set_topline(wp, wp->w_topline + added);
++        }
++        if (wp->w_cursor.lnum > split_index) {
++          wp->w_cursor.lnum += added;
++        }
+         // Ensure valid cursor for each window displaying this terminal.
+         wp->w_cursor.lnum = MIN(wp->w_cursor.lnum, ml_end);
+       }
 @@ -2723,4 +2746,26 @@
  
  // }}}

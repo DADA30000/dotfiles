@@ -142,6 +142,15 @@ let
         pname = "${stripExtension (baseNameOf path)}";
         name = pname;
         dontUnpack = true;
+        src = pkgs.writeTextFile {
+          name = pname;
+          text = (
+            evalAndSubstitute {
+              string = builtins.readFile path;
+              scope = { inherit config; };
+            }
+          );
+        };
 
         nativeBuildInputs = [
           pkgs.pkgsStatic.rustc
@@ -150,10 +159,7 @@ let
         ];
 
         buildPhase = ''
-          echo "Checking formatting with rustfmt (${pname})..."
-          rustfmt --edition 2024 --check ${path}
-
-          echo "Running exhaustive clippy-driver hardening analysis (${pname})..."
+          rustfmt --edition 2024 --check "$src"
           clippy-driver --edition 2024 \
             -D warnings \
             -W clippy::all \
@@ -175,10 +181,8 @@ let
             -W rust-2024-compatibility \
             -W future-incompatible \
             -W nonstandard-style \
-            ${path} --emit=metadata -o lint_check.rmeta
+            "$src" --emit=metadata -o lint_check.rmeta
           rm -f lint_check.rmeta
-
-          echo "Compiling hardened, high-performance static binary with rustc (${pname})..."
           rustc --edition 2024 \
             --target x86_64-unknown-linux-musl \
             -D warnings \
@@ -194,7 +198,7 @@ let
             -C codegen-units=1 \
             -C panic=abort \
             -C strip=symbols \
-            -O ${path} -o ${pname}
+            -O "$src" -o ${pname}
         '';
 
         installPhase = ''

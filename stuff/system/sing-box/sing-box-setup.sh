@@ -30,6 +30,3 @@ ip netns exec vpn_wrapper sysctl -q net.ipv4.ping_group_range="0 2147483647"
 ip netns exec vpn_wrapper nft add table inet nat
 ip netns exec vpn_wrapper nft add chain inet nat output '{ type nat hook output priority dstnat; policy accept; }'
 ip netns exec vpn_wrapper nft add rule inet nat output ip daddr 127.0.0.1 meta l4proto '{ tcp, udp }' th dport 53 dnat to 10.200.0.1:53
-
-mkdir -p /etc/netns/vpn_wrapper
-echo "nameserver 10.200.0.1" >/etc/netns/vpn_wrapper/resolv.conf

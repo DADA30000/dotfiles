@@ -1,43 +1,43 @@
-#!/usr/bin/env bash
-THE_MOUNT_POINT="$HOME/.local/state/nixos-config"
-USER_ID="$(id -u)"
-GROUP_ID="$(id -g)"
-USER_NAME="$(id -un)"
-USER_HOME="$HOME"
-WAYLAND_DISPLAY_VAR="$WAYLAND_DISPLAY"
-DISPLAY_VAR="$DISPLAY"
-XAUTHORITY_VAR="$XAUTHORITY"
-XDG_RUNTIME_DIR_VAR="$XDG_RUNTIME_DIR"
+set -euo pipefail
 
-pkexec unshare -m --propagation slave -- bash -c '
-  MOUNT_POINT="$9"
+exec run0 \
+  --background= \
+  --property=PrivateMounts=yes \
+  --setenv=PATH \
+  --setenv=HOME \
+  --setenv=USER \
+  --setenv=WAYLAND_DISPLAY \
+  --setenv=DISPLAY \
+  --setenv=XAUTHORITY \
+  --setenv=XDG_RUNTIME_DIR \
+  --setenv=DBUS_SESSION_BUS_ADDRESS \
+  --setenv=SSH_AUTH_SOCK \
+  --setenv="MOUNT_POINT=$HOME/.local/state/nixos-config" \
+  --setenv="TARGET_UID=$(id -u)" \
+  --setenv="TARGET_GID=$(id -g)" \
+  --setenv="TARGET_USER=$(id -un)" \
+  bash -c '
+    set -euo pipefail
 
-  cleanup() {
-    if findmnt -M "$MOUNT_POINT" > /dev/null; then
-      umount "$MOUNT_POINT"
-    fi
-    if [ -d "$MOUNT_POINT" ]; then
-      rmdir "$MOUNT_POINT"
-    fi
-  }
+    cleanup() {
+      if findmnt -M "$MOUNT_POINT" > /dev/null; then
+        umount "$MOUNT_POINT"
+      fi
+      if [ -d "$MOUNT_POINT" ]; then
+        rmdir "$MOUNT_POINT"
+      fi
+    }
+    trap cleanup EXIT
 
-  trap cleanup EXIT
+    mkdir -p "$MOUNT_POINT"
+    chown "$TARGET_UID:$TARGET_GID" "$MOUNT_POINT"
 
-  mkdir -p "$MOUNT_POINT"
-  chown "$1:$2" "$MOUNT_POINT"
-  bindfs --force-user=$1 --force-group=$2 \
-         --create-for-user=root --create-for-group=root \
-         --chown-ignore --chgrp-ignore --chmod-ignore \
-         /etc/nixos "$MOUNT_POINT"
+    bindfs --force-user="$TARGET_UID" --force-group="$TARGET_GID" \
+           --create-for-user=root --create-for-group=root \
+           --chown-ignore --chgrp-ignore --chmod-ignore \
+           /etc/nixos "$MOUNT_POINT"
 
-  runuser -u "$3" -- \
-    env \
-      HOME="$4" \
-      WAYLAND_DISPLAY="$5" \
-      DISPLAY="$6" \
-      XAUTHORITY="$7" \
-      XDG_RUNTIME_DIR="$8" \
-      NEOVIDE_MOUNT_POINT="$MOUNT_POINT" \
+    runuser -m -u "$TARGET_USER" -- \
+      env NEOVIDE_MOUNT_POINT="$MOUNT_POINT" \
       neovide "$MOUNT_POINT"
-
-' bash "$USER_ID" "$GROUP_ID" "$USER_NAME" "$USER_HOME" "$WAYLAND_DISPLAY_VAR" "$DISPLAY_VAR" "$XAUTHORITY_VAR" "$XDG_RUNTIME_DIR_VAR" "$THE_MOUNT_POINT"
+  '

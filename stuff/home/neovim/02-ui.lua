@@ -249,6 +249,7 @@ if vim.g.neovide then
 	vim.g.neovide_padding_left = _G.OPTS.neovide.padding.left
 	vim.g.neovide_padding_right = _G.OPTS.neovide.padding.right
 	vim.g.neovide_opacity = _G.OPTS.neovide.opacity
+	vim.g.neovide_normal_opacity = _G.OPTS.neovide.normal_opacity
 	vim.g.neovide_floating_shadow = _G.OPTS.neovide.floating_shadow
 	vim.g.neovide_floating_blur_amount_x = _G.OPTS.neovide.floating_blur
 	vim.g.neovide_floating_blur_amount_y = _G.OPTS.neovide.floating_blur

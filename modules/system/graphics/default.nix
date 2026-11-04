@@ -12,15 +12,24 @@ in
 {
   options.graphics = {
     enable = mkEnableOption "graphics";
-    nvidia.enable = mkEnableOption "NVIDIA specific stuff (can be used together with AMDGPU)";
-    vulkan_video = mkEnableOption "experimental mesa flags for vulkan video stuff";
+    nvidia = {
+      enable = mkEnableOption "NVIDIA specific stuff (can be used together with AMDGPU)";
+      initrd = mkEnableOption "nvidia initrd driver";
+    };
     amdgpu = {
-      enable = mkEnableOption "some AMDGPU specific stuff (can be used together with NVIDIA)";
+      initrd = mkEnableOption "amdgpu initrd driver";
       pro = mkEnableOption "OpenCL and ROCm";
     };
   };
 
   config = mkIf cfg.enable {
+    services.xserver.videoDrivers = mkIf cfg.nvidia.enable [ "nvidia" ];
+    boot.initrd.kernelModules = mkIf cfg.nvidia.initrd [
+      "nvidia"
+      "nvidia_modeset"
+      "nvidia_uvm"
+      "nvidia_drm"
+    ];
     hardware = {
       graphics = {
         enable = true;
@@ -31,13 +40,9 @@ in
         ];
       };
       amdgpu = mkMerge [
-        (mkIf cfg.amdgpu.enable { initrd.enable = true; })
+        (mkIf cfg.amdgpu.initrd { initrd.enable = true; })
         (mkIf cfg.amdgpu.pro {
           opencl.enable = true;
-          #overdrive = {
-          #  enable = true;
-          #  ppfeaturemask = "0xffffffff";
-          #};
         })
       ];
       nvidia = mkIf cfg.nvidia.enable {
@@ -67,18 +72,6 @@ in
           kernelSuspendNotifier = true;
         };
       };
-    };
-    services.xserver.videoDrivers = mkMerge [
-      (mkIf cfg.amdgpu.enable [ "amdgpu" ])
-      (mkIf cfg.nvidia.enable [ "nvidia" ])
-    ];
-    environment.variables = {
-      # NVD_BACKEND = mkIf (cfg.nvidia.enable) "direct";
-      # ROC_ENABLE_PRE_VEGA = mkIf (cfg.amdgpu.pro && cfg.amdgpu.enable) 1;
-      RADV_EXPERIMENTAL = mkIf cfg.vulkan_video "video_decode,video_encode";
-      ANV_DEBUG = mkIf cfg.vulkan_video "video-decode,video-encode";
-      ANV_VIDEO_DECODE = mkIf cfg.vulkan_video 1;
-      ANV_VIDEO_ENCODE = mkIf cfg.vulkan_video 1;
     };
   };
 }

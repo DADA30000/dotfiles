@@ -20,7 +20,6 @@ let
   };
 
   authServices = [
-    "sudo"
     "polkit-1"
     "login"
     "sshd"
@@ -47,14 +46,17 @@ in
 
   sing-box.enable = true;
 
-  plymouth.enable = true;
-
   replays.enable = true;
 
   umu.enable = true;
 
   # Enable base disks configuration (NOT RECOMMENDED TO DISABLE, DISABLING IT WILL NUKE THE SYSTEM IF THERE IS NO ANOTHER FILESYSTEM CONFIGURATION)
   disks.enable = true;
+
+  plymouth = {
+    enable = true;
+    simpledrm = true;
+  };
 
   zramSwap = {
     enable = true;
@@ -131,7 +133,6 @@ in
         strict-iommu = false;
         binfmt-misc = true;
         io-uring = true;
-        sysrq = "none";
         kfence = false;
       };
       system = {
@@ -246,12 +247,7 @@ in
 
     enable = true;
 
-    vulkan_video = true;
-
-    amdgpu = {
-      enable = true;
-      pro = true;
-    };
+    amdgpu.pro = true;
 
   };
 
@@ -343,7 +339,6 @@ in
       "vm.page-cluster" = 0;
       "net.core.default_qdisc" = "cake";
       "net.ipv4.tcp_congestion_control" = "bbr";
-      "kernel.sysrq" = 240;
       "kernel.panic" = 0;
     };
 
@@ -760,13 +755,20 @@ in
 
   security = {
 
-    wrappers.su.enable = false;
+    sudo.enable = false;
 
     rtkit.enable = true;
 
+    wrappers = {
+      newgrp.enable = false;
+      su.enable = false;
+      sg.enable = false;
+      mount.enable = false;
+      umount.enable = false;
+    };
+
     polkit = {
       enable = true;
-      enablePkexecWrapper = true;
       adminIdentities = [ "unix-user:${user}" ];
       extraConfig = ''
         polkit.addRule(function(action, subject) {
@@ -780,18 +782,6 @@ in
         });
       '';
     };
-
-    sudo.extraRules = [
-      {
-        users = [ user ];
-        commands = [
-          {
-            command = "ALL";
-            options = [ "SETENV" ];
-          }
-        ];
-      }
-    ];
 
     # Disable usual coredumps (I hate them)
     pam = {

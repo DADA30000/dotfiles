@@ -8,7 +8,7 @@ if [ -z "$NOTIFY_ID" ]; then
   exit 1
 fi
 
-pkexec nixos-rebuild switch -v &>"$LOG_FILE" &
+run0 nixos-rebuild switch -v &>"$LOG_FILE" &
 REBUILD_PID=$!
 
 while [[ ! -s "$LOG_FILE" ]]; do

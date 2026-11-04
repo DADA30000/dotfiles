@@ -11,6 +11,7 @@ in
 {
   options.plymouth = {
     enable = mkEnableOption "plymouth";
+    simpledrm = mkEnableOption "simpledrm";
   };
 
   config = mkIf cfg.enable {
@@ -22,8 +23,10 @@ in
       };
       kernelParams = [
         "quiet"
-        #"plymouth.use-simpledrm"
-      ];
+      ]
+      ++ (lib.optionals cfg.simpledrm [
+        "plymouth.use-simpledrm"
+      ]);
     };
   };
 }

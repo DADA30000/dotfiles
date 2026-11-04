@@ -22,7 +22,8 @@ _G.OPTS = {
 		position_animation_length = 0.15,
 		cursor_trail_size = 0.2,
 		padding = { top = 20, left = 20, right = 20 },
-		opacity = 0.2,
+		opacity = 0.4,
+		normal_opacity = 0.2,
 		floating_blur = 8.0,
 		floating_shadow = false,
 		no_vsync = true,
@@ -61,7 +62,7 @@ vim.opt.undofile = true
 vim.opt.undodir = _G.OPTS.editor.undodir
 vim.opt.clipboard = "unnamedplus"
 vim.opt.selection = "inclusive"
-vim.opt.tabclose = "uselast"
+vim.opt.tabclose = ""
 vim.opt.guicursor:append("t:ver25")
 vim.g.suda_smart_edit = 1
 vim.cmd("set report=99999")

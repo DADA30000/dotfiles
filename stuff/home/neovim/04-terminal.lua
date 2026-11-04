@@ -96,13 +96,6 @@ local function term_scroll_down(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		if can_scroll <= to_scroll then
-			vim.schedule(function()
-				if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "terminal" then
-					vim.cmd("startinsert")
-				end
-			end)
-		end
 		return to_scroll .. "\x05"
 	else
 		vim.cmd("startinsert")

@@ -27,13 +27,13 @@ for dev in /dev/disk/by-label/*-encrypted; do
   fi
 done
 
-importable_pools="$(zpool import -d /dev/mapper -d /dev/disk/by-label -d /dev/disk/by-id -d /dev 2>/dev/null | awk '/pool:/ {print $2}' || true)"
+importable_pools="$(zpool import -d /dev/mapper -d /dev/disk/by-id 2>/dev/null | awk '/pool:/ {print $2}' || true)"
 
 for pool in $importable_pools; do
   [ "$pool" = "nixos" ] && continue
   [ "$pool" = "rpool" ] && continue
 
-  zpool import -d /dev/mapper -d /dev/disk/by-label -d /dev/disk/by-id -d /dev -N -f "$pool" || true
+  zpool import -d /dev/mapper -d /dev/disk/by-id -N -f "$pool" || true
 done
 
 for pool in $(zpool list -H -o name 2>/dev/null || true); do
