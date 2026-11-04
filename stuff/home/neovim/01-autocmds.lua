@@ -169,6 +169,54 @@ vim.api.nvim_create_autocmd({ "TabClosed", "WinClosed" }, {
 	end,
 })
 
+-- Native run0 execution for suda.vim with immediate unit notification
+_G.SudaRun0Exec = function(cmd_args, input_data)
+	local stdout_lines = {}
+	local stderr_lines = {}
+	local full_cmd = { "run0", "--background=" }
+	for _, arg in ipairs(cmd_args) do
+		table.insert(full_cmd, arg)
+	end
+
+	local job_id = vim.fn.jobstart(full_cmd, {
+		stdout_buffered = true,
+		stderr_buffered = false,
+		on_stderr = function(_, data)
+			for _, line in ipairs(data) do
+				if line and line ~= "" then
+					table.insert(stderr_lines, line)
+					if line:match("^run0:") then
+						vim.api.nvim_echo({ { "[" .. line .. "]", "Title" } }, false, {})
+						vim.cmd("redraw")
+					end
+				end
+			end
+		end,
+		on_stdout = function(_, data)
+			if data then
+				for _, line in ipairs(data) do
+					table.insert(stdout_lines, line)
+				end
+			end
+		end,
+	})
+
+	if job_id <= 0 then
+		return { code = -1, stdout = {}, stderr = { "Failed to spawn run0" } }
+	end
+
+	if input_data and input_data ~= "" then
+		vim.api.nvim_chan_send(job_id, input_data)
+	end
+
+	local code = vim.fn.jobwait({ job_id })[1]
+	if #stdout_lines > 0 and stdout_lines[#stdout_lines] == "" then
+		table.remove(stdout_lines, #stdout_lines)
+	end
+
+	return { code = code, stdout = stdout_lines, stderr = stderr_lines }
+end
+
 -- Smart Netrw directory browsing (supports suda:// and root-edited files)
 local function get_clean_buffer_dir()
 	local name = vim.api.nvim_buf_get_name(0)

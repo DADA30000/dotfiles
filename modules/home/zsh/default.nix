@@ -74,7 +74,7 @@ in
         enable = true;
         shellAliases.ls = "lsd";
         envExtra = /* zsh */ ''
-          #touch "${config.home.homeDirectory}"/.zsh/.zshenv_add
+          #touch "${config.home.homeDirectory}"/.zsh/.zshenv_add dasdas
           #source "${config.home.homeDirectory}"/.zsh/.zshenv_add
           source "${flake-stuff-hash}"
           local NIX_FLAKE_PREAMBLE="(

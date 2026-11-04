@@ -64,6 +64,10 @@ let
     inherit rust-analyzer-unwrapped;
   };
 
+  vim-suda = pkgs.vimPlugins.vim-suda.overrideAttrs (prev: {
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/suda-run0.patch ];
+  });
+
   rust-toolchain = pkgs.symlinkJoin {
     name = "nixos-system-toolchain";
     paths = with pkgs; [
@@ -192,7 +196,7 @@ in
         ps.pynvim
       ];
       plugins = [
-        pkgs.vimPlugins.vim-suda
+        vim-suda
         pkgs.vimPlugins.conform-nvim
         pkgs.vimPlugins.auto-save-nvim
         pkgs.vimPlugins.netrw-nvim

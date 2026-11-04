@@ -1,0 +1,37 @@
+--- a/autoload/suda.vim
++++ b/autoload/suda.vim
+@@ -7,6 +7,8 @@
+ function! s:get_command(opts, cmd)
+   if g:suda#executable ==# 'sudo' 
+     let ret = a:opts + ['--'] + a:cmd
++  elseif g:suda#executable ==# 'run0'
++    let ret = ['--background='] + a:cmd
+   else
+     " TODO:
+     " Should we pass '--' before cmd when using a custom suda#executable?
+@@ -23,6 +25,13 @@ endfunction
+ " {input} (a:1) is a string to pass as stdin to the command
+ " Returns a list of the command's output, split by NLs, with NULs replaced with NLs.
+ function! suda#systemlist(cmd, ...) abort
++  if g:suda#executable ==# 'run0' && exists('*luaeval')
++    let res = luaeval('SudaRun0Exec(_A[1], _A[2])', [a:cmd, (a:0 ? a:1 : '')])
++    if res.code != 0
++      throw join(res.stderr, "\n")
++    endif
++    return res.stdout
++  endif
+   let cmd = has('win32') || g:suda#noninteractive
+         \ ? s:get_command([], a:cmd)
+         \ : s:get_command(['-p', '', '-n'], a:cmd)
+@@ -164,9 +173,8 @@ function! suda#write(expr, ...) abort ra
+           \ fnamemodify(path, ':~'),
+           \ 'g',
+           \)
+-    if path_exists
+-      let echo_message = substitute(echo_message, '\[New\] ', '', 'g')
+-    endif
++    let echo_message = substitute(echo_message, '\[New\] ', '', 'g')
++    let echo_message = substitute(echo_message, '\[New File\] ', '', 'g')
+     return substitute(echo_message, '^\r\?\n', '', '')
+   finally
+     silent call delete(tempfile)
