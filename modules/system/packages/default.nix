@@ -136,9 +136,9 @@ let
       pkgs.writers.writePython3Bin (stripExtension (baseNameOf path)) { } (evalAndSubstitute {
         string = builtins.readFile path;
       });
-    rs =
+    rs = (
       path:
-      pkgs.pkgsStatic.stdenv.mkDerivation rec {
+      (pkgs.pkgsStatic.stdenv.mkDerivation rec {
         pname = "${stripExtension (baseNameOf path)}";
         name = pname;
         dontUnpack = true;
@@ -205,7 +205,9 @@ let
           mkdir -p $out/bin
           install -m 0755 ${pname} $out/bin/${pname}
         '';
-      };
+      }).overrideAttrs
+        { meta.priority = 4; }
+    );
     c =
       path:
       pkgs.pkgsStatic.stdenv.mkDerivation rec {

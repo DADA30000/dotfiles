@@ -786,6 +786,7 @@ in
     # Disable usual coredumps (I hate them)
     pam = {
       services = lib.genAttrs authServices (_: fastAuth) // {
+        systemd-run0.setEnvironment = false;
         greetd = {
           nodelay = true;
           failDelay = {

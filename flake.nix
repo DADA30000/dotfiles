@@ -341,7 +341,6 @@
             overwriteBackup = true;
             useGlobalPkgs = true;
             useUserPackages = true;
-            users.root = import ./modules/home/shared/home-root.nix;
             sharedModules = [
               { home.stateVersion = "26.05"; }
             ]

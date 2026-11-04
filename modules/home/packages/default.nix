@@ -513,15 +513,12 @@ let
         VENTOY_PATH="$out/share/ventoy"
         GUI_BIN="$GUI_BIN"
         if [ "\''${EUID}" -ne 0 ]; then
-          exec run0 \
-            --setenv=PATH \
-            --setenv=HOME \
-            --setenv=WAYLAND_DISPLAY \
-            --setenv=XDG_RUNTIME_DIR \
-            --setenv=DISPLAY \
-            --setenv=XAUTHORITY \
-            --setenv=GTK_THEME \
-            --setenv=QT_QPA_PLATFORMTHEME \
+          exec pkexec env \
+            PATH="\$PATH" \
+            XDG_DATA_HOME="\$XDG_DATA_HOME" \
+            WAYLAND_DISPLAY="\$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY" \
+            DISPLAY="\$DISPLAY" \
+            GTK_THEME="\$GTK_THEME" \
             "\$0" "\$@"
         fi
         cd "\$VENTOY_PATH"
