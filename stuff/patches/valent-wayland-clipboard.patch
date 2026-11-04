@@ -1,6 +1,6 @@
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/meson.build /tmp/valent-test/src/plugins/gtk/meson.build
 --- a/src/plugins/gtk/meson.build	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/plugins/gtk/meson.build	2026-11-01 15:23:00.917699652 +0300
++++ b/src/plugins/gtk/meson.build	2026-11-04 21:12:42.911221636 +0300
 @@ -6,9 +6,12 @@
    error('"@0@" plugin requires gtk4 @1@'.format(plugin_name, gtk_version))
  endif
@@ -29,8 +29,8 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 -
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/valent-gdk-clipboard.c /tmp/valent-test/src/plugins/gtk/valent-gdk-clipboard.c
 --- a/src/plugins/gtk/valent-gdk-clipboard.c	1970-01-01 03:00:01.000000000 +0300
-+++ b/src/plugins/gtk/valent-gdk-clipboard.c	2026-11-01 15:23:39.792968207 +0300
-@@ -1,17 +1,76 @@
++++ b/src/plugins/gtk/valent-gdk-clipboard.c	2026-11-04 21:12:42.912221633 +0300
+@@ -1,17 +1,98 @@
  // SPDX-License-Identifier: GPL-3.0-or-later
  // SPDX-FileCopyrightText: Andy Holmes <andrew.g.r.holmes@gmail.com>
  
@@ -63,8 +63,16 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +{
 +  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
 +  *timeout = -1;
++
++  if (wsource->reading)
++    return FALSE;
++
 +  while (wl_display_prepare_read (wsource->display) != 0)
-+    wl_display_dispatch_pending (wsource->display);
++    {
++      if (wl_display_dispatch_pending (wsource->display) < 0)
++        return FALSE;
++    }
++
 +  wsource->reading = TRUE;
 +  wl_display_flush (wsource->display);
 +  return FALSE;
@@ -74,20 +82,23 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +valent_wayland_source_check (GSource *source)
 +{
 +  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
-+  if (wsource->reading)
++
++  if (!wsource->reading)
++    return FALSE;
++
++  wsource->reading = FALSE;
++
++  if (wsource->pfd.revents & G_IO_IN)
 +    {
-+      wsource->reading = FALSE;
-+      if (wsource->pfd.revents & G_IO_IN)
-+        {
-+          wl_display_read_events (wsource->display);
-+          return TRUE;
-+        }
-+      else
-+        {
-+          wl_display_cancel_read (wsource->display);
-+        }
++      if (wl_display_read_events (wsource->display) < 0)
++        return FALSE;
++      return TRUE;
 +    }
-+  return FALSE;
++  else
++    {
++      wl_display_cancel_read (wsource->display);
++      return FALSE;
++    }
 +}
 +
 +static gboolean
@@ -98,16 +109,27 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +  return G_SOURCE_CONTINUE;
 +}
 +
++static void
++valent_wayland_source_finalize (GSource *source)
++{
++  ValentWaylandSource *wsource = (ValentWaylandSource *)source;
++  if (wsource->reading)
++    {
++      wsource->reading = FALSE;
++      wl_display_cancel_read (wsource->display);
++    }
++}
++
 +static GSourceFuncs valent_wayland_source_funcs = {
 +  valent_wayland_source_prepare,
 +  valent_wayland_source_check,
 +  valent_wayland_source_dispatch,
-+  NULL
++  valent_wayland_source_finalize
 +};
  
  struct _ValentGdkClipboard
  {
-@@ -19,6 +78,23 @@
+@@ -19,6 +100,23 @@
  
    GdkClipboard           *clipboard;
    int64_t                 timestamp;
@@ -131,7 +153,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  };
  
  G_DEFINE_FINAL_TYPE (ValentGdkClipboard, valent_gdk_clipboard, VALENT_TYPE_CLIPBOARD_ADAPTER)
-@@ -33,6 +109,309 @@
+@@ -33,6 +131,315 @@
    NULL,
  };
  
@@ -386,8 +408,14 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +        {
 +          if (size > 0 && buf[size - 1] == '\0')
 +            size--;
-+          ssize_t written = write (fd, buf, size);
-+          (void)written;
++          while (size > 0)
++            {
++              ssize_t written = write (fd, buf, size);
++              if (written <= 0)
++                break;
++              buf += written;
++              size -= (gsize)written;
++            }
 +        }
 +    }
 +  close (fd);
@@ -441,7 +469,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
  /*
   * GdkClipboard Callbacks
-@@ -46,7 +425,6 @@
+@@ -46,7 +453,6 @@
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
    g_assert (VALENT_IS_CLIPBOARD_ADAPTER (adapter));
  
@@ -449,7 +477,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    self->timestamp = valent_timestamp_ms ();
    valent_clipboard_adapter_changed (adapter);
  }
-@@ -136,6 +514,10 @@
+@@ -136,6 +542,10 @@
    const char * const *mimetypes = NULL;
  
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
@@ -460,7 +488,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    g_return_val_if_fail (GDK_IS_CLIPBOARD (self->clipboard), NULL);
  
    if ((formats = gdk_clipboard_get_formats (self->clipboard)) == NULL)
-@@ -152,7 +534,6 @@
+@@ -152,7 +562,6 @@
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
  
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
@@ -468,7 +496,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
  
    return self->timestamp;
  }
-@@ -171,6 +552,26 @@
+@@ -171,6 +580,26 @@
    g_assert (VALENT_IS_GDK_CLIPBOARD (self));
    g_assert (mimetype != NULL && *mimetype != '\0');
  
@@ -495,7 +523,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    if G_UNLIKELY (!GDK_IS_CLIPBOARD (self->clipboard))
      {
        g_task_report_new_error (adapter, callback, user_data,
-@@ -181,7 +582,6 @@
+@@ -181,7 +610,6 @@
        return;
      }
  
@@ -503,7 +531,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    if (g_strv_contains (text_mimetypes, mimetype))
      {
        task = g_task_new (adapter, cancellable, callback, user_data);
-@@ -194,33 +594,22 @@
+@@ -194,33 +622,22 @@
        return;
      }
  
@@ -541,7 +569,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
                              G_PRIORITY_DEFAULT,
                              cancellable,
                              (GAsyncReadyCallback)gdk_clipboard_read_cb,
-@@ -236,24 +625,44 @@
+@@ -236,24 +653,44 @@
                                    gpointer                user_data)
  {
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (adapter);
@@ -599,7 +627,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
      }
  
    task = g_task_new (adapter, cancellable, callback, user_data);
-@@ -269,12 +678,54 @@
+@@ -269,12 +706,54 @@
  {
    ValentGdkClipboard *self = VALENT_GDK_CLIPBOARD (object);
  
@@ -614,13 +642,11 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +    }
 +
 +  if (self->wlr_source != NULL)
-     {
--      g_signal_handlers_disconnect_by_data (self->clipboard, self);
--      self->clipboard = NULL;
++    {
 +      zwlr_data_control_source_v1_destroy (self->wlr_source);
 +      self->wlr_source = NULL;
-     }
- 
++    }
++
 +  if (self->wlr_device != NULL)
 +    {
 +      zwlr_data_control_device_v1_destroy (self->wlr_device);
@@ -640,11 +666,13 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +    }
 +
 +  if (self->wl_registry != NULL)
-+    {
+     {
+-      g_signal_handlers_disconnect_by_data (self->clipboard, self);
+-      self->clipboard = NULL;
 +      wl_registry_destroy (self->wl_registry);
 +      self->wl_registry = NULL;
-+    }
-+
+     }
+ 
 +  if (self->wl_display != NULL)
 +    {
 +      wl_display_disconnect (self->wl_display);
@@ -657,7 +685,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
    VALENT_OBJECT_CLASS (valent_gdk_clipboard_parent_class)->destroy (object);
  }
  
-@@ -297,6 +748,33 @@
+@@ -297,6 +776,33 @@
                                 G_CALLBACK (on_changed),
                                 self,
                                 G_CONNECT_DEFAULT);
@@ -691,14 +719,14 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
      }
    else
      {
-@@ -327,4 +805,3 @@
+@@ -327,4 +833,3 @@
  valent_gdk_clipboard_init (ValentGdkClipboard *self)
  {
  }
 -
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-protocol.c /tmp/valent-test/src/plugins/gtk/wlr-data-control-protocol.c
 --- a/src/plugins/gtk/wlr-data-control-protocol.c	1970-01-01 03:00:00.000000000 +0300
-+++ b/src/plugins/gtk/wlr-data-control-protocol.c	2026-11-01 15:23:00.914434737 +0300
++++ b/src/plugins/gtk/wlr-data-control-protocol.c	2026-11-04 21:12:42.909508010 +0300
 @@ -0,0 +1,123 @@
 +/* Generated by wayland-scanner 1.26.0 */
 +
@@ -825,7 +853,7 @@ diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/sr
 +
 diff -ruN -a -x .gitlab-ci /nix/store/zish83j079rac3bfb8fjhw83gvnc1ppr-source/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h /tmp/valent-test/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h
 --- a/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	1970-01-01 03:00:00.000000000 +0300
-+++ b/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	2026-11-01 15:23:00.911699612 +0300
++++ b/src/plugins/gtk/wlr-data-control-unstable-v1-client-protocol.h	2026-11-04 21:12:42.907221644 +0300
 @@ -0,0 +1,665 @@
 +/* Generated by wayland-scanner 1.26.0 */
 +
