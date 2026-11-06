@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 # 1. Copy original files to /dev/shm and give ownership to your user (1 single run0 call)
-run0 --background= bash -c '
+run0 --setenv=PATH --background= bash -c '
   set -euo pipefail
   uid="$1"; gid="$2"; shift 2
   n=$(( $# / 2 ))
@@ -69,7 +69,7 @@ done
 
 # 5. Copy modified files back (uses cached Polkit token if <5 min)
 if [ ${#CHANGED_REAL[@]} -gt 0 ]; then
-  run0 --background= bash -c '
+  run0 --setenv=PATH --background= bash -c '
     set -euo pipefail
     n=$(( $# / 2 ))
     for (( i=1; i<=n; i++ )); do

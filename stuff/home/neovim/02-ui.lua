@@ -266,6 +266,15 @@ _G.InstantTabSwitch = function(cmd)
 	vim.g.neovide_position_animation_length = 0
 
 	if cmd == "tabclose" then
+		local total_tabs = vim.fn.tabpagenr("$")
+		if total_tabs <= 1 then
+			return
+		end
+
+		local cur_idx = vim.fn.tabpagenr()
+		local target_idx = (cur_idx < total_tabs) and (cur_idx + 1) or (cur_idx - 1)
+		local target_tab = vim.api.nvim_list_tabpages()[target_idx]
+
 		local current_tab = vim.api.nvim_get_current_tabpage()
 		local wins = vim.api.nvim_tabpage_list_wins(current_tab)
 		local bufs_to_kill = {}
@@ -298,7 +307,13 @@ _G.InstantTabSwitch = function(cmd)
 			end
 		end
 
-		pcall(vim.cmd, "tabclose")
+		-- Explicitly navigate to the destination tab first (Kitty behavior: right, or left if closing rightmost)
+		if target_tab and vim.api.nvim_tabpage_is_valid(target_tab) then
+			vim.api.nvim_set_current_tabpage(target_tab)
+		end
+
+		-- Close the old tab by its index
+		pcall(vim.cmd, "tabclose " .. cur_idx)
 
 		for _, buf in ipairs(bufs_to_kill) do
 			if vim.api.nvim_buf_is_valid(buf) then

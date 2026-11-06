@@ -559,7 +559,7 @@ let
     '';
   };
 
-  valent = pkgs.valent.overrideAttrs (oldAttrs: {
+  valentPkg = pkgs.valent.overrideAttrs (oldAttrs: {
     buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ pkgs.wayland ];
     patches = (oldAttrs.patches or [ ]) ++ [
       ../../../stuff/patches/valent-wayland-clipboard.patch
@@ -576,7 +576,18 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
-      valent
+      pkgs.dnsutils
+      pkgs.nmap
+      pkgs.podman-compose
+      pkgs.cmatrix
+      pkgs.dpkg
+      pkgs.libinput
+      pkgs.nftables
+      pkgs.wev
+      pkgs.binwalk
+      pkgs.iperf3
+      pkgs.wireshark
+      pkgs.gh
       pkgs.git-repo
       pkgs.gpu-screen-recorder-gtk
       pkgs.qdiskinfo
@@ -772,6 +783,7 @@ in
       pkgs.shellcheck.doc
       pkgs.python3Packages.xmltodict
 
+      valentPkg
       aero-control-center
       rustHelpersPkg
       json2xPkg
@@ -817,7 +829,7 @@ in
     Service = {
       Type = "dbus";
       BusName = "ca.andyholmes.Valent";
-      ExecStart = "${valent}/bin/valent --gapplication-service";
+      ExecStart = "${valentPkg}/bin/valent --gapplication-service";
       Environment = "SSH_AUTH_SOCK=%t/ssh-agent";
       Restart = "on-failure";
       RestartSec = 3;
