@@ -371,11 +371,17 @@ in
 
   };
 
-  environment.etc = {
-    texinfo.source = pkgs.texinfo;
-    stdenvNoCC.source = pkgs.stdenvNoCC;
-    bashInteractive.source = pkgs.bashInteractive;
-    "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+  environment = {
+    variables = {
+      __GL_SHADER_DISK_CACHE_SIZE = 107374182400;
+      __GL_SHADER_DISK_CACHE_SKIP_CLEANUP = 1;
+    };
+    etc = {
+      texinfo.source = pkgs.texinfo;
+      stdenvNoCC.source = pkgs.stdenvNoCC;
+      bashInteractive.source = pkgs.bashInteractive;
+      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
+    };
   };
 
   virtualisation = {

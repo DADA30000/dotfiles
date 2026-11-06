@@ -722,7 +722,7 @@ in
       };
       server = mkOption {
         type = types.str;
-        default = "Germany-Premium";
+        default = "auto";
         description = "Preferred FPTN server name";
       };
       sni = mkOption {

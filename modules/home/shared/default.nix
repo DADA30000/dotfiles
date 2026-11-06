@@ -22,6 +22,8 @@
   };
 
   home.sessionVariables = {
+    __GL_SHADER_DISK_CACHE_SIZE = 107374182400;
+    __GL_SHADER_DISK_CACHE_SKIP_CLEANUP = 1;
     NIXOS_OZONE_WL = "1";
     ELECTRON_OZONE_PLATFORM_HINT = "auto";
     CUDA_CACHE_PATH = "${config.xdg.dataHome}/nv";
