@@ -339,6 +339,9 @@ _G.OvertakeTerminal = function(term_buf, action_json, fifo_path)
 				local file_win = vim.api.nvim_get_current_win()
 				vim.cmd("1split")
 				local guard_win = vim.api.nvim_get_current_win()
+				if vim.api.nvim_buf_is_valid(term_buf) then
+					vim.api.nvim_win_set_buf(guard_win, term_buf)
+				end
 				vim.api.nvim_set_current_win(file_win)
 
 				vim.schedule(function()
