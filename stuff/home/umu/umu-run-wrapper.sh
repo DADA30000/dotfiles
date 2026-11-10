@@ -116,11 +116,11 @@ if command -v manage-running-prefix >/dev/null 2>&1; then
   fi
 fi
 
-# 3. Guard against legacy / polluted prefix folders (only upper and .work allowed)
+# 3. Guard against legacy / polluted prefix folders (only upper, .work and sandbox allowed)
 if [[ -d "$PREFIX_DIR" ]]; then
-  unexpected_items=$(find "$PREFIX_DIR" -mindepth 1 -maxdepth 1 ! -name "upper" ! -name ".work" ! -name ".*" 2>/dev/null)
+  unexpected_items=$(find "$PREFIX_DIR" -mindepth 1 -maxdepth 1 ! -name "upper" ! -name ".work" ! -name "sandbox" ! -name ".*" 2>/dev/null)
   if [[ -n "$unexpected_items" ]]; then
-    %{{{pkgs.libnotify}}}/bin/notify-send -u critical "UMU Prefix Error" "Directory '$PREFIX_DIR' contains non-overlay files! Overlay prefix must only contain 'upper' and '.work'."
+    %{{{pkgs.libnotify}}}/bin/notify-send -u critical "UMU Prefix Error" "Directory '$PREFIX_DIR' contains non-overlay files! Overlay prefix must only contain 'upper', '.work' and 'sandbox'."
     echo "ERROR: Prefix '$PREFIX_DIR' is not a valid overlay prefix directory!" >&2
     echo "Found non-overlay files:" >&2
     echo "$unexpected_items" >&2
@@ -128,7 +128,7 @@ if [[ -d "$PREFIX_DIR" ]]; then
     exit 1
   fi
 else
-  mkdir -p "$PREFIX_DIR/upper" "$PREFIX_DIR/.work"
+  mkdir -p "$PREFIX_DIR/upper" "$PREFIX_DIR/.work" "$PREFIX_DIR/sandbox"
 fi
 
 %{{{pkgs.libnotify}}}/bin/notify-send "Starting UMU" "Launching $prefix_name"
@@ -378,13 +378,14 @@ fi
 
 # 12. Execution configuration
 if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
+  mkdir -p "$PREFIX_DIR/sandbox"
   OVERLAY_EXEC_CMD=(
     sb-run
     --no-landlock
     --uid "$ORIG_UID"
     --gid "$ORIG_GID"
     --id "umu-$prefix_name"
-    --tmpfs
+    --dir "$PREFIX_DIR/sandbox"
     --rw "$MERGED_PFX"
     --rw "$SECURE_MOUNT"
     --rw "$SECURE_MOUNT:$MOUNT_DIR"

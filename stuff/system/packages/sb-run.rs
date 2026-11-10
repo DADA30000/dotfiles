@@ -70,6 +70,7 @@ const RO_SYSTEM_PATHS: &[&str] = &[
     "/etc/xdg",
     "/etc/fonts",
     "/etc/localtime",
+    "/etc/zoneinfo",
     "/etc/profiles",
     "/etc/static",
     "/nix/profile",
@@ -1422,27 +1423,31 @@ fn add_gpu_binds(cmd: &mut Command) {
             cmd.arg("--dev-bind").arg(node).arg(node);
         }
     }
-    cmd.arg("--ro-bind")
+    cmd.arg("--ro-bind-try")
         .arg("/run/opengl-driver")
         .arg("/run/opengl-driver");
     if Path::new("/run/opengl-driver-32").exists() {
-        cmd.arg("--ro-bind")
+        cmd.arg("--ro-bind-try")
             .arg("/run/opengl-driver-32")
             .arg("/run/opengl-driver-32");
     }
-    cmd.arg("--ro-bind")
+    cmd.arg("--ro-bind-try")
         .arg("/sys/dev/char")
         .arg("/sys/dev/char");
     if Path::new("/sys/devices/pci0000:00").exists() {
-        cmd.arg("--ro-bind")
+        cmd.arg("--ro-bind-try")
             .arg("/sys/devices/pci0000:00")
             .arg("/sys/devices/pci0000:00");
     }
-    cmd.arg("--ro-bind")
+    cmd.arg("--ro-bind-try")
         .arg("/sys/class/drm")
         .arg("/sys/class/drm");
-    cmd.arg("--ro-bind").arg("/sys/devices").arg("/sys/devices");
-    cmd.arg("--ro-bind").arg("/sys/bus/pci").arg("/sys/bus/pci");
+    cmd.arg("--ro-bind-try")
+        .arg("/sys/devices")
+        .arg("/sys/devices");
+    cmd.arg("--ro-bind-try")
+        .arg("/sys/bus/pci")
+        .arg("/sys/bus/pci");
 }
 
 fn add_audio_binds(cmd: &mut Command, cfg: &SandboxConfig, runtime_dir: &str) {
@@ -1933,23 +1938,23 @@ fn build_bwrap_command(
 
     add_network_bwrap_args(&mut cmd, cfg, sandbox_runtime);
 
-    cmd.arg("--bind").arg(sandbox_home).arg(&home);
-    cmd.arg("--bind").arg(sandbox_runtime).arg(&runtime);
+    cmd.arg("--bind-try").arg(sandbox_home).arg(&home);
+    cmd.arg("--bind-try").arg(sandbox_runtime).arg(&runtime);
 
     if cfg.shm_mode == "passthrough" {
-        cmd.arg("--bind").arg("/dev/shm").arg("/dev/shm");
+        cmd.arg("--bind-try").arg("/dev/shm").arg("/dev/shm");
     } else {
         let shm_dir = sandbox_runtime.join("shm");
         let _ = fs::create_dir_all(&shm_dir);
-        cmd.arg("--bind").arg(&shm_dir).arg("/dev/shm");
+        cmd.arg("--bind-try").arg(&shm_dir).arg("/dev/shm");
     }
 
     if cfg.tmp_mode == "passthrough" {
-        cmd.arg("--bind").arg("/tmp").arg("/tmp");
+        cmd.arg("--bind-try").arg("/tmp").arg("/tmp");
     } else {
         let tmp_dir = sandbox_runtime.join("tmp");
         let _ = fs::create_dir_all(&tmp_dir);
-        cmd.arg("--bind").arg(&tmp_dir).arg("/tmp");
+        cmd.arg("--bind-try").arg(&tmp_dir).arg("/tmp");
     }
 
     let bin_dir = sandbox_runtime.join("bin");
@@ -2564,19 +2569,25 @@ fn start_pasta(cfg: &SandboxConfig, child_pid: u32) -> Option<Child> {
 }
 
 fn resolve_sandbox_home(cfg: &SandboxConfig, runtime_base: &str) -> PathBuf {
-    if (cfg.flags & CFG_TMPFS) != 0 {
-        let tmpfs_path = PathBuf::from(format!("{runtime_base}/sb-run/{}/home", cfg.app_id));
-        let _ = fs::create_dir_all(&tmpfs_path);
-        tmpfs_path
-    } else if let Some(ref dir) = cfg.custom_dir {
-        let _ = fs::create_dir_all(dir);
-        dir.clone()
-    } else {
-        let home = env::var("HOME").unwrap_or_else(|_| "/home/user".into());
-        let default_home = PathBuf::from(format!("{home}/.nixpak/{}/home", cfg.app_id));
-        let _ = fs::create_dir_all(&default_home);
-        default_home
-    }
+    cfg.custom_dir.as_ref().map_or_else(
+        || {
+            if (cfg.flags & CFG_TMPFS) != 0 {
+                let tmpfs_path =
+                    PathBuf::from(format!("{runtime_base}/sb-run/{}/home", cfg.app_id));
+                let _ = fs::create_dir_all(&tmpfs_path);
+                tmpfs_path
+            } else {
+                let home = env::var("HOME").unwrap_or_else(|_| "/home/user".into());
+                let default_home = PathBuf::from(format!("{home}/.nixpak/{}/home", cfg.app_id));
+                let _ = fs::create_dir_all(&default_home);
+                default_home
+            }
+        },
+        |dir| {
+            let _ = fs::create_dir_all(dir);
+            dir.clone()
+        },
+    )
 }
 
 fn cleanup_session(
