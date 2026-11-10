@@ -1,6 +1,6 @@
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/_colors.scss clean-patched/src/_sass/_colors.scss
---- a/src/_sass/_colors.scss	2026-10-18 14:56:14.455794780 +0300
-+++ b/src/_sass/_colors.scss	2026-10-18 14:56:31.299386424 +0300
+--- a/src/_sass/_colors.scss	2026-11-10 18:32:04.039713068 +0300
++++ b/src/_sass/_colors.scss	2026-11-10 18:32:04.553405748 +0300
 @@ -182,4 +182,18 @@
  $titlebar-fill:                         on($titlebar, fill);
  
@@ -22,8 +22,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/_colors.scss clean-patch
 +  $tooltip:                             rgba(#333333, 0.01);
 +}
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_gnome-3.22.scss clean-patched/src/_sass/gtk/apps/_gnome-3.22.scss
---- a/src/_sass/gtk/apps/_gnome-3.22.scss	2026-10-18 14:56:14.456073955 +0300
-+++ b/src/_sass/gtk/apps/_gnome-3.22.scss	2026-10-18 14:56:31.299501931 +0300
+--- a/src/_sass/gtk/apps/_gnome-3.22.scss	2026-11-10 18:32:04.041284059 +0300
++++ b/src/_sass/gtk/apps/_gnome-3.22.scss	2026-11-10 18:32:04.553508903 +0300
 @@ -256,6 +256,19 @@
    .icon-item-background {
      padding: $space-size;
@@ -45,8 +45,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_gnome-3.22.scs
  
    &:selected {
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_gnome-40.0.scss clean-patched/src/_sass/gtk/apps/_gnome-40.0.scss
---- a/src/_sass/gtk/apps/_gnome-40.0.scss	2026-10-18 14:56:14.456092189 +0300
-+++ b/src/_sass/gtk/apps/_gnome-40.0.scss	2026-10-18 14:56:31.299561403 +0300
+--- a/src/_sass/gtk/apps/_gnome-40.0.scss	2026-11-10 18:32:04.041363089 +0300
++++ b/src/_sass/gtk/apps/_gnome-40.0.scss	2026-11-10 18:32:04.553606018 +0300
 @@ -11,9 +11,18 @@
    child.activatable {
      padding: 0;
@@ -77,8 +77,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_gnome-40.0.scs
      }
    }
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_libadwaita.scss clean-patched/src/_sass/gtk/apps/_libadwaita.scss
---- a/src/_sass/gtk/apps/_libadwaita.scss	2026-10-18 14:56:14.456110414 +0300
-+++ b/src/_sass/gtk/apps/_libadwaita.scss	2026-10-18 14:56:49.555151777 +0300
+--- a/src/_sass/gtk/apps/_libadwaita.scss	2026-11-10 18:32:04.041448731 +0300
++++ b/src/_sass/gtk/apps/_libadwaita.scss	2026-11-10 18:32:04.564028753 +0300
 @@ -574,7 +574,7 @@
          font-size: 0.75rem;
          padding-top: $space-size + 1px;
@@ -155,7 +155,7 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_libadwaita.scs
 +      background-color: $dialog-bg;
 +      color: $text;
 +      border: 1px solid $border;
-+    }
++      }
 +  }
 +}
 +
@@ -170,8 +170,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/apps/_libadwaita.scs
  // AdwGizmo
  //
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_common-3.20.scss clean-patched/src/_sass/gtk/_common-3.20.scss
---- a/src/_sass/gtk/_common-3.20.scss	2026-10-18 14:56:14.455946054 +0300
-+++ b/src/_sass/gtk/_common-3.20.scss	2026-10-18 15:00:16.133476534 +0300
+--- a/src/_sass/gtk/_common-3.20.scss	2026-11-10 18:32:04.040616191 +0300
++++ b/src/_sass/gtk/_common-3.20.scss	2026-11-10 18:32:04.553831626 +0300
 @@ -3012,35 +3012,37 @@
   **********/
  switch {
@@ -265,8 +265,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_common-3.20.scss cl
  
    // padding: 4px; /* not working */
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_common-4.0.scss clean-patched/src/_sass/gtk/_common-4.0.scss
---- a/src/_sass/gtk/_common-4.0.scss	2026-10-18 14:56:14.455985539 +0300
-+++ b/src/_sass/gtk/_common-4.0.scss	2026-10-18 15:01:50.823776303 +0300
+--- a/src/_sass/gtk/_common-4.0.scss	2026-11-10 18:32:04.040837010 +0300
++++ b/src/_sass/gtk/_common-4.0.scss	2026-11-10 18:32:04.563948921 +0300
 @@ -16,6 +16,11 @@
    }
  }
@@ -279,233 +279,9 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_common-4.0.scss cle
  #desktopwindow.background {
    background-color: transparent;
  }
-@@ -410,6 +415,11 @@
-     @extend %selected_items_primary;
-   }
- 
-+  > text > placeholder,
-+  placeholder {
-+    color: $placeholder_text_color;
-+  }
-+
-   // entry error and warning style
-   @each $e_type, $e_color in (error, $error),
-   (warning, $warning),
-@@ -519,12 +529,18 @@
-   background-clip: padding-box;
-   @include button(normal);
- 
--  &:focus, &:checked:focus {
-+  &:focus {
-+    @include button(focus);
-+    background-color: rgba(white, 0.15);
-+  }
-+
-+  &:checked:focus {
-     @include button(focus);
-   }
- 
-   &:hover {
-     @include button(hover);
-+    background-color: rgba(white, 0.08);
-   }
- 
-   &:active {
-@@ -678,6 +694,10 @@
-   padding: ($medium-size - 24px) / 2 ($medium-size - 16px) / 2;
-   @extend %button-basic;
- 
-+  > box {
-+    border-spacing: 8px;
-+  }
-+
-   &.flat {
-     @extend %button-flat;
-   }
-@@ -729,7 +749,7 @@
-     }
- 
-     image:not(:only-child) {
--      margin: 0 (24px - 16px) / 2;
-+      margin: 0 8px;
-     }
-   }
- 
-@@ -1985,18 +2005,38 @@
-   switch {
-     margin-top: ($large-size - 24px) / 2;
-     margin-bottom: ($large-size - 24px) / 2;
--    box-shadow: inset 0 0 0 1px $titlebar-text-secondary-disabled;
-+    min-width: 40px;
-+    min-height: 20px;
-+    padding: 0;
-+    border: none;
-+    box-shadow: none;
-+    outline: none;
-+    border-radius: $circular-radius;
-+    background-color: rgba(white, 0.08);
- 
-     &:hover {
--      box-shadow: inset 0 0 0 1px $titlebar-text-disabled;
-+      background-color: rgba(white, 0.14);
-+      box-shadow: none;
-     }
- 
--    checked {
-+    &:checked {
-+      background-color: $primary;
-       box-shadow: none;
-     }
- 
-     slider {
--      background-color: $titlebar-text-secondary-disabled;
-+      min-width: 12px;
-+      min-height: 12px;
-+      margin: 4px;
-+      border-radius: $circular-radius;
-+      outline: none;
-+      border: none;
-+      box-shadow: none;
-+      background-color: $text-secondary;
-+    }
-+
-+    &:checked slider {
-+      background-color: on($primary);
-     }
-   }
- 
-@@ -2874,6 +2914,15 @@
-     border-radius: $corner-radius;
-     @extend %button-flat-simple;
- 
-+    > box {
-+      border-spacing: 8px;
-+    }
-+
-+    image:not(:only-child) {
-+      &:dir(ltr) { margin-right: 8px; }
-+      &:dir(rtl) { margin-left: 8px; }
-+    }
-+
-     &:hover {
-       transition: none;
-     }
-@@ -3360,7 +3409,7 @@
- 
-     &.dragging,
-     &.hovering {
--      background-color: rgba($surface, 0.9);
-+      background-color: transparent;
-     }
-   }
- 
-@@ -3414,47 +3463,50 @@
-  **********/
- switch {
-   transition: all $duration $ease-out;
--  min-width: $small-size;
-+  min-width: 40px;
-+  min-height: 20px;
-   margin: $space-size 0;
-   padding: 0;
--  border: 0 solid transparent;
-+  border: none;
-+  box-shadow: none;
-+  outline: none;
-   border-radius: $circular-radius;
--  background-color: transparent;
--  background-clip: padding-box;
--  box-shadow: inset 0 0 0 1px $text-disabled;
-+  background-color: rgba(white, 0.08);
-   font-size: 0;
-   color: transparent;
- 
-   &:hover {
--    box-shadow: inset 0 0 0 1px $text-secondary;
-+    background-color: rgba(white, 0.14);
-+    box-shadow: none;
-   }
- 
-   &:checked {
--    box-shadow: none;
-     background-color: $primary;
-+    box-shadow: none;
- 
-     &:hover {
--      box-shadow: none;
-       background-color: lighten($primary, 5%);
-+      box-shadow: none;
-     }
-   }
- 
-   &:disabled {
--    opacity: 0.5;
-+    opacity: 0.4;
-   }
- 
--  // hide on/off icons for >=3.24.5
-   image {
-     margin: -8px;
-+    -gtk-icon-transform: scale(0);
-   }
- 
-   > slider {
-     transition: all $duration $ease-out;
--    min-width: $space-size + 6px;
--    min-height: $space-size + 6px;
--    margin: 5px;
-+    min-width: 12px;
-+    min-height: 12px;
-+    margin: 4px;
-     border-radius: $circular-radius;
-     outline: none;
-+    border: none;
-     box-shadow: none;
-     background-color: $text-secondary;
-   }
-@@ -4498,11 +4550,19 @@
-  * Dialogs *
-  ***********/
- 
-+window.dialog,
-+window.preferences,
-+window.messagedialog,
-+window.aboutdialog {
-+  background-color: $dialog-bg;
-+  color: $text;
-+}
-+
- window.dialog.message {
- 
-   // Message Dialog styling
-   &.background {
--    background-color: $surface;
-+    background-color: $dialog-bg;
-   }
- 
-   box.dialog-vbox.vertical {
-@@ -4558,7 +4618,7 @@
- 
- window.messagedialog {
-   &.background {
--    background-color: $surface;
-+    background-color: $dialog-bg;
-   }
- 
-   .response-area {
-@@ -5032,7 +5092,8 @@
-     background-color: $tooltip;
-     color: on($tooltip);
-     box-shadow: $shadow-z4;
--    border-radius: $window-radius;
-+    border-radius: $corner-radius;
-+    border: 1px solid $border;
-     margin: 2px 6px 8px 6px;
-   }
- 
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_drawing-3.20.scss clean-patched/src/_sass/gtk/_drawing-3.20.scss
---- a/src/_sass/gtk/_drawing-3.20.scss	2026-10-18 14:56:14.456010055 +0300
-+++ b/src/_sass/gtk/_drawing-3.20.scss	2026-10-18 14:56:31.299465813 +0300
+--- a/src/_sass/gtk/_drawing-3.20.scss	2026-11-10 18:32:04.040924887 +0300
++++ b/src/_sass/gtk/_drawing-3.20.scss	2026-11-10 18:32:04.554253035 +0300
 @@ -48,13 +48,13 @@
    }
  
@@ -532,8 +308,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_drawing-3.20.scss c
    }
  
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_drawing-4.0.scss clean-patched/src/_sass/gtk/_drawing-4.0.scss
---- a/src/_sass/gtk/_drawing-4.0.scss	2026-10-18 14:56:14.456022939 +0300
-+++ b/src/_sass/gtk/_drawing-4.0.scss	2026-10-18 14:56:31.299450905 +0300
+--- a/src/_sass/gtk/_drawing-4.0.scss	2026-11-10 18:32:04.040968510 +0300
++++ b/src/_sass/gtk/_drawing-4.0.scss	2026-11-10 18:32:04.554291468 +0300
 @@ -26,13 +26,13 @@
    }
  
@@ -551,8 +327,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_drawing-4.0.scss cl
      border-color: if($fc == $primary, $text-disabled, $fc);
      outline: none;
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_libadwaita-colors-public.scss clean-patched/src/_sass/gtk/_libadwaita-colors-public.scss
---- a/src/_sass/gtk/_libadwaita-colors-public.scss	2026-10-18 14:56:14.456032477 +0300
-+++ b/src/_sass/gtk/_libadwaita-colors-public.scss	2026-10-18 15:01:50.823628324 +0300
+--- a/src/_sass/gtk/_libadwaita-colors-public.scss	2026-11-10 18:32:04.040991233 +0300
++++ b/src/_sass/gtk/_libadwaita-colors-public.scss	2026-11-10 18:32:04.554325262 +0300
 @@ -83,7 +83,7 @@
  
  /*
@@ -563,8 +339,8 @@ diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/gtk/_libadwaita-colors-p
  
  /*
 diff -ruN -x _tweaks-temp.scss clean-upstream/src/_sass/_variables.scss clean-patched/src/_sass/_variables.scss
---- a/src/_sass/_variables.scss	2026-10-18 14:56:14.455813235 +0300
-+++ b/src/_sass/_variables.scss	2026-10-18 14:56:31.299411761 +0300
+--- a/src/_sass/_variables.scss	2026-11-10 18:32:04.039853604 +0300
++++ b/src/_sass/_variables.scss	2026-11-10 18:32:04.554358215 +0300
 @@ -21,7 +21,7 @@
  //
  

@@ -1,14 +1,15 @@
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/Renderer.hpp>
+#include <hyprland/src/render/Context.hpp>
 #include <hyprland/src/protocols/SessionLock.hpp>
 #include <hyprland/src/render/pass/SurfacePassElement.hpp>
 #include <hyprland/src/Compositor.hpp>
 
 inline HANDLE PHANDLE = nullptr;
-typedef void (*origRenderSessionLockSurface)(void*, WP<SSessionLockSurface>, PHLMONITOR, const Time::steady_tp&);
+typedef void (*origRenderSessionLockSurface)(void*, Render::CRenderContext&, WP<SSessionLockSurface>, PHLMONITOR, const Time::steady_tp&);
 inline CFunctionHook* g_pRenderSessionLockHook = nullptr;
 
-void hkRenderSessionLockSurface(void* thisptr, WP<SSessionLockSurface> pSurface, PHLMONITOR pMonitor, const Time::steady_tp& time) {
+void hkRenderSessionLockSurface(void* thisptr, Render::CRenderContext& ctx, WP<SSessionLockSurface> pSurface, PHLMONITOR pMonitor, const Time::steady_tp& time) {
     static auto PSESSIONLOCKXRAY = CConfigValue<Config::BOOL>("misc:session_lock_xray");
     static auto PSESSIONLOCKBLUR = CConfigValue<Config::BOOL>("misc:session_lock_blur");
 
@@ -25,7 +26,7 @@ void hkRenderSessionLockSurface(void* thisptr, WP<SSessionLockSurface> pSurface,
     renderdata.h        = pMonitor->m_size.y;
 
     renderdata.surface->breadthfirst(
-        [&renderdata, &pSurface](SP<CWLSurfaceResource> s, const Vector2D& offset, void* data) {
+        [&renderdata, &pSurface, &ctx](SP<CWLSurfaceResource> s, const Vector2D& offset, void* data) {
             if (!s->m_current.texture)
                 return;
 
@@ -36,7 +37,8 @@ void hkRenderSessionLockSurface(void* thisptr, WP<SSessionLockSurface> pSurface,
             renderdata.texture     = s->m_current.texture;
             renderdata.surface     = s;
             renderdata.mainSurface = s == pSurface->surface->surface();
-            g_pHyprRenderer->m_renderPass.add(makeUnique<CSurfacePassElement>(renderdata));
+            auto* pass = ctx.m_currentPass ? ctx.m_currentPass : &ctx.m_pass;
+            pass->add(makeUnique<CSurfacePassElement>(renderdata));
             renderdata.surfaceCounter++;
         },
         &renderdata);

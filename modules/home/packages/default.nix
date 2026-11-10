@@ -35,19 +35,6 @@ let
   # ---------------------------------------------------------------------------
   # Sandboxed Applications
   # ---------------------------------------------------------------------------
-  rustdeskSandbox = mkSandbox rec {
-    appId = "com.rustdesk.RustDesk";
-    network = "sandboxed";
-    audio_pulse = "sandboxed";
-    wayland = "sandboxed";
-    gpu = true;
-    additional_args.dbus.enable = true;
-    package = pkgs.rustdesk-flutter;
-    additional_outside_commands = ''
-      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/rustdesk" "$XDG_CONFIG_HOME/rustdesk"
-    '';
-  };
-
   prismLauncherSandbox = mkSandbox rec {
     appId = "org.prismlauncher.PrismLauncher";
     network = "singbox";
@@ -652,7 +639,6 @@ in
       pkgs.yaml-language-server
       pkgs.shellcheck
       pkgs.shfmt
-      pkgs.asm-lsp
       pkgs.tmux
       pkgs.tree-sitter
       pkgs.ripgrep
@@ -802,7 +788,6 @@ in
 
       nixOutputMonitorSandbox
       sounduxSandbox
-      rustdeskSandbox
       prismLauncherSandbox
       discordCanarySandbox
       vesktopSandbox

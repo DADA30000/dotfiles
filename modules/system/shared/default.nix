@@ -305,30 +305,27 @@ in
 
     initrd = {
       supportedFilesystems.zfs = true;
-      systemd = {
-        enable = true;
-        services.ttm-dynamic-limit = {
-          description = "Dynamically configure 75% TTM limit in modprobe.d";
-          wantedBy = [ "systemd-modules-load.service" ];
-          before = [
-            "systemd-modules-load.service"
-            "systemd-udevd.service"
-            "systemd-udev-trigger.service"
-          ];
-          unitConfig.DefaultDependencies = false;
-          serviceConfig.Type = "oneshot";
+      systemd.services.ttm-dynamic-limit = {
+        description = "Dynamically configure 75% TTM limit in modprobe.d";
+        wantedBy = [ "systemd-modules-load.service" ];
+        before = [
+          "systemd-modules-load.service"
+          "systemd-udevd.service"
+          "systemd-udev-trigger.service"
+        ];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig.Type = "oneshot";
 
-          path = with pkgs; [
-            gawk
-            coreutils
-          ];
+        path = with pkgs; [
+          gawk
+          coreutils
+        ];
 
-          script = ''
-            LIMIT=$(awk '/MemTotal/ {printf "%d\n", ($2 / 4) * 0.75}' /proc/meminfo)
-            mkdir -p /run/modprobe.d
-            echo "options ttm pages_limit=$LIMIT" > /run/modprobe.d/ttm.conf
-          '';
-        };
+        script = ''
+          LIMIT=$(awk '/MemTotal/ {printf "%d\n", ($2 / 4) * 0.75}' /proc/meminfo)
+          mkdir -p /run/modprobe.d
+          echo "options ttm pages_limit=$LIMIT" > /run/modprobe.d/ttm.conf
+        '';
       };
     };
 
@@ -573,27 +570,29 @@ in
           };
         };
 
-      "opentabletdriver@" = {
-        description = "OpenTabletDriver Daemon for %i";
-        after = [
-          "graphical.target"
-          "user@%U.service"
-        ];
-        bindsTo = [ "user@%U.service" ];
+      "opentabletdriver@" =
+        let
+          otd-system-runner = pkgs.writeShellScript "otd-system-runner" ''
+            USER_NAME="$1"
+            USER_UID="$(${pkgs.coreutils}/bin/id -u "$USER_NAME")"
+            export XDG_RUNTIME_DIR="/run/user/$USER_UID"
+            exec ${pkgs.opentabletdriver}/bin/otd-daemon
+          '';
+        in
+        {
+          description = "OpenTabletDriver Daemon for %i";
+          after = [ "graphical.target" ];
 
-        serviceConfig = {
-          User = "%i";
-          Group = "users";
-          SupplementaryGroups = [ "uinput" ];
-          DeviceAllow = [ "/dev/uinput rw" ];
-          Environment = [
-            "XDG_RUNTIME_DIR=/run/user/%U"
-          ];
-          ExecStart = "${pkgs.opentabletdriver}/bin/otd-daemon";
-          Restart = "on-failure";
-          RestartSec = "3s";
+          serviceConfig = {
+            User = "%i";
+            Group = "users";
+            SupplementaryGroups = [ "uinput" ];
+            DeviceAllow = [ "/dev/uinput rw" ];
+            ExecStart = "${otd-system-runner} %i";
+            Restart = "on-failure";
+            RestartSec = "3s";
+          };
         };
-      };
 
     };
 

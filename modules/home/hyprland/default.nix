@@ -791,7 +791,8 @@ in
       noctalia = {
         enable = true;
         systemd.enable = true;
-        package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
+        #package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
+        package = pkgs.noctalia.overrideAttrs (prev: {
           patches = (prev.patches or [ ]) ++ [
             ../../../stuff/patches/noctalia.patch
             ../../../stuff/patches/noctalia-cpu-freq.patch
@@ -951,8 +952,8 @@ in
               open_near_click_session = true;
               open_near_click_launcher = true;
               transparency_mode = "glass";
-              background_opacity = 0.18;
-              card_opacity = 0.30;
+              background_opacity = 0.05;
+              card_opacity = 0.15;
               borders = false;
               shadow = false;
             };

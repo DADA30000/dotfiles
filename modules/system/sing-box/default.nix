@@ -249,6 +249,12 @@ let
 
     inbounds = [
       {
+        type = "mixed";
+        tag = "mixed-in";
+        listen = "127.0.0.1";
+        listen_port = 2080;
+      }
+      {
         type = "direct";
         tag = "dns-in";
         listen = "127.0.0.1";
@@ -386,7 +392,6 @@ let
                 "exa.ai"
                 "rutracker.org"
                 "rutracker.cc"
-                "cache.nixos.org"
                 "bitwarden.com"
                 "klipy.com"
               ];
@@ -418,19 +423,28 @@ let
 
         {
           outbound_selected.proxy = "proxy-vless";
-          inbound = [ "vless-in" ];
+          inbound = [
+            "vless-in"
+            "mixed-in"
+          ];
           ip_version = 6;
           action = "reject";
         }
         {
           outbound_selected.proxy = "proxy-vless";
-          inbound = [ "vless-in" ];
+          inbound = [
+            "vless-in"
+            "mixed-in"
+          ];
           port = 443;
           network = "udp";
           action = "reject";
         }
         {
-          inbound = [ "vless-in" ];
+          inbound = [
+            "vless-in"
+            "mixed-in"
+          ];
           outbound = "proxy";
         }
 
@@ -546,7 +560,11 @@ let
 
         {
           outbound_selected.proxy = "proxy-vless";
-          inbound = [ "direct-in" ];
+          inbound = [
+            "direct-in"
+            "vless-in"
+            "mixed-in"
+          ];
           query_type = [ "AAAA" ];
           action = "reject";
         }

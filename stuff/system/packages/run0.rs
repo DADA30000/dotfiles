@@ -8,6 +8,8 @@ use std::{
 
 const SYSTEMD_PACKAGE: &str = "%{{{config.systemd.package}}}/bin/run0";
 
+const FORWARD_ENVS: &[&str] = &["GDK_WAYLAND_DISABLE"];
+
 fn write_tty(msg: &[u8]) {
     if let Ok(mut tty) = OpenOptions::new().write(true).open("/dev/tty") {
         let _ = tty.write_all(msg);
@@ -41,6 +43,12 @@ fn main() {
         let unit = format!("run0-{pid}.service");
         write_tty(format!("run0: {unit}\n").as_bytes());
         cmd.arg(format!("--unit={unit}"));
+    }
+
+    if !is_info_query {
+        for &var in FORWARD_ENVS {
+            cmd.arg(format!("--setenv={var}"));
+        }
     }
 
     cmd.args(&args);

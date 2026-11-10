@@ -103,6 +103,7 @@ let
 
     nativeBuildInputs = [
       pkgs.pahole
+      pkgs.buildPackages.kmodigest
     ];
 
     makeFlags = [
@@ -113,6 +114,7 @@ let
       dir=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/platform/x86
       mkdir -p $dir
       cp aorus-laptop.ko $dir/
+      kmodigest $dir/aorus-laptop.ko
     '';
   };
 

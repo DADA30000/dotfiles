@@ -153,7 +153,7 @@ diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
 diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
 --- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300
 +++ b/route/rule/rule_item_outbound_selected.go	2026-10-29 22:06:38.504382218 +0300
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,96 @@
 +package rule
 +
 +import (
@@ -210,20 +210,28 @@ diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_ou
 +		if !isGroup {
 +			return false
 +		}
-+		currentTag := group.Now()
++		var network string
++		if metadata != nil {
++			network = metadata.Network
++		}
++		selected := group.Selected(network)
++		if selected == nil {
++			return false
++		}
++		currentTag := selected.Tag()
 +		realTag := currentTag
-+		detour := outbound
++		detour := selected
 +		for {
 +			g, ok := detour.(adapter.OutboundGroup)
 +			if !ok {
 +				break
 +			}
-+			realTag = g.Now()
-+			var ok2 bool
-+			detour, ok2 = r.outboundManager.Outbound(realTag)
-+			if !ok2 {
++			next := g.Selected(network)
++			if next == nil {
 +				break
 +			}
++			realTag = next.Tag()
++			detour = next
 +		}
 +		matched := false
 +		for _, expected := range expectedTags {

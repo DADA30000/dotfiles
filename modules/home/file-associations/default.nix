@@ -538,11 +538,6 @@ in
         "x-scheme-handler/vnc" = "org.remmina.Remmina.desktop";
 
         # -------------------------------------------------------------------
-        # Remote Desktop (RustDesk)
-        # -------------------------------------------------------------------
-        "x-scheme-handler/rustdesk" = "rustdesk-link.desktop";
-
-        # -------------------------------------------------------------------
         # Music (Spotify)
         # -------------------------------------------------------------------
         "x-scheme-handler/spotify" = "com.spotify.Client.desktop";

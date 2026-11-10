@@ -37,6 +37,7 @@
     QT_QPA_PLATFORMTHEME = "qt5ct";
     QT_QPA_TRANSPARENT_BACKGROUND = "1";
     GTK_THEME = "Fluent-Dark";
+    GDK_WAYLAND_DISABLE = "ext_background_effect_manager_v1";
     ENVFS_RESOLVE_ALWAYS = "1";
     MOZ_ENABLE_WAYLAND = "1";
     TERMINAL = "neovide-term";
