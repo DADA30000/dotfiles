@@ -1,12 +1,12 @@
 # vim: set ft=bash ts=2 sw=2 et:
 # shellcheck shell=bash
 
-DEVICE="tokay"
-KERNEL_CODENAME="caimito"
-TAG="2026110700"
-UPDATE_URL="https://update.sanic.space/"
-OS_DIR="$HOME/Documents/grapheneos"
-KERNEL_DIR="$HOME/Downloads/kernel_pixel_6.1"
+DEVICE="${DEVICE:-tokay}"
+KERNEL_CODENAME="${KERNEL_CODENAME:-caimito}"
+TAG="${TAG:-2026110700}"
+UPDATE_URL="${UPDATE_URL:-https://update.sanic.space/}"
+OS_DIR="${OS_DIR:-$HOME/Documents/grapheneos}"
+KERNEL_DIR="${KERNEL_DIR:-$HOME/Downloads/kernel_pixel_6.1}"
 
 # Apply shallow-protection patch directly from embedded diff (prevents auto-unshallow and 110GB bloat)
 patch_repo_tool() {
@@ -106,7 +106,7 @@ tag_update() {
 # Unified smart GC: checks in 2ms and skips clean repos with 0 I/O; prunes dead refs, shallow-truncates, and repacks only dirty repos
 gc() {
   # shellcheck disable=SC2016
-  cd "$OS_DIR" && repo forall -j"$(nproc)" -c 'gd="$(git rev-parse --git-dir)" && head="$(git rev-parse HEAD)" && [ "$head" = "$(cat "$gd/shallow" 2>/dev/null)" ] && [ -z "$(git for-each-ref --format="%(refname)" refs/remotes/aosp/ 2>/dev/null)" ] && [ "$(git count-objects | cut -d" " -f1)" = "0" ] && exit 0; echo "$head" > "$gd/shallow" && git for-each-ref --format="delete %(refname)" refs/remotes/aosp/ 2>/dev/null | git update-ref --stdin && git reflog expire --expire=now --all && git repack -a -d --quiet && git prune --expire=now && git prune-packed'
+  cd "$OS_DIR" && repo forall -j"$(nproc)" -c 'gd="$(git rev-parse --git-dir)" && head="$(git rev-parse HEAD)" && [ "$head" = "$(cat "$gd/shallow" 2>/dev/null)" ] && [ -z "$(git for-each-ref --format="%(refname)" refs/remotes/aosp/ 2>/dev/null)" ] && [ -z "$(git for-each-ref --format="%(refname)" refs/tags/ 2>/dev/null)" ] && [ "$(git count-objects | cut -d" " -f1)" = "0" ] && exit 0; echo "$head" > "$gd/shallow" && git for-each-ref --format="delete %(refname)" refs/remotes/aosp/ 2>/dev/null | git update-ref --stdin && git for-each-ref --format="delete %(refname)" refs/tags/ 2>/dev/null | git update-ref --stdin && { git for-each-ref --format="delete %(refname) %(objectname)" refs/remotes/m/ 2>/dev/null | grep -v " $head$" | cut -d" " -f1,2 || true; } | git update-ref --stdin && git reflog expire --expire=now --all && git repack -a -d --quiet && git prune --expire=now && git prune-packed'
 }
 
 repo_check_clean() {
