@@ -3,7 +3,7 @@
 
 DEVICE="tokay"
 KERNEL_CODENAME="caimito"
-TAG="2026102100"
+TAG="2026110700"
 UPDATE_URL="https://update.sanic.space/"
 OS_DIR="$HOME/Documents/grapheneos"
 KERNEL_DIR="$HOME/Downloads/kernel_pixel_6.1"
@@ -166,7 +166,7 @@ os-init-sync) os_init_sync ;;
 tag-update) tag_update ;;
 gc) gc ;;
 check-clean) repo_check_clean ;;
-repair|repair-offline) repo_repair ;;
+repair | repair-offline) repo_repair ;;
 distrobox-create) distrobox_create ;;
 distrobox-enter) distrobox_enter ;;
 distrobox-provision) distrobox_provision ;;
