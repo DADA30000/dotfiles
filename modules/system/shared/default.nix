@@ -60,7 +60,7 @@ in
 
   zramSwap = {
     enable = true;
-    memoryPercent = 100;
+    memoryPercent = 200;
   };
 
   console = {
