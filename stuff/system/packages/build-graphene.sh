@@ -146,7 +146,14 @@ vendor_blobs() {
 }
 
 kernel_build() {
-  rm -rf "$KERNEL_DIR" && git clone https://gitlab.com/grapheneos/kernel_pixel_6.1.git -b 17 --depth 1 "$KERNEL_DIR" && cd "$KERNEL_DIR" && git submodule update --init --recursive --depth 1 --progress && "prepare_ksu_graphene_${KERNEL_CODENAME}" "$KERNEL_DIR" && KLEAF_REPO_MANIFEST=aosp_manifest.xml "./build_${KERNEL_CODENAME}.sh" --lto=full && cp -a "$KERNEL_DIR/out/${KERNEL_CODENAME}/dist/"* "$OS_DIR/device/google/${KERNEL_CODENAME}-kernels/6.1/grapheneos/"
+  if [ ! -d "$KERNEL_DIR/.git" ]; then
+    rm -rf "$KERNEL_DIR"
+    until git clone https://gitlab.com/grapheneos/kernel_pixel_6.1.git -b 17 --depth 1 "$KERNEL_DIR"; do
+      echo "Kernel clone dropped, retrying in 3s..." && rm -rf "$KERNEL_DIR" && sleep 3
+    done
+  fi && cd "$KERNEL_DIR" && until git submodule update --init --recursive --depth 1 --progress; do
+    echo "Kernel submodule sync dropped, retrying in 3s..." && sleep 3
+  done && "prepare_ksu_graphene_${KERNEL_CODENAME}" "$KERNEL_DIR" && KLEAF_REPO_MANIFEST=aosp_manifest.xml "./build_${KERNEL_CODENAME}.sh" --lto=full && cp -a "$KERNEL_DIR/out/${KERNEL_CODENAME}/dist/"* "$OS_DIR/device/google/${KERNEL_CODENAME}-kernels/6.1/grapheneos/"
 }
 
 keys_generate() {
