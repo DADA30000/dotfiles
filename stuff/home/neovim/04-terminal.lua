@@ -96,10 +96,13 @@ local function term_scroll_down(buf, step_override)
 
 	if can_scroll > 0 then
 		local to_scroll = math.min(step, can_scroll)
-		return to_scroll .. "\x05"
+		if to_scroll == can_scroll then
+			return to_scroll .. "\x05i"
+		else
+			return to_scroll .. "\x05"
+		end
 	else
-		vim.cmd("startinsert")
-		return ""
+		return "i"
 	end
 end
 

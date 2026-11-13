@@ -260,29 +260,101 @@
      'ms-run-button button[type="submit"], '
      # Legacy selectors
 --- a/api_utils/utils_ext/prompts.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/utils_ext/prompts.py	2026-11-13 23:42:28.632302789 +0300
-@@ -106,6 +106,14 @@
++++ b/api_utils/utils_ext/prompts.py	2026-11-14 01:33:37.341363631 +0300
+@@ -106,6 +106,17 @@
                          chosen_name = tool_choice
                      if chosen_name:
                          tool_lines.append(f"Recommended function to use: {chosen_name}")
 +                tool_lines.append(
-+                    "\nTo call any tool, you MUST format your response as:\n"
++                    "\nIMPORTANT TOOL INVOCATION RULES:\n"
++                    "1. When you state that you will check, inspect, run, or search something, do NOT stop. You MUST execute the tool call immediately in the SAME response.\n"
++                    "2. To call a tool, format the call at the end of your message as:\n"
 +                    "Request function call: <function_name>\n"
 +                    "Parameters:\n"
 +                    "{\n"
-+                    '  "argument_name": value\n'
-+                    "}"
++                    '  "argument_name": "value"\n'
++                    "}\n"
++                    "3. Ensure all string parameters in JSON are properly escaped."
 +                )
                  combined_parts.append("\n".join(tool_lines) + "\n---\n")
              except Exception:
                  pass
+@@ -617,7 +628,10 @@
+ 
+     final_prompt = "".join(combined_parts)
+     if final_prompt:
+-        final_prompt += "\n"
++        if messages and messages[-1].role in ("user", "tool"):
++            final_prompt += f"{turn_separator}Assistant:\n"
++        else:
++            final_prompt += "\n"
+ 
+     # Consolidated English summary (replaces verbose Chinese logs)
+     sys_indicator = "Yes" if _has_system_prompt else "No"
 --- a/api_utils/response_generators.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/response_generators.py	2026-11-14 00:26:12.544558816 +0300
-@@ -328,6 +328,15 @@
++++ b/api_utils/response_generators.py	2026-11-14 01:17:48.010015896 +0300
+@@ -32,6 +32,12 @@
+     re.IGNORECASE,
+ )
+ 
++# Pattern to immediately cut off any tool-calling text during streaming
++_FC_PREFIX_PATTERN = re.compile(
++    r"(?:Request\s+function\s+call:|Parameters:\s*\{)",
++    re.IGNORECASE,
++)
++
+ # Pattern to strip control characters like <ctrl46> from body content
+ # These appear in AI Studio's wire format as string delimiters
+ # Also captures trailing } or { that may follow control chars (JSON leak artifacts)
+@@ -277,15 +283,17 @@
+                 last_reason_pos = len(reason)
+ 
+             # The Latch: Body Handling
+-            # ALWAYS strip "Request function call:..." text from body
+-            # This prevents emulated FC text from appearing as content to clients
+-            # even when function call detection fails (race condition protection)
++            # Cut off any tool calling or parameter blocks immediately so they never stream to clients
+             original_body = body
+             if body:
+-                body = _FUNCTION_CALL_TEXT_PATTERN.sub("", body).strip()
++                fc_match = _FC_PREFIX_PATTERN.search(body)
++                if fc_match:
++                    body = body[:fc_match.start()].rstrip()
++                else:
++                    body = _FUNCTION_CALL_TEXT_PATTERN.sub("", body).strip()
++
+                 if body != original_body:
+                     full_body_content = body
+-                    # If we stripped FC text but function is empty, try parsing from the original
+                     if not function:
+                         from api_utils.utils_ext.function_call_response_parser import (
+                             parse_emulated_function_calls_static,
+@@ -294,8 +302,6 @@
+                         parsed_fc = parse_emulated_function_calls_static(original_body)
+                         if parsed_fc:
+                             function = parsed_fc
+-                            # Demoted from INFO to DEBUG - this is normal fallback behavior
+-                            # when model outputs text format instead of native FC
+                             logger.debug(
+                                 f"[{req_id}] Recovered function calls from emulated text"
+                             )
+@@ -328,6 +334,29 @@
                  is_recovering = GlobalState.IS_RECOVERING
                  is_quota_exceeded = GlobalState.IS_QUOTA_EXCEEDED
  
-+                if not function and (full_body_content or original_body or body):
++                has_valid_function = False
++                if function:
++                    for fc in function:
++                        fc_p = (
++                            fc.get("params") or fc.get("arguments")
++                            if isinstance(fc, dict)
++                            else (getattr(fc, "arguments", None) or getattr(fc, "params", None))
++                        )
++                        if fc_p:
++                            has_valid_function = True
++                            break
++
++                if not has_valid_function and (full_body_content or original_body or body):
 +                    from api_utils.utils_ext.function_call_response_parser import (
 +                        parse_emulated_function_calls_static,
 +                    )
@@ -290,11 +362,13 @@
 +                    parsed_fc = parse_emulated_function_calls_static(text_to_check)
 +                    if parsed_fc:
 +                        function = parsed_fc
++                    else:
++                        function = []
 +
                  if (
                      done
                      and not has_started_body
-@@ -384,20 +393,28 @@
+@@ -384,20 +413,28 @@
                      finish_reason = "tool_calls"
                      tool_calls_list = []
                      for func_idx, function_call_data in enumerate(function):
@@ -338,25 +412,43 @@
                          "index": 0,
                          "delta": {
 --- a/api_utils/request_processor.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/request_processor.py	2026-11-14 00:24:29.260156137 +0300
-@@ -361,6 +361,16 @@
++++ b/api_utils/request_processor.py	2026-11-14 01:26:47.198634716 +0300
+@@ -361,6 +361,34 @@
                  content = data.get("body")
                  reasoning_content = data.get("reason")
                  functions = data.get("function")
 +
-+                if not functions and content:
++                has_valid_functions = False
++                if functions:
++                    for fc in functions:
++                        fc_p = (
++                            fc.get("params") or fc.get("arguments")
++                            if isinstance(fc, dict)
++                            else (getattr(fc, "arguments", None) or getattr(fc, "params", None))
++                        )
++                        if fc_p:
++                            has_valid_functions = True
++                            break
++
++                if not has_valid_functions and content:
 +                    from api_utils.utils_ext.function_call_response_parser import (
 +                        parse_emulated_function_calls_static,
 +                    )
 +                    parsed_fc = parse_emulated_function_calls_static(content)
 +                    if parsed_fc:
 +                        functions = parsed_fc
-+                        from api_utils.response_generators import _FUNCTION_CALL_TEXT_PATTERN
++
++                if functions and content:
++                    from api_utils.response_generators import _FC_PREFIX_PATTERN, _FUNCTION_CALL_TEXT_PATTERN
++                    fc_match = _FC_PREFIX_PATTERN.search(content)
++                    if fc_match:
++                        content = content[:fc_match.start()].rstrip()
++                    else:
 +                        content = _FUNCTION_CALL_TEXT_PATTERN.sub("", content).strip()
                  break
  
          if (
-@@ -405,14 +415,25 @@
+@@ -405,14 +433,25 @@
          if functions and len(functions) > 0:
              tool_calls_list: List[Dict[str, Any]] = []
              for func_idx, function_call_data in enumerate(functions):
@@ -384,3 +476,218 @@
                          },
                      }
                  )
+@@ -904,7 +943,7 @@
+         calc_timeout = 5.0 + (len(prepared_prompt) / 1000.0)
+         config_timeout = RESPONSE_COMPLETION_TIMEOUT / 1000.0
+         dynamic_timeout = max(calc_timeout, config_timeout)
+-        dynamic_silence_threshold = max(60.0, dynamic_timeout / 2.0)
++        dynamic_silence_threshold = 15.0
+ 
+         logger.info(
+             f"[{req_id}] Dynamic timeout: {dynamic_timeout:.2f}s, silence threshold: {dynamic_silence_threshold:.2f}s"
+--- a/api_utils/utils_ext/function_call_response_parser.py	1970-01-01 03:00:01.000000000 +0300
++++ b/api_utils/utils_ext/function_call_response_parser.py	2026-11-14 01:17:37.762945866 +0300
+@@ -41,15 +41,72 @@
+     re.IGNORECASE,
+ )
+ _STATIC_EMULATED_PARAMS_PATTERN = re.compile(
+-    r"Parameters:\s*\n?\s*(\{[\s\S]*?\})\s*(?:\n\n|\Z|(?=Request\s+function\s+call:))",
+-    re.IGNORECASE,
+-)
+-_STATIC_EMULATED_PARAMS_PATTERN = re.compile(
+-    r"Parameters:\s*\n?\s*(\{[\s\S]*?\})\s*(?:\n\n|\Z|(?=Request\s+function\s+call:))",
++    r"Parameters:\s*\n?\s*(\{[\s\S]*?\})",
+     re.IGNORECASE,
+ )
+ 
+ 
++def _robust_extract_arguments(json_str: str) -> Dict[str, Any]:
++    """Parse JSON arguments tolerating unescaped quotes and dangling keys."""
++    json_str = re.sub(r"<ctrl\d+>", "", json_str).strip()
++    try:
++        return json.loads(json_str)
++    except Exception:
++        pass
++
++    cleaned = re.sub(r",\s*([}\]])", r"\1", json_str)
++    cleaned = re.sub(r",\s*\"[^\"]*\"\s*:\s*(?:[}\]]|$)", r"}", cleaned)
++    try:
++        return json.loads(cleaned)
++    except Exception:
++        pass
++
++    res: Dict[str, Any] = {}
++    cmd_match = re.search(r"\"command\"\s*:\s*\"(.*)", json_str, re.DOTALL)
++    if cmd_match:
++        cmd_rest = cmd_match.group(1)
++        greedy_match = re.search(
++            r"^([\s\S]*)\"\s*(?:,\s*\"[^\"]+\"\s*:|\}\s*$|$)", cmd_rest
++        )
++        if greedy_match:
++            res["command"] = greedy_match.group(1)
++        else:
++            end_match = re.search(r"([\s\S]*?)\"\s*(?:,\s*\"|\}|$)", cmd_rest)
++            if end_match:
++                res["command"] = end_match.group(1)
++            else:
++                res["command"] = cmd_rest.rstrip(" \t\n\r\"}")
++
++    for m in re.finditer(r'"(\w+)"\s*:\s*', json_str):
++        k = m.group(1)
++        if k in res:
++            continue
++        v_rest = json_str[m.end() :].lstrip()
++        if v_rest.startswith('"'):
++            vm = re.search(r'^"(.*?)"(?:\s*,|\s*\}|$)', v_rest, re.DOTALL)
++            if vm:
++                res[k] = vm.group(1)
++        else:
++            vm = re.match(r"([^\s,}]+)", v_rest)
++            if vm:
++                val = vm.group(1)
++                if val == "true":
++                    res[k] = True
++                elif val == "false":
++                    res[k] = False
++                elif val == "null":
++                    res[k] = None
++                else:
++                    try:
++                        res[k] = int(val)
++                    except ValueError:
++                        try:
++                            res[k] = float(val)
++                        except ValueError:
++                            pass
++    return res
++
++
+ def parse_emulated_function_calls_static(text: str) -> List[Any]:
+     """Static function to parse emulated text-based function calls without page instance.
+ 
+@@ -72,46 +129,69 @@
+     """
+     calls: List[Any] = []
+ 
+-    if not text or "Request function call:" not in text:
++    if not text:
+         return calls
+ 
+-    try:
+-        # Split by "Request function call:" to handle multiple calls
+-        parts = re.split(r"(?=Request\s+function\s+call:)", text, flags=re.IGNORECASE)
++    has_rfc = bool(re.search(r"Request\s+function\s+call:", text, re.IGNORECASE))
++    has_params = bool(re.search(r"Parameters:\s*\{", text, re.IGNORECASE))
+ 
+-        for part in parts:
+-            if not part.strip():
+-                continue
+-
+-            # Extract function name
+-            name_match = _STATIC_EMULATED_FC_PATTERN.search(part)
+-            if not name_match:
+-                continue
+-
+-            function_name = name_match.group(1).strip()
+-
+-            # Strip common prefixes like "default_api_"
+-            if function_name.startswith("default_api_"):
+-                function_name = function_name[len("default_api_") :]
+-
+-            # Extract parameters
+-            arguments: Dict[str, Any] = {}
+-            params_match = _STATIC_EMULATED_PARAMS_PATTERN.search(part)
++    if not has_rfc and not has_params:
++        return calls
++
++    try:
++        if has_rfc:
++            # Split by "Request function call:" to handle multiple calls
++            parts = re.split(r"(?=Request\s+function\s+call:)", text, flags=re.IGNORECASE)
++
++            for part in parts:
++                if not part.strip():
++                    continue
++
++                # Extract function name
++                name_match = _STATIC_EMULATED_FC_PATTERN.search(part)
++                if not name_match:
++                    continue
++
++                function_name = name_match.group(1).strip()
++
++                # Strip common prefixes like "default_api_"
++                if function_name.startswith("default_api_"):
++                    function_name = function_name[len("default_api_") :]
++
++                # Extract parameters
++                arguments: Dict[str, Any] = {}
++                params_match = _STATIC_EMULATED_PARAMS_PATTERN.search(part)
++                if params_match:
++                    arguments = _robust_extract_arguments(params_match.group(1))
++
++                call = _create_parsed_call(
++                    name=function_name,
++                    arguments=arguments,
++                    raw_text=part[:200],
++                )
++                calls.append(call)
++        elif has_params:
++            # Standalone Parameters block without explicit Request function call:
++            params_match = re.search(r"Parameters:\s*\n?\s*(\{[\s\S]*\})", text, re.IGNORECASE)
++            if not params_match:
++                params_match = re.search(r"Parameters:\s*\n?\s*(\{[\s\S]*$)", text, re.IGNORECASE)
+             if params_match:
+-                try:
+-                    json_str = params_match.group(1)
+-                    # Clean control characters
+-                    json_str = re.sub(r"<ctrl\d+>", "", json_str)
+-                    arguments = json.loads(json_str)
+-                except (json.JSONDecodeError, Exception):
+-                    pass
+-
+-            call = _create_parsed_call(
+-                name=function_name,
+-                arguments=arguments,
+-                raw_text=part[:200],
+-            )
+-            calls.append(call)
++                arguments = _robust_extract_arguments(params_match.group(1))
++                function_name = "bash"
++                if "command" in arguments:
++                    function_name = "bash"
++                elif "path" in arguments and "content" in arguments:
++                    function_name = "write"
++                elif "path" in arguments:
++                    function_name = "read"
++                elif "query" in arguments:
++                    function_name = "google_search"
++                call = _create_parsed_call(
++                    name=function_name,
++                    arguments=arguments,
++                    raw_text=text[:200],
++                )
++                calls.append(call)
+ 
+     except Exception as e:
+         if FUNCTION_CALLING_DEBUG:
+--- a/api_utils/utils_ext/stream.py	1970-01-01 03:00:01.000000000 +0300
++++ b/api_utils/utils_ext/stream.py	2026-11-14 01:26:34.636551446 +0300
+@@ -447,6 +447,17 @@
+                 if empty_count - last_ui_check_time >= ui_check_interval:
+                     if await check_ui_generation_active():
+                         logger.info(f"[{req_id}] UI detected still generating...")
++                    elif received_items_count > 0 and empty_count >= 15:
++                        logger.info(
++                            f"[{req_id}] 🏁 UI generation finished and stream idle. Completing."
++                        )
++                        yield {
++                            "done": True,
++                            "reason": "ui_idle_stream_end",
++                            "body": "",
++                            "function": [],
++                        }
++                        return
+                     last_ui_check_time = empty_count
+                 await asyncio.sleep(0.1)
+                 continue
