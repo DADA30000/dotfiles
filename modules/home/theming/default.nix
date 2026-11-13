@@ -65,7 +65,9 @@ let
     transparent = true;
     disableMinSize = true;
     winNativeTitleBar = true;
-    enabledThemes = [ "transparent.css" ];
+    enabledThemes = [
+      #"transparent.css"
+    ];
     plugins = {
       CommandsAPI.enabled = true;
       MessageAccessoriesAPI.enabled = true;

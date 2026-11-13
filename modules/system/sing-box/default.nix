@@ -327,6 +327,12 @@ let
           type = "inline";
           rules = [
             {
+              source_ip_cidr = [
+                "10.200.0.0/24"
+                "fd00:200::/126"
+              ];
+            }
+            {
               domain_suffix = [
                 "dis.gd"
                 "discord.co"
@@ -455,13 +461,6 @@ let
           ];
           network = "icmp";
           outbound = "direct";
-        }
-        {
-          source_ip_cidr = [
-            "10.200.0.0/24"
-            "fd00:200::/126"
-          ];
-          outbound = "proxy";
         }
 
         {

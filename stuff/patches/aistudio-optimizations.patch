@@ -1,0 +1,253 @@
+--- a/browser_utils/page_controller.py
++++ b/browser_utils/page_controller.py
+@@ -79,47 +79,55 @@
+         await self._check_disconnect(
+             check_client_disconnected, "Start Parameter Adjustment"
+         )
+-        temp = request_params.get("temperature", DEFAULT_TEMPERATURE)
+-        await self._adjust_temperature(
+-            temp, page_params_cache, params_cache_lock, check_client_disconnected
+-        )
+-        max_tokens = request_params.get("max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS)
+-        await self._adjust_max_tokens(
+-            max_tokens,
+-            page_params_cache,
+-            params_cache_lock,
+-            model_id_to_use,
+-            parsed_model_list,
+-            check_client_disconnected,
+-        )
+-        stop = request_params.get("stop", DEFAULT_STOP_SEQUENCES)
+-        await self._adjust_stop_sequences(
+-            stop, page_params_cache, params_cache_lock, check_client_disconnected
+-        )
+-        top_p = request_params.get("top_p", DEFAULT_TOP_P)
+-        await self._adjust_top_p(top_p, check_client_disconnected)
+-        await self._ensure_tools_panel_expanded(check_client_disconnected)
+-
+-        # Force disable URL context if function calling is active
+-        is_fc_enabled = await self.is_function_calling_enabled(
+-            check_client_disconnected
+-        )
+-        if is_fc_enabled:
+-            await self._adjust_url_context(False, check_client_disconnected)
+-        elif ENABLE_URL_CONTEXT:
++        if "temperature" in request_params:
++            temp = request_params.get("temperature", DEFAULT_TEMPERATURE)
++            await self._adjust_temperature(
++                temp, page_params_cache, params_cache_lock, check_client_disconnected
++            )
++        if "max_output_tokens" in request_params:
++            max_tokens = request_params.get("max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS)
++            await self._adjust_max_tokens(
++                max_tokens,
++                page_params_cache,
++                params_cache_lock,
++                model_id_to_use,
++                parsed_model_list,
++                check_client_disconnected,
++            )
++        if "stop" in request_params:
++            stop = request_params.get("stop", DEFAULT_STOP_SEQUENCES)
++            await self._adjust_stop_sequences(
++                stop, page_params_cache, params_cache_lock, check_client_disconnected
++            )
++        if "top_p" in request_params:
++            top_p = request_params.get("top_p", DEFAULT_TOP_P)
++            await self._adjust_top_p(top_p, check_client_disconnected)
++        # Only check tools/function calling if tools are provided in request
++        if request_params.get("tools"):
++            await self._ensure_tools_panel_expanded(check_client_disconnected)
++            is_fc_enabled = await self.is_function_calling_enabled(
++                check_client_disconnected
++            )
++            if is_fc_enabled:
++                await self._adjust_url_context(False, check_client_disconnected)
++
++        if request_params.get("url_context"):
+             await self._adjust_url_context(True, check_client_disconnected)
+ 
+-        await self._handle_thinking_budget(
+-            request_params,
+-            page_params_cache,
+-            params_cache_lock,
+-            model_id_to_use,
+-            check_client_disconnected,
+-            is_streaming,
+-        )
+-        await self._adjust_google_search(
+-            request_params, model_id_to_use, check_client_disconnected
+-        )
++        if request_params.get("reasoning_effort") or request_params.get("thinking_level"):
++            await self._handle_thinking_budget(
++                request_params,
++                page_params_cache,
++                params_cache_lock,
++                model_id_to_use,
++                check_client_disconnected,
++                is_streaming,
++            )
++
++        if request_params.get("google_search"):
++            await self._adjust_google_search(
++                request_params, model_id_to_use, check_client_disconnected
++            )
+ 
+     async def clear_chat_history(self, check_client_disconnected: Callable):
+         """Clear chat history and invalidate function calling cache."""
+@@ -169,11 +177,11 @@
+                 button_clicked = False
+                 is_btn_enabled = False
+                 try:
+-                    await expect_async(submit).to_be_enabled(timeout=10000)
++                    await expect_async(submit).to_be_enabled(timeout=2000)
+                     is_btn_enabled = True
+                 except Exception:
+-                    self.logger.warning(
+-                        f"[{self.req_id}] Submit button not enabled within timeout, trying keyboard fallback."
++                    self.logger.info(
++                        f"[{self.req_id}] Submit button not enabled in 2s, using keyboard shortcut."
+                     )
+ 
+                 await self._check_disconnect(
+@@ -200,19 +208,19 @@
+                         )
+ 
+                 if not button_clicked:
+-                    # Keyboard fallbacks (using logic inherited from InputController)
++                    # Prioritize native AI Studio shortcut (Control+Enter)
+                     self.logger.info(
+-                        f"[{self.req_id}] Attempting Enter key submission..."
++                        f"[{self.req_id}] Attempting Combo key submission (Control+Enter)..."
+                     )
+-                    if await self._try_enter_submit(
++                    if await self._try_combo_submit(
+                         textarea, check_client_disconnected
+                     ):
+                         button_clicked = True
+                     else:
+                         self.logger.info(
+-                            f"[{self.req_id}] Attempting Combo key submission..."
++                            f"[{self.req_id}] Attempting Enter key submission..."
+                         )
+-                        if await self._try_combo_submit(
++                        if await self._try_enter_submit(
+                             textarea, check_client_disconnected
+                         ):
+                             button_clicked = True
+--- a/browser_utils/page_controller_modules/chat.py
++++ b/browser_utils/page_controller_modules/chat.py
+@@ -319,6 +319,19 @@
+         and remove interfering iframes like google-hats-survey.
+         """
+         try:
++            # 0. Remove Google Cookie Notification Bar
++            try:
++                await self.page.evaluate(
++                    """
++                    () => {
++                        const cookieBars = document.querySelectorAll('.glue-cookie-notification-bar, [id*="glue-cookie-notification-bar"]');
++                        cookieBars.forEach(el => el.remove());
++                    }
++                    """
++                )
++            except Exception:
++                pass
++
+             # 1. Remove Google Survey Iframe
+             try:
+                 survey_iframe = self.page.locator(
+--- a/browser_utils/initialization/core.py
++++ b/browser_utils/initialization/core.py
+@@ -437,8 +437,8 @@
+                     timeout=5000
+                 )
+             except PlaywrightAsyncError as e:
+-                logger.error(f"Error getting model name (model_name_locator): {e}")
+-                raise
++                logger.warning(f"Optional model name locator timed out ({e}), continuing...")
++                model_name_on_page = "unknown"
+ 
+             result_page_instance = found_page
+             result_page_ready = True
+@@ -570,15 +570,15 @@
+             'button[aria-label="Temporary chat toggle"]'
+         )
+ 
+-        await incognito_button_locator.wait_for(state="visible", timeout=10000)
++        await incognito_button_locator.wait_for(state="visible", timeout=300)
+ 
+         button_classes = await incognito_button_locator.get_attribute("class")
+ 
+         if button_classes and "ms-button-active" in button_classes:
+             logger.debug("[UI] Temporary chat mode already active")
+         else:
+-            await incognito_button_locator.click(timeout=5000, force=True)
+-            await asyncio.sleep(1)
++            await incognito_button_locator.click(timeout=1000, force=True)
++            await asyncio.sleep(0.2)
+ 
+             updated_classes = await incognito_button_locator.get_attribute("class")
+             if updated_classes and "ms-button-active" in updated_classes:
+--- a/browser_utils/models/switcher.py
++++ b/browser_utils/models/switcher.py
+@@ -132,7 +132,7 @@
+             try:
+                 model_name_locator = page.locator(MODEL_NAME_SELECTOR)
+                 actual_displayed_model_id_on_page_raw = (
+-                    await model_name_locator.first.inner_text(timeout=5000)
++                    await model_name_locator.first.inner_text(timeout=500)
+                 )
+                 actual_displayed_model_id_on_page = (
+                     actual_displayed_model_id_on_page_raw.strip()
+@@ -152,9 +152,9 @@
+             except asyncio.CancelledError:
+                 raise
+             except Exception as e_disp:
+-                page_display_match = False  # Reading failed, assume mismatch
++                page_display_match = True  # UI locator outdated, trust localStorage switch
+                 logger.warning(
+-                    f"Error reading displayed model ID: {e_disp}. Cannot verify page display."
++                    f"Optional model name display check failed ({e_disp}). Assuming switch succeeded via localStorage."
+                 )
+ 
+             if page_display_match:
+@@ -165,7 +165,7 @@
+                     )
+ 
+                     await incognito_button_locator.wait_for(
+-                        state="visible", timeout=5000
++                        state="visible", timeout=500
+                     )
+ 
+                     button_classes = await incognito_button_locator.get_attribute(
+--- a/browser_utils/models/startup.py
++++ b/browser_utils/models/startup.py
+@@ -156,9 +156,13 @@
+     try:
+         logger.debug("[Model] Reading current model from page display...")
+         model_name_locator = page.locator(MODEL_NAME_SELECTOR)
+-        displayed_model_name_from_page_raw = await model_name_locator.first.inner_text(
+-            timeout=7000
+-        )
++        try:
++            displayed_model_name_from_page_raw = await model_name_locator.first.inner_text(
++                timeout=3000
++            )
++        except Exception as e:
++            logger.warning(f"Could not read model name from page display ({e}), using default.")
++            displayed_model_name_from_page_raw = "gemini-2.5-flash"
+         displayed_model_name = displayed_model_name_from_page_raw.strip()
+         logger.debug(f"[Model] Page display: '{displayed_model_name}'")
+ 
+--- a/config/selectors.py
++++ b/config/selectors.py
+@@ -23,6 +23,8 @@
+ # Submit button: prioritize primary submit button in prompt area
+ SUBMIT_BUTTON_SELECTOR = (
+     # Current UI structure
++    'button.ctrl-enter-submits, '
++    'button.ctrl-enter-submits.ms-button-primary, '
+     'ms-run-button button[type="submit"].ms-button-primary, '
+     'ms-run-button button[type="submit"], '
+     # Legacy selectors

@@ -35,6 +35,24 @@ let
   # ---------------------------------------------------------------------------
   # Sandboxed Applications
   # ---------------------------------------------------------------------------
+  aiStudioProxyApiSandbox = mkSandbox rec {
+    appId = "io.github.masurii.aistudioproxyapi";
+    package = aiStudioProxyApiPkg;
+    network = "sandboxed";
+    gpu = true;
+    wayland = "sandboxed";
+    x11 = "sandboxed";
+
+    additional_outside_commands = ''
+      rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
+      mkdir -p "$HOME/.nixpak/${appId}/home" "$XDG_DATA_HOME" "$HOME/.cache" "$HOME/.nixpak/${appId}/home/.cache"
+      ln -sfn "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/aistudio-proxy-api" "$XDG_DATA_HOME/aistudio-proxy-api"
+    '';
+    additional_inside_commands = ''
+      rust-bridge -r pass --address 127.0.0.1:2048 -s "$XDG_RUNTIME_DIR/aistudio" -d
+    '';
+  };
+
   prismLauncherSandbox = mkSandbox rec {
     appId = "org.prismlauncher.PrismLauncher";
     network = "singbox";
@@ -285,6 +303,155 @@ let
   # ---------------------------------------------------------------------------
   # Custom Derivations & Overrides
   # ---------------------------------------------------------------------------
+  camoufoxFetchScript = pkgs.writeScript "fetch-camoufox.py" ''
+    import os, subprocess, zipfile, orjson
+    from camoufox.pkgman import CamoufoxFetcher, INSTALL_DIR
+
+    vf, bf = INSTALL_DIR / "version.json", INSTALL_DIR / "camoufox-bin"
+    if not vf.exists() or not bf.exists():
+        f = CamoufoxFetcher()
+        print(f"Fetching Camoufox {f.version}-{f.release} via aria2c...")
+        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["aria2c", "-c", "-x8", "-s8", "-d", "/tmp", "-o", "camoufox.zip", "--summary-interval=5", f.url], check=True)
+        with zipfile.ZipFile("/tmp/camoufox.zip") as zf:
+            zf.extractall(INSTALL_DIR)
+        os.remove("/tmp/camoufox.zip")
+        with open(vf, "wb") as j:
+            j.write(orjson.dumps({"version": f.version, "release": f.release}))
+        os.system(f"chmod -R 755 {INSTALL_DIR}")
+  '';
+
+  aiStudioProxyApiPkg =
+    let
+      camoufoxFhsRunner = pkgs.buildFHSEnv {
+        name = "aistudio-proxy-api-fhs";
+        targetPkgs = pkgs: [
+          (pkgs.python312.withPackages (ps: [
+            ps.pip
+            ps.tkinter
+          ]))
+          pkgs.tcl
+          pkgs.tk
+          pkgs.aria2
+          pkgs.unzip
+          pkgs.patch
+          pkgs.cacert
+          pkgs.gtk3
+          pkgs.glib
+          pkgs.pango
+          pkgs.cairo
+          pkgs.gdk-pixbuf
+          pkgs.alsa-lib
+          pkgs.libxkbcommon
+          pkgs.libx11
+          pkgs.libxcomposite
+          pkgs.libxdamage
+          pkgs.libxext
+          pkgs.libxfixes
+          pkgs.libxrandr
+          pkgs.libxcb
+          pkgs.nspr
+          pkgs.nss
+          pkgs.dbus
+          pkgs.libglvnd
+          pkgs.mesa
+          pkgs.ffmpeg
+          pkgs.cups
+          pkgs.libdrm
+          pkgs.udev
+          pkgs.fontconfig
+          pkgs.freetype
+          pkgs.zlib
+          pkgs.stdenv.cc.cc.lib
+        ];
+        runScript = pkgs.writeShellScript "aistudio-runner" ''
+          set -e
+          TARGET_SCRIPT="$1"
+          shift
+
+          SRC="${inputs.aistudio-proxy-api}"
+          DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/aistudio-proxy-api"
+          STAMP="$DIR/.source_stamp"
+
+          mkdir -p "$DIR/logs" "$DIR/auth_profiles/saved" "$DIR/auth_profiles/active" "$DIR/auth_profiles/emergency"
+          chmod -R u+w "$DIR" 2>/dev/null || true
+
+          # Automatic sync and dependency install when source store path updates
+          if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$SRC" ]; then
+            echo "=== AI Studio Proxy API: Source update detected ($SRC) ==="
+            echo "Syncing repository files to $DIR..."
+            find "$SRC" -maxdepth 1 -mindepth 1 | while read -r item; do
+              base=$(basename "$item")
+              case "$base" in
+                logs|auth_profiles|.venv|.env) ;;
+                *)
+                  rm -rf "$DIR/$base"
+                  cp -r --no-preserve=mode,ownership "$item" "$DIR/"
+                  ;;
+              esac
+            done
+            chmod -R u+w "$DIR"
+
+            # Apply performance and DOM update optimizations patch
+            ${pkgs.patch}/bin/patch -p1 -N -r - -d "$DIR" < ${../../../stuff/patches/aistudio-optimizations.patch} || true
+
+            if [ ! -f "$DIR/.env" ]; then
+              cp --no-preserve=mode,ownership "$SRC/.env.example" "$DIR/.env"
+            fi
+
+            cd "$DIR"
+            if [ ! -d "$DIR/.venv" ]; then
+              echo "Setting up Python 3.12 virtual environment with Poetry..."
+              python3.12 -m venv "$DIR/.venv"
+              "$DIR/.venv/bin/pip" install --upgrade pip poetry
+            fi
+
+            echo "Installing/updating dependencies via Poetry..."
+            success=0
+            for i in $(seq 1 10); do
+              if "$DIR/.venv/bin/poetry" install --only main --no-root --no-interaction; then
+                success=1
+                break
+              fi
+              echo "Poetry attempt $i failed, retrying in 3 seconds..."
+              sleep 3
+            done
+            [ "$success" -eq 1 ] || exit 1
+
+            echo "$SRC" > "$STAMP"
+            echo "=== Setup complete ==="
+          fi
+
+          # Disable upstream default proxy (127.0.0.1:7890) if present in .env
+          if [ -f "$DIR/.env" ]; then
+            sed -i 's|^UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|# UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|' "$DIR/.env"
+            sed -i 's|^GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|# GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|' "$DIR/.env"
+          fi
+
+          pkill -9 -f "launchServer.js" 2>/dev/null || true
+
+          cd "$DIR"
+          source "$DIR/.venv/bin/activate"
+
+          # Dynamically resolve and download Camoufox browser binaries matching poetry.lock
+          python ${camoufoxFetchScript}
+
+          exec python "$DIR/$TARGET_SCRIPT" "$@"
+        '';
+      };
+    in
+    pkgs.symlinkJoin {
+      name = "aistudio-proxy-api";
+      paths = [
+        (pkgs.writeShellScriptBin "aistudio-proxy-api" ''
+          exec ${camoufoxFhsRunner}/bin/aistudio-proxy-api-fhs simple_launcher.py "$@"
+        '')
+        (pkgs.writeShellScriptBin "aistudio-proxy-api-server" ''
+          exec ${camoufoxFhsRunner}/bin/aistudio-proxy-api-fhs launch_camoufox.py "$@"
+        '')
+      ];
+    };
+
   sounduxPkg = pkgs.stdenv.mkDerivation {
     pname = "soundux";
     version = "0.2.8-unstable";
@@ -555,7 +722,7 @@ let
 
 in
 {
-  home.extraOutputsToInstall = osConfig.environment.extraOutputsToInstall;
+  home.extraOutputsToInstall = osConfig.environment.extraOutputsToInstall; # ++ [ "lib" ];
 
   home.packages =
     osConfig.environment.systemPackages
@@ -786,6 +953,7 @@ in
       gtkshutdownPkg
       anicliRuPkg
 
+      aiStudioProxyApiSandbox
       nixOutputMonitorSandbox
       sounduxSandbox
       prismLauncherSandbox

@@ -16,6 +16,22 @@
         "type": "github"
       }
     },
+    "aistudio-proxy-api": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1771603980,
+        "narHash": "sha256-XlAY8brdYZ+JLL5h3X7mlgxz1blfF09axYB/sqk/Rfo=",
+        "owner": "MasuRii",
+        "repo": "AIstudioProxyAPI-EN",
+        "rev": "c764934e6eae7762b903e8088745975c0ce3196f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "MasuRii",
+        "repo": "AIstudioProxyAPI-EN",
+        "type": "github"
+      }
+    },
     "anicli-ru": {
       "flake": false,
       "locked": {
@@ -1509,6 +1525,7 @@
     "root": {
       "inputs": {
         "aero-control-center": "aero-control-center",
+        "aistudio-proxy-api": "aistudio-proxy-api",
         "anicli-ru": "anicli-ru",
         "bibata-modern-hyprcursor": "bibata-modern-hyprcursor",
         "btop": "btop",

@@ -8,7 +8,7 @@ use std::{
 
 const SYSTEMD_PACKAGE: &str = "%{{{config.systemd.package}}}/bin/run0";
 
-const FORWARD_ENVS: &[&str] = &["GDK_WAYLAND_DISABLE"];
+const FORWARD_ENVS: &[&str] = &["GDK_WAYLAND_DISABLE", "PATH"];
 
 fn write_tty(msg: &[u8]) {
     if let Ok(mut tty) = OpenOptions::new().write(true).open("/dev/tty") {
