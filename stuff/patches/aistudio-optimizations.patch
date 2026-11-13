@@ -1,6 +1,14 @@
---- a/browser_utils/page_controller.py
-+++ b/browser_utils/page_controller.py
-@@ -79,47 +79,55 @@
+--- a/browser_utils/page_controller.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/page_controller.py	2026-11-13 23:30:15.882870628 +0300
+@@ -20,6 +20,7 @@
+     DEFAULT_TOP_P,
+     EDIT_MESSAGE_BUTTON_SELECTOR,
+     ENABLE_URL_CONTEXT,
++    FUNCTION_CALLING_MODE,
+     PROMPT_TEXTAREA_SELECTOR,
+     SUBMIT_BUTTON_SELECTOR,
+     UPLOAD_BUTTON_SELECTOR,
+@@ -79,47 +80,55 @@
          await self._check_disconnect(
              check_client_disconnected, "Start Parameter Adjustment"
          )
@@ -55,8 +63,8 @@
 +        if "top_p" in request_params:
 +            top_p = request_params.get("top_p", DEFAULT_TOP_P)
 +            await self._adjust_top_p(top_p, check_client_disconnected)
-+        # Only check tools/function calling if tools are provided in request
-+        if request_params.get("tools"):
++        # Only check tools/function calling UI if tools are provided and not in emulated mode
++        if request_params.get("tools") and FUNCTION_CALLING_MODE != "emulated":
 +            await self._ensure_tools_panel_expanded(check_client_disconnected)
 +            is_fc_enabled = await self.is_function_calling_enabled(
 +                check_client_disconnected
@@ -95,7 +103,7 @@
  
      async def clear_chat_history(self, check_client_disconnected: Callable):
          """Clear chat history and invalidate function calling cache."""
-@@ -169,11 +177,11 @@
+@@ -169,11 +178,11 @@
                  button_clicked = False
                  is_btn_enabled = False
                  try:
@@ -110,7 +118,7 @@
                      )
  
                  await self._check_disconnect(
-@@ -200,19 +208,19 @@
+@@ -200,19 +209,19 @@
                          )
  
                  if not button_clicked:
@@ -135,8 +143,8 @@
                              textarea, check_client_disconnected
                          ):
                              button_clicked = True
---- a/browser_utils/page_controller_modules/chat.py
-+++ b/browser_utils/page_controller_modules/chat.py
+--- a/browser_utils/page_controller_modules/chat.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/page_controller_modules/chat.py	2026-11-13 22:23:46.154876381 +0300
 @@ -319,6 +319,19 @@
          and remove interfering iframes like google-hats-survey.
          """
@@ -157,8 +165,8 @@
              # 1. Remove Google Survey Iframe
              try:
                  survey_iframe = self.page.locator(
---- a/browser_utils/initialization/core.py
-+++ b/browser_utils/initialization/core.py
+--- a/browser_utils/initialization/core.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/initialization/core.py	2026-11-13 22:50:53.978730341 +0300
 @@ -437,8 +437,8 @@
                      timeout=5000
                  )
@@ -189,8 +197,8 @@
  
              updated_classes = await incognito_button_locator.get_attribute("class")
              if updated_classes and "ms-button-active" in updated_classes:
---- a/browser_utils/models/switcher.py
-+++ b/browser_utils/models/switcher.py
+--- a/browser_utils/models/switcher.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/models/switcher.py	2026-11-13 22:42:20.174990486 +0300
 @@ -132,7 +132,7 @@
              try:
                  model_name_locator = page.locator(MODEL_NAME_SELECTOR)
@@ -221,8 +229,8 @@
                      )
  
                      button_classes = await incognito_button_locator.get_attribute(
---- a/browser_utils/models/startup.py
-+++ b/browser_utils/models/startup.py
+--- a/browser_utils/models/startup.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/models/startup.py	2026-11-13 22:50:53.981730363 +0300
 @@ -156,9 +156,13 @@
      try:
          logger.debug("[Model] Reading current model from page display...")
@@ -240,8 +248,8 @@
          displayed_model_name = displayed_model_name_from_page_raw.strip()
          logger.debug(f"[Model] Page display: '{displayed_model_name}'")
  
---- a/config/selectors.py
-+++ b/config/selectors.py
+--- a/config/selectors.py	1970-01-01 03:00:01.000000000 +0300
++++ b/config/selectors.py	2026-11-13 22:19:09.821859996 +0300
 @@ -23,6 +23,8 @@
  # Submit button: prioritize primary submit button in prompt area
  SUBMIT_BUTTON_SELECTOR = (
@@ -251,3 +259,128 @@
      'ms-run-button button[type="submit"].ms-button-primary, '
      'ms-run-button button[type="submit"], '
      # Legacy selectors
+--- a/api_utils/utils_ext/prompts.py	1970-01-01 03:00:01.000000000 +0300
++++ b/api_utils/utils_ext/prompts.py	2026-11-13 23:42:28.632302789 +0300
+@@ -106,6 +106,14 @@
+                         chosen_name = tool_choice
+                     if chosen_name:
+                         tool_lines.append(f"Recommended function to use: {chosen_name}")
++                tool_lines.append(
++                    "\nTo call any tool, you MUST format your response as:\n"
++                    "Request function call: <function_name>\n"
++                    "Parameters:\n"
++                    "{\n"
++                    '  "argument_name": value\n'
++                    "}"
++                )
+                 combined_parts.append("\n".join(tool_lines) + "\n---\n")
+             except Exception:
+                 pass
+--- a/api_utils/response_generators.py	1970-01-01 03:00:01.000000000 +0300
++++ b/api_utils/response_generators.py	2026-11-14 00:26:12.544558816 +0300
+@@ -328,6 +328,15 @@
+                 is_recovering = GlobalState.IS_RECOVERING
+                 is_quota_exceeded = GlobalState.IS_QUOTA_EXCEEDED
+ 
++                if not function and (full_body_content or original_body or body):
++                    from api_utils.utils_ext.function_call_response_parser import (
++                        parse_emulated_function_calls_static,
++                    )
++                    text_to_check = original_body or full_body_content or body
++                    parsed_fc = parse_emulated_function_calls_static(text_to_check)
++                    if parsed_fc:
++                        function = parsed_fc
++
+                 if (
+                     done
+                     and not has_started_body
+@@ -384,20 +393,28 @@
+                     finish_reason = "tool_calls"
+                     tool_calls_list = []
+                     for func_idx, function_call_data in enumerate(function):
+-                        if isinstance(function_call_data, dict):
+-                            tool_calls_list.append(
+-                                {
+-                                    "id": f"call_{random_id()}",
+-                                    "index": func_idx,
+-                                    "type": "function",
+-                                    "function": {
+-                                        "name": function_call_data.get("name", ""),
+-                                        "arguments": json.dumps(
+-                                            function_call_data.get("params", {})
+-                                        ),
+-                                    },
+-                                }
+-                            )
++                        fn_name = (
++                            function_call_data.get("name", "")
++                            if isinstance(function_call_data, dict)
++                            else getattr(function_call_data, "name", "")
++                        )
++                        fn_params = (
++                            function_call_data.get("params") or function_call_data.get("arguments")
++                            if isinstance(function_call_data, dict)
++                            else (getattr(function_call_data, "arguments", None) or getattr(function_call_data, "params", {}))
++                        )
++                        args_str = fn_params if isinstance(fn_params, str) else json.dumps(fn_params or {})
++                        tool_calls_list.append(
++                            {
++                                "id": f"call_{random_id()}",
++                                "index": func_idx,
++                                "type": "function",
++                                "function": {
++                                    "name": fn_name,
++                                    "arguments": args_str,
++                                },
++                            }
++                        )
+                     choice_item = {
+                         "index": 0,
+                         "delta": {
+--- a/api_utils/request_processor.py	1970-01-01 03:00:01.000000000 +0300
++++ b/api_utils/request_processor.py	2026-11-14 00:24:29.260156137 +0300
+@@ -361,6 +361,16 @@
+                 content = data.get("body")
+                 reasoning_content = data.get("reason")
+                 functions = data.get("function")
++
++                if not functions and content:
++                    from api_utils.utils_ext.function_call_response_parser import (
++                        parse_emulated_function_calls_static,
++                    )
++                    parsed_fc = parse_emulated_function_calls_static(content)
++                    if parsed_fc:
++                        functions = parsed_fc
++                        from api_utils.response_generators import _FUNCTION_CALL_TEXT_PATTERN
++                        content = _FUNCTION_CALL_TEXT_PATTERN.sub("", content).strip()
+                 break
+ 
+         if (
+@@ -405,14 +415,25 @@
+         if functions and len(functions) > 0:
+             tool_calls_list: List[Dict[str, Any]] = []
+             for func_idx, function_call_data in enumerate(functions):
++                fn_name = (
++                    function_call_data.get("name", "")
++                    if isinstance(function_call_data, dict)
++                    else getattr(function_call_data, "name", "")
++                )
++                fn_params = (
++                    function_call_data.get("params") or function_call_data.get("arguments")
++                    if isinstance(function_call_data, dict)
++                    else (getattr(function_call_data, "arguments", None) or getattr(function_call_data, "params", {}))
++                )
++                args_str = fn_params if isinstance(fn_params, str) else json.dumps(fn_params or {})
+                 tool_calls_list.append(
+                     {
+                         "id": f"call_{_random_id()}",
+                         "index": func_idx,
+                         "type": "function",
+                         "function": {
+-                            "name": function_call_data["name"],
+-                            "arguments": json.dumps(function_call_data["params"]),
++                            "name": fn_name,
++                            "arguments": args_str,
+                         },
+                     }
+                 )
