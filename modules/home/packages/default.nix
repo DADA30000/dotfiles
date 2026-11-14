@@ -35,21 +35,44 @@ let
   # ---------------------------------------------------------------------------
   # Sandboxed Applications
   # ---------------------------------------------------------------------------
-  aiStudioProxyApiSandbox = mkSandbox rec {
-    appId = "io.github.masurii.aistudioproxyapi";
-    package = aiStudioProxyApiPkg;
+  aistudio2apiSandbox = mkSandbox rec {
+    appId = "io.github.mag1cfall.aistudio2api";
+    package = aistudio2apiPkg;
     network = "sandboxed";
     gpu = true;
     wayland = "sandboxed";
     x11 = "sandboxed";
-
+    additional_args.dbus = {
+      enable = true;
+      policies."org.kde.StatusNotifierItem*" = "own";
+    };
     additional_outside_commands = ''
-      rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
-      mkdir -p "$HOME/.nixpak/${appId}/home" "$XDG_DATA_HOME" "$HOME/.cache" "$HOME/.nixpak/${appId}/home/.cache"
-      ln -sfn "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/aistudio-proxy-api" "$XDG_DATA_HOME/aistudio-proxy-api"
+      rust-bridge -r listen --address 127.0.0.1:[2048,2050] -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
+      SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
+      SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
+      SANDBOX_CACHE_REL="''${XDG_CACHE_HOME#"$HOME/"}"
+      SANDBOX_CFG="$SANDBOX_HOME/$SANDBOX_CFG_REL/AIStudio2API"
+      SANDBOX_CACHE="$SANDBOX_HOME/$SANDBOX_CACHE_REL/AIStudio2API"
+      mkdir -p "$SANDBOX_HOME/$SANDBOX_CFG_REL" "$SANDBOX_HOME/$SANDBOX_CACHE_REL" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
+      if [ -d "$XDG_CONFIG_HOME/AIStudio2API" ] && [ ! -L "$XDG_CONFIG_HOME/AIStudio2API" ]; then
+        if [ ! -e "$SANDBOX_CFG" ]; then
+          mv "$XDG_CONFIG_HOME/AIStudio2API" "$SANDBOX_CFG"
+        else
+          rm -rf "$XDG_CONFIG_HOME/AIStudio2API.pre-sandbox"
+          mv "$XDG_CONFIG_HOME/AIStudio2API" "$XDG_CONFIG_HOME/AIStudio2API.pre-sandbox"
+        fi
+      fi
+      if [ -d "$XDG_CACHE_HOME/AIStudio2API" ] && [ ! -L "$XDG_CACHE_HOME/AIStudio2API" ]; then
+        rm -rf "$XDG_CACHE_HOME/AIStudio2API.pre-sandbox"
+        mv "$XDG_CACHE_HOME/AIStudio2API" "$XDG_CACHE_HOME/AIStudio2API.pre-sandbox"
+      fi
+      mkdir -p "$SANDBOX_CFG" "$SANDBOX_CACHE"
+      rm -f "$SANDBOX_CFG/webkit2gtk-4.1"
+      ln -sfn "$SANDBOX_CFG" "$XDG_CONFIG_HOME/AIStudio2API"
+      ln -sfn "$SANDBOX_CACHE" "$XDG_CACHE_HOME/AIStudio2API"
     '';
     additional_inside_commands = ''
-      rust-bridge -r pass --address 127.0.0.1:2048 -s "$XDG_RUNTIME_DIR/aistudio" -d
+      rust-bridge -r pass --address 127.0.0.1:[2048,2050] -s "$XDG_RUNTIME_DIR/aistudio" -d
     '';
   };
 
@@ -303,44 +326,125 @@ let
   # ---------------------------------------------------------------------------
   # Custom Derivations & Overrides
   # ---------------------------------------------------------------------------
-  camoufoxFetchScript = pkgs.writeScript "fetch-camoufox.py" ''
-    import os, subprocess, zipfile, orjson
-    from camoufox.pkgman import CamoufoxFetcher, INSTALL_DIR
-
-    vf, bf = INSTALL_DIR / "version.json", INSTALL_DIR / "camoufox-bin"
-    if not vf.exists() or not bf.exists():
-        f = CamoufoxFetcher()
-        print(f"Fetching Camoufox {f.version}-{f.release} via aria2c...")
-        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["aria2c", "-c", "-x8", "-s8", "-d", "/tmp", "-o", "camoufox.zip", "--summary-interval=5", f.url], check=True)
-        with zipfile.ZipFile("/tmp/camoufox.zip") as zf:
-            zf.extractall(INSTALL_DIR)
-        os.remove("/tmp/camoufox.zip")
-        with open(vf, "wb") as j:
-            j.write(orjson.dumps({"version": f.version, "release": f.release}))
-        os.system(f"chmod -R 755 {INSTALL_DIR}")
-  '';
-
-  aiStudioProxyApiPkg =
+  aistudio2apiPkg =
     let
-      camoufoxFhsRunner = pkgs.buildFHSEnv {
-        name = "aistudio-proxy-api-fhs";
+      src = inputs.aistudio2api;
+      version = src.shortRev or "unstable";
+      spidermonkeyVersion = "v158.0.1-aistudio2api.1";
+      targetArch = if pkgs.stdenv.hostPlatform.isAarch64 then "arm64" else "amd64";
+
+      spidermonkey = pkgs.fetchzip {
+        name = "spidermonkey-${spidermonkeyVersion}-linux-${targetArch}-gnu";
+        url = "https://github.com/Mag1cFall/firefox/releases/download/${spidermonkeyVersion}/spidermonkey-${spidermonkeyVersion}-linux-${targetArch}-gnu.tar.gz";
+        hash = "sha256-9Pk455NANu9za+NG/70+maM7eHVaG758YQkWu0At7ew=";
+        stripRoot = false;
+      };
+
+      webDist = pkgs.buildNpmPackage {
+        pname = "aistudio2api-web";
+        inherit version src;
+
+        npmDeps = pkgs.importNpmLock {
+          npmRoot = "${src}/web";
+          package = builtins.removeAttrs (lib.importJSON "${src}/web/package.json") [ "overrides" ];
+          packageLock = lib.importJSON "${src}/web/package-lock.json";
+        };
+        npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+        npmFlags = [ "--legacy-peer-deps" ];
+
+        postPatch = ''
+          cd web
+        '';
+
+        preBuild = ''
+          for dart in node_modules/sass-embedded-*/dart-sass/src/dart; do
+            if [ -f "$dart" ]; then
+              chmod +w "$dart"
+              patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" "$dart"
+            fi
+          done
+        '';
+
+        nodejs = pkgs.nodejs_22;
+
+        installPhase = ''
+          runHook preInstall
+          mkdir -p $out
+          cp -r ../internal/webui/dist/* $out/
+          runHook postInstall
+        '';
+      };
+
+      aistudio2apiBin = pkgs.buildGoModule {
+        pname = "aistudio2api";
+        inherit version src;
+
+        vendorHash = "sha256-bUb08+XzhX00/temVernQ4RuNvNTum6RpopPLthkHfY=";
+        overrideModAttrs = _: {
+          name = "aistudio2api-go-modules-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")}-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+        };
+
+        subPackages = [ "cmd/aistudio2api" ];
+        tags = [
+          "desktop"
+          "production"
+          "gtk3"
+        ];
+        ldflags = [
+          "-s"
+          "-w"
+          "-X github.com/Mag1cFall/AIStudio2API/internal/app.version=${version}"
+        ];
+        doCheck = false;
+
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.wrapGAppsHook3
+        ];
+
+        buildInputs = [
+          pkgs.gtk3
+          pkgs.webkitgtk_4_1
+          pkgs.libwebp
+        ];
+
+        env = {
+          CGO_ENABLED = "1";
+          CGO_CPPFLAGS = "-I${spidermonkey}/include";
+          CGO_LDFLAGS = "-L${spidermonkey}/lib";
+        };
+
+        postPatch = ''
+          expected_sm=$(sed -n 's/.*SPIDERMONKEY:[[:space:]]*//p' .github/actions/static-libraries/action.yml | tr -d '\r')
+          if [ "$expected_sm" != "${spidermonkeyVersion}" ]; then
+            echo "ERROR: Upstream SpiderMonkey version changed to '$expected_sm' (packaged: '${spidermonkeyVersion}')" >&2
+            exit 1
+          fi
+        '';
+
+        postConfigure = ''
+          rm -rf internal/webui/dist
+          cp -r ${webDist} internal/webui/dist
+        '';
+
+        postInstall = ''
+          install -Dm644 build/linux/aistudio2api.desktop $out/share/applications/aistudio2api.desktop
+          install -Dm644 build/appicon.png $out/share/icons/hicolor/256x256/apps/aistudio2api.png
+        '';
+      };
+
+      # FHS runner so runtime-downloaded Camoufox (isolated login / camoufox backend) executes without patchelf
+      aistudio2apiFhs = pkgs.buildFHSEnv {
+        name = "aistudio2api";
         targetPkgs = pkgs: [
-          (pkgs.python312.withPackages (ps: [
-            ps.pip
-            ps.tkinter
-          ]))
-          pkgs.tcl
-          pkgs.tk
-          pkgs.aria2
-          pkgs.unzip
-          pkgs.patch
           pkgs.cacert
           pkgs.gtk3
           pkgs.glib
           pkgs.pango
           pkgs.cairo
           pkgs.gdk-pixbuf
+          pkgs.atk
+          pkgs.at-spi2-atk
           pkgs.alsa-lib
           pkgs.libxkbcommon
           pkgs.libx11
@@ -349,7 +453,9 @@ let
           pkgs.libxext
           pkgs.libxfixes
           pkgs.libxrandr
+          pkgs.libxrender
           pkgs.libxcb
+          pkgs.libxt
           pkgs.nspr
           pkgs.nss
           pkgs.dbus
@@ -362,97 +468,22 @@ let
           pkgs.fontconfig
           pkgs.freetype
           pkgs.zlib
+          pkgs.libgpg-error
           pkgs.stdenv.cc.cc.lib
         ];
-        runScript = pkgs.writeShellScript "aistudio-runner" ''
-          set -e
-          TARGET_SCRIPT="$1"
-          shift
-
-          SRC="${inputs.aistudio-proxy-api}"
-          DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/aistudio-proxy-api"
-          STAMP="$DIR/.source_stamp"
-
-          mkdir -p "$DIR/logs" "$DIR/auth_profiles/saved" "$DIR/auth_profiles/active" "$DIR/auth_profiles/emergency"
-          chmod -R u+w "$DIR" 2>/dev/null || true
-
-          # Automatic sync and dependency install when source store path updates
-          if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$SRC" ]; then
-            echo "=== AI Studio Proxy API: Source update detected ($SRC) ==="
-            echo "Syncing repository files to $DIR..."
-            find "$SRC" -maxdepth 1 -mindepth 1 | while read -r item; do
-              base=$(basename "$item")
-              case "$base" in
-                logs|auth_profiles|.venv|.env) ;;
-                *)
-                  rm -rf "$DIR/$base"
-                  cp -r --no-preserve=mode,ownership "$item" "$DIR/"
-                  ;;
-              esac
-            done
-            chmod -R u+w "$DIR"
-
-            # Apply performance and DOM update optimizations patch
-            ${pkgs.patch}/bin/patch -p1 -N -r - -d "$DIR" < ${../../../stuff/patches/aistudio-optimizations.patch} || true
-
-            if [ ! -f "$DIR/.env" ]; then
-              cp --no-preserve=mode,ownership "$SRC/.env.example" "$DIR/.env"
-            fi
-
-            cd "$DIR"
-            if [ ! -d "$DIR/.venv" ]; then
-              echo "Setting up Python 3.12 virtual environment with Poetry..."
-              python3.12 -m venv "$DIR/.venv"
-              "$DIR/.venv/bin/pip" install --upgrade pip poetry
-            fi
-
-            echo "Installing/updating dependencies via Poetry..."
-            success=0
-            for i in $(seq 1 10); do
-              if "$DIR/.venv/bin/poetry" install --only main --no-root --no-interaction; then
-                success=1
-                break
-              fi
-              echo "Poetry attempt $i failed, retrying in 3 seconds..."
-              sleep 3
-            done
-            [ "$success" -eq 1 ] || exit 1
-
-            echo "$SRC" > "$STAMP"
-            echo "=== Setup complete ==="
-          fi
-
-          # Disable upstream default proxy (127.0.0.1:7890) and enable native tool calling
-          if [ -f "$DIR/.env" ]; then
-            sed -i 's|^UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|# UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|' "$DIR/.env"
-            sed -i 's|^GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|# GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|' "$DIR/.env"
-            sed -i 's|^FUNCTION_CALLING_MODE=.*|FUNCTION_CALLING_MODE=native|' "$DIR/.env"
-            sed -i 's|^AUTO_ROTATE_AUTH_PROFILE=.*|AUTO_ROTATE_AUTH_PROFILE=false|' "$DIR/.env"
-            sed -i 's|^QUOTA_HARD_LIMIT=.*|QUOTA_HARD_LIMIT=100000000|' "$DIR/.env"
-            sed -i 's|^QUOTA_SOFT_LIMIT=.*|QUOTA_SOFT_LIMIT=100000000|' "$DIR/.env"
-          fi
-
-          pkill -9 -f "launchServer.js" 2>/dev/null || true
-
-          cd "$DIR"
-          source "$DIR/.venv/bin/activate"
-
-          # Dynamically resolve and download Camoufox browser binaries matching poetry.lock
-          python ${camoufoxFetchScript}
-
-          exec python "$DIR/$TARGET_SCRIPT" "$@"
-        '';
+        runScript = "${aistudio2apiBin}/bin/aistudio2api";
       };
+
+      aistudio2apiAssets = pkgs.runCommand "aistudio2api-assets" { } ''
+        mkdir -p $out/share
+        cp -r ${aistudio2apiBin}/share/* $out/share/
+      '';
     in
     pkgs.symlinkJoin {
-      name = "aistudio-proxy-api";
+      name = "aistudio2api-${version}";
       paths = [
-        (pkgs.writeShellScriptBin "aistudio-proxy-api" ''
-          exec ${camoufoxFhsRunner}/bin/aistudio-proxy-api-fhs simple_launcher.py "$@"
-        '')
-        (pkgs.writeShellScriptBin "aistudio-proxy-api-server" ''
-          exec ${camoufoxFhsRunner}/bin/aistudio-proxy-api-fhs launch_camoufox.py "$@"
-        '')
+        aistudio2apiFhs
+        aistudio2apiAssets
       ];
     };
 
@@ -957,7 +988,7 @@ in
       gtkshutdownPkg
       anicliRuPkg
 
-      aiStudioProxyApiSandbox
+      aistudio2apiSandbox
       nixOutputMonitorSandbox
       sounduxSandbox
       prismLauncherSandbox

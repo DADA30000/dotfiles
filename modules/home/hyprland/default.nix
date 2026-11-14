@@ -114,6 +114,7 @@ in
       enable = true;
       systemd.enable = false;
       configType = "lua";
+      xdph.settings.screencopy.custom_picker_binary = "hyprland-preview-share-picker";
       extraLuaFiles."00-init" = {
         autoLoad = true;
         content = ''

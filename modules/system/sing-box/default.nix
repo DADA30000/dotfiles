@@ -405,6 +405,18 @@ let
             {
               process_name = processes;
             }
+            {
+              source_ip_cidr = [
+                "10.200.0.0/24"
+                "fd00:200::/126"
+              ];
+            }
+            {
+              inbound = [
+                "vless-in"
+                "mixed-in"
+              ];
+            }
           ];
         }
       ];
@@ -412,7 +424,11 @@ let
       rules = [
         { action = "sniff"; }
         {
-          inbound = [ "dns-in" ];
+          inbound = [
+            "dns-in"
+            "direct-in"
+          ];
+          port = 53;
           action = "hijack-dns";
         }
 
@@ -428,33 +444,6 @@ let
         }
 
         {
-          outbound_selected.proxy = "proxy-vless";
-          inbound = [
-            "vless-in"
-            "mixed-in"
-          ];
-          ip_version = 6;
-          action = "reject";
-        }
-        {
-          outbound_selected.proxy = "proxy-vless";
-          inbound = [
-            "vless-in"
-            "mixed-in"
-          ];
-          port = 443;
-          network = "udp";
-          action = "reject";
-        }
-        {
-          inbound = [
-            "vless-in"
-            "mixed-in"
-          ];
-          outbound = "proxy";
-        }
-
-        {
           source_ip_cidr = [
             "10.200.0.0/24"
             "fd00:200::/126"
@@ -464,14 +453,34 @@ let
         }
 
         {
-          outbound_selected.proxy = "proxy-vless";
-          rule_set = "proxy-rules";
+          type = "logical";
+          mode = "or";
+          rules = [
+            {
+              outbound_selected.proxy = ".*block-v6.*";
+              rule_set = "proxy-rules";
+            }
+            {
+              outbound_selected.zen-toggle = ".*block-v6.*";
+              rule_set = "zen-rules";
+            }
+          ];
           ip_version = 6;
           action = "reject";
         }
         {
-          outbound_selected.proxy = "proxy-vless";
-          rule_set = "proxy-rules";
+          type = "logical";
+          mode = "or";
+          rules = [
+            {
+              outbound_selected.proxy = ".*block-quic.*";
+              rule_set = "proxy-rules";
+            }
+            {
+              outbound_selected.zen-toggle = ".*block-quic.*";
+              rule_set = "zen-rules";
+            }
+          ];
           port = 443;
           network = "udp";
           action = "reject";
@@ -480,29 +489,9 @@ let
           rule_set = "proxy-rules";
           outbound = "proxy";
         }
-
-        {
-          outbound_selected.zen-toggle = "proxy-vless";
-          rule_set = "zen-rules";
-          ip_version = 6;
-          action = "reject";
-        }
-        {
-          outbound_selected.zen-toggle = "proxy-vless";
-          rule_set = "zen-rules";
-          port = 443;
-          network = "udp";
-          action = "reject";
-        }
         {
           rule_set = "zen-rules";
           outbound = "zen-toggle";
-        }
-
-        {
-          inbound = [ "direct-in" ];
-          port = 53;
-          action = "hijack-dns";
         }
       ];
     };
@@ -545,24 +534,21 @@ let
       ];
       rules = [
         {
-          outbound_selected.proxy = "proxy-vless";
-          rule_set = "proxy-rules";
-          query_type = [ "AAAA" ];
-          action = "reject";
-        }
-        {
-          outbound_selected.zen-toggle = "proxy-vless";
-          rule_set = "zen-rules";
-          query_type = [ "AAAA" ];
-          action = "reject";
-        }
-
-        {
-          outbound_selected.proxy = "proxy-vless";
-          inbound = [
-            "direct-in"
-            "vless-in"
-            "mixed-in"
+          type = "logical";
+          mode = "or";
+          rules = [
+            {
+              outbound_selected.proxy = ".*block-v6.*";
+              rule_set = "proxy-rules";
+            }
+            {
+              outbound_selected.zen-toggle = ".*block-v6.*";
+              rule_set = "zen-rules";
+            }
+            {
+              outbound_selected.proxy = ".*block-v6.*";
+              inbound = [ "direct-in" ];
+            }
           ];
           query_type = [ "AAAA" ];
           action = "reject";

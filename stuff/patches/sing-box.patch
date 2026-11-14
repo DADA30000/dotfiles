@@ -120,6 +120,17 @@ diff -Naur a/option/rule.go b/option/rule.go
  	NetworkType              badoption.Listable[InterfaceType]                                           `json:"network_type,omitempty"`
  	NetworkIsExpensive       bool                                                                        `json:"network_is_expensive,omitempty"`
  	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
+diff -Naur a/option/rule_set.go b/option/rule_set.go
+--- a/option/rule_set.go	1970-01-01 03:00:01.000000000 +0300
++++ b/option/rule_set.go	2026-11-14 20:11:33.646686512 +0300
+@@ -249,6 +249,7 @@
+ }
+ 
+ type DefaultHeadlessRule struct {
++	Inbound                 badoption.Listable[string]                                                  `json:"inbound,omitempty" reference:"inbound"`
+ 	QueryType               badoption.Listable[DNSQueryType]                                            `json:"query_type,omitempty"`
+ 	Network                 badoption.Listable[string]                                                  `json:"network,omitempty" enum:"tcp,udp,icmp"`
+ 	Domain                  badoption.Listable[string]                                                  `json:"domain,omitempty"`
 diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
 --- a/route/rule/rule_default.go	1970-01-01 03:00:01.000000000 +0300
 +++ b/route/rule/rule_default.go	2026-11-14 18:53:35.652482527 +0300
@@ -149,6 +160,21 @@ diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
 +	}
  	if len(options.NetworkType) > 0 {
  		item := NewNetworkTypeItem(networkManager, common.Map(options.NetworkType, option.InterfaceType.Build))
+ 		rule.items = append(rule.items, item)
+diff -Naur a/route/rule/rule_headless.go b/route/rule/rule_headless.go
+--- a/route/rule/rule_headless.go	1970-01-01 03:00:01.000000000 +0300
++++ b/route/rule/rule_headless.go	2026-11-14 20:11:39.334659053 +0300
+@@ -41,6 +41,11 @@
+ 			invert: options.Invert,
+ 		},
+ 	}
++	if len(options.Inbound) > 0 {
++		item := NewInboundRule(options.Inbound)
++		rule.items = append(rule.items, item)
++		rule.allItems = append(rule.allItems, item)
++	}
+ 	if len(options.QueryType) > 0 {
+ 		item := NewQueryTypeItem(options.QueryType)
  		rule.items = append(rule.items, item)
 diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
 --- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300

@@ -1,8 +1,8 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    aistudio-proxy-api = {
-      url = "github:MasuRii/AIstudioProxyAPI-EN";
+    aistudio2api = {
+      url = "github:Mag1cFall/AIStudio2API";
       flake = false;
     };
     photogimp = {

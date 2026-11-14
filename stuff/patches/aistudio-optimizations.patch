@@ -400,7 +400,7 @@
 +    'mat-dialog-container button:has-text("Cancel")'
  )
 --- a/config/settings.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/config/settings.py	2026-11-14 03:32:16.491381081 +0300
++++ b/config/settings.py	2026-11-14 21:18:48.266882617 +0300
 @@ -99,8 +99,8 @@
  )
  
@@ -426,7 +426,7 @@
  # - "native": AI Studio UI-driven function calling
  # - "auto": Native with automatic fallback to emulated on failure
 -FUNCTION_CALLING_MODE = os.environ.get("FUNCTION_CALLING_MODE", "emulated").lower()
-+FUNCTION_CALLING_MODE = os.environ.get("FUNCTION_CALLING_MODE", "native").lower()
++FUNCTION_CALLING_MODE = "emulated"
  
  # Enable automatic fallback to emulated mode when native mode fails
  FUNCTION_CALLING_NATIVE_FALLBACK = get_boolean_env(
