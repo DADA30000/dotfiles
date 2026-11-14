@@ -325,8 +325,17 @@ let
     let
       src = inputs.aistudio2api;
       version = src.shortRev or "unstable";
-      spidermonkeyVersion = "v158.0.1-aistudio2api.1";
-      targetArch = if pkgs.stdenv.hostPlatform.isAarch64 then "arm64" else "amd64";
+      spidermonkeyVersion =
+        let
+          m = builtins.match ".*SPIDERMONKEY:[[:space:]]*([^[:space:]\r\n]+).*" (
+            builtins.readFile "${src}/.github/actions/static-libraries/action.yml"
+          );
+        in
+        if m != null then
+          builtins.head m
+        else
+          throw "Failed to parse SPIDERMONKEY version from .github/actions/static-libraries/action.yml";
+      targetArch = pkgs.stdenv.hostPlatform.go.GOARCH;
 
       spidermonkey = pkgs.fetchzip {
         name = "spidermonkey-${spidermonkeyVersion}-linux-${targetArch}-gnu";
@@ -391,6 +400,7 @@ let
           "-s"
           "-w"
           "-X github.com/Mag1cFall/AIStudio2API/internal/app.version=${version}"
+          "-X github.com/Mag1cFall/AIStudio2API/internal/app.managedBy=Nix"
         ];
         doCheck = false;
 
@@ -410,14 +420,6 @@ let
           CGO_CPPFLAGS = "-I${spidermonkey}/include";
           CGO_LDFLAGS = "-L${spidermonkey}/lib";
         };
-
-        postPatch = ''
-          expected_sm=$(sed -n 's/.*SPIDERMONKEY:[[:space:]]*//p' .github/actions/static-libraries/action.yml | tr -d '\r')
-          if [ "$expected_sm" != "${spidermonkeyVersion}" ]; then
-            echo "ERROR: Upstream SpiderMonkey version changed to '$expected_sm' (packaged: '${spidermonkeyVersion}')" >&2
-            exit 1
-          fi
-        '';
 
         postConfigure = ''
           rm -rf internal/webui/dist
