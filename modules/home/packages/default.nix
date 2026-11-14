@@ -41,13 +41,8 @@ let
     network = "sandboxed";
     gpu = true;
     wayland = "sandboxed";
-    x11 = "sandboxed";
-    additional_args.dbus = {
-      enable = true;
-      policies."org.kde.StatusNotifierItem*" = "own";
-    };
     additional_outside_commands = ''
-      rust-bridge -r listen --address 127.0.0.1:[2048,2050] -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
+      rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
       SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
       SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
       SANDBOX_CACHE_REL="''${XDG_CACHE_HOME#"$HOME/"}"
@@ -72,7 +67,7 @@ let
       ln -sfn "$SANDBOX_CACHE" "$XDG_CACHE_HOME/AIStudio2API"
     '';
     additional_inside_commands = ''
-      rust-bridge -r pass --address 127.0.0.1:[2048,2050] -s "$XDG_RUNTIME_DIR/aistudio" -d
+      rust-bridge -r pass --address 127.0.0.1:2048 -s "$XDG_RUNTIME_DIR/aistudio" -d
     '';
   };
 
@@ -346,7 +341,7 @@ let
 
         npmDeps = pkgs.importNpmLock {
           npmRoot = "${src}/web";
-          package = builtins.removeAttrs (lib.importJSON "${src}/web/package.json") [ "overrides" ];
+          package = removeAttrs (lib.importJSON "${src}/web/package.json") [ "overrides" ];
           packageLock = lib.importJSON "${src}/web/package-lock.json";
         };
         npmConfigHook = pkgs.importNpmLock.npmConfigHook;
@@ -381,7 +376,9 @@ let
 
         vendorHash = "sha256-bUb08+XzhX00/temVernQ4RuNvNTum6RpopPLthkHfY=";
         overrideModAttrs = _: {
-          name = "aistudio2api-go-modules-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")}-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+          name = "aistudio2api-go-modules-${
+            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
+          }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
         };
 
         subPackages = [ "cmd/aistudio2api" ];
@@ -454,12 +451,14 @@ let
           pkgs.libxfixes
           pkgs.libxrandr
           pkgs.libxrender
+          pkgs.libxtst
           pkgs.libxcb
           pkgs.libxt
           pkgs.nspr
           pkgs.nss
           pkgs.dbus
           pkgs.libglvnd
+          pkgs.libgbm
           pkgs.mesa
           pkgs.ffmpeg
           pkgs.cups
