@@ -1,6 +1,6 @@
 diff -Naur a/dns/client.go b/dns/client.go
 --- a/dns/client.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/dns/client.go	2026-10-29 22:07:12.632896328 +0300
++++ b/dns/client.go	2026-11-14 18:53:35.652061223 +0300
 @@ -40,6 +40,7 @@
  	disableExpire     bool
  	optimisticTimeout time.Duration
@@ -78,7 +78,7 @@ diff -Naur a/dns/client.go b/dns/client.go
  	}()
 diff -Naur a/dns/router.go b/dns/router.go
 --- a/dns/router.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/dns/router.go	2026-10-29 22:07:03.470980284 +0300
++++ b/dns/router.go	2026-11-14 18:53:35.652267988 +0300
 @@ -88,6 +88,7 @@
  		DisableExpire:     options.DNSClientOptions.DisableExpire,
  		OptimisticTimeout: optimisticTimeout,
@@ -89,7 +89,7 @@ diff -Naur a/dns/router.go b/dns/router.go
  			cacheFile := service.FromContext[adapter.CacheFile](ctx)
 diff -Naur a/option/dns.go b/option/dns.go
 --- a/option/dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/dns.go	2026-10-29 22:06:59.778014145 +0300
++++ b/option/dns.go	2026-11-14 18:53:35.652363265 +0300
 @@ -66,6 +66,7 @@
  	DisableExpire    bool                  `json:"disable_expire,omitempty"`
  	IndependentCache bool                  `json:"independent_cache,omitempty" schema:"omit"`
@@ -100,7 +100,7 @@ diff -Naur a/option/dns.go b/option/dns.go
  }
 diff -Naur a/option/rule_dns.go b/option/rule_dns.go
 --- a/option/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/rule_dns.go	2026-10-29 22:06:38.504169920 +0300
++++ b/option/rule_dns.go	2026-11-14 18:53:35.652403490 +0300
 @@ -162,6 +162,7 @@
  	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
  	Outbound                 badoption.Listable[string]                                                  `json:"outbound,omitempty" reference:"outbound" schema:"omit"`
@@ -111,7 +111,7 @@ diff -Naur a/option/rule_dns.go b/option/rule_dns.go
  	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
 diff -Naur a/option/rule.go b/option/rule.go
 --- a/option/rule.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/option/rule.go	2026-10-29 22:06:38.504250872 +0300
++++ b/option/rule.go	2026-11-14 18:53:35.652441661 +0300
 @@ -167,6 +167,7 @@
  	User                     badoption.Listable[string]                                                  `json:"user,omitempty"`
  	UserID                   badoption.Listable[int32]                                                   `json:"user_id,omitempty"`
@@ -122,7 +122,7 @@ diff -Naur a/option/rule.go b/option/rule.go
  	NetworkIsConstrained     bool                                                                        `json:"network_is_constrained,omitempty"`
 diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
 --- a/route/rule/rule_default.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/route/rule/rule_default.go	2026-10-29 22:06:38.504300595 +0300
++++ b/route/rule/rule_default.go	2026-11-14 18:53:35.652482527 +0300
 @@ -228,6 +228,11 @@
  		rule.items = append(rule.items, item)
  		rule.allItems = append(rule.allItems, item)
@@ -137,7 +137,7 @@ diff -Naur a/route/rule/rule_default.go b/route/rule/rule_default.go
  		rule.items = append(rule.items, item)
 diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
 --- a/route/rule/rule_dns.go	1970-01-01 03:00:01.000000000 +0300
-+++ b/route/rule/rule_dns.go	2026-10-29 22:06:38.504347303 +0300
++++ b/route/rule/rule_dns.go	2026-11-14 18:53:35.652524736 +0300
 @@ -322,6 +322,11 @@
  		rule.items = append(rule.items, item)
  		rule.allItems = append(rule.allItems, item)
@@ -152,12 +152,13 @@ diff -Naur a/route/rule/rule_dns.go b/route/rule/rule_dns.go
  		rule.items = append(rule.items, item)
 diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
 --- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300
-+++ b/route/rule/rule_item_outbound_selected.go	2026-10-29 22:06:38.504382218 +0300
-@@ -0,0 +1,96 @@
++++ b/route/rule/rule_item_outbound_selected.go	2026-11-14 18:53:51.303558442 +0300
+@@ -0,0 +1,116 @@
 +package rule
 +
 +import (
 +	"context"
++	"regexp"
 +	"strings"
 +
 +	"github.com/sagernet/sing-box/adapter"
@@ -172,6 +173,7 @@ diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_ou
 +	ctx             context.Context
 +	outboundManager adapter.OutboundManager
 +	selections      map[string][]string
++	regexes         map[string][]*regexp.Regexp
 +	description     string
 +}
 +
@@ -179,10 +181,21 @@ diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_ou
 +	item := &OutboundSelectedItem{
 +		ctx:        ctx,
 +		selections: make(map[string][]string, selections.Size()),
++		regexes:    make(map[string][]*regexp.Regexp, selections.Size()),
 +	}
 +	var descriptions []string
 +	for _, entry := range selections.Entries() {
 +		item.selections[entry.Key] = entry.Value
++		var res []*regexp.Regexp
++		for _, val := range entry.Value {
++			re, err := regexp.Compile(val)
++			if err == nil {
++				res = append(res, re)
++			} else {
++				res = append(res, nil)
++			}
++		}
++		item.regexes[entry.Key] = res
 +		descriptions = append(descriptions, entry.Key+"="+strings.Join(entry.Value, ","))
 +	}
 +	item.description = "outbound_selected=[" + strings.Join(descriptions, " ") + "]"
@@ -234,10 +247,17 @@ diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_ou
 +			detour = next
 +		}
 +		matched := false
-+		for _, expected := range expectedTags {
++		regexList := r.regexes[groupTag]
++		for i, expected := range expectedTags {
 +			if expected == currentTag || expected == realTag {
 +				matched = true
 +				break
++			}
++			if i < len(regexList) && regexList[i] != nil {
++				if regexList[i].MatchString(currentTag) || regexList[i].MatchString(realTag) {
++					matched = true
++					break
++				}
 +			}
 +		}
 +		if !matched {

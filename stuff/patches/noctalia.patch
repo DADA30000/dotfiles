@@ -2723,7 +2723,7 @@ index 0000000..ae408fc
 +  std::thread([this, names = std::move(names)]() {
 +    std::unordered_map<std::string, int> delays;
 +    for (const auto& name : names) {
-+      const std::string out = apiGet(std::format("/proxies/{}/delay?timeout=2500&url=http://www.gstatic.com/generate_204", name));
++      const std::string out = apiGet(std::format("/proxies/{}/delay?timeout=2500&url=http://www.gstatic.com/generate_204", StringUtils::urlEncode(name)));
 +      int delay = -1;
 +      try {
 +        if (!out.empty()) delay = nlohmann::json::parse(out).value("delay", -1);

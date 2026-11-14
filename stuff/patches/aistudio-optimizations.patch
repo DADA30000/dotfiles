@@ -1,5 +1,5 @@
 --- a/browser_utils/page_controller.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/browser_utils/page_controller.py	2026-11-13 23:30:15.882870628 +0300
++++ b/browser_utils/page_controller.py	2026-11-14 02:38:13.598555851 +0300
 @@ -20,6 +20,7 @@
      DEFAULT_TOP_P,
      EDIT_MESSAGE_BUTTON_SELECTOR,
@@ -8,7 +8,7 @@
      PROMPT_TEXTAREA_SELECTOR,
      SUBMIT_BUTTON_SELECTOR,
      UPLOAD_BUTTON_SELECTOR,
-@@ -79,47 +80,55 @@
+@@ -79,47 +80,48 @@
          await self._check_disconnect(
              check_client_disconnected, "Start Parameter Adjustment"
          )
@@ -63,14 +63,7 @@
 +        if "top_p" in request_params:
 +            top_p = request_params.get("top_p", DEFAULT_TOP_P)
 +            await self._adjust_top_p(top_p, check_client_disconnected)
-+        # Only check tools/function calling UI if tools are provided and not in emulated mode
-+        if request_params.get("tools") and FUNCTION_CALLING_MODE != "emulated":
-+            await self._ensure_tools_panel_expanded(check_client_disconnected)
-+            is_fc_enabled = await self.is_function_calling_enabled(
-+                check_client_disconnected
-+            )
-+            if is_fc_enabled:
-+                await self._adjust_url_context(False, check_client_disconnected)
++        # Tools and function calling are managed by FunctionCallingOrchestrator
 +
 +        if request_params.get("url_context"):
              await self._adjust_url_context(True, check_client_disconnected)
@@ -103,7 +96,39 @@
  
      async def clear_chat_history(self, check_client_disconnected: Callable):
          """Clear chat history and invalidate function calling cache."""
-@@ -169,11 +178,11 @@
+@@ -128,13 +130,24 @@
+         # Invalidate FC cache since we're starting a new chat
+         self.invalidate_fc_cache("new_chat")
+ 
+-        btn = self.page.locator(CLEAR_CHAT_BUTTON_SELECTOR)
+-        if await btn.is_enabled(timeout=5000):
+-            await btn.click(timeout=CLICK_TIMEOUT_MS)
+-            confirm = self.page.locator(CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR)
+-            if await confirm.is_visible(timeout=2000):
+-                await confirm.click(timeout=CLICK_TIMEOUT_MS)
+-            await enable_temporary_chat_mode(self.page)
++        try:
++            btn = self.page.locator(CLEAR_CHAT_BUTTON_SELECTOR)
++            if await btn.is_enabled(timeout=2000):
++                await btn.click(timeout=CLICK_TIMEOUT_MS)
++                confirm = self.page.locator(CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR)
++                if await confirm.is_visible(timeout=1000):
++                    await confirm.click(timeout=CLICK_TIMEOUT_MS)
++                await enable_temporary_chat_mode(self.page)
++                return
++        except Exception:
++            pass
++
++        # Fallback if UI is unresponsive: reload to fresh chat
++        try:
++            await self.page.goto("https://aistudio.google.com/prompts/new_chat", timeout=10000)
++            await asyncio.sleep(1)
++        except Exception:
++            pass
+ 
+     async def submit_prompt(
+         self, prompt: str, image_list: List, check_client_disconnected: Callable
+@@ -169,11 +182,11 @@
                  button_clicked = False
                  is_btn_enabled = False
                  try:
@@ -118,7 +143,7 @@
                      )
  
                  await self._check_disconnect(
-@@ -200,19 +209,19 @@
+@@ -200,19 +213,19 @@
                          )
  
                  if not button_clicked:
@@ -249,7 +274,7 @@
          logger.debug(f"[Model] Page display: '{displayed_model_name}'")
  
 --- a/config/selectors.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/config/selectors.py	2026-11-13 22:19:09.821859996 +0300
++++ b/config/selectors.py	2026-11-14 02:08:22.743019597 +0300
 @@ -23,6 +23,8 @@
  # Submit button: prioritize primary submit button in prompt area
  SUBMIT_BUTTON_SELECTOR = (
@@ -259,8 +284,168 @@
      'ms-run-button button[type="submit"].ms-button-primary, '
      'ms-run-button button[type="submit"], '
      # Legacy selectors
+@@ -88,7 +90,10 @@
+     'ms-slider input.slider-number-input[aria-valuemax="2"], '
+     'input.slider-number-input[aria-valuemax="2"]'
+ )
+-USE_URL_CONTEXT_SELECTOR = 'button[aria-label="Browse the url context"]'
++USE_URL_CONTEXT_SELECTOR = (
++    'button[aria-label="URL context"], '
++    'button[aria-label="Browse the url context"]'
++)
+ 
+ # --- Thinking Mode Selectors ---
+ THINKING_CONTAINER_SELECTOR = "ms-thought-accordion, ms-thought-chunk, [data-testid*='thinking'], [data-testid*='reasoning']"
+@@ -127,6 +132,7 @@
+ THINKING_LEVEL_OPTION_MINIMAL_SELECTOR = '[role="listbox"][aria-label="Thinking Level"] [role="option"]:has-text("Minimal"), [role="listbox"][aria-label="Thinking level"] [role="option"]:has-text("Minimal")'
+ 
+ GROUNDING_WITH_GOOGLE_SEARCH_TOGGLE_SELECTOR = (
++    'button[aria-label="Grounding with Google Search"], '
+     'div[data-test-id="searchAsAToolTooltip"] mat-slide-toggle button'
+ )
+ 
+@@ -228,10 +234,13 @@
+ 
+ # --- Function Calling Selectors ---
+ # Container for the function calling toggle and edit button
+-FUNCTION_CALLING_CONTAINER_SELECTOR = '[data-test-id="functionCallingTooltip"]'
++FUNCTION_CALLING_CONTAINER_SELECTOR = (
++    'ms-prompt-box-tools, .tools-dialog, button[aria-label="Function calling"], [data-test-id="functionCallingTooltip"]'
++)
+ 
+ # Toggle switch to enable/disable function calling
+ FUNCTION_CALLING_TOGGLE_SELECTOR = (
++    'button[aria-label="Function calling"], '
+     '[data-test-id="functionCallingTooltip"] mat-slide-toggle button[role="switch"].mdc-switch, '
+     '[data-test-id="functionCallingTooltip"] .function-calling-toggle button[role="switch"], '
+     '[data-test-id="functionCallingTooltip"] button.mdc-switch'
+@@ -239,6 +248,8 @@
+ 
+ # Button to open the function declarations editor modal
+ FUNCTION_DECLARATIONS_EDIT_BUTTON_SELECTOR = (
++    'button[aria-label="Edit Function calling"], '
++    '.tool-item button:has-text("Edit"), '
+     '[data-test-id="functionCallingTooltip"] .edit-function-declarations-button, '
+     'button.edit-function-declarations-button[aria-label="Edit function declarations"], '
+     "button.edit-function-declarations-button"
+@@ -246,53 +257,46 @@
+ 
+ # Function declarations modal dialog container
+ FUNCTION_DECLARATIONS_DIALOG_SELECTOR = (
+-    'mat-dialog-container:has(h2:has-text("Function declarations")), '
+-    'mat-mdc-dialog-container:has(h2:has-text("Function declarations")), '
+-    ".mat-mdc-dialog-container"
++    'mat-dialog-container, '
++    'mat-mdc-dialog-container, '
++    '[role="dialog"]'
+ )
+ 
+ # Code Editor tab in the function declarations modal
+ FUNCTION_DECLARATIONS_CODE_EDITOR_TAB_SELECTOR = (
+-    'mat-dialog-container ms-tab-group button[role="tab"]:has-text("Code Editor"), '
+-    'mat-mdc-dialog-container ms-tab-group button[role="tab"]:has-text("Code Editor")'
++    'mat-dialog-container button[role="tab"]:has-text("Code Editor"), '
++    'button[role="tab"]:has-text("Code Editor")'
+ )
+ 
+ # Visual Editor tab in the function declarations modal
+ FUNCTION_DECLARATIONS_VISUAL_EDITOR_TAB_SELECTOR = (
+-    'mat-dialog-container ms-tab-group button[role="tab"]:has-text("Visual Editor"), '
+-    'mat-mdc-dialog-container ms-tab-group button[role="tab"]:has-text("Visual Editor")'
++    'mat-dialog-container button[role="tab"]:has-text("Visual Editor"), '
++    'button[role="tab"]:has-text("Visual Editor")'
+ )
+ 
+ # Textarea for entering function declarations JSON in Code Editor mode
+ FUNCTION_DECLARATIONS_TEXTAREA_SELECTOR = (
++    'mat-dialog-container textarea, '
++    '[role="dialog"] textarea, '
+     "mat-dialog-container ms-text-editor textarea, "
+-    "mat-mdc-dialog-container ms-text-editor textarea, "
+-    'mat-dialog-container textarea[placeholder*="Tab"], '
+-    'mat-mdc-dialog-container textarea[placeholder*="Tab"]'
++    "mat-mdc-dialog-container ms-text-editor textarea"
+ )
+ 
+ # Save button in the function declarations modal
+ FUNCTION_DECLARATIONS_SAVE_BUTTON_SELECTOR = (
+-    'mat-dialog-container button[aria-label="Save the current function declarations"], '
+-    'mat-mdc-dialog-container button[aria-label="Save the current function declarations"], '
+-    'mat-dialog-container button:has-text("Save"), '
+-    'mat-mdc-dialog-container button:has-text("Save")'
++    'button[aria-label="Save the current function declarations"], '
++    'mat-dialog-container button:has-text("Save")'
+ )
+ 
+ # Reset button in the function declarations modal
+ FUNCTION_DECLARATIONS_RESET_BUTTON_SELECTOR = (
+-    'mat-dialog-container button[aria-label="Reset the function declarations"], '
+-    'mat-mdc-dialog-container button[aria-label="Reset the function declarations"], '
+-    'mat-dialog-container button:has-text("Reset"), '
+-    'mat-mdc-dialog-container button:has-text("Reset")'
++    'button[aria-label="Reset the function declarations"], '
++    'mat-dialog-container button:has-text("Reset")'
+ )
+ 
+ # Close/Cancel button in the function declarations modal (typically an X or Cancel button)
+ FUNCTION_DECLARATIONS_CLOSE_BUTTON_SELECTOR = (
+-    'mat-dialog-container button[aria-label="Close"], '
+-    'mat-mdc-dialog-container button[aria-label="Close"], '
+-    "mat-dialog-container button.close-button, "
+-    "mat-mdc-dialog-container button.close-button, "
+-    'mat-dialog-container button:has-text("Cancel"), '
+-    'mat-mdc-dialog-container button:has-text("Cancel")'
++    'button[aria-label="close"], '
++    'mat-dialog-container button.close-button, '
++    'mat-dialog-container button:has-text("Cancel")'
+ )
+--- a/config/settings.py	1970-01-01 03:00:01.000000000 +0300
++++ b/config/settings.py	2026-11-14 03:32:16.491381081 +0300
+@@ -99,8 +99,8 @@
+ )
+ 
+ # --- Proactive Rotation Configuration ---
+-QUOTA_SOFT_LIMIT = get_int_env("QUOTA_SOFT_LIMIT", 650000)
+-QUOTA_HARD_LIMIT = get_int_env("QUOTA_HARD_LIMIT", 800000)
++QUOTA_SOFT_LIMIT = get_int_env("QUOTA_SOFT_LIMIT", 100000000)
++QUOTA_HARD_LIMIT = get_int_env("QUOTA_HARD_LIMIT", 100000000)
+ 
+ MODEL_QUOTA_LIMITS = {}
+ for key, value in os.environ.items():
+@@ -120,7 +120,7 @@
+ )
+ 
+ # --- Granular Configuration for Auth and Budget ---
+-AUTO_ROTATE_AUTH_PROFILE = get_boolean_env("AUTO_ROTATE_AUTH_PROFILE", True)
++AUTO_ROTATE_AUTH_PROFILE = get_boolean_env("AUTO_ROTATE_AUTH_PROFILE", False)
+ 
+ 
+ def _get_thinking_budget_value(env_key: str, default: int, level_name: str) -> int:
+@@ -146,7 +146,7 @@
+ # - "emulated": Current text-based approach (default, backwards compatible)
+ # - "native": AI Studio UI-driven function calling
+ # - "auto": Native with automatic fallback to emulated on failure
+-FUNCTION_CALLING_MODE = os.environ.get("FUNCTION_CALLING_MODE", "emulated").lower()
++FUNCTION_CALLING_MODE = os.environ.get("FUNCTION_CALLING_MODE", "native").lower()
+ 
+ # Enable automatic fallback to emulated mode when native mode fails
+ FUNCTION_CALLING_NATIVE_FALLBACK = get_boolean_env(
+--- a/config/global_state.py	1970-01-01 03:00:01.000000000 +0300
++++ b/config/global_state.py	2026-11-14 03:32:03.403296783 +0300
+@@ -177,8 +177,9 @@
+         # Retrieve limit (fallback to global hard limit)
+         limit = MODEL_QUOTA_LIMITS.get(model_key, QUOTA_HARD_LIMIT)
+ 
+-        # Check Hard Limit (Emergency Kill / Model Exhaustion)
+-        if current_usage >= limit:
++        # Check Hard Limit (Emergency Kill / Model Exhaustion) only if auto-rotation is enabled
++        from config.settings import AUTO_ROTATE_AUTH_PROFILE
++        if AUTO_ROTATE_AUTH_PROFILE and current_usage >= limit:
+             logger.critical(
+                 f"⛔ HARD LIMIT REACHED ({model_key}): {current_usage} >= {limit}. Marking model as exhausted."
+             )
 --- a/api_utils/utils_ext/prompts.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/utils_ext/prompts.py	2026-11-14 01:33:37.341363631 +0300
++++ b/api_utils/utils_ext/prompts.py	2026-11-14 03:26:50.433282801 +0300
 @@ -106,6 +106,17 @@
                          chosen_name = tool_choice
                      if chosen_name:
@@ -279,12 +464,119 @@
                  combined_parts.append("\n".join(tool_lines) + "\n---\n")
              except Exception:
                  pass
-@@ -617,7 +628,10 @@
+@@ -136,11 +147,34 @@
+     }
+     turn_separator = "\n---\n"
+ 
+-    # Process other messages
+-    for i, msg in enumerate(messages):
+-        if i in processed_system_message_indices:
+-            continue
++    # Smart Conversation History Management:
++    # If the conversation has grown very large (e.g., 20+ turns), pasting 800k+ characters
++    # into Google AI Studio's Angular textarea causes catastrophic regex backtracking
++    # and 100% CPU browser lockup.
++    # We prune stale intermediate turns while strictly preserving:
++    # 1. System prompt (processed above)
++    # 2. Initial user message (core requirements/goal)
++    # 3. Last 16 non-system messages (active context, current tool states)
++    MAX_RECENT_MESSAGES = 16
++    other_messages = [msg for i, msg in enumerate(messages) if i not in processed_system_message_indices]
++
++    if len(other_messages) > MAX_RECENT_MESSAGES + 2:
++        initial_user_msg = other_messages[0]
++        recent_other_messages = other_messages[-MAX_RECENT_MESSAGES:]
++        omitted_count = len(other_messages) - 1 - len(recent_other_messages)
++        placeholder_msg = Message(
++            role="user",
++            content=f"... [{omitted_count} older conversation turns omitted for performance. Proceeding from current context...] ..."
++        )
++        effective_messages = [initial_user_msg, placeholder_msg] + recent_other_messages
++        logger.info(
++            f"[{req_id}] Smart context optimization: {len(other_messages)} turns -> {len(effective_messages)} turns (preserved initial task requirements and {len(recent_other_messages)} recent turns)"
++        )
++    else:
++        effective_messages = other_messages
+ 
++    # Process other messages
++    for i, msg in enumerate(effective_messages):
+         if msg.role == "system":
+             logger.debug(f"Skipping subsequent system message at index {i}")
+             continue
+@@ -575,8 +609,10 @@
+             tool_call_id = getattr(msg, "tool_call_id", None)
+             if tool_call_id:
+                 tool_result_lines.append(f"Tool result (tool_call_id={tool_call_id}):")
++
++            raw_result = ""
+             if isinstance(msg.content, str):
+-                tool_result_lines.append(msg.content)
++                raw_result = msg.content
+             elif isinstance(msg.content, list):
+                 # Compatible with few clients putting results in a list
+                 try:
+@@ -585,20 +621,28 @@
+                         if isinstance(it, dict):
+                             if it.get("type") == "text":
+                                 text_raw = it.get("text", "")
+-                                if isinstance(text_raw, str):
+-                                    merged_parts.append(text_raw)
+-                                else:
+-                                    merged_parts.append(str(text_raw))
++                                merged_parts.append(str(text_raw))
+                             else:
+                                 merged_parts.append(str(it))
+                         else:
+                             merged_parts.append(str(it))
+-                    merged = "\n".join(merged_parts)
+-                    tool_result_lines.append(merged)
++                    raw_result = "\n".join(merged_parts)
+                 except Exception:
+-                    tool_result_lines.append(str(msg.content))
++                    raw_result = str(msg.content)
+             else:
+-                tool_result_lines.append(str(msg.content))
++                raw_result = str(msg.content)
++
++            # Safeguard: Never dump more than 8,000 chars per tool result into the browser textarea!
++            # Dumping hundreds of thousands of characters freezes Firefox in an infinite regex/DOM layout loop.
++            MAX_TOOL_CHARS = 8000
++            if len(raw_result) > MAX_TOOL_CHARS:
++                head = raw_result[:MAX_TOOL_CHARS - 1500]
++                tail = raw_result[-1000:]
++                truncated = len(raw_result) - (len(head) + len(tail))
++                raw_result = f"{head}\n\n... [Truncated {truncated} characters for browser safety] ...\n\n{tail}"
++
++            if raw_result:
++                tool_result_lines.append(raw_result)
+             if tool_result_lines:
+                 if content_str:
+                     current_turn_parts.append("\n")
+@@ -617,7 +661,29 @@
  
      final_prompt = "".join(combined_parts)
      if final_prompt:
 -        final_prompt += "\n"
 +        if messages and messages[-1].role in ("user", "tool"):
++            if tools:
++                tool_names = []
++                for t in tools:
++                    if isinstance(t, dict):
++                        fn = t.get("function", {})
++                        if isinstance(fn, dict) and "name" in fn:
++                            tool_names.append(fn["name"])
++                tool_str = ", ".join(tool_names) if tool_names else "bash, read, edit, write"
++                final_prompt += (
++                    f"\n[System Reminder: Available tools: {tool_str}. "
++                    "If your next step is to inspect files, execute shell commands, or check code, "
++                    "you MUST output your tool call at the end of your response using:\n"
++                    "Request function call: <function_name>\n"
++                    "Parameters:\n"
++                    "{\n"
++                    '  "argument_name": "value"\n'
++                    "}\n"
++                    "Never stop at just describing what you plan to do.]\n"
++                )
 +            final_prompt += f"{turn_separator}Assistant:\n"
 +        else:
 +            final_prompt += "\n"
@@ -292,14 +584,14 @@
      # Consolidated English summary (replaces verbose Chinese logs)
      sys_indicator = "Yes" if _has_system_prompt else "No"
 --- a/api_utils/response_generators.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/response_generators.py	2026-11-14 01:17:48.010015896 +0300
++++ b/api_utils/response_generators.py	2026-11-14 03:09:26.976598704 +0300
 @@ -32,6 +32,12 @@
      re.IGNORECASE,
  )
  
 +# Pattern to immediately cut off any tool-calling text during streaming
 +_FC_PREFIX_PATTERN = re.compile(
-+    r"(?:Request\s+function\s+call:|Parameters:\s*\{)",
++    r"(?:Request(?:\s+function(?:\s+call)?)?:?|Parameters:\s*\{)",
 +    re.IGNORECASE,
 +)
 +
@@ -412,7 +704,7 @@
                          "index": 0,
                          "delta": {
 --- a/api_utils/request_processor.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/request_processor.py	2026-11-14 01:26:47.198634716 +0300
++++ b/api_utils/request_processor.py	2026-11-14 02:57:34.682996139 +0300
 @@ -361,6 +361,34 @@
                  content = data.get("body")
                  reasoning_content = data.get("reason")
@@ -476,12 +768,23 @@
                          },
                      }
                  )
-@@ -904,7 +943,7 @@
+@@ -801,6 +840,10 @@
+         fc_orchestrator = get_function_calling_orchestrator()
+         fc_state: Optional[FunctionCallingState] = None
+ 
++        logger.info(
++            f"[{req_id}] [FC] Effective mode: {fc_orchestrator.get_effective_mode(getattr(request, 'tools', None))}, tools: {len(getattr(request, 'tools', [])) if getattr(request, 'tools', None) else 0}"
++        )
++
+         if getattr(request, "tools", None):
+             try:
+                 fc_state = await fc_orchestrator.prepare_request(
+@@ -904,7 +947,7 @@
          calc_timeout = 5.0 + (len(prepared_prompt) / 1000.0)
          config_timeout = RESPONSE_COMPLETION_TIMEOUT / 1000.0
          dynamic_timeout = max(calc_timeout, config_timeout)
 -        dynamic_silence_threshold = max(60.0, dynamic_timeout / 2.0)
-+        dynamic_silence_threshold = 15.0
++        dynamic_silence_threshold = 8.0
  
          logger.info(
              f"[{req_id}] Dynamic timeout: {dynamic_timeout:.2f}s, silence threshold: {dynamic_silence_threshold:.2f}s"
@@ -672,22 +975,182 @@
      except Exception as e:
          if FUNCTION_CALLING_DEBUG:
 --- a/api_utils/utils_ext/stream.py	1970-01-01 03:00:01.000000000 +0300
-+++ b/api_utils/utils_ext/stream.py	2026-11-14 01:26:34.636551446 +0300
-@@ -447,6 +447,17 @@
-                 if empty_count - last_ui_check_time >= ui_check_interval:
-                     if await check_ui_generation_active():
-                         logger.info(f"[{req_id}] UI detected still generating...")
-+                    elif received_items_count > 0 and empty_count >= 15:
-+                        logger.info(
-+                            f"[{req_id}] 🏁 UI generation finished and stream idle. Completing."
-+                        )
-+                        yield {
-+                            "done": True,
-+                            "reason": "ui_idle_stream_end",
-+                            "body": "",
-+                            "function": [],
-+                        }
-+                        return
-                     last_ui_check_time = empty_count
-                 await asyncio.sleep(0.1)
-                 continue
++++ b/api_utils/utils_ext/stream.py	2026-11-14 02:49:05.532717493 +0300
+@@ -62,6 +62,8 @@
+     force_body_mode = False
+     split_index = -1
+     empty_count = 0
++    await clear_stream_queue()
++
+     initial_wait_limit = int(timeout * 10)
+     silence_wait_limit = int(silence_threshold * 10)
+     max_empty_retries = max(silence_wait_limit, initial_wait_limit)
+@@ -84,19 +86,22 @@
+         if not page:
+             return False
+         try:
+-            stop_button = page.locator('button[aria-label="Stop generating"]')
+-            if await stop_button.is_visible(timeout=1000):
+-                return True
+-            from config.selectors import SUBMIT_BUTTON_SELECTOR
+-
+-            submit_button = page.locator(SUBMIT_BUTTON_SELECTOR)
+-            if await submit_button.count() > 0:
+-                try:
+-                    if await submit_button.first.is_disabled(timeout=2000):
+-                        return True
+-                except Exception:
+-                    return False
+-            return False
++            async def _check():
++                stop_button = page.locator('button[aria-label="Stop generating"]')
++                if await stop_button.is_visible():
++                    return True
++                from config.selectors import SUBMIT_BUTTON_SELECTOR
++
++                submit_button = page.locator(SUBMIT_BUTTON_SELECTOR)
++                if await submit_button.count() > 0:
++                    try:
++                        if await submit_button.first.is_disabled():
++                            return True
++                    except Exception:
++                        return False
++                return False
++
++            return await asyncio.wait_for(_check(), timeout=0.4)
+         except Exception:
+             return False
+ 
+--- a/browser_utils/page_controller_modules/function_calling.py	1970-01-01 03:00:01.000000000 +0300
++++ b/browser_utils/page_controller_modules/function_calling.py	2026-11-14 02:10:08.024683234 +0300
+@@ -55,6 +55,30 @@
+     # Instance-level cache for quick toggle state lookup
+     _fc_toggle_cached: Optional[bool] = None
+ 
++    async def _ensure_tools_menu_open(self) -> bool:
++        """Ensure the Tools menu popup is open."""
++        try:
++            tools_dialog = self.page.locator(".tools-dialog")
++            if await tools_dialog.count() > 0 and await tools_dialog.first.is_visible():
++                return True
++            btn = self.page.locator("ms-prompt-box-tools button, button[aria-label='Open tools menu']")
++            if await btn.count() > 0:
++                await btn.first.click(timeout=2000)
++                await asyncio.sleep(0.3)
++                return True
++        except Exception:
++            pass
++        return False
++
++    async def _ensure_tools_menu_closed(self) -> None:
++        """Ensure the Tools menu popup is closed."""
++        try:
++            popover = self.page.locator(".cdk-overlay-popover")
++            if await popover.count() > 0:
++                await popover.first.evaluate("p => p.hidePopover && p.hidePopover()")
++        except Exception:
++            pass
++
+     def _get_fc_cache(self):
+         """Get the function calling cache instance (lazy import to avoid circular deps)."""
+         try:
+@@ -111,6 +135,9 @@
+         try:
+             toggle_locator = self.page.locator(FUNCTION_CALLING_TOGGLE_SELECTOR)
+ 
++            if await toggle_locator.count() == 0 or not await toggle_locator.first.is_visible():
++                await self._ensure_tools_menu_open()
++
+             # Wait for toggle to be visible with a short timeout
+             try:
+                 await expect_async(toggle_locator.first).to_be_visible(
+@@ -186,6 +213,7 @@
+         start_time = time.perf_counter()
+ 
+         try:
++            await self._ensure_tools_menu_open()
+             toggle_locator = self.page.locator(FUNCTION_CALLING_TOGGLE_SELECTOR)
+ 
+             # Wait for toggle to be visible
+@@ -531,6 +559,7 @@
+                 await expect_async(dialog.first).not_to_be_visible(timeout=3000)
+                 if FUNCTION_CALLING_DEBUG:
+                     self.logger.debug(f"[{self.req_id}] UI: Dialog closed successfully")
++                await self._ensure_tools_menu_closed()
+                 return True
+             except Exception:
+                 # Dialog might still be open, try close button
+@@ -545,6 +574,7 @@
+                     await close_button.first.click(timeout=CLICK_TIMEOUT_MS)
+                     await asyncio.sleep(0.3)
+ 
++                await self._ensure_tools_menu_closed()
+                 return True
+ 
+         except asyncio.CancelledError:
+@@ -622,7 +652,9 @@
+             )
+ 
+         try:
+-            # Step 0: Disable Google Search and URL Context if enabled (blocks FC)
++            await self._ensure_tools_menu_open()
++
++            # Step 0: Disable Google Search, URL Context, and Code Execution (which block FC)
+             from config import (
+                 GROUNDING_WITH_GOOGLE_SEARCH_TOGGLE_SELECTOR,
+                 USE_URL_CONTEXT_SELECTOR,
+@@ -634,15 +666,15 @@
+             )
+             if await search_toggle.count() > 0:
+                 try:
+-                    if await search_toggle.is_visible(timeout=2000):
+-                        is_checked = await search_toggle.get_attribute("aria-checked")
++                    if await search_toggle.first.is_visible():
++                        is_checked = await search_toggle.first.get_attribute("aria-checked")
+                         if is_checked == "true":
+                             if FUNCTION_CALLING_DEBUG:
+                                 self.logger.info(
+                                     f"[{self.req_id}] [FC:UI] Disabling Google Search (blocks FC)"
+                                 )
+-                            await search_toggle.click(timeout=CLICK_TIMEOUT_MS)
+-                            await asyncio.sleep(0.5)
++                            await search_toggle.first.click(timeout=CLICK_TIMEOUT_MS)
++                            await asyncio.sleep(0.3)
+                 except Exception:
+                     pass  # Ignore if not visible
+ 
+@@ -650,18 +682,30 @@
+             url_toggle = self.page.locator(USE_URL_CONTEXT_SELECTOR)
+             if await url_toggle.count() > 0:
+                 try:
+-                    if await url_toggle.is_visible(timeout=2000):
+-                        is_checked = await url_toggle.get_attribute("aria-checked")
++                    if await url_toggle.first.is_visible():
++                        is_checked = await url_toggle.first.get_attribute("aria-checked")
+                         if is_checked == "true":
+                             if FUNCTION_CALLING_DEBUG:
+                                 self.logger.info(
+                                     f"[{self.req_id}] [FC:UI] Disabling URL Context (blocks FC)"
+                                 )
+-                            await url_toggle.click(timeout=CLICK_TIMEOUT_MS)
+-                            await asyncio.sleep(0.5)
++                            await url_toggle.first.click(timeout=CLICK_TIMEOUT_MS)
++                            await asyncio.sleep(0.3)
+                 except Exception:
+                     pass  # Ignore if not visible
+ 
++            # 0c. Disable Code Execution
++            code_toggle = self.page.locator('button[aria-label="Code execution"]')
++            if await code_toggle.count() > 0:
++                try:
++                    if await code_toggle.first.is_visible():
++                        is_checked = await code_toggle.first.get_attribute("aria-checked")
++                        if is_checked == "true":
++                            await code_toggle.first.click(timeout=CLICK_TIMEOUT_MS)
++                            await asyncio.sleep(0.3)
++                except Exception:
++                    pass
++
+             # Step 1: Enable function calling if not already enabled
+             toggle_start = time.perf_counter()
+             if not await self.is_function_calling_enabled(check_client_disconnected):

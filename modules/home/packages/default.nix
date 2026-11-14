@@ -422,11 +422,14 @@ let
             echo "=== Setup complete ==="
           fi
 
-          # Disable upstream default proxy (127.0.0.1:7890) and enable emulated tool calling
+          # Disable upstream default proxy (127.0.0.1:7890) and enable native tool calling
           if [ -f "$DIR/.env" ]; then
             sed -i 's|^UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|# UNIFIED_PROXY_CONFIG=http://127.0.0.1:7890|' "$DIR/.env"
             sed -i 's|^GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|# GUI_DEFAULT_PROXY_ADDRESS=http://127.0.0.1:7890|' "$DIR/.env"
-            sed -i 's|^FUNCTION_CALLING_MODE=.*|FUNCTION_CALLING_MODE=emulated|' "$DIR/.env"
+            sed -i 's|^FUNCTION_CALLING_MODE=.*|FUNCTION_CALLING_MODE=native|' "$DIR/.env"
+            sed -i 's|^AUTO_ROTATE_AUTH_PROFILE=.*|AUTO_ROTATE_AUTH_PROFILE=false|' "$DIR/.env"
+            sed -i 's|^QUOTA_HARD_LIMIT=.*|QUOTA_HARD_LIMIT=100000000|' "$DIR/.env"
+            sed -i 's|^QUOTA_SOFT_LIMIT=.*|QUOTA_SOFT_LIMIT=100000000|' "$DIR/.env"
           fi
 
           pkill -9 -f "launchServer.js" 2>/dev/null || true

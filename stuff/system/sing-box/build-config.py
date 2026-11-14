@@ -1,23 +1,21 @@
-import sys
-import os
 import json
+import os
+import sys
 
 # Arguments:
-# 1. Path to base config (e.g. /run/sing-box/merged.json)
-# 2. Path to credential config.json (or "none" if not exists)
-# 3. Path to output config.json (e.g. /run/sing-box/config.json)
-# 4. JSON string of generated AWG outbounds (e.g. '[{"tag": "awg0", ...}]')
-# 5. JSON string of dynamic tags to prepend (e.g. '["proxy-server", "awg0"]')
+# 1. Base config (e.g. sing-box-config-file)
+# 2. Output config (e.g. /run/sing-box/config.json)
+# 3. JSON string of generated AWG outbounds (e.g. '[]')
+# 4+. Extra config file paths (e.g. sub_config.json, config.json)
 
-if len(sys.argv) < 6:
-    print("Error: Missing arguments for build-config.py", file=sys.stderr)
+if len(sys.argv) < 3:
+    print("Error: Missing arguments", file=sys.stderr)
     sys.exit(1)
 
 base_config_path = sys.argv[1]
-credential_config_path = sys.argv[2]
-output_config_path = sys.argv[3]
-awg_outbounds_str = sys.argv[4]
-prepend_tags_str = sys.argv[5]
+output_config_path = sys.argv[2]
+awg_outbounds_str = sys.argv[3] if len(sys.argv) > 3 else "[]"
+extra_config_paths = sys.argv[4:]
 
 # Load base config
 try:
@@ -32,26 +30,16 @@ except Exception as e:
 
 # Parse dynamic inputs safely
 try:
-    awg_outbounds = (
-        json.loads(awg_outbounds_str) if awg_outbounds_str.strip() else []
-    )
+    if awg_outbounds_str.strip():
+        awg_outbounds = json.loads(awg_outbounds_str)
+    else:
+        awg_outbounds = []
 except Exception as e:
     print(
-        f"Warning: Failed to parse AWG outbounds JSON: {e}. Using empty list.",
+        f"Warning: Failed to parse AWG outbounds JSON: {e}.",
         file=sys.stderr,
     )
     awg_outbounds = []
-
-try:
-    prepend_tags = (
-        json.loads(prepend_tags_str) if prepend_tags_str.strip() else []
-    )
-except Exception as e:
-    print(
-        f"Warning: Failed to parse prepend tags JSON: {e}. Using empty list.",
-        file=sys.stderr,
-    )
-    prepend_tags = []
 
 
 # Deep merge function
@@ -69,28 +57,44 @@ def deep_merge(dict1, dict2):
             dict1[key] = val2
 
 
-# 1. Merge with credential config if it exists
-if (
-    credential_config_path
-    and credential_config_path.lower() != "none"
-    and os.path.isfile(credential_config_path)
-):
+def extract_tags(cfg):
+    tags = []
+    for item in cfg.get("outbounds", []):
+        if isinstance(item, dict) and item.get("tag"):
+            tags.append(item["tag"])
+    for item in cfg.get("endpoints", []):
+        if isinstance(item, dict) and item.get("tag"):
+            tags.append(item["tag"])
+    return tags
+
+
+# Merge each extra config in order
+loaded_extra_configs = []
+for path in extra_config_paths:
+    if not path or path.lower() == "none" or not os.path.isfile(path):
+        continue
     try:
-        with open(credential_config_path, "r") as f:
-            cred_config = json.load(f)
-        deep_merge(config, cred_config)
+        with open(path, "r") as f:
+            extra_cfg = json.load(f)
+        deep_merge(config, extra_cfg)
+        loaded_extra_configs.append(extra_cfg)
     except Exception as e:
         print(
-            f"Warning: Failed to read or merge {credential_config_path}: {e}",
+            f"Warning: Failed to read or merge {path}: {e}",
             file=sys.stderr,
         )
 
-# 2. Append AWG outbounds to outbounds list
+# Append AWG outbounds to outbounds list
 if "outbounds" not in config or not isinstance(config["outbounds"], list):
     config["outbounds"] = []
 config["outbounds"].extend(awg_outbounds)
 
-# 3. Process the "out" or "proxy" selector to prepend tags and deduplicate
+# Collect tags from extra configs (config.json tags before sub tags)
+prepend_tags = []
+for extra_cfg in reversed(loaded_extra_configs):
+    prepend_tags.extend(extract_tags(extra_cfg))
+
+# Process the "out" or "proxy" selector to prepend tags and deduplicate
 for outbound in config.get("outbounds", []):
     if (
         isinstance(outbound, dict)
@@ -101,10 +105,8 @@ for outbound in config.get("outbounds", []):
         if not isinstance(existing_list, list):
             existing_list = []
 
-        # Build combined list (new tags first, then existing tags)
         combined = prepend_tags + existing_list
 
-        # Deduplicate while preserving first-seen order
         seen = set()
         deduped = []
         for tag in combined:

@@ -687,6 +687,7 @@ let
     string = builtins.readFile ../../../stuff/system/sing-box/sing-box-init.sh;
     scope = {
       inherit
+        pkgs
         setup_script
         CREDENTIAL_DIR
         build-config-py
@@ -789,6 +790,7 @@ in
         before = [ "sing-box-core.service" ];
         partOf = [ "sing-box-core.service" ];
         path = with pkgs; [
+          bash
           iproute2
           nftables
           jq
@@ -796,6 +798,9 @@ in
           gawk
           systemd
           python3
+          curl
+          cacert
+          coreutils
         ];
         serviceConfig = {
           Type = "oneshot";
