@@ -21,10 +21,16 @@ const MSG_EXIT_RESPONSE: u16 = 4;
 
 const FLAG_WAIT_EXIT: u32 = 1 << 0;
 const FLAG_HELPER: u32 = 1 << 2;
+const FLAG_SECCOMP: u32 = 1 << 3;
 
 const SOL_SOCKET: i32 = 1;
 const SCM_RIGHTS: i32 = 1;
 const SIGTERM: i32 = 15;
+const PR_SET_NO_NEW_PRIVS: i32 = 38;
+const SYS_SECCOMP: i64 = 317;
+const SECCOMP_SET_MODE_FILTER: usize = 1;
+const SECCOMP_FILTER_FLAG_NEW_LISTENER: usize = 1 << 3;
+const SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV: usize = 1 << 5;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -110,6 +116,7 @@ const WNOHANG: i32 = 1;
 const TIOCSWINSZ: usize = 0x5414;
 
 unsafe extern "C" {
+    fn syscall(number: i64, ...) -> i64;
     fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn close(fd: i32) -> i32;
     fn fork() -> i32;
@@ -123,6 +130,7 @@ unsafe extern "C" {
     fn ioctl(fd: i32, request: usize, ...) -> i32;
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn recvmsg(sockfd: i32, msg: *mut LibcMsghdr, flags: i32) -> isize;
+    fn sendmsg(sockfd: i32, msg: *const LibcMsghdr, flags: i32) -> isize;
     fn unshare(flags: i32) -> i32;
 }
 
@@ -230,9 +238,10 @@ struct ExecPayload {
     cwd: String,
     args: Vec<String>,
     env: Vec<String>,
+    seccomp_bpf: Vec<u8>,
 }
 
-fn parse_exec_payload(buf: &[u8]) -> Option<ExecPayload> {
+fn parse_exec_payload(buf: &[u8], has_seccomp: bool) -> Option<ExecPayload> {
     let mut cursor = 0;
     let read_u32 = |c: &mut usize| -> Option<u32> {
         if *c + 4 > buf.len() {
@@ -272,10 +281,146 @@ fn parse_exec_payload(buf: &[u8]) -> Option<ExecPayload> {
         env.push(read_string(&mut cursor)?);
     }
 
-    Some(ExecPayload { cwd, args, env })
+    let seccomp_bpf = if has_seccomp {
+        let bpf_len = usize::try_from(read_u32(&mut cursor)?).ok()?;
+        if bpf_len > 4096 * 8 || bpf_len % 8 != 0 || cursor + bpf_len > buf.len() {
+            return None;
+        }
+        buf[cursor..cursor + bpf_len].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    Some(ExecPayload {
+        cwd,
+        args,
+        env,
+        seccomp_bpf,
+    })
 }
 
-fn run_child_process(payload: &ExecPayload, fds: &[OwnedFd], is_cli: bool) -> ! {
+#[repr(C)]
+struct SockFprog {
+    len: u16,
+    filter: *const u8,
+}
+
+fn send_fd_with_byte(sock: &UnixStream, fd_to_send: RawFd) -> std::io::Result<()> {
+    let mut byte = [b'S'; 1];
+    let mut iov = LibcIovec {
+        iov_base: byte.as_mut_ptr().cast(),
+        iov_len: 1,
+    };
+    let mut cmsg_buf = CmsgBuffer([0u8; 128]);
+    let raw_len = size_of::<LibcCmsghdr>() + size_of::<RawFd>();
+    let control_space = (raw_len + 7) & !7;
+    let msg = LibcMsghdr {
+        name: std::ptr::null_mut(),
+        namelen: 0,
+        _pad1: 0,
+        iov: &raw mut iov,
+        iovlen: 1,
+        control: cmsg_buf.0.as_mut_ptr().cast(),
+        controllen: control_space,
+        flags: 0,
+        _pad2: 0,
+    };
+    let cmsghdr_ptr = msg.control.cast::<LibcCmsghdr>();
+    unsafe {
+        (*cmsghdr_ptr).len = raw_len;
+        (*cmsghdr_ptr).level = SOL_SOCKET;
+        (*cmsghdr_ptr).type_ = SCM_RIGHTS;
+        *cmsghdr_ptr.add(1).cast::<RawFd>() = fd_to_send;
+    }
+    let n = unsafe { sendmsg(sock.as_raw_fd(), &raw const msg, 0) };
+    if n < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
+    if bpf_bytes.is_empty() {
+        return;
+    }
+    if seccomp_socket.is_empty() {
+        eprintln!("[sb-executor] Seccomp filter requested but --seccomp-socket is missing");
+        exit(1);
+    }
+    let Ok(insn_count) = u16::try_from(bpf_bytes.len() / 8) else {
+        eprintln!("[sb-executor] Seccomp BPF exceeds maximum instruction count");
+        exit(1);
+    };
+    if insn_count == 0 {
+        return;
+    }
+
+    let mut stream = match UnixStream::connect(seccomp_socket) {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("[sb-executor] Failed to connect seccomp socket '{seccomp_socket}': {err}");
+            exit(1);
+        }
+    };
+
+    if unsafe { prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+        eprintln!(
+            "[sb-executor] prctl(PR_SET_NO_NEW_PRIVS) failed: {}",
+            std::io::Error::last_os_error()
+        );
+        exit(1);
+    }
+
+    let prog = SockFprog {
+        len: insn_count,
+        filter: bpf_bytes.as_ptr(),
+    };
+    let flags = SECCOMP_FILTER_FLAG_NEW_LISTENER | SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV;
+    let res = unsafe {
+        syscall(
+            SYS_SECCOMP,
+            SECCOMP_SET_MODE_FILTER,
+            flags,
+            (&raw const prog).cast::<c_void>(),
+        )
+    };
+    let Ok(notif_fd) = i32::try_from(res) else {
+        eprintln!(
+            "[sb-executor] seccomp(SECCOMP_SET_MODE_FILTER) failed: {}",
+            std::io::Error::last_os_error()
+        );
+        exit(1);
+    };
+    if notif_fd < 0 {
+        eprintln!(
+            "[sb-executor] seccomp(SECCOMP_SET_MODE_FILTER) failed: {}",
+            std::io::Error::last_os_error()
+        );
+        exit(1);
+    }
+
+    if let Err(err) = send_fd_with_byte(&stream, notif_fd) {
+        unsafe { close(notif_fd) };
+        eprintln!("[sb-executor] Failed to hand off seccomp listener fd: {err}");
+        exit(1);
+    }
+    unsafe { close(notif_fd) };
+
+    let mut ack = [0u8; 1];
+    if let Err(err) = stream.read_exact(&mut ack) {
+        eprintln!("[sb-executor] Failed waiting for seccomp supervisor ack: {err}");
+        exit(1);
+    }
+}
+
+fn run_child_process(
+    payload: &ExecPayload,
+    fds: &[OwnedFd],
+    is_cli: bool,
+    is_helper: bool,
+    seccomp_socket: &str,
+) -> ! {
     if fds.len() >= 3 {
         unsafe {
             dup2(fds[0].as_raw_fd(), 0);
@@ -304,6 +449,10 @@ fn run_child_process(payload: &ExecPayload, fds: &[OwnedFd], is_cli: bool) -> ! 
         {
             unsafe { setenv(ck.as_ptr(), cv.as_ptr(), 1) };
         }
+    }
+
+    if !is_helper {
+        install_seccomp_and_handoff(&payload.seccomp_bpf, seccomp_socket);
     }
 
     let Ok(c_argv) = payload
@@ -462,6 +611,7 @@ fn handle_connection(
     listener_fd: RawFd,
     auth_token: Option<[u8; 16]>,
     migrator_socket: &str,
+    seccomp_socket: &str,
 ) {
     let (header, fds) = match recv_header_with_fds(&stream) {
         Ok(res) => res,
@@ -500,7 +650,8 @@ fn handle_connection(
         return;
     }
 
-    let Some(payload) = parse_exec_payload(&payload_buf) else {
+    let has_seccomp = (header.flags & FLAG_SECCOMP) != 0;
+    let Some(payload) = parse_exec_payload(&payload_buf, has_seccomp) else {
         eprintln!("[sb-executor] Malformed payload");
         return;
     };
@@ -528,7 +679,7 @@ fn handle_connection(
         if !is_helper && !migrator_socket.is_empty() {
             migrate_to_inside(migrator_socket);
         }
-        run_child_process(&payload, &fds, is_cli);
+        run_child_process(&payload, &fds, is_cli, is_helper, seccomp_socket);
     }
 
     drop(fds);
@@ -626,6 +777,7 @@ struct ExecutorCli {
     socket_path: String,
     ready_pipe: String,
     migrator_socket: String,
+    seccomp_socket: String,
     inside_init: Vec<String>,
     auth_token: Option<[u8; 16]>,
     singbox_bin: String,
@@ -642,6 +794,7 @@ fn parse_executor_cli() -> ExecutorCli {
     let mut socket_path = String::new();
     let mut ready_pipe = String::new();
     let mut migrator_socket = String::new();
+    let mut seccomp_socket = String::new();
     let mut inside_init = Vec::new();
     let mut auth_token = None;
     let mut singbox_bin = String::new();
@@ -665,6 +818,10 @@ fn parse_executor_cli() -> ExecutorCli {
             }
             "--migrator-socket" if i + 1 < args.len() => {
                 migrator_socket.clone_from(&args[i + 1]);
+                i += 2;
+            }
+            "--seccomp-socket" if i + 1 < args.len() => {
+                seccomp_socket.clone_from(&args[i + 1]);
                 i += 2;
             }
             "--inside-init" if i + 1 < args.len() => {
@@ -717,6 +874,7 @@ fn parse_executor_cli() -> ExecutorCli {
         socket_path,
         ready_pipe,
         migrator_socket,
+        seccomp_socket,
         inside_init,
         auth_token,
         singbox_bin,
@@ -795,7 +953,13 @@ fn main() {
         if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
             match listener.accept() {
                 Ok((s, _)) => {
-                    handle_connection(s, listener_fd, cli.auth_token, &cli.migrator_socket);
+                    handle_connection(
+                        s,
+                        listener_fd,
+                        cli.auth_token,
+                        &cli.migrator_socket,
+                        &cli.seccomp_socket,
+                    );
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(err) => {

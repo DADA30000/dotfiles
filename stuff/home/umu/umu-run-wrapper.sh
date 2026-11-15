@@ -31,6 +31,26 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   export UMU_EXTRA_PATHS="$(get_dprop 'X-UMU-Extra-Paths')"
   export USE_BIND_CWD="$(get_dprop 'X-UMU-Bind-CWD')"
   export UMU_X11_MODE="$(get_dprop 'X-UMU-X11')"
+  export UMU_SINGBOX_CONFIG="$(get_dprop 'X-UMU-Singbox-Config')"
+  export UMU_PULSE_MODE="$(get_dprop 'X-UMU-Pulse')"
+  export UMU_PIPEWIRE_MODE="$(get_dprop 'X-UMU-Pipewire')"
+  export UMU_SB_GPU="$(get_dprop 'X-UMU-GPU')"
+  export UMU_WEBCAM="$(get_dprop 'X-UMU-Webcam')"
+  export UMU_DBUS_MODE="$(get_dprop 'X-UMU-DBus')"
+  export UMU_DBUS_ARGS="$(get_dprop 'X-UMU-DBus-Args')"
+  export UMU_SHM_MODE="$(get_dprop 'X-UMU-SHM')"
+  export UMU_TMP_MODE="$(get_dprop 'X-UMU-Tmp')"
+  export UMU_LANDLOCK="$(get_dprop 'X-UMU-Landlock')"
+  export UMU_SECCOMP="$(get_dprop 'X-UMU-Seccomp')"
+  export UMU_SECCOMP_ALLOW="$(get_dprop 'X-UMU-Seccomp-Allow')"
+  export UMU_SECCOMP_BLOCK="$(get_dprop 'X-UMU-Seccomp-Block')"
+  export UMU_SHARE_PID="$(get_dprop 'X-UMU-Share-Pid')"
+  export UMU_PORTALS="$(get_dprop 'X-UMU-Portals')"
+  export UMU_TMPFS="$(get_dprop 'X-UMU-Tmpfs')"
+  export UMU_VPNIFY="$(get_dprop 'X-UMU-Vpnify')"
+  export UMU_BRIDGES="$(get_dprop 'X-UMU-Bridges')"
+  export UMU_BWRAP_ARGS="$(get_dprop 'X-UMU-Bwrap-Args')"
+  export UMU_SB_ENV="$(get_dprop 'X-UMU-Env')"
 
   EXTRA_CLI_ARGS=("$@")
   RAW_ARGS_LIST=()
@@ -279,17 +299,21 @@ if [[ "${USE_GAMEPAD:-0}" != "0" ]]; then
 fi
 
 NET_MODE="sandboxed"
-PASTA_ARG=()
+SINGBOX_CFG_ARGS=()
 if [[ "$USE_NETWORK" == "0" || "$USE_NETWORK" == "off" ]]; then
   NET_MODE="off"
 elif [[ "$USE_NETWORK" == "passthrough" || "$USE_NETWORK" == "1" ]]; then
   NET_MODE="passthrough"
 elif [[ "$USE_NETWORK" == "singbox" || "$USE_VPN" == "1" ]]; then
   NET_MODE="singbox"
-else
-  PASTA_ARG+=(--pasta-bin "%{{{pkgs.passt}}}/bin/pasta")
 fi
-[[ "$NET_MODE" == "sandboxed" && ${#PASTA_ARG[@]} -eq 0 ]] && PASTA_ARG+=(--pasta-bin "%{{{pkgs.passt}}}/bin/pasta")
+if [[ "$NET_MODE" == "singbox" && -n "${UMU_SINGBOX_CONFIG:-}" ]]; then
+  if [[ "$UMU_SINGBOX_CONFIG" == \{* ]]; then
+    SINGBOX_CFG_ARGS+=(--singbox-json "$UMU_SINGBOX_CONFIG")
+  else
+    SINGBOX_CFG_ARGS+=(--singbox-config "$UMU_SINGBOX_CONFIG")
+  fi
+fi
 
 STEAM_BINDS=()
 STEAM_BRIDGE=()
@@ -376,12 +400,62 @@ else
   DISPLAY_ARGS+=(--no-wayland --x11 "${UMU_X11_MODE:-passthrough}")
 fi
 
+EXTRA_SB_ARGS=()
+[[ -n "${UMU_PULSE_MODE:-}" ]] && EXTRA_SB_ARGS+=(--pulse "$UMU_PULSE_MODE")
+[[ -n "${UMU_PIPEWIRE_MODE:-}" ]] && EXTRA_SB_ARGS+=(--pipewire "$UMU_PIPEWIRE_MODE")
+if [[ "${UMU_SB_GPU:-1}" == "0" ]]; then
+  EXTRA_SB_ARGS+=(--no-gpu)
+else
+  EXTRA_SB_ARGS+=(--gpu)
+fi
+if [[ -n "${UMU_WEBCAM:-}" && "${UMU_WEBCAM}" != "0" ]]; then
+  EXTRA_SB_ARGS+=(--webcam "$UMU_WEBCAM")
+fi
+[[ -n "${UMU_DBUS_MODE:-}" ]] && EXTRA_SB_ARGS+=(--dbus "$UMU_DBUS_MODE")
+[[ -n "${UMU_SHM_MODE:-}" ]] && EXTRA_SB_ARGS+=(--shm "$UMU_SHM_MODE")
+[[ -n "${UMU_TMP_MODE:-}" ]] && EXTRA_SB_ARGS+=(--tmp "$UMU_TMP_MODE")
+if [[ "${UMU_LANDLOCK:-0}" == "1" ]]; then
+  EXTRA_SB_ARGS+=(--landlock)
+else
+  EXTRA_SB_ARGS+=(--no-landlock)
+fi
+if [[ "${UMU_SECCOMP:-1}" == "0" ]]; then
+  EXTRA_SB_ARGS+=(--no-seccomp)
+else
+  EXTRA_SB_ARGS+=(--seccomp)
+  [[ -n "${UMU_SECCOMP_ALLOW:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-allow "$UMU_SECCOMP_ALLOW")
+  [[ -n "${UMU_SECCOMP_BLOCK:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-block "$UMU_SECCOMP_BLOCK")
+fi
+[[ "${UMU_SHARE_PID:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--share-pid)
+[[ "${UMU_PORTALS:-1}" == "0" ]] && EXTRA_SB_ARGS+=(--no-portals)
+[[ "${UMU_TMPFS:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--tmpfs)
+[[ "${UMU_VPNIFY:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--vpnify)
+if [[ -n "${UMU_BRIDGES:-}" ]]; then
+  for br in $UMU_BRIDGES; do
+    EXTRA_SB_ARGS+=(--bridge "$br")
+  done
+fi
+if [[ -n "${UMU_DBUS_ARGS:-}" ]]; then
+  for da in $UMU_DBUS_ARGS; do
+    EXTRA_SB_ARGS+=(--dbus-arg "$da")
+  done
+fi
+if [[ -n "${UMU_BWRAP_ARGS:-}" ]]; then
+  for ba in $UMU_BWRAP_ARGS; do
+    EXTRA_SB_ARGS+=(--bwrap-arg "$ba")
+  done
+fi
+if [[ -n "${UMU_SB_ENV:-}" ]]; then
+  for ev in $UMU_SB_ENV; do
+    EXTRA_SB_ARGS+=(--env "$ev")
+  done
+fi
+
 # 12. Execution configuration
 if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   mkdir -p "$PREFIX_DIR/sandbox"
   OVERLAY_EXEC_CMD=(
     sb-run
-    --no-landlock
     --uid "$ORIG_UID"
     --gid "$ORIG_GID"
     --id "umu-$prefix_name"
@@ -389,12 +463,11 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
     --rw "$MERGED_PFX"
     --rw "$SECURE_MOUNT"
     --rw "$SECURE_MOUNT:$MOUNT_DIR"
-    --gpu
-    --pulse sandboxed
     "${DISPLAY_ARGS[@]}"
     "${GAMEPAD_ARGS[@]}"
     --net "$NET_MODE"
-    "${PASTA_ARG[@]}"
+    "${SINGBOX_CFG_ARGS[@]}"
+    "${EXTRA_SB_ARGS[@]}"
     "${STEAM_BINDS[@]}"
     "${STEAM_BRIDGE[@]}"
     "${STEAM_TMP_SHM[@]}"

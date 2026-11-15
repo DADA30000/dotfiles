@@ -32,6 +32,24 @@ let
       '';
     };
 
+  fhsSeccompAllow = [
+    "unshare"
+    "setns"
+    "mount"
+    "umount"
+    "umount2"
+    "pivot_root"
+    "chroot"
+    "open_tree"
+    "move_mount"
+    "fsopen"
+    "fsconfig"
+    "fsmount"
+    "fspick"
+    "mount_setattr"
+    "clone_newuser"
+  ];
+
   # ---------------------------------------------------------------------------
   # Sandboxed Applications
   # ---------------------------------------------------------------------------
@@ -41,6 +59,7 @@ let
     network = "sandboxed";
     gpu = true;
     wayland = "sandboxed";
+    seccomp_allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
       SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
@@ -68,6 +87,67 @@ let
     '';
     additional_inside_commands = ''
       rust-bridge -r pass --address 127.0.0.1:2048 -s "$XDG_RUNTIME_DIR/aistudio" -d
+    '';
+  };
+
+  geminiWeb2ApiSandbox = mkSandbox rec {
+    appId = "com.mag1cfall.geminiweb2api";
+    package = geminiWeb2ApiPkg;
+    network = "sandboxed";
+    gpu = true;
+    wayland = "sandboxed";
+    x11 = "sandboxed";
+    seccomp_allow = fhsSeccompAllow;
+    additional_args.dbus.policies."com.mag1cfall.gemini-web2api.*" = "own";
+    additional_outside_commands = ''
+      rust-bridge -r listen --address 127.0.0.1:8007 -s "$SANDBOXED_RUNTIME_DIR/gemini-web2api" &
+      SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
+      SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
+      SANDBOX_CFG="$SANDBOX_HOME/$SANDBOX_CFG_REL/Gemini-Web2API"
+      mkdir -p "$SANDBOX_HOME/$SANDBOX_CFG_REL" "$XDG_CONFIG_HOME"
+      if [ -d "$XDG_CONFIG_HOME/Gemini-Web2API" ] && [ ! -L "$XDG_CONFIG_HOME/Gemini-Web2API" ]; then
+        if [ ! -e "$SANDBOX_CFG" ]; then
+          mv "$XDG_CONFIG_HOME/Gemini-Web2API" "$SANDBOX_CFG"
+        else
+          rm -rf "$XDG_CONFIG_HOME/Gemini-Web2API.pre-sandbox"
+          mv "$XDG_CONFIG_HOME/Gemini-Web2API" "$XDG_CONFIG_HOME/Gemini-Web2API.pre-sandbox"
+        fi
+      fi
+      mkdir -p "$SANDBOX_CFG"
+      ln -sfn "$SANDBOX_CFG" "$XDG_CONFIG_HOME/Gemini-Web2API"
+    '';
+    additional_inside_commands = ''
+      rust-bridge -r pass --address 127.0.0.1:8007 -s "$XDG_RUNTIME_DIR/gemini-web2api" -d
+    '';
+  };
+
+  antigravity2apiSandbox = mkSandbox rec {
+    appId = "com.mag1cfall.antigravity2api";
+    package = antigravity2apiPkg;
+    network = "sandboxed";
+    gpu = true;
+    wayland = "sandboxed";
+    x11 = "sandboxed";
+    seccomp_allow = fhsSeccompAllow;
+    additional_outside_commands = ''
+      rust-bridge -r listen --address 127.0.0.1:8017 -s "$SANDBOXED_RUNTIME_DIR/antigravity2api" &
+      SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
+      SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
+      SANDBOX_CFG="$SANDBOX_HOME/$SANDBOX_CFG_REL/Antigravity2API"
+      mkdir -p "$SANDBOX_HOME/$SANDBOX_CFG_REL" "$XDG_CONFIG_HOME"
+      if [ -d "$XDG_CONFIG_HOME/Antigravity2API" ] && [ ! -L "$XDG_CONFIG_HOME/Antigravity2API" ]; then
+        if [ ! -e "$SANDBOX_CFG" ]; then
+          mv "$XDG_CONFIG_HOME/Antigravity2API" "$SANDBOX_CFG"
+        else
+          rm -rf "$XDG_CONFIG_HOME/Antigravity2API.pre-sandbox"
+          mv "$XDG_CONFIG_HOME/Antigravity2API" "$XDG_CONFIG_HOME/Antigravity2API.pre-sandbox"
+        fi
+      fi
+      mkdir -p "$SANDBOX_CFG"
+      ln -sfn "$SANDBOX_CFG" "$XDG_CONFIG_HOME/Antigravity2API"
+    '';
+    additional_inside_commands = ''
+      rust-bridge -r pass --address 127.0.0.1:8017 -s "$XDG_RUNTIME_DIR/antigravity2api" -d
     '';
   };
 
@@ -110,6 +190,7 @@ let
     wayland = "sandboxed";
     gpu = true;
     webcam = 5;
+    seccomp_allow = fhsSeccompAllow;
     additional_args =
       { sloth, ... }:
       {
@@ -263,6 +344,14 @@ let
         use_landlock = false;
         sandbox_tmp = false;
         sandbox_shm = false;
+        seccomp_allow = fhsSeccompAllow ++ [
+          "ptrace"
+          "process_vm_readv"
+          "process_vm_writev"
+          "modify_ldt"
+          "personality"
+          "userfaultfd"
+        ];
         additional_outside_commands = ''
           rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
           mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_DATA_HOME/vulkan"
@@ -485,6 +574,306 @@ let
       paths = [
         aistudio2apiFhs
         aistudio2apiAssets
+      ];
+    };
+
+  geminiWeb2ApiPkg =
+    let
+      src = inputs.gemini-web2api;
+      version = src.shortRev or "unstable";
+
+      webDist = pkgs.stdenv.mkDerivation {
+        pname = "gemini-web2api-web";
+        inherit version;
+        src = "${src}/web";
+
+        nativeBuildInputs = [
+          pkgs.nodejs_22
+          pkgs.pnpmConfigHook
+          pkgs.pnpm_11
+        ];
+
+        pnpmDeps = pkgs.fetchPnpmDeps {
+          pname = "gemini-web2api-web-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")}";
+          inherit version;
+          src = "${src}/web";
+          pnpm = pkgs.pnpm_11;
+          fetcherVersion = 5;
+          hash = "sha256-0zkeevUZ99vp2bEKr8CGVDDM92pUiYuFyPWGkEemBpQ=";
+        };
+
+        buildPhase = ''
+          runHook preBuild
+          pnpm run build
+          runHook postBuild
+        '';
+
+        installPhase = ''
+          runHook preInstall
+          cp -r ../internal/webui/dist $out
+          runHook postInstall
+        '';
+      };
+      geminiWeb2ApiBin = pkgs.buildGoModule {
+        pname = "gemini-web2api";
+        inherit version src;
+
+        vendorHash = "sha256-HuWU1neEojrjQUTNlc1YfaUseLG91gAGKd4YtQVS42s=";
+        overrideModAttrs = _: {
+          name = "gemini-web2api-go-modules-${
+            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
+          }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+        };
+
+        subPackages = [ "cmd/gemini-web2api" ];
+        tags = [
+          "desktop"
+          "production"
+          "gtk3"
+          "nomsgpack"
+        ];
+        ldflags = [
+          "-s"
+          "-w"
+          "-X github.com/Mag1cFall/Gemini-Web2API/internal/app.version=${version}"
+        ];
+        doCheck = false;
+
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.wrapGAppsHook3
+        ];
+
+        buildInputs = [
+          pkgs.gtk3
+          pkgs.webkitgtk_4_1
+        ];
+
+        postConfigure = ''
+          rm -rf internal/webui/dist
+          cp -r ${webDist} internal/webui/dist
+        '';
+
+        postInstall = ''
+          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
+          mkdir -p $out/share/applications
+          cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
+[Desktop Entry]
+Version=1.0
+Name=Gemini-Web2API
+Comment=Gemini Web to OpenAI, Anthropic and Gemini compatible API
+Exec=gemini-web2api
+Terminal=false
+Type=Application
+Icon=gemini-web2api
+Categories=Network;Development;
+StartupWMClass=gemini-web2api
+DESKTOP
+        '';
+      };
+
+      geminiFhs = pkgs.buildFHSEnv {
+        name = "gemini-web2api";
+        targetPkgs = pkgs: [
+          pkgs.cacert
+          pkgs.gtk3
+          pkgs.glib
+          pkgs.pango
+          pkgs.cairo
+          pkgs.gdk-pixbuf
+          pkgs.atk
+          pkgs.at-spi2-atk
+          pkgs.alsa-lib
+          pkgs.libxkbcommon
+          pkgs.libx11
+          pkgs.libxcomposite
+          pkgs.libxdamage
+          pkgs.libxext
+          pkgs.libxfixes
+          pkgs.libxrandr
+          pkgs.libxrender
+          pkgs.libxtst
+          pkgs.libxcb
+          pkgs.libxt
+          pkgs.nspr
+          pkgs.nss
+          pkgs.dbus
+          pkgs.libglvnd
+          pkgs.libgbm
+          pkgs.mesa
+          pkgs.ffmpeg
+          pkgs.cups
+          pkgs.libdrm
+          pkgs.udev
+          pkgs.fontconfig
+          pkgs.freetype
+          pkgs.zlib
+          pkgs.libgpg-error
+          pkgs.stdenv.cc.cc.lib
+        ];
+        runScript = "${geminiWeb2ApiBin}/bin/gemini-web2api";
+      };
+
+      geminiAssets = pkgs.runCommand "gemini-web2api-assets" { } ''
+        mkdir -p $out/share
+        cp -r ${geminiWeb2ApiBin}/share/* $out/share/
+      '';
+    in
+    pkgs.symlinkJoin {
+      name = "gemini-web2api-${version}";
+      paths = [
+        geminiFhs
+        geminiAssets
+      ];
+    };
+
+  antigravity2apiPkg =
+    let
+      src = inputs.antigravity2api;
+      version = src.shortRev or "unstable";
+
+      webDist = pkgs.stdenv.mkDerivation {
+        pname = "antigravity2api-web";
+        inherit version src;
+
+        pnpmRoot = "web";
+
+        nativeBuildInputs = [
+          pkgs.nodejs_22
+          pkgs.pnpmConfigHook
+          pkgs.pnpm_11
+        ];
+
+        pnpmDeps = pkgs.fetchPnpmDeps {
+          pname = "antigravity2api-web-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")}";
+          inherit version;
+          src = "${src}/web";
+          pnpm = pkgs.pnpm_11;
+          fetcherVersion = 5;
+          hash = "sha256-PHx2Hs48i83rkHINEng0xRNZ7LfbMjmGFopuY3s99Gc=";
+        };
+
+        buildPhase = ''
+          runHook preBuild
+          pnpm --dir web run build
+          runHook postBuild
+        '';
+
+        installPhase = ''
+          runHook preInstall
+          cp -r internal/webui/dist $out
+          runHook postInstall
+        '';
+      };
+
+      antigravity2apiBin = pkgs.buildGoModule {
+        pname = "antigravity2api";
+        inherit version src;
+
+        vendorHash = "sha256-WBysuWN0PO+hWQTNUxx/q6W0OU6acmhOBe/G812yffk=";
+        overrideModAttrs = _: {
+          name = "antigravity2api-go-modules-${
+            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
+          }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+        };
+
+        subPackages = [ "cmd/antigravity2api" ];
+        tags = [
+          "desktop"
+          "production"
+          "gtk3"
+        ];
+        ldflags = [
+          "-s"
+          "-w"
+        ];
+        doCheck = false;
+
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.wrapGAppsHook3
+        ];
+
+        buildInputs = [
+          pkgs.gtk3
+          pkgs.webkitgtk_4_1
+        ];
+
+        postConfigure = ''
+          rm -rf internal/webui/dist
+          cp -r ${webDist} internal/webui/dist
+        '';
+
+        postInstall = ''
+          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/antigravity2api.png
+          mkdir -p $out/share/applications
+          cat << 'DESKTOP' > $out/share/applications/antigravity2api.desktop
+[Desktop Entry]
+Version=1.0
+Name=Antigravity2API
+Comment=Antigravity to OpenAI, Anthropic and Gemini compatible API
+Exec=antigravity2api
+Terminal=false
+Type=Application
+Icon=antigravity2api
+Categories=Network;Development;
+StartupWMClass=antigravity2api
+DESKTOP
+        '';
+      };
+
+      antigravityFhs = pkgs.buildFHSEnv {
+        name = "antigravity2api";
+        targetPkgs = pkgs: [
+          pkgs.cacert
+          pkgs.gtk3
+          pkgs.glib
+          pkgs.pango
+          pkgs.cairo
+          pkgs.gdk-pixbuf
+          pkgs.atk
+          pkgs.at-spi2-atk
+          pkgs.alsa-lib
+          pkgs.libxkbcommon
+          pkgs.libx11
+          pkgs.libxcomposite
+          pkgs.libxdamage
+          pkgs.libxext
+          pkgs.libxfixes
+          pkgs.libxrandr
+          pkgs.libxrender
+          pkgs.libxtst
+          pkgs.libxcb
+          pkgs.libxt
+          pkgs.nspr
+          pkgs.nss
+          pkgs.dbus
+          pkgs.libglvnd
+          pkgs.libgbm
+          pkgs.mesa
+          pkgs.ffmpeg
+          pkgs.cups
+          pkgs.libdrm
+          pkgs.udev
+          pkgs.fontconfig
+          pkgs.freetype
+          pkgs.zlib
+          pkgs.libgpg-error
+          pkgs.stdenv.cc.cc.lib
+        ];
+        runScript = "${antigravity2apiBin}/bin/antigravity2api";
+      };
+
+      antigravityAssets = pkgs.runCommand "antigravity2api-assets" { } ''
+        mkdir -p $out/share
+        cp -r ${antigravity2apiBin}/share/* $out/share/
+      '';
+    in
+    pkgs.symlinkJoin {
+      name = "antigravity2api-${version}";
+      paths = [
+        antigravityFhs
+        antigravityAssets
       ];
     };
 
@@ -990,6 +1379,8 @@ in
       anicliRuPkg
 
       aistudio2apiSandbox
+      geminiWeb2ApiSandbox
+      antigravity2apiSandbox
       nixOutputMonitorSandbox
       sounduxSandbox
       prismLauncherSandbox

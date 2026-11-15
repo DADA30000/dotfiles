@@ -5,6 +5,14 @@
       url = "github:Mag1cFall/AIStudio2API";
       flake = false;
     };
+    gemini-web2api = {
+      url = "github:Mag1cFall/Gemini-Web2API";
+      flake = false;
+    };
+    antigravity2api = {
+      url = "github:Mag1cFall/Antigravity2API";
+      flake = false;
+    };
     photogimp = {
       url = "github:Diolinux/Photogimp";
       flake = false;

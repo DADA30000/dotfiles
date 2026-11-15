@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::ffi::{CString, c_void};
 use std::fmt::Write as _;
@@ -5,12 +6,14 @@ use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio, exit};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const IPC_MAGIC: [u8; 4] = *b"SBEX";
@@ -24,6 +27,7 @@ const MSG_EXIT_RESPONSE: u16 = 4;
 const FLAG_WAIT_EXIT: u32 = 1 << 0;
 const FLAG_IS_TTY: u32 = 1 << 1;
 const FLAG_HELPER: u32 = 1 << 2;
+const FLAG_SECCOMP: u32 = 1 << 3;
 
 const SOL_SOCKET: i32 = 1;
 const SCM_RIGHTS: i32 = 1;
@@ -42,6 +46,12 @@ const CFG_USE_VPNIFY: u32 = 1 << 7;
 const CFG_SYSTEM_DBUS: u32 = 1 << 8;
 const CFG_FLATPAK_INFO: u32 = 1 << 9;
 const CFG_SCOPE: u32 = 1 << 10;
+const CFG_SECCOMP: u32 = 1 << 11;
+const CFG_EDIT_SINGBOX: u32 = 1 << 12;
+const CFG_SECCOMP_LIST: u32 = 1 << 13;
+const CFG_EDIT_SECCOMP: u32 = 1 << 14;
+const CFG_HELPER_REQ: u32 = 1 << 15;
+const CFG_VERBOSE: u32 = 1 << 16;
 
 const TIOCGWINSZ: usize = 0x5413;
 const SYS_PIDFD_OPEN: i64 = 434;
@@ -51,133 +61,32 @@ const EPOLL_CTL_DEL: i32 = 2;
 const EPOLLIN: u32 = 1;
 const EPOLLPRI: u32 = 0x0002;
 const EPOLLERR: u32 = 0x0008;
+const EPOLLHUP: u32 = 0x0010;
 
-const ALLOWED_ENV_VARS: &[&str] = &[
-    "HOME",
-    "XDG_RUNTIME_DIR",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
-    "XDG_STATE_HOME",
-    "XDG_CACHE_HOME",
-    "USER",
-];
+const AUDIT_ARCH_I386: u32 = 0x4000_0003;
+const AUDIT_ARCH_X86_64: u32 = 0xC000_003E;
 
-const RO_SYSTEM_PATHS: &[&str] = &[
-    "/nix/store",
-    "/bin",
-    "/usr/bin",
-    "/run/current-system",
-    "/etc/xdg",
-    "/etc/fonts",
-    "/etc/localtime",
-    "/etc/zoneinfo",
-    "/etc/profiles",
-    "/etc/static",
-    "/nix/profile",
-    "/nix/var/nix/profiles",
-    "/etc/ssl/certs",
-    "/etc/static/ssl/certs",
-    "/etc/pki",
-    "/etc/hosts",
-    "/etc/nsswitch.conf",
-    "/etc/machine-id",
-    "/etc/os-release",
-    "/etc/mime.types",
-    "/etc/passwd",
-    "/etc/group",
-    "/sys/class/hwmon",
-    "/etc/xdg/openxr",
-];
+const BPF_LD: u16 = 0x00;
+const BPF_ALU: u16 = 0x04;
+const BPF_JMP: u16 = 0x05;
+const BPF_RET: u16 = 0x06;
+const BPF_W: u16 = 0x00;
+const BPF_ABS: u16 = 0x20;
+const BPF_K: u16 = 0x00;
+const BPF_AND: u16 = 0x50;
+const BPF_JEQ: u16 = 0x10;
+const BPF_JSET: u16 = 0x40;
 
-const USER_THEME_SUBPATHS: &[&str] = &[
-    ".nix-profile",
-    ".local/state/nix/profile",
-    ".icons",
-    ".themes",
-];
+const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
+const SECCOMP_RET_USER_NOTIF: u32 = 0x7FC0_0000;
+const SECCOMP_RET_ALLOW: u32 = 0x7FFF_0000;
 
-const XDG_CONFIG_SUBPATHS: &[&str] = &[
-    "user-dirs.dirs",
-    "user-dirs.conf",
-    "gtk-4.0",
-    "gtk-3.0",
-    "qt6ct",
-    "qt5ct",
-    "Kvantum",
-    "starship.toml",
-    "fastfetch",
-    "openvr",
-    "openxr",
-];
+const SECCOMP_IOCTL_NOTIF_RECV: usize = 0xC050_2100;
+const SECCOMP_IOCTL_NOTIF_SEND: usize = 0xC018_2101;
 
-const XDG_DATA_SUBPATHS: &[&str] = &["zsh/.zshenv", "zsh/.zshrc", "icons", "themes"];
-
-const NVIDIA_NODES: &[&str] = &[
-    "/dev/nvidia0",
-    "/dev/nvidiactl",
-    "/dev/nvidia-modeset",
-    "/dev/nvidia-uvm",
-    "/dev/nvidia-uvm-tools",
-];
-
-const DEFAULT_DBUS_TALKS: &[&str] = &[
-    "org.freedesktop.portal.Desktop",
-    "org.freedesktop.portal.Documents",
-    "org.freedesktop.portal.Secret",
-    "org.freedesktop.Notifications",
-    "org.freedesktop.FileManager1",
-    "org.freedesktop.ScreenSaver",
-    "org.gnome.Mutter.IdleMonitor",
-    "org.kde.StatusNotifierWatcher",
-    "org.ayatana.indicator.application",
-    "com.canonical.AppMenu.Registrar",
-    "org.mpris.MediaPlayer2.Player",
-];
-
-const DEFAULT_DBUS_OWNS: &[&str] = &[
-    "org.kde.StatusNotifierItem.*",
-    "org.kde.StatusNotifierItem",
-    "org.mpris.MediaPlayer2.*",
-];
-
-const PASTA_DEFAULT_ARGS: &[&str] = &[
-    "--config-net",
-    "--no-dhcp",
-    "--no-dhcpv6",
-    "--no-ra",
-    "--no-map-gw",
-    "-t",
-    "none",
-    "-u",
-    "none",
-    "-T",
-    "none",
-    "-U",
-    "none",
-    "--ns-ifname",
-    "eth0",
-    "--address",
-    "192.168.1.100",
-    "--netmask",
-    "255.255.255.0",
-    "--gateway",
-    "192.168.1.1",
-    "--dns-forward",
-    "192.168.1.1",
-    "--search",
-    "none",
-];
-
-const DEFAULT_FLATPAK_POLICY_BUS: &str = "\n[Session Bus Policy]\norg.kde.StatusNotifierWatcher=talk\norg.kde.StatusNotifierItem.*=own\norg.kde.StatusNotifierItem=own\norg.ayatana.indicator.application=talk\ncom.canonical.AppMenu.Registrar=talk\norg.freedesktop.Notifications=talk\norg.freedesktop.portal.Desktop=talk\norg.freedesktop.portal.Secret=talk\norg.freedesktop.portal.Documents=talk\norg.freedesktop.FileManager1=talk\norg.freedesktop.ScreenSaver=talk\norg.gnome.Mutter.IdleMonitor=talk\norg.mpris.MediaPlayer2.Player=talk\norg.mpris.MediaPlayer2.*=own\n";
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-struct WinSizePayload {
-    row: u16,
-    col: u16,
-    xpixel: u16,
-    ypixel: u16,
-}
+const TIOCSTI_CMD: u32 = 0x5412;
+const TIOCLINUX_CMD: u32 = 0x541C;
+const CLONE_NEWUSER_FLAG: u32 = 0x1000_0000;
 
 static PENDING_SIGNAL: AtomicI32 = AtomicI32::new(0);
 static PENDING_WINCH: AtomicI32 = AtomicI32::new(0);
@@ -188,6 +97,521 @@ extern "C" fn forward_sig_handler(sig: i32) {
     } else {
         PENDING_SIGNAL.store(sig, Ordering::Relaxed);
     }
+}
+
+fn fail_exit(msg: &str) -> ! {
+    eprintln!("[sb-run] Error: {msg}");
+    exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Minimal Zero-Dependency JSON Parser & Merger
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug)]
+enum JsonValue {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Str(String),
+    Array(Vec<Self>),
+    Object(BTreeMap<String, Self>),
+}
+
+struct JsonParser<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> JsonParser<'a> {
+    const fn new(src: &'a str) -> Self {
+        Self {
+            bytes: src.as_bytes(),
+            pos: 0,
+        }
+    }
+
+    const fn skip_ws(&mut self) {
+        while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_whitespace() {
+            self.pos += 1;
+        }
+    }
+
+    fn peek(&mut self) -> Option<u8> {
+        self.skip_ws();
+        self.bytes.get(self.pos).copied()
+    }
+
+    fn expect(&mut self, ch: u8) -> Result<(), String> {
+        self.skip_ws();
+        if self.bytes.get(self.pos) == Some(&ch) {
+            self.pos += 1;
+            Ok(())
+        } else {
+            Err(format!("expected '{}' at offset {}", ch as char, self.pos))
+        }
+    }
+
+    fn parse_string(&mut self) -> Result<String, String> {
+        self.expect(b'"')?;
+        let mut out = String::new();
+        while self.pos < self.bytes.len() {
+            let b = self.bytes[self.pos];
+            self.pos += 1;
+            if b == b'"' {
+                return Ok(out);
+            }
+            if b == b'\\' {
+                let esc = *self
+                    .bytes
+                    .get(self.pos)
+                    .ok_or_else(|| "unterminated escape".to_string())?;
+                self.pos += 1;
+                match esc {
+                    b'"' => out.push('"'),
+                    b'\\' => out.push('\\'),
+                    b'/' => out.push('/'),
+                    b'b' => out.push('\u{0008}'),
+                    b'f' => out.push('\u{000c}'),
+                    b'n' => out.push('\n'),
+                    b'r' => out.push('\r'),
+                    b't' => out.push('\t'),
+                    b'u' => {
+                        if self.pos + 4 > self.bytes.len() {
+                            return Err("short unicode escape".into());
+                        }
+                        let hex = std::str::from_utf8(&self.bytes[self.pos..self.pos + 4])
+                            .map_err(|_| "invalid utf8 in escape".to_string())?;
+                        let code = u32::from_str_radix(hex, 16)
+                            .map_err(|_| "invalid hex in escape".to_string())?;
+                        let ch = char::from_u32(code).unwrap_or('\u{FFFD}');
+                        out.push(ch);
+                        self.pos += 4;
+                    }
+                    other => out.push(other as char),
+                }
+            } else {
+                let start = self.pos - 1;
+                while self.pos < self.bytes.len()
+                    && self.bytes[self.pos] != b'"'
+                    && self.bytes[self.pos] != b'\\'
+                {
+                    self.pos += 1;
+                }
+                let seg = std::str::from_utf8(&self.bytes[start..self.pos])
+                    .map_err(|_| "invalid utf8 in json string".to_string())?;
+                out.push_str(seg);
+            }
+        }
+        Err("unterminated string".into())
+    }
+
+    fn parse_number(&mut self) -> Result<JsonValue, String> {
+        self.skip_ws();
+        let start = self.pos;
+        if self.bytes.get(self.pos) == Some(&b'-') {
+            self.pos += 1;
+        }
+        while self.pos < self.bytes.len()
+            && (self.bytes[self.pos].is_ascii_digit()
+                || matches!(self.bytes[self.pos], b'.' | b'e' | b'E' | b'+' | b'-'))
+        {
+            self.pos += 1;
+        }
+        let s = std::str::from_utf8(&self.bytes[start..self.pos])
+            .map_err(|_| "invalid number".to_string())?;
+        s.parse::<i64>().map_or_else(
+            |_| {
+                if s.parse::<f64>().is_ok() {
+                    Ok(JsonValue::Int(0))
+                } else {
+                    Err(format!("invalid number '{s}'"))
+                }
+            },
+            |n| Ok(JsonValue::Int(n)),
+        )
+    }
+
+    fn parse_value(&mut self) -> Result<JsonValue, String> {
+        match self.peek() {
+            Some(b'{') => self.parse_object(),
+            Some(b'[') => self.parse_array(),
+            Some(b'"') => self.parse_string().map(JsonValue::Str),
+            Some(b't') if self.bytes[self.pos..].starts_with(b"true") => {
+                self.pos += 4;
+                Ok(JsonValue::Bool(true))
+            }
+            Some(b'f') if self.bytes[self.pos..].starts_with(b"false") => {
+                self.pos += 5;
+                Ok(JsonValue::Bool(false))
+            }
+            Some(b'n') if self.bytes[self.pos..].starts_with(b"null") => {
+                self.pos += 4;
+                Ok(JsonValue::Null)
+            }
+            Some(b'-' | b'0'..=b'9') => self.parse_number(),
+            Some(c) => Err(format!("unexpected char '{}' at {}", c as char, self.pos)),
+            None => Err("unexpected end of JSON".into()),
+        }
+    }
+
+    fn parse_array(&mut self) -> Result<JsonValue, String> {
+        self.expect(b'[')?;
+        let mut arr = Vec::new();
+        if self.peek() == Some(b']') {
+            self.pos += 1;
+            return Ok(JsonValue::Array(arr));
+        }
+        loop {
+            arr.push(self.parse_value()?);
+            match self.peek() {
+                Some(b',') => self.pos += 1,
+                Some(b']') => {
+                    self.pos += 1;
+                    return Ok(JsonValue::Array(arr));
+                }
+                _ => return Err("expected ',' or ']' in array".into()),
+            }
+        }
+    }
+
+    fn parse_object(&mut self) -> Result<JsonValue, String> {
+        self.expect(b'{')?;
+        let mut map = BTreeMap::new();
+        if self.peek() == Some(b'}') {
+            self.pos += 1;
+            return Ok(JsonValue::Object(map));
+        }
+        loop {
+            let key = self.parse_string()?;
+            self.expect(b':')?;
+            let val = self.parse_value()?;
+            map.insert(key, val);
+            match self.peek() {
+                Some(b',') => self.pos += 1,
+                Some(b'}') => {
+                    self.pos += 1;
+                    return Ok(JsonValue::Object(map));
+                }
+                _ => return Err("expected ',' or '}' in object".into()),
+            }
+        }
+    }
+}
+
+fn parse_json(src: &str) -> Result<JsonValue, String> {
+    let mut p = JsonParser::new(src);
+    let val = p.parse_value()?;
+    if p.peek().is_some() {
+        return Err(format!("trailing bytes at offset {}", p.pos));
+    }
+    Ok(val)
+}
+
+fn merge_json(base: &mut JsonValue, overlay: JsonValue) {
+    if let (JsonValue::Object(bmap), JsonValue::Object(omap)) = (&mut *base, &overlay) {
+        for (k, v) in omap {
+            if let Some(existing) = bmap.get_mut(k) {
+                merge_json(existing, v.clone());
+            } else {
+                bmap.insert(k.clone(), v.clone());
+            }
+        }
+        return;
+    }
+    *base = overlay;
+}
+
+impl JsonValue {
+    fn as_obj(&self, ctx: &str) -> &BTreeMap<String, Self> {
+        match self {
+            Self::Object(m) => m,
+            _ => fail_exit(&format!("config field '{ctx}' must be an object")),
+        }
+    }
+
+    fn get_req(&self, key: &str, ctx: &str) -> &Self {
+        self.as_obj(ctx)
+            .get(key)
+            .unwrap_or_else(|| fail_exit(&format!("missing required config key '{ctx}.{key}'")))
+    }
+
+    fn req_str(&self, key: &str, ctx: &str) -> String {
+        match self.get_req(key, ctx) {
+            Self::Str(s) if !s.is_empty() => s.clone(),
+            _ => fail_exit(&format!("missing non-empty string '{ctx}.{key}'")),
+        }
+    }
+
+    fn req_bool(&self, key: &str, ctx: &str) -> bool {
+        match self.get_req(key, ctx) {
+            Self::Bool(b) => *b,
+            _ => fail_exit(&format!("missing boolean '{ctx}.{key}'")),
+        }
+    }
+
+    fn req_usize(&self, key: &str, ctx: &str) -> usize {
+        match self.get_req(key, ctx) {
+            Self::Int(n) if *n >= 0 => {
+                usize::try_from(*n).unwrap_or_else(|_| fail_exit(&format!("bad '{ctx}.{key}'")))
+            }
+            _ => fail_exit(&format!("missing non-negative integer '{ctx}.{key}'")),
+        }
+    }
+
+    fn req_str_list(&self, key: &str, ctx: &str) -> Vec<String> {
+        match self.get_req(key, ctx) {
+            Self::Array(arr) => arr
+                .iter()
+                .map(|v| match v {
+                    Self::Str(s) => s.clone(),
+                    _ => fail_exit(&format!("non-string item in '{ctx}.{key}'")),
+                })
+                .collect(),
+            _ => fail_exit(&format!("missing array '{ctx}.{key}'")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Declarative Configuration Structures
+// ---------------------------------------------------------------------------
+
+struct DeclDefaults {
+    network: String,
+    wayland: String,
+    x11: String,
+    pulse: String,
+    pipewire: String,
+    dbus: String,
+    shm: String,
+    tmp: String,
+    webcam: usize,
+    flags: u32,
+    subsystems: u32,
+}
+
+struct DeclConfig {
+    defaults: DeclDefaults,
+    bins: BTreeMap<String, String>,
+    singbox_config: PathBuf,
+    syscalls_file: PathBuf,
+    default_allowed: Vec<String>,
+    silent_errno: BTreeSet<String>,
+    dbus_talks: Vec<String>,
+    dbus_owns: Vec<String>,
+    pasta_args: Vec<String>,
+    allowed_env_vars: Vec<String>,
+    ro_system_paths: Vec<String>,
+    user_theme_subpaths: Vec<String>,
+    xdg_config_subpaths: Vec<String>,
+    xdg_data_subpaths: Vec<String>,
+    nvidia_nodes: Vec<String>,
+}
+
+impl DeclConfig {
+    fn bin(&self, name: &str) -> PathBuf {
+        self.bins.get(name).filter(|s| !s.is_empty()).map_or_else(
+            || fail_exit(&format!("missing required binary 'bins.{name}' in config")),
+            PathBuf::from,
+        )
+    }
+}
+
+fn find_explicit_config_flag() -> Option<String> {
+    let args: Vec<String> = env::args().collect();
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--" {
+            break;
+        }
+        if args[i] == "--config" && i + 1 < args.len() {
+            return Some(args[i + 1].clone());
+        }
+        if let Some(val) = args[i].strip_prefix("--config=") {
+            return Some(val.to_string());
+        }
+        i += 1;
+    }
+    None
+}
+
+fn read_and_parse_json_file(path: &Path) -> JsonValue {
+    let raw = fs::read_to_string(path)
+        .unwrap_or_else(|e| fail_exit(&format!("failed to read '{}': {e}", path.display())));
+    parse_json(&raw)
+        .unwrap_or_else(|e| fail_exit(&format!("invalid JSON in '{}': {e}", path.display())))
+}
+
+fn load_layered_config() -> DeclConfig {
+    let explicit_flag = find_explicit_config_flag();
+    let explicit_env = env::var("SB_RUN_CONFIG").ok().filter(|s| !s.is_empty());
+    let home = env::var("HOME").unwrap_or_default();
+    let xdg_data_cfg = env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map_or_else(
+            || {
+                if home.is_empty() {
+                    None
+                } else {
+                    Some(PathBuf::from(&home).join(".local/share/sb-run/config.json"))
+                }
+            },
+            |d| Some(PathBuf::from(d).join("sb-run/config.json")),
+        );
+    let sys_cfg = PathBuf::from("/etc/sb-run/config.json");
+    let explicit_path = explicit_flag
+        .as_deref()
+        .or(explicit_env.as_deref())
+        .map(PathBuf::from);
+    if let Some(ref ep) = explicit_path
+        && !ep.is_file()
+    {
+        fail_exit(&format!("config path '{}' does not exist", ep.display()));
+    }
+
+    let base_path = if sys_cfg.is_file() {
+        sys_cfg
+    } else if let Some(ref p) = xdg_data_cfg
+        && p.is_file()
+    {
+        p.clone()
+    } else if let Some(ref ep) = explicit_path {
+        ep.clone()
+    } else {
+        fail_exit("missing system declarative config '/etc/sb-run/config.json'");
+    };
+
+    let mut root = read_and_parse_json_file(&base_path);
+
+    let user_cfg = env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map_or_else(
+            || {
+                if home.is_empty() {
+                    None
+                } else {
+                    Some(PathBuf::from(&home).join(".config/sb-run/config.json"))
+                }
+            },
+            |d| Some(PathBuf::from(d).join("sb-run/config.json")),
+        );
+    if let Some(ref u_path) = user_cfg
+        && u_path.is_file()
+        && *u_path != base_path
+    {
+        merge_json(&mut root, read_and_parse_json_file(u_path));
+    }
+
+    if let Some(ref ep) = explicit_path
+        && *ep != base_path
+    {
+        merge_json(&mut root, read_and_parse_json_file(ep));
+    }
+
+    build_decl_config(&root)
+}
+
+fn build_decl_config(root: &JsonValue) -> DeclConfig {
+    let def_v = root.get_req("defaults", "root");
+    let dbus_mode = def_v.req_str("dbus", "defaults");
+    let mut flags = 0u32;
+    if dbus_mode != "off" {
+        flags |= CFG_DBUS;
+    }
+    for (k, bit) in [
+        ("landlock", CFG_LANDLOCK),
+        ("seccomp", CFG_SECCOMP),
+        ("portals", CFG_PORTALS),
+        ("tmpfs", CFG_TMPFS),
+        ("share_pid", CFG_SHARE_PID),
+        ("share_ipc", CFG_SHARE_IPC),
+        ("vpnify", CFG_USE_VPNIFY),
+        ("flatpak_info", CFG_FLATPAK_INFO),
+        ("scope", CFG_SCOPE),
+    ] {
+        if def_v.req_bool(k, "defaults") {
+            flags |= bit;
+        }
+    }
+    let mut subsystems = 0u32;
+    if def_v.req_bool("gpu", "defaults") {
+        subsystems |= SUBSYS_GPU;
+    }
+    if def_v.req_bool("gamepad", "defaults") {
+        subsystems |= SUBSYS_GAMEPAD;
+    }
+
+    let defaults = DeclDefaults {
+        network: def_v.req_str("network", "defaults"),
+        wayland: def_v.req_str("wayland", "defaults"),
+        x11: def_v.req_str("x11", "defaults"),
+        pulse: def_v.req_str("pulse", "defaults"),
+        pipewire: def_v.req_str("pipewire", "defaults"),
+        dbus: dbus_mode,
+        shm: def_v.req_str("shm", "defaults"),
+        tmp: def_v.req_str("tmp", "defaults"),
+        webcam: def_v.req_usize("webcam", "defaults"),
+        flags,
+        subsystems,
+    };
+
+    let mut bins = BTreeMap::new();
+    for (k, v) in root.get_req("bins", "root").as_obj("bins") {
+        if let JsonValue::Str(s) = v {
+            bins.insert(k.clone(), s.clone());
+        } else {
+            fail_exit(&format!("binary path 'bins.{k}' must be a string"));
+        }
+    }
+
+    let sec_v = root.get_req("seccomp", "root");
+    let silent_errno =
+        sec_v
+            .as_obj("seccomp")
+            .get("silent_errno")
+            .map_or_else(BTreeSet::new, |_| {
+                sec_v
+                    .req_str_list("silent_errno", "seccomp")
+                    .into_iter()
+                    .collect()
+            });
+
+    let dbus_v = root.get_req("dbus", "root");
+    let paths_v = root.get_req("paths", "root");
+
+    DeclConfig {
+        defaults,
+        bins,
+        singbox_config: PathBuf::from(root.req_str("singbox_config", "root")),
+        syscalls_file: PathBuf::from(root.req_str("syscalls_file", "root")),
+        default_allowed: sec_v.req_str_list("default_allowed", "seccomp"),
+        silent_errno,
+        dbus_talks: dbus_v.req_str_list("default_talks", "dbus"),
+        dbus_owns: dbus_v.req_str_list("default_owns", "dbus"),
+        pasta_args: root.req_str_list("pasta_args", "root"),
+        allowed_env_vars: paths_v.req_str_list("allowed_env_vars", "paths"),
+        ro_system_paths: paths_v.req_str_list("ro_system_paths", "paths"),
+        user_theme_subpaths: paths_v.req_str_list("user_theme_subpaths", "paths"),
+        xdg_config_subpaths: paths_v.req_str_list("xdg_config_subpaths", "paths"),
+        xdg_data_subpaths: paths_v.req_str_list("xdg_data_subpaths", "paths"),
+        nvidia_nodes: paths_v.req_str_list("nvidia_nodes", "paths"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IPC & Libc Primitives
+// ---------------------------------------------------------------------------
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct WinSizePayload {
+    row: u16,
+    col: u16,
+    xpixel: u16,
+    ypixel: u16,
 }
 
 #[repr(C)]
@@ -276,16 +700,6 @@ struct LibcCmsghdr {
     type_: i32,
 }
 
-unsafe extern "C" {
-    fn sendmsg(sockfd: i32, msg: *const LibcMsghdr, flags: i32) -> isize;
-    fn isatty(fd: i32) -> i32;
-    fn raise(sig: i32) -> i32;
-    fn mkfifo(pathname: *const i8, mode: u32) -> i32;
-    fn ioctl(fd: i32, request: usize, ...) -> i32;
-    fn signal(sig: i32, handler: usize) -> usize;
-    fn kill(pid: i32, sig: i32) -> i32;
-}
-
 #[repr(C, align(8))]
 struct CmsgBuffer([u8; 128]);
 
@@ -341,13 +755,60 @@ fn send_header_with_fds(
     if n < 0 {
         return Err(std::io::Error::last_os_error());
     }
-
     Ok(())
 }
 
-fn build_exec_payload(cwd: &str, args: &[String], env_vars: &[String]) -> Vec<u8> {
-    let mut buf = Vec::new();
+fn recv_byte_with_fd(sock: &UnixStream) -> std::io::Result<OwnedFd> {
+    let mut byte = [0u8; 1];
+    let mut iov = LibcIovec {
+        iov_base: byte.as_mut_ptr().cast(),
+        iov_len: 1,
+    };
+    let mut cmsg_buf = CmsgBuffer([0u8; 128]);
+    let mut msg = LibcMsghdr {
+        name: std::ptr::null_mut(),
+        namelen: 0,
+        _pad1: 0,
+        iov: &raw mut iov,
+        iovlen: 1,
+        control: cmsg_buf.0.as_mut_ptr().cast(),
+        controllen: cmsg_buf.0.len(),
+        flags: 0,
+        _pad2: 0,
+    };
+    let n = unsafe { recvmsg(sock.as_raw_fd(), &raw mut msg, 0) };
+    if n <= 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if msg.controllen >= size_of::<LibcCmsghdr>() {
+        let cmsghdr_ptr = msg.control.cast::<LibcCmsghdr>();
+        unsafe {
+            if !cmsghdr_ptr.is_null()
+                && (*cmsghdr_ptr).len >= size_of::<LibcCmsghdr>() + size_of::<RawFd>()
+                && (*cmsghdr_ptr).len <= msg.controllen
+                && (*cmsghdr_ptr).level == SOL_SOCKET
+                && (*cmsghdr_ptr).type_ == SCM_RIGHTS
+            {
+                let fd = *cmsghdr_ptr.add(1).cast::<RawFd>();
+                if fd >= 0 {
+                    return Ok(OwnedFd::from_raw_fd(fd));
+                }
+            }
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        "missing seccomp notif fd",
+    ))
+}
 
+fn build_exec_payload(
+    cwd: &str,
+    args: &[String],
+    env_vars: &[String],
+    seccomp_bpf: Option<&[u8]>,
+) -> Vec<u8> {
+    let mut buf = Vec::new();
     let write_str = |b: &mut Vec<u8>, s: &str| {
         let bytes = s.as_bytes();
         let len = u32::try_from(bytes.len()).unwrap_or(0);
@@ -356,7 +817,6 @@ fn build_exec_payload(cwd: &str, args: &[String], env_vars: &[String]) -> Vec<u8
     };
 
     write_str(&mut buf, cwd);
-
     let arg_count = u32::try_from(args.len()).unwrap_or(0);
     buf.extend_from_slice(&arg_count.to_le_bytes());
     for arg in args {
@@ -369,8 +829,17 @@ fn build_exec_payload(cwd: &str, args: &[String], env_vars: &[String]) -> Vec<u8
         write_str(&mut buf, item);
     }
 
+    if let Some(bpf) = seccomp_bpf {
+        let bpf_len = u32::try_from(bpf.len()).unwrap_or(0);
+        buf.extend_from_slice(&bpf_len.to_le_bytes());
+        buf.extend_from_slice(bpf);
+    }
     buf
 }
+
+// ---------------------------------------------------------------------------
+// Configuration & CLI Argument Parsing
+// ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum BridgeDirection {
@@ -385,7 +854,6 @@ struct BridgeRule {
     ports: String,
 }
 
-#[derive(Default)]
 struct SandboxConfig {
     app_id: String,
     custom_dir: Option<PathBuf>,
@@ -416,18 +884,87 @@ struct SandboxConfig {
     mkdir_dirs: Vec<String>,
     bwrap_extra_args: Vec<String>,
     extra_env: Vec<String>,
-    singbox_bin: Option<PathBuf>,
-    singbox_config: Option<PathBuf>,
-    dbus_proxy_bin: Option<PathBuf>,
-    way_secure_bin: Option<PathBuf>,
-    pasta_bin: Option<PathBuf>,
-    xwayland_satellite_bin: Option<PathBuf>,
+    singbox_bin: PathBuf,
+    singbox_config: PathBuf,
+    singbox_json: Option<String>,
+    dbus_proxy_bin: PathBuf,
+    way_secure_bin: PathBuf,
+    pasta_bin: PathBuf,
+    xwayland_satellite_bin: PathBuf,
+    bwrap_bin: PathBuf,
+    rust_bridge_bin: PathBuf,
+    app2unit_bin: PathBuf,
+    systemctl_bin: PathBuf,
+    vpnify_bin: PathBuf,
+    notify_send_bin: PathBuf,
+    seccomp_allow: Vec<String>,
+    seccomp_block: Vec<String>,
+    seccomp_file: Option<PathBuf>,
     custom_uid: Option<u32>,
     custom_gid: Option<u32>,
     inside_init: Vec<String>,
-    is_helper_request: bool,
-    verbose: bool,
     command: Vec<String>,
+}
+
+impl SandboxConfig {
+    fn from_decl(decl: &DeclConfig) -> Self {
+        let mut flags = decl.defaults.flags;
+        if env::var("SB_RUN_VERBOSE").as_deref() == Ok("1") {
+            flags |= CFG_VERBOSE;
+        }
+
+        Self {
+            app_id: String::new(),
+            custom_dir: None,
+            network: decl.defaults.network.clone(),
+            wayland_mode: decl.defaults.wayland.clone(),
+            x11_mode: decl.defaults.x11.clone(),
+            pulse_mode: decl.defaults.pulse.clone(),
+            pipewire_mode: decl.defaults.pipewire.clone(),
+            dbus_mode: decl.defaults.dbus.clone(),
+            shm_mode: decl.defaults.shm.clone(),
+            tmp_mode: decl.defaults.tmp.clone(),
+            bridges: Vec::new(),
+            subsystems: decl.defaults.subsystems,
+            flags,
+            webcam_count: decl.defaults.webcam,
+            executor_path: Some(decl.bin("sb_executor")),
+            dbus_talk: Vec::new(),
+            dbus_own: Vec::new(),
+            dbus_see: Vec::new(),
+            dbus_extra_args: Vec::new(),
+            system_dbus_talk: Vec::new(),
+            system_dbus_own: Vec::new(),
+            system_dbus_see: Vec::new(),
+            system_dbus_extra_args: Vec::new(),
+            rw_binds: Vec::new(),
+            ro_binds: Vec::new(),
+            dev_binds: Vec::new(),
+            mkdir_dirs: Vec::new(),
+            bwrap_extra_args: Vec::new(),
+            extra_env: Vec::new(),
+            singbox_bin: decl.bin("singbox"),
+            singbox_config: decl.singbox_config.clone(),
+            singbox_json: None,
+            dbus_proxy_bin: decl.bin("dbus_proxy"),
+            way_secure_bin: decl.bin("way_secure"),
+            pasta_bin: decl.bin("pasta"),
+            xwayland_satellite_bin: decl.bin("xwayland_satellite"),
+            bwrap_bin: decl.bin("bwrap"),
+            rust_bridge_bin: decl.bin("rust_bridge"),
+            app2unit_bin: decl.bin("app2unit"),
+            systemctl_bin: decl.bin("systemctl"),
+            vpnify_bin: decl.bin("vpnify"),
+            notify_send_bin: decl.bin("notify_send"),
+            seccomp_allow: Vec::new(),
+            seccomp_block: Vec::new(),
+            seccomp_file: None,
+            custom_uid: None,
+            custom_gid: None,
+            inside_init: Vec::new(),
+            command: Vec::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -444,8 +981,7 @@ fn parse_bridge_arg(arg: &str) -> Option<BridgeRule> {
     if parts.len() < 2 {
         return None;
     }
-    let dir_str = parts[0].to_lowercase();
-    let direction = match dir_str.as_str() {
+    let direction = match parts[0].to_lowercase().as_str() {
         "from" | "from-sandbox" | "out" => BridgeDirection::FromSandbox,
         "to" | "to-sandbox" | "in" => BridgeDirection::ToSandbox,
         _ => return None,
@@ -456,7 +992,6 @@ fn parse_bridge_arg(arg: &str) -> Option<BridgeRule> {
     } else {
         (parts[1].to_string(), parts[2].to_string())
     };
-
     let clean_ports = raw_ports.trim_matches(|c| c == '[' || c == ']').to_string();
     if clean_ports.is_empty() {
         return None;
@@ -469,14 +1004,14 @@ fn parse_bridge_arg(arg: &str) -> Option<BridgeRule> {
     })
 }
 
-fn expand_env_path(path_str: &str) -> String {
+fn expand_env_path(path_str: &str, allowed_env: &[String]) -> String {
     let mut result = path_str.to_string();
     if result.starts_with("~/")
         && let Ok(home) = env::var("HOME")
     {
         result = format!("{home}/{}", &result[2..]);
     }
-    for &k in ALLOWED_ENV_VARS {
+    for k in allowed_env {
         if let Ok(v) = env::var(k) {
             let var_dollar = format!("${k}");
             let var_braced = format!("${{{k}}}");
@@ -491,240 +1026,216 @@ fn expand_env_path(path_str: &str) -> String {
     result
 }
 
-fn parse_subsystem_flag(arg: &str, subs: &mut u32) -> bool {
-    match arg {
+fn parse_subsystem_flag(args: &[String], i: &mut usize, subs: &mut u32) -> bool {
+    match args[*i].as_str() {
         "--gpu" => {
             *subs |= SUBSYS_GPU;
+            *i += 1;
             true
         }
         "--no-gpu" => {
             *subs &= !SUBSYS_GPU;
+            *i += 1;
             true
         }
         "--gamepad" => {
             *subs |= SUBSYS_GAMEPAD;
+            *i += 1;
             true
         }
         "--no-gamepad" => {
             *subs &= !SUBSYS_GAMEPAD;
+            *i += 1;
             true
         }
         _ => false,
     }
 }
 
-fn prompt_user(prompt: &str, default: &str) -> String {
-    print!("{prompt} [{default}]: ");
-    let _ = std::io::stdout().flush();
-    let mut line = String::new();
-    let _ = std::io::stdin().read_line(&mut line);
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        default.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn run_interactive_prompt(cfg: &mut SandboxConfig) {
-    if cfg.command.is_empty() {
-        let exe = prompt_user("Executable to run", "/bin/sh");
-        cfg.command = vec![exe];
-    }
-
-    let net = prompt_user("Network [sandboxed|singbox|passthrough|off]", &cfg.network);
-    cfg.network = net;
-
-    let tmpfs = prompt_user(
-        "Use ephemeral tmpfs? (y/n)",
-        if (cfg.flags & CFG_TMPFS) != 0 {
-            "y"
-        } else {
-            "n"
-        },
-    );
-    if tmpfs.eq_ignore_ascii_case("y") {
-        cfg.flags |= CFG_TMPFS;
-    } else {
-        cfg.flags &= !CFG_TMPFS;
-    }
-
-    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-    let add_cwd = prompt_user(
-        &format!("Bind current directory ({}) as RW? (y/n)", cwd.display()),
-        "y",
-    );
-    if add_cwd.eq_ignore_ascii_case("y") {
-        cfg.rw_binds.push(cwd.to_string_lossy().to_string());
-    }
-
-    loop {
-        let extra = prompt_user("Add path to bind (or press Enter to finish)", "");
-        if extra.is_empty() {
-            break;
-        }
-        let mode = prompt_user("Mode [rw/ro]", "rw");
-        if mode.eq_ignore_ascii_case("ro") {
-            cfg.ro_binds.push(expand_env_path(&extra));
-        } else {
-            cfg.rw_binds.push(expand_env_path(&extra));
-        }
-    }
-}
-
 fn parse_dbus_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
     let arg = &args[*i];
+    let has_next = *i + 1 < args.len();
     if let Some(talk) = arg.strip_prefix("--system-dbus-talk=") {
         cfg.system_dbus_talk.push(talk.into());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 1;
-        true
     } else if let Some(own) = arg.strip_prefix("--system-dbus-own=") {
         cfg.system_dbus_own.push(own.into());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 1;
-        true
     } else if let Some(see) = arg.strip_prefix("--system-dbus-see=") {
         cfg.system_dbus_see.push(see.into());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 1;
-        true
     } else if let Some(call) = arg.strip_prefix("--system-dbus-call=") {
         cfg.system_dbus_extra_args.push(format!("--call={call}"));
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 1;
-        true
-    } else if arg == "--system-dbus-talk" && *i + 1 < args.len() {
+    } else if arg == "--system-dbus-talk" && has_next {
         cfg.system_dbus_talk.push(args[*i + 1].clone());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 2;
-        true
-    } else if arg == "--system-dbus-own" && *i + 1 < args.len() {
+    } else if arg == "--system-dbus-own" && has_next {
         cfg.system_dbus_own.push(args[*i + 1].clone());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 2;
-        true
-    } else if arg == "--system-dbus-see" && *i + 1 < args.len() {
+    } else if arg == "--system-dbus-see" && has_next {
         cfg.system_dbus_see.push(args[*i + 1].clone());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 2;
-        true
-    } else if (arg == "--system-dbus-arg" || arg == "--system-dbus-call") && *i + 1 < args.len() {
+    } else if (arg == "--system-dbus-arg" || arg == "--system-dbus-call") && has_next {
         cfg.system_dbus_extra_args.push(args[*i + 1].clone());
         cfg.flags |= CFG_SYSTEM_DBUS;
         *i += 2;
-        true
     } else if let Some(talk) = arg.strip_prefix("--dbus-talk=") {
         cfg.dbus_talk.push(talk.into());
         *i += 1;
-        true
     } else if let Some(own) = arg.strip_prefix("--dbus-own=") {
         cfg.dbus_own.push(own.into());
         *i += 1;
-        true
     } else if let Some(see) = arg.strip_prefix("--dbus-see=") {
         cfg.dbus_see.push(see.into());
         *i += 1;
-        true
     } else if let Some(call) = arg.strip_prefix("--dbus-call=") {
         cfg.dbus_extra_args.push(format!("--call={call}"));
         *i += 1;
-        true
-    } else if (arg == "--talk" || arg == "--dbus-talk") && *i + 1 < args.len() {
+    } else if (arg == "--talk" || arg == "--dbus-talk") && has_next {
         cfg.dbus_talk.push(args[*i + 1].clone());
         *i += 2;
-        true
-    } else if (arg == "--own" || arg == "--dbus-own") && *i + 1 < args.len() {
+    } else if (arg == "--own" || arg == "--dbus-own") && has_next {
         cfg.dbus_own.push(args[*i + 1].clone());
         *i += 2;
-        true
-    } else if (arg == "--see" || arg == "--dbus-see") && *i + 1 < args.len() {
+    } else if (arg == "--see" || arg == "--dbus-see") && has_next {
         cfg.dbus_see.push(args[*i + 1].clone());
         *i += 2;
-        true
-    } else if (arg == "--dbus-arg" || arg == "--call" || arg == "--dbus-call")
-        && *i + 1 < args.len()
-    {
+    } else if (arg == "--dbus-arg" || arg == "--call" || arg == "--dbus-call") && has_next {
         cfg.dbus_extra_args.push(args[*i + 1].clone());
         *i += 2;
-        true
     } else {
-        false
+        return false;
     }
+    true
 }
 
 fn parse_audio_display_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
+    let has_next = *i + 1 < args.len();
     match args[*i].as_str() {
-        "--pulse" if *i + 1 < args.len() => {
+        "--pulse" if has_next => {
             cfg.pulse_mode.clone_from(&args[*i + 1]);
             *i += 2;
-            true
         }
-        "--pipewire" if *i + 1 < args.len() => {
+        "--pipewire" if has_next => {
             cfg.pipewire_mode.clone_from(&args[*i + 1]);
             *i += 2;
-            true
         }
         "--audio" => {
             cfg.pulse_mode = "sandboxed".into();
             cfg.pipewire_mode = "sandboxed".into();
             *i += 1;
-            true
         }
         "--no-audio" => {
             cfg.pulse_mode = "off".into();
             cfg.pipewire_mode = "off".into();
             *i += 1;
-            true
         }
         "--no-pulse" => {
             cfg.pulse_mode = "off".into();
             *i += 1;
-            true
         }
         "--no-pipewire" => {
             cfg.pipewire_mode = "off".into();
             *i += 1;
-            true
         }
         "--wayland" => {
-            if *i + 1 < args.len() && !args[*i + 1].starts_with('-') {
+            if has_next && !args[*i + 1].starts_with('-') {
                 cfg.wayland_mode.clone_from(&args[*i + 1]);
                 *i += 2;
             } else {
                 cfg.wayland_mode = "sandboxed".into();
                 *i += 1;
             }
-            true
         }
         "--no-wayland" => {
             cfg.wayland_mode = "off".into();
             *i += 1;
-            true
         }
         "--x11" => {
-            if *i + 1 < args.len() && !args[*i + 1].starts_with('-') {
+            if has_next && !args[*i + 1].starts_with('-') {
                 cfg.x11_mode.clone_from(&args[*i + 1]);
                 *i += 2;
             } else {
                 cfg.x11_mode = "sandboxed".into();
                 *i += 1;
             }
-            true
         }
         "--no-x11" => {
             cfg.x11_mode = "off".into();
             *i += 1;
-            true
         }
-        _ => false,
+        _ => return false,
     }
+    true
 }
 
-fn parse_dbus_ipc_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
+fn parse_seccomp_arg(
+    cfg: &mut SandboxConfig,
+    args: &[String],
+    i: &mut usize,
+    allowed_env: &[String],
+) -> bool {
+    let has_next = *i + 1 < args.len();
+    match args[*i].as_str() {
+        "--seccomp" => {
+            cfg.flags |= CFG_SECCOMP;
+            *i += 1;
+        }
+        "--no-seccomp" => {
+            cfg.flags &= !CFG_SECCOMP;
+            *i += 1;
+        }
+        "--seccomp-allow" if has_next => {
+            for item in args[*i + 1]
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                cfg.seccomp_allow.push(item.to_string());
+            }
+            *i += 2;
+        }
+        "--seccomp-block" if has_next => {
+            for item in args[*i + 1]
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                cfg.seccomp_block.push(item.to_string());
+            }
+            *i += 2;
+        }
+        "--seccomp-file" if has_next => {
+            cfg.seccomp_file = Some(PathBuf::from(expand_env_path(&args[*i + 1], allowed_env)));
+            cfg.flags |= CFG_SECCOMP;
+            *i += 2;
+        }
+        "--seccomp-list" => {
+            cfg.flags |= CFG_SECCOMP_LIST;
+            *i += 1;
+        }
+        "--edit-seccomp" => {
+            cfg.flags |= CFG_EDIT_SECCOMP | CFG_SECCOMP;
+            *i += 1;
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn parse_system_state_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
+    let has_next = *i + 1 < args.len();
     match args[*i].as_str() {
         "--dbus" => {
-            if *i + 1 < args.len() && !args[*i + 1].starts_with('-') {
+            if has_next && !args[*i + 1].starts_with('-') {
                 cfg.dbus_mode.clone_from(&args[*i + 1]);
                 if cfg.dbus_mode == "off" {
                     cfg.flags &= !CFG_DBUS;
@@ -737,281 +1248,174 @@ fn parse_dbus_ipc_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -
                 cfg.flags |= CFG_DBUS;
                 *i += 1;
             }
-            true
         }
         "--no-dbus" => {
             cfg.dbus_mode = "off".into();
             cfg.flags &= !CFG_DBUS;
             *i += 1;
-            true
         }
         "--system-dbus" => {
             cfg.flags |= CFG_SYSTEM_DBUS;
             *i += 1;
-            true
         }
         "--no-system-dbus" => {
             cfg.flags &= !CFG_SYSTEM_DBUS;
             *i += 1;
-            true
         }
         "--share-ipc" => {
             cfg.flags |= CFG_SHARE_IPC;
             *i += 1;
-            true
         }
         "--unshare-ipc" => {
             cfg.flags &= !CFG_SHARE_IPC;
             *i += 1;
-            true
         }
-        _ => false,
-    }
-}
-
-fn parse_system_state_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
-    if parse_dbus_ipc_arg(cfg, args, i) {
-        return true;
-    }
-    match args[*i].as_str() {
-        "--shm" if *i + 1 < args.len() => {
+        "--shm" if has_next => {
             cfg.shm_mode.clone_from(&args[*i + 1]);
             *i += 2;
-            true
         }
-        "--tmp" if *i + 1 < args.len() => {
+        "--tmp" if has_next => {
             cfg.tmp_mode.clone_from(&args[*i + 1]);
             *i += 2;
-            true
         }
         "--portals" => {
             cfg.flags |= CFG_PORTALS;
             *i += 1;
-            true
         }
         "--no-portals" => {
             cfg.flags &= !CFG_PORTALS;
             *i += 1;
-            true
         }
         "--flatpak-info" => {
             cfg.flags |= CFG_FLATPAK_INFO;
             *i += 1;
-            true
         }
         "--tmpfs" => {
             cfg.flags |= CFG_TMPFS;
             *i += 1;
-            true
         }
         "--no-tmpfs" => {
             cfg.flags &= !CFG_TMPFS;
             *i += 1;
-            true
         }
         "--scope" => {
             cfg.flags |= CFG_SCOPE;
             *i += 1;
-            true
         }
         "--no-scope" => {
             cfg.flags &= !CFG_SCOPE;
             *i += 1;
-            true
         }
         "--share-pid" => {
             cfg.flags |= CFG_SHARE_PID;
             *i += 1;
-            true
         }
         "--unshare-pid" => {
             cfg.flags &= !CFG_SHARE_PID;
             *i += 1;
-            true
         }
         "--landlock" => {
             cfg.flags |= CFG_LANDLOCK;
             *i += 1;
-            true
         }
         "--no-landlock" => {
             cfg.flags &= !CFG_LANDLOCK;
             *i += 1;
-            true
         }
-        _ => false,
+        _ => return false,
     }
+    true
 }
 
-fn parse_bind_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
+fn parse_bind_arg(
+    cfg: &mut SandboxConfig,
+    args: &[String],
+    i: &mut usize,
+    allowed_env: &[String],
+) -> bool {
     let arg = &args[*i];
+    let has_next = *i + 1 < args.len();
     if let Some(val) = arg.strip_prefix("--rw=") {
-        cfg.rw_binds.push(expand_env_path(val));
+        cfg.rw_binds.push(expand_env_path(val, allowed_env));
         *i += 1;
-        return true;
-    }
-    if let Some(val) = arg.strip_prefix("--ro=") {
-        cfg.ro_binds.push(expand_env_path(val));
+    } else if let Some(val) = arg.strip_prefix("--ro=") {
+        cfg.ro_binds.push(expand_env_path(val, allowed_env));
         *i += 1;
-        return true;
-    }
-    if let Some(val) = arg.strip_prefix("--dev=") {
-        cfg.dev_binds.push(expand_env_path(val));
+    } else if let Some(val) = arg.strip_prefix("--dev=") {
+        cfg.dev_binds.push(expand_env_path(val, allowed_env));
         *i += 1;
-        return true;
-    }
-    if let Some(val) = arg.strip_prefix("--mkdir=") {
-        cfg.mkdir_dirs.push(expand_env_path(val));
+    } else if let Some(val) = arg.strip_prefix("--mkdir=") {
+        cfg.mkdir_dirs.push(expand_env_path(val, allowed_env));
         *i += 1;
-        return true;
+    } else if (arg == "--rw" || arg == "--bind-rw") && has_next {
+        cfg.rw_binds
+            .push(expand_env_path(&args[*i + 1], allowed_env));
+        *i += 2;
+    } else if (arg == "--ro" || arg == "--bind-ro") && has_next {
+        cfg.ro_binds
+            .push(expand_env_path(&args[*i + 1], allowed_env));
+        *i += 2;
+    } else if (arg == "--dev" || arg == "--bind-dev") && has_next {
+        cfg.dev_binds
+            .push(expand_env_path(&args[*i + 1], allowed_env));
+        *i += 2;
+    } else if arg == "--mkdir" && has_next {
+        cfg.mkdir_dirs
+            .push(expand_env_path(&args[*i + 1], allowed_env));
+        *i += 2;
+    } else {
+        return false;
     }
-
-    match arg.as_str() {
-        "--rw" | "--bind-rw" if *i + 1 < args.len() => {
-            cfg.rw_binds.push(expand_env_path(&args[*i + 1]));
-            *i += 2;
-            true
-        }
-        "--ro" | "--bind-ro" if *i + 1 < args.len() => {
-            cfg.ro_binds.push(expand_env_path(&args[*i + 1]));
-            *i += 2;
-            true
-        }
-        "--dev" | "--bind-dev" if *i + 1 < args.len() => {
-            cfg.dev_binds.push(expand_env_path(&args[*i + 1]));
-            *i += 2;
-            true
-        }
-        "--mkdir" if *i + 1 < args.len() => {
-            cfg.mkdir_dirs.push(expand_env_path(&args[*i + 1]));
-            *i += 2;
-            true
-        }
-        _ => false,
-    }
+    true
 }
 
-fn parse_command_and_env_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
+fn parse_bins_and_net_arg(
+    cfg: &mut SandboxConfig,
+    args: &[String],
+    i: &mut usize,
+    allowed_env: &[String],
+) -> bool {
+    let has_next = *i + 1 < args.len();
     match args[*i].as_str() {
-        "--bwrap-arg" if *i + 1 < args.len() => {
-            cfg.bwrap_extra_args.push(args[*i + 1].clone());
+        "--config" if has_next => *i += 2,
+        s if s.starts_with("--config=") => *i += 1,
+        "--singbox-bin" if has_next => {
+            cfg.singbox_bin = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
-            true
         }
-        "-v" | "--verbose" => {
-            cfg.verbose = true;
-            unsafe {
-                env::set_var("SB_RUN_VERBOSE", "1");
-            }
-            *i += 1;
-            true
-        }
-        "--cli" => {
-            cfg.flags |= CFG_IS_CLI;
-            *i += 1;
-            true
-        }
-        "--gui" => {
-            cfg.flags &= !CFG_IS_CLI;
-            *i += 1;
-            true
-        }
-        "--vpnify" => {
-            cfg.flags |= CFG_USE_VPNIFY;
-            *i += 1;
-            true
-        }
-        "--bridge" if *i + 1 < args.len() => {
-            if let Some(rule) = parse_bridge_arg(&args[*i + 1]) {
-                cfg.bridges.push(rule);
-            }
+        "--singbox-config" if has_next => {
+            cfg.singbox_config = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
-            true
         }
-        "--inside-init" if *i + 1 < args.len() => {
-            cfg.inside_init.push(args[*i + 1].clone());
+        "--singbox-json" if has_next => {
+            cfg.singbox_json = Some(args[*i + 1].clone());
             *i += 2;
-            true
         }
-        "--env" if *i + 1 < args.len() => {
-            cfg.extra_env.push(args[*i + 1].clone());
-            *i += 2;
-            true
-        }
-        _ => false,
-    }
-}
-
-fn parse_option_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> bool {
-    if parse_subsystem_flag(&args[*i], &mut cfg.subsystems) {
-        *i += 1;
-        return true;
-    }
-    if parse_audio_display_arg(cfg, args, i) {
-        return true;
-    }
-    if parse_system_state_arg(cfg, args, i) {
-        return true;
-    }
-    if parse_dbus_arg(cfg, args, i) {
-        return true;
-    }
-    if parse_bind_arg(cfg, args, i) {
-        return true;
-    }
-    if parse_command_and_env_arg(cfg, args, i) {
-        return true;
-    }
-
-    match args[*i].as_str() {
-        "-h" | "--help" => {
-            print_help_and_exit();
-        }
-        "-i" | "--interactive" => {
-            run_interactive_prompt(cfg);
+        "--edit-singbox" => {
+            cfg.flags |= CFG_EDIT_SINGBOX;
             *i += 1;
         }
-        "--singbox-bin" if *i + 1 < args.len() => {
-            cfg.singbox_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
+        "--dbus-proxy-bin" if has_next => {
+            cfg.dbus_proxy_bin = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
         }
-        "--singbox-config" if *i + 1 < args.len() => {
-            cfg.singbox_config = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
+        "--way-secure-bin" if has_next => {
+            cfg.way_secure_bin = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
         }
-        "--dbus-proxy-bin" if *i + 1 < args.len() => {
-            cfg.dbus_proxy_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
+        "--pasta-bin" if has_next => {
+            cfg.pasta_bin = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
         }
-        "--way-secure-bin" if *i + 1 < args.len() => {
-            cfg.way_secure_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
+        "--xwayland-satellite-bin" if has_next => {
+            cfg.xwayland_satellite_bin = PathBuf::from(expand_env_path(&args[*i + 1], allowed_env));
             *i += 2;
         }
-        "--pasta-bin" if *i + 1 < args.len() => {
-            cfg.pasta_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
+        "--executor-bin" if has_next => {
+            cfg.executor_path = Some(PathBuf::from(expand_env_path(&args[*i + 1], allowed_env)));
             *i += 2;
         }
-        "--uid" if *i + 1 < args.len() => {
-            cfg.custom_uid = args[*i + 1].parse().ok();
-            *i += 2;
-        }
-        "--gid" if *i + 1 < args.len() => {
-            cfg.custom_gid = args[*i + 1].parse().ok();
-            *i += 2;
-        }
-        "--xwayland-satellite-bin" if *i + 1 < args.len() => {
-            cfg.xwayland_satellite_bin = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
-            *i += 2;
-        }
-        "--id" if *i + 1 < args.len() => {
-            cfg.app_id.clone_from(&args[*i + 1]);
-            *i += 2;
-        }
-        "--dir" if *i + 1 < args.len() => {
-            cfg.custom_dir = Some(PathBuf::from(expand_env_path(&args[*i + 1])));
-            *i += 2;
-        }
-        "--net" if *i + 1 < args.len() => {
+        "--net" if has_next => {
             cfg.network.clone_from(&args[*i + 1]);
             *i += 2;
         }
@@ -1019,17 +1423,90 @@ fn parse_option_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> 
             cfg.network = "off".into();
             *i += 1;
         }
-        "--webcam" if *i + 1 < args.len() => {
-            cfg.webcam_count = args[*i + 1].parse().unwrap_or(0);
+        _ => return false,
+    }
+    true
+}
+
+fn parse_misc_arg(
+    cfg: &mut SandboxConfig,
+    args: &[String],
+    i: &mut usize,
+    allowed_env: &[String],
+) -> bool {
+    let has_next = *i + 1 < args.len();
+    match args[*i].as_str() {
+        "-h" | "--help" => print_help_and_exit(),
+        "--bwrap-arg" if has_next => {
+            cfg.bwrap_extra_args.push(args[*i + 1].clone());
+            *i += 2;
+        }
+        "-v" | "--verbose" => {
+            cfg.flags |= CFG_VERBOSE;
+            unsafe { env::set_var("SB_RUN_VERBOSE", "1") };
+            *i += 1;
+        }
+        "--cli" => {
+            cfg.flags |= CFG_IS_CLI;
+            *i += 1;
+        }
+        "--gui" => {
+            cfg.flags &= !CFG_IS_CLI;
+            *i += 1;
+        }
+        "--vpnify" => {
+            cfg.flags |= CFG_USE_VPNIFY;
+            *i += 1;
+        }
+        "--bridge" if has_next => {
+            if let Some(rule) = parse_bridge_arg(&args[*i + 1]) {
+                cfg.bridges.push(rule);
+            } else {
+                fail_exit(&format!("invalid bridge specification '{}'", args[*i + 1]));
+            }
+            *i += 2;
+        }
+        "--inside-init" if has_next => {
+            cfg.inside_init.push(args[*i + 1].clone());
+            *i += 2;
+        }
+        "--env" if has_next => {
+            cfg.extra_env.push(args[*i + 1].clone());
+            *i += 2;
+        }
+        "--uid" if has_next => {
+            cfg.custom_uid = Some(
+                args[*i + 1]
+                    .parse()
+                    .unwrap_or_else(|_| fail_exit(&format!("invalid --uid '{}'", args[*i + 1]))),
+            );
+            *i += 2;
+        }
+        "--gid" if has_next => {
+            cfg.custom_gid = Some(
+                args[*i + 1]
+                    .parse()
+                    .unwrap_or_else(|_| fail_exit(&format!("invalid --gid '{}'", args[*i + 1]))),
+            );
+            *i += 2;
+        }
+        "--id" if has_next => {
+            cfg.app_id.clone_from(&args[*i + 1]);
+            *i += 2;
+        }
+        "--dir" if has_next => {
+            cfg.custom_dir = Some(PathBuf::from(expand_env_path(&args[*i + 1], allowed_env)));
+            *i += 2;
+        }
+        "--webcam" if has_next => {
+            cfg.webcam_count = args[*i + 1]
+                .parse()
+                .unwrap_or_else(|_| fail_exit(&format!("invalid --webcam '{}'", args[*i + 1])));
             *i += 2;
         }
         "--no-webcam" => {
             cfg.webcam_count = 0;
             *i += 1;
-        }
-        "--executor-bin" if *i + 1 < args.len() => {
-            cfg.executor_path = Some(PathBuf::from(&args[*i + 1]));
-            *i += 2;
         }
         _ => return false,
     }
@@ -1039,7 +1516,9 @@ fn parse_option_arg(cfg: &mut SandboxConfig, args: &[String], i: &mut usize) -> 
 fn validate_subsystem_modes(cfg: &SandboxConfig) {
     let check_mode = |name: &str, val: &str, allowed: &[&str]| {
         if !allowed.contains(&val) {
-            eprintln!("[sb-run] Warning: unrecognized {name} mode '{val}'; allowed: {allowed:?}");
+            fail_exit(&format!(
+                "invalid {name} mode '{val}'; allowed: {allowed:?}"
+            ));
         }
     };
     check_mode(
@@ -1068,25 +1547,20 @@ fn validate_subsystem_modes(cfg: &SandboxConfig) {
     check_mode("tmp", &cfg.tmp_mode, &["sandboxed", "passthrough"]);
 }
 
-fn parse_cli_args() -> SandboxConfig {
+fn parse_cli_args(decl: &DeclConfig) -> SandboxConfig {
     let args: Vec<String> = env::args().collect();
-    let mut cfg = SandboxConfig {
-        network: "sandboxed".into(),
-        wayland_mode: "sandboxed".into(),
-        x11_mode: "off".into(),
-        pulse_mode: "sandboxed".into(),
-        pipewire_mode: "sandboxed".into(),
-        dbus_mode: "sandboxed".into(),
-        shm_mode: "sandboxed".into(),
-        tmp_mode: "sandboxed".into(),
-        flags: CFG_DBUS | CFG_LANDLOCK | CFG_PORTALS | CFG_FLATPAK_INFO | CFG_SCOPE,
-        verbose: env::var("SB_RUN_VERBOSE").as_deref() == Ok("1"),
-        ..Default::default()
-    };
-
+    let mut cfg = SandboxConfig::from_decl(decl);
     let mut i = 1;
     while i < args.len() {
-        if parse_option_arg(&mut cfg, &args, &mut i) {
+        let handled = parse_subsystem_flag(&args, &mut i, &mut cfg.subsystems)
+            || parse_audio_display_arg(&mut cfg, &args, &mut i)
+            || parse_seccomp_arg(&mut cfg, &args, &mut i, &decl.allowed_env_vars)
+            || parse_system_state_arg(&mut cfg, &args, &mut i)
+            || parse_dbus_arg(&mut cfg, &args, &mut i)
+            || parse_bind_arg(&mut cfg, &args, &mut i, &decl.allowed_env_vars)
+            || parse_bins_and_net_arg(&mut cfg, &args, &mut i, &decl.allowed_env_vars)
+            || parse_misc_arg(&mut cfg, &args, &mut i, &decl.allowed_env_vars);
+        if handled {
             continue;
         }
         if args[i] == "--" {
@@ -1097,8 +1571,7 @@ fn parse_cli_args() -> SandboxConfig {
             cfg.command = args[i..].to_vec();
             break;
         }
-        eprintln!("[sb-run] Warning: unrecognized option '{}'", args[i]);
-        i += 1;
+        fail_exit(&format!("unrecognized option '{}'", args[i]));
     }
 
     if cfg.app_id.is_empty() {
@@ -1127,9 +1600,648 @@ fn parse_cli_args() -> SandboxConfig {
     }
 
     validate_subsystem_modes(&cfg);
-
     cfg
 }
+
+fn require_binary(path: &Path, label: &str) {
+    let s = path.to_string_lossy();
+    if s.contains('/') {
+        if !path.is_file() {
+            fail_exit(&format!(
+                "required {label} binary '{}' does not exist",
+                path.display()
+            ));
+        }
+        return;
+    }
+    if let Ok(path_env) = env::var("PATH") {
+        for dir in env::split_paths(&path_env) {
+            if dir.join(path).is_file() {
+                return;
+            }
+        }
+    }
+    fail_exit(&format!("required {label} binary '{s}' not found in PATH"));
+}
+
+fn validate_required_binaries(cfg: &SandboxConfig) {
+    require_binary(&cfg.bwrap_bin, "bwrap");
+    if let Some(ref ex) = cfg.executor_path {
+        require_binary(ex, "sb-executor");
+    } else {
+        fail_exit("missing executor binary path");
+    }
+    if cfg.network == "singbox" {
+        require_binary(&cfg.singbox_bin, "sing-box");
+        require_binary(&cfg.rust_bridge_bin, "rust-bridge");
+    }
+    if cfg.network == "sandboxed" {
+        require_binary(&cfg.pasta_bin, "pasta");
+    }
+    if cfg.wayland_mode == "sandboxed" {
+        require_binary(&cfg.way_secure_bin, "way-secure");
+    }
+    if cfg.x11_mode == "sandboxed" {
+        require_binary(&cfg.xwayland_satellite_bin, "xwayland-satellite");
+    }
+    if cfg.dbus_mode == "sandboxed" || (cfg.flags & CFG_SYSTEM_DBUS) != 0 {
+        require_binary(&cfg.dbus_proxy_bin, "xdg-dbus-proxy");
+    }
+    if !cfg.bridges.is_empty() {
+        require_binary(&cfg.rust_bridge_bin, "rust-bridge");
+    }
+    if (cfg.flags & CFG_USE_VPNIFY) != 0 {
+        require_binary(&cfg.vpnify_bin, "vpnify");
+    }
+    if (cfg.flags & CFG_SCOPE) != 0 {
+        require_binary(&cfg.app2unit_bin, "app2unit");
+        require_binary(&cfg.systemctl_bin, "systemctl");
+    }
+    if (cfg.flags & CFG_SECCOMP) != 0 {
+        require_binary(&cfg.notify_send_bin, "notify-send");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// $EDITOR Helper (Strictly $EDITOR, Fail-Closed)
+// ---------------------------------------------------------------------------
+
+fn run_user_editor(path: &Path) {
+    let editor_raw = env::var("EDITOR")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fail_exit("$EDITOR is not set; cannot launch editor"));
+
+    let mut parts = editor_raw.split_whitespace();
+    let Some(cmd_bin) = parts.next() else {
+        fail_exit("$EDITOR is empty");
+    };
+    let args: Vec<&str> = parts.collect();
+    require_binary(Path::new(cmd_bin), "$EDITOR");
+
+    let status = Command::new(cmd_bin)
+        .args(&args)
+        .arg(path)
+        .status()
+        .unwrap_or_else(|e| fail_exit(&format!("failed to execute $EDITOR ('{cmd_bin}'): {e}")));
+
+    if !status.success() {
+        fail_exit(&format!("$EDITOR exited with status {:?}", status.code()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sing-Box Configurator
+// ---------------------------------------------------------------------------
+
+fn prepare_singbox_config(cfg: &mut SandboxConfig, sandbox_runtime: &Path) {
+    if let Some(ref json_str) = cfg.singbox_json {
+        if let Err(e) = parse_json(json_str) {
+            fail_exit(&format!("invalid --singbox-json payload: {e}"));
+        }
+        let target = sandbox_runtime.join("sing-box.json");
+        if let Err(e) = fs::write(&target, json_str) {
+            fail_exit(&format!("failed to write '{}': {e}", target.display()));
+        }
+        cfg.singbox_config = target;
+    }
+
+    if (cfg.flags & CFG_EDIT_SINGBOX) != 0 {
+        let initial = fs::read_to_string(&cfg.singbox_config).unwrap_or_else(|e| {
+            fail_exit(&format!(
+                "failed to read sing-box config '{}': {e}",
+                cfg.singbox_config.display()
+            ))
+        });
+        let target = sandbox_runtime.join("sing-box-edited.json");
+        if let Err(e) = fs::write(&target, &initial) {
+            fail_exit(&format!("failed to write '{}': {e}", target.display()));
+        }
+        run_user_editor(&target);
+        let edited = fs::read_to_string(&target)
+            .unwrap_or_else(|e| fail_exit(&format!("failed to read edited sing-box JSON: {e}")));
+        if let Err(e) = parse_json(&edited) {
+            fail_exit(&format!(
+                "edited sing-box config contains invalid JSON: {e}"
+            ));
+        }
+        cfg.singbox_config = target;
+        if cfg.command.is_empty() {
+            println!("{}", cfg.singbox_config.display());
+            exit(0);
+        }
+    }
+
+    if cfg.network == "singbox" && !cfg.singbox_config.is_file() {
+        fail_exit(&format!(
+            "sing-box config '{}' does not exist",
+            cfg.singbox_config.display()
+        ));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Seccomp Table, BPF Compiler, and Notification Supervisor
+// ---------------------------------------------------------------------------
+
+struct SyscallTable {
+    x86_64: HashMap<String, u32>,
+    i386: HashMap<String, u32>,
+    x86_64_names: HashMap<u32, String>,
+    i386_names: HashMap<u32, String>,
+}
+
+impl SyscallTable {
+    fn load(path: &Path) -> Self {
+        let root = read_and_parse_json_file(path);
+        let parse_arch = |arch: &str| -> (HashMap<String, u32>, HashMap<u32, String>) {
+            let mut by_name = HashMap::new();
+            let mut by_nr = HashMap::new();
+            for (name, val) in root.get_req(arch, "syscalls").as_obj(arch) {
+                if let JsonValue::Int(n) = val
+                    && let Ok(nr) = u32::try_from(*n)
+                {
+                    by_name.insert(name.clone(), nr);
+                    by_nr.entry(nr).or_insert_with(|| name.clone());
+                } else {
+                    fail_exit(&format!("invalid syscall number for '{arch}.{name}'"));
+                }
+            }
+            (by_name, by_nr)
+        };
+        let (x86_64, x86_64_names) = parse_arch("x86_64");
+        let (i386, i386_names) = parse_arch("i386");
+        Self {
+            x86_64,
+            i386,
+            x86_64_names,
+            i386_names,
+        }
+    }
+
+    fn resolve_name(&self, arch: u32, nr: u32, args: [u64; 6]) -> (&'static str, String) {
+        if arch == AUDIT_ARCH_X86_64 {
+            if nr == 16
+                && (args[1] == u64::from(TIOCSTI_CMD) || args[1] == u64::from(TIOCLINUX_CMD))
+            {
+                return ("x86_64", "tiocsti".to_string());
+            }
+            if nr == 56 && (args[0] & u64::from(CLONE_NEWUSER_FLAG)) != 0 {
+                return ("x86_64", "clone_newuser".to_string());
+            }
+            let name = self
+                .x86_64_names
+                .get(&nr)
+                .cloned()
+                .unwrap_or_else(|| format!("syscall_{nr}"));
+            ("x86_64", name)
+        } else if arch == AUDIT_ARCH_I386 {
+            if nr == 54
+                && (args[1] == u64::from(TIOCSTI_CMD) || args[1] == u64::from(TIOCLINUX_CMD))
+            {
+                return ("i386", "tiocsti".to_string());
+            }
+            if nr == 120 && (args[0] & u64::from(CLONE_NEWUSER_FLAG)) != 0 {
+                return ("i386", "clone_newuser".to_string());
+            }
+            let name = self
+                .i386_names
+                .get(&nr)
+                .cloned()
+                .unwrap_or_else(|| format!("syscall_{nr}"));
+            ("i386", name)
+        } else {
+            ("unknown", format!("syscall_{nr}"))
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SockFilter {
+    code: u16,
+    jt: u8,
+    jf: u8,
+    k: u32,
+}
+
+const fn bpf_stmt(code: u16, k: u32) -> SockFilter {
+    SockFilter {
+        code,
+        jt: 0,
+        jf: 0,
+        k,
+    }
+}
+
+const fn bpf_jump(code: u16, k: u32, jt: u8, jf: u8) -> SockFilter {
+    SockFilter { code, jt, jf, k }
+}
+
+fn load_seccomp_file_list(path: &Path) -> Vec<String> {
+    let raw = fs::read_to_string(path).unwrap_or_else(|e| {
+        fail_exit(&format!(
+            "failed to read seccomp file '{}': {e}",
+            path.display()
+        ))
+    });
+    let trimmed = raw.trim();
+    if trimmed.starts_with('[') {
+        let val = parse_json(trimmed).unwrap_or_else(|e| {
+            fail_exit(&format!("invalid seccomp JSON '{}': {e}", path.display()))
+        });
+        match val {
+            JsonValue::Array(arr) => arr
+                .into_iter()
+                .map(|item| match item {
+                    JsonValue::Str(s) => s,
+                    _ => fail_exit("seccomp JSON array must contain strings"),
+                })
+                .collect(),
+            _ => fail_exit("seccomp JSON file must be a string array"),
+        }
+    } else {
+        trimmed
+            .lines()
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && !s.starts_with('#'))
+            .map(ToString::to_string)
+            .collect()
+    }
+}
+
+fn resolve_allowed_syscalls(
+    decl: &DeclConfig,
+    cfg: &SandboxConfig,
+    table: &SyscallTable,
+    runtime: &Path,
+) -> Vec<String> {
+    let mut allowed: Vec<String> = cfg.seccomp_file.as_ref().map_or_else(
+        || decl.default_allowed.clone(),
+        |p| load_seccomp_file_list(p),
+    );
+
+    if !cfg.seccomp_block.is_empty() {
+        let block_set: BTreeSet<&str> = cfg.seccomp_block.iter().map(String::as_str).collect();
+        allowed.retain(|s| !block_set.contains(s.as_str()));
+    }
+    for a in &cfg.seccomp_allow {
+        if !allowed.contains(a) {
+            allowed.push(a.clone());
+        }
+    }
+
+    if (cfg.flags & CFG_EDIT_SECCOMP) != 0 {
+        let mut json_buf = String::from("[\n");
+        for (idx, item) in allowed.iter().enumerate() {
+            let comma = if idx + 1 < allowed.len() { "," } else { "" };
+            let _ = writeln!(json_buf, "  \"{item}\"{comma}");
+        }
+        json_buf.push_str("]\n");
+
+        let edit_path = runtime.join("seccomp-edit.json");
+        if let Err(e) = fs::write(&edit_path, json_buf) {
+            fail_exit(&format!("failed to write '{}': {e}", edit_path.display()));
+        }
+        run_user_editor(&edit_path);
+        allowed = load_seccomp_file_list(&edit_path);
+    }
+
+    for name in &allowed {
+        if !matches!(name.as_str(), "tiocsti" | "clone_newuser")
+            && !table.x86_64.contains_key(name)
+            && !table.i386.contains_key(name)
+        {
+            fail_exit(&format!("unknown seccomp syscall '{name}'"));
+        }
+    }
+
+    if (cfg.flags & CFG_SECCOMP_LIST) != 0 {
+        for name in &allowed {
+            println!("{name}");
+        }
+        if cfg.command.is_empty() {
+            exit(0);
+        }
+    }
+    if (cfg.flags & CFG_EDIT_SECCOMP) != 0 && cfg.command.is_empty() {
+        println!("{}", allowed.join(","));
+        exit(0);
+    }
+
+    allowed
+}
+
+fn compile_arch_filter(
+    insns: &mut Vec<SockFilter>,
+    syscalls: &HashMap<String, u32>,
+    ioctl_nr: u32,
+    clone_nr: u32,
+    allowed: &[String],
+    silent_errno: &BTreeSet<String>,
+) {
+    let allowed_set: BTreeSet<&str> = allowed.iter().map(String::as_str).collect();
+    let allow_tiocsti = allowed_set.contains("tiocsti");
+    let allow_clone_newuser = allowed_set.contains("clone_newuser");
+    let allow_ioctl = allowed_set.contains("ioctl");
+    let allow_clone = allowed_set.contains("clone");
+
+    let mut allow_nrs = BTreeSet::new();
+    for &name in &allowed_set {
+        if let Some(&nr) = syscalls.get(name) {
+            if nr == ioctl_nr && !allow_tiocsti {
+                continue;
+            }
+            if nr == clone_nr && !allow_clone_newuser {
+                continue;
+            }
+            allow_nrs.insert(nr);
+        }
+    }
+
+    let mut silent_nrs = BTreeSet::new();
+    for name in silent_errno {
+        if !allowed_set.contains(name.as_str())
+            && !matches!(name.as_str(), "tiocsti" | "clone_newuser")
+            && let Some(&nr) = syscalls.get(name)
+            && !allow_nrs.contains(&nr)
+        {
+            silent_nrs.insert(nr);
+        }
+    }
+
+    insns.push(bpf_stmt(BPF_LD | BPF_W | BPF_ABS, 0));
+
+    for nr in allow_nrs {
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, nr, 0, 1));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_ALLOW));
+    }
+
+    if allow_ioctl && !allow_tiocsti {
+        let act = if silent_errno.contains("tiocsti") {
+            SECCOMP_RET_ERRNO | 1
+        } else {
+            SECCOMP_RET_USER_NOTIF
+        };
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, ioctl_nr, 0, 5));
+        insns.push(bpf_stmt(BPF_LD | BPF_W | BPF_ABS, 24));
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, TIOCSTI_CMD, 2, 0));
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, TIOCLINUX_CMD, 1, 0));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_ALLOW));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, act));
+    }
+
+    if allow_clone && !allow_clone_newuser {
+        let act = if silent_errno.contains("clone_newuser") {
+            SECCOMP_RET_ERRNO | 1
+        } else {
+            SECCOMP_RET_USER_NOTIF
+        };
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, clone_nr, 0, 5));
+        insns.push(bpf_stmt(BPF_LD | BPF_W | BPF_ABS, 16));
+        insns.push(bpf_stmt(BPF_ALU | BPF_AND | BPF_K, CLONE_NEWUSER_FLAG));
+        insns.push(bpf_jump(
+            BPF_JMP | BPF_JSET | BPF_K,
+            CLONE_NEWUSER_FLAG,
+            1,
+            0,
+        ));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_ALLOW));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, act));
+    }
+
+    for nr in silent_nrs {
+        insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, nr, 0, 1));
+        insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | 1));
+    }
+
+    insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF));
+}
+
+fn compile_seccomp_bpf(
+    allowed: &[String],
+    silent_errno: &BTreeSet<String>,
+    table: &SyscallTable,
+) -> Vec<u8> {
+    let mut x64_insns = Vec::new();
+    compile_arch_filter(&mut x64_insns, &table.x86_64, 16, 56, allowed, silent_errno);
+
+    let mut i386_insns = Vec::new();
+    compile_arch_filter(&mut i386_insns, &table.i386, 54, 120, allowed, silent_errno);
+
+    let x64_skip = u32::try_from(x64_insns.len())
+        .unwrap_or_else(|_| fail_exit("seccomp BPF program too large"));
+
+    let mut insns = Vec::with_capacity(5 + x64_insns.len() + i386_insns.len());
+    insns.push(bpf_stmt(BPF_LD | BPF_W | BPF_ABS, 4));
+    insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 3, 0));
+    insns.push(bpf_jump(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_I386, 1, 0));
+    insns.push(bpf_stmt(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF));
+    insns.push(bpf_stmt(BPF_JMP, x64_skip));
+
+    insns.extend_from_slice(&x64_insns);
+    insns.extend_from_slice(&i386_insns);
+
+    if insns.len() > 4096 {
+        fail_exit("compiled seccomp BPF exceeds 4096 instructions");
+    }
+
+    let mut bytes = Vec::with_capacity(insns.len() * 8);
+    for f in insns {
+        bytes.extend_from_slice(&f.code.to_ne_bytes());
+        bytes.push(f.jt);
+        bytes.push(f.jf);
+        bytes.extend_from_slice(&f.k.to_ne_bytes());
+    }
+    bytes
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SeccompData {
+    nr: i32,
+    arch: u32,
+    instruction_pointer: u64,
+    args: [u64; 6],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SeccompNotif {
+    id: u64,
+    pid: u32,
+    flags: u32,
+    data: SeccompData,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SeccompNotifResp {
+    id: u64,
+    val: i64,
+    error: i32,
+    flags: u32,
+}
+
+fn send_seccomp_notification(
+    notify_bin: &Path,
+    app_id: &str,
+    arch_str: &str,
+    syscall_name: &str,
+    nr: u32,
+    replace_id: Option<u32>,
+    count: u64,
+) -> Option<u32> {
+    let mut cmd = Command::new(notify_bin);
+    cmd.args(["-u", "critical", "-p"]);
+    if let Some(id) = replace_id {
+        cmd.args(["-r", &id.to_string()]);
+    }
+    let summary = format!("Seccomp blocked ({app_id})");
+    let body = format!("Syscall: {syscall_name} ({arch_str}:{nr}) [x{count}]");
+    cmd.arg(&summary).arg(&body);
+    let out = cmd.output().ok()?;
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .or(replace_id)
+}
+
+fn handle_seccomp_notif_fd(
+    fd: i32,
+    table: &SyscallTable,
+    notify_bin: &Path,
+    app_id: &str,
+    counts: &mut HashMap<(u32, u32), (Option<u32>, u64)>,
+) -> bool {
+    let mut req = SeccompNotif::default();
+    let r = unsafe {
+        ioctl(
+            fd,
+            SECCOMP_IOCTL_NOTIF_RECV,
+            (&raw mut req).cast::<c_void>(),
+        )
+    };
+    if r < 0 {
+        let err = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+        return err == 2 || err == 9 || err == 19; // ENOENT / EBADF / ENODEV -> closed
+    }
+
+    let mut resp = SeccompNotifResp {
+        id: req.id,
+        val: 0,
+        error: -1, // -EPERM
+        flags: 0,
+    };
+    let _ = unsafe {
+        ioctl(
+            fd,
+            SECCOMP_IOCTL_NOTIF_SEND,
+            (&raw mut resp).cast::<c_void>(),
+        )
+    };
+
+    let nr_u32 = u32::try_from(req.data.nr).unwrap_or(0);
+    let (arch_str, name) = table.resolve_name(req.data.arch, nr_u32, req.data.args);
+    let entry = counts.entry((req.data.arch, nr_u32)).or_insert((None, 0));
+    entry.1 += 1;
+    let new_id = send_seccomp_notification(
+        notify_bin, app_id, arch_str, &name, nr_u32, entry.0, entry.1,
+    );
+    entry.0 = new_id;
+    false
+}
+
+struct SeccompMonitorHandle {
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl SeccompMonitorHandle {
+    fn shutdown(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(h) = self.thread.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+fn start_seccomp_monitor(
+    runtime: &Path,
+    table: Arc<SyscallTable>,
+    notify_bin: PathBuf,
+    app_id: String,
+) -> SeccompMonitorHandle {
+    let sock_path = runtime.join("seccomp.sock");
+    let _ = fs::remove_file(&sock_path);
+    let listener = UnixListener::bind(&sock_path)
+        .unwrap_or_else(|e| fail_exit(&format!("failed to bind seccomp socket: {e}")));
+    let _ = listener.set_nonblocking(true);
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_flag = Arc::clone(&stop);
+
+    let handle = thread::spawn(move || {
+        let Some(epoll) = Epoll::new() else {
+            return;
+        };
+        let listen_fd = listener.as_raw_fd();
+        epoll.add(listen_fd);
+        let mut notif_fds: BTreeSet<i32> = BTreeSet::new();
+        let mut counts: HashMap<(u32, u32), (Option<u32>, u64)> = HashMap::new();
+        let mut events = [EpollEvent { events: 0, data: 0 }; 16];
+
+        while !stop_flag.load(Ordering::Acquire) {
+            let n = match epoll.wait(&mut events, 100) {
+                Ok(n) => n,
+                Err(4) => continue,
+                Err(_) => break,
+            };
+            for ev in &events[..n] {
+                let Ok(fd) = i32::try_from(ev.data) else {
+                    continue;
+                };
+                if fd == listen_fd {
+                    while let Ok((mut stream, _)) = listener.accept() {
+                        if let Ok(owned) = recv_byte_with_fd(&stream) {
+                            let nfd = owned.into_raw_fd();
+                            if epoll.add(nfd) {
+                                notif_fds.insert(nfd);
+                            } else {
+                                unsafe { close(nfd) };
+                            }
+                        }
+                        let _ = stream.write_all(b"A");
+                    }
+                    continue;
+                }
+                if (ev.events & (EPOLLHUP | EPOLLERR)) != 0 && (ev.events & EPOLLIN) == 0 {
+                    epoll.del_and_close(fd);
+                    notif_fds.remove(&fd);
+                    continue;
+                }
+                if handle_seccomp_notif_fd(fd, &table, &notify_bin, &app_id, &mut counts) {
+                    epoll.del_and_close(fd);
+                    notif_fds.remove(&fd);
+                }
+            }
+        }
+        for fd in notif_fds {
+            epoll.del_and_close(fd);
+        }
+    });
+
+    SeccompMonitorHandle {
+        stop,
+        thread: Some(handle),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Running Sandbox Connection & CLI Forwarding
+// ---------------------------------------------------------------------------
 
 fn get_token_for_app(app_id: &str) -> Option<[u8; 16]> {
     let uid = libc_getuid();
@@ -1164,33 +2276,37 @@ fn create_token_for_app(app_id: &str) -> [u8; 16] {
 fn cleanup_token_for_app(app_id: &str) {
     let uid = libc_getuid();
     let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
-    let token_path = PathBuf::from(format!("{runtime_base}/sb-tokens/{app_id}.token"));
-    let _ = fs::remove_file(&token_path);
+    let _ = fs::remove_file(format!("{runtime_base}/sb-tokens/{app_id}.token"));
 }
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
 
-fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i32> {
-    let Ok(mut stream) = UnixStream::connect(ipc_sock) else {
-        return None;
-    };
-
+fn try_connect_running_sandbox(
+    ipc_sock: &Path,
+    cfg: &SandboxConfig,
+    seccomp_bpf: Option<&[u8]>,
+) -> Option<i32> {
+    let mut stream = UnixStream::connect(ipc_sock).ok()?;
     let cwd = env::current_dir().map_or_else(|_| "/".into(), |p| p.to_string_lossy().to_string());
-
     let env_vars: Vec<String> = env::vars().map(|(k, v)| format!("{k}={v}")).collect();
-    let payload = build_exec_payload(&cwd, &cfg.command, &env_vars);
+    let active_bpf = if (cfg.flags & CFG_HELPER_REQ) != 0 {
+        None
+    } else {
+        seccomp_bpf
+    };
+    let payload = build_exec_payload(&cwd, &cfg.command, &env_vars, active_bpf);
     let payload_len = u32::try_from(payload.len()).unwrap_or(0);
 
     let is_cli = (cfg.flags & CFG_IS_CLI) != 0;
     let is_tty = unsafe { isatty(0) == 1 };
     let mut flags = 0u32;
-    if cfg.is_helper_request {
+    if (cfg.flags & CFG_HELPER_REQ) != 0 {
         flags |= FLAG_HELPER;
     }
     if is_cli {
@@ -1199,14 +2315,15 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
     if is_tty {
         flags |= FLAG_IS_TTY;
     }
+    if active_bpf.is_some() {
+        flags |= FLAG_SECCOMP;
+    }
 
     let mut header = IpcHeader::new(MSG_EXEC_REQUEST, payload_len, flags);
     if let Some(token) = get_token_for_app(&cfg.app_id) {
         header.extra = token;
     }
-
     let fds = if is_cli { vec![0, 1, 2] } else { Vec::new() };
-
     if send_header_with_fds(&stream, &header, &fds).is_err() {
         return None;
     }
@@ -1218,31 +2335,13 @@ fn try_connect_running_sandbox(ipc_sock: &Path, cfg: &SandboxConfig) -> Option<i
     if !is_cli {
         return Some(0);
     }
-
     Some(wait_for_cli_exit_response(&mut stream, is_tty))
 }
 
 fn forward_cli_events(stream: &mut UnixStream, is_tty: bool) {
     if is_tty && PENDING_WINCH.swap(0, Ordering::Relaxed) != 0 {
-        let mut ws = WinSizePayload {
-            row: 0,
-            col: 0,
-            xpixel: 0,
-            ypixel: 0,
-        };
-        if unsafe { ioctl(0, TIOCGWINSZ, &raw mut ws.row) } == 0
-            && let Ok(ws_len) = u32::try_from(size_of::<WinSizePayload>())
-        {
-            let ws_hdr = IpcHeader::new(MSG_WINSIZE, ws_len, 0);
-            let _ = stream.write_all(&ws_hdr.to_bytes());
-            let ws_ptr = (&raw const ws).cast::<u8>();
-            let ws_bytes =
-                unsafe { std::slice::from_raw_parts(ws_ptr, size_of::<WinSizePayload>()) };
-            let _ = stream.write_all(ws_bytes);
-            let _ = stream.flush();
-        }
+        send_initial_winsize(stream);
     }
-
     let sig = PENDING_SIGNAL.swap(0, Ordering::Relaxed);
     if sig != 0
         && let Ok(sig_len) = u32::try_from(size_of::<i32>())
@@ -1287,21 +2386,17 @@ fn wait_for_cli_exit_response(stream: &mut UnixStream, is_tty: bool) -> i32 {
     if is_tty {
         send_initial_winsize(stream);
     }
-
     unsafe {
         signal(2, forward_sig_handler as *const () as usize);
         signal(15, forward_sig_handler as *const () as usize);
         signal(28, forward_sig_handler as *const () as usize);
     }
-
     let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
 
     let mut resp_header_buf = [0u8; size_of::<IpcHeader>()];
     let mut header_read = 0;
-
     let exit_code = loop {
         forward_cli_events(stream, is_tty);
-
         match stream.read(&mut resp_header_buf[header_read..]) {
             Ok(0) => break 1,
             Ok(n) => {
@@ -1327,88 +2422,86 @@ fn wait_for_cli_exit_response(stream: &mut UnixStream, is_tty: bool) -> i32 {
     if exit_code != 0 {
         return 1;
     }
-
     let Some(resp_hdr) = IpcHeader::from_bytes(&resp_header_buf) else {
         return 1;
     };
     if resp_hdr.msg_type != MSG_EXIT_RESPONSE {
         return 1;
     }
-
     let mut status_buf = [0u8; 4];
     if stream.read_exact(&mut status_buf).is_err() {
         return 1;
     }
-    let raw_status = i32::from_le_bytes(status_buf);
-    parse_exit_status(raw_status)
+    parse_exit_status(i32::from_le_bytes(status_buf))
 }
 
 fn print_help_and_exit() -> ! {
     println!(
         "Usage: sb-run [OPTIONS] [-- COMMAND [ARGS...]]\n\n\
         Options:\n\
-          -h, --help               Show this help message and exit\n\
-          -i, --interactive        Run interactive CLI wizard to configure sandbox\n\
-          --id <APP_ID>            Sandbox application identifier\n\
-          --dir <PATH>             Custom home directory persistence path\n\
-          --net <MODE>             Network: sandboxed | singbox | passthrough | off\n\
-          --gpu                    Enable GPU acceleration (/dev/dri, nvidia, vulkan)\n\
-          --no-gpu                 Disable GPU acceleration\n\
-          --gamepad                Enable gamepad/controller (/dev/input, /dev/uinput)\n\
-          --no-gamepad             Disable gamepad/controller\n\
-          --pulse <MODE>           PulseAudio: sandboxed | passthrough | off\n\
-          --pipewire <MODE>        PipeWire: sandboxed | passthrough | off\n\
-          --audio / --no-audio     Toggle all audio subsystems\n\
-          --wayland <MODE>         Wayland: sandboxed | passthrough | off\n\
-          --no-wayland             Disable Wayland\n\
-          --x11 <MODE>             X11: sandboxed | passthrough | off\n\
-          --no-x11                 Disable X11\n\
-          --webcam <COUNT>         Number of webcam video nodes (0-10)\n\
-          --dbus <MODE>            D-Bus: sandboxed | passthrough | off\n\
-          --no-dbus                Disable D-Bus proxy\n\
-          --dbus-talk <NAME>       Allow talking to D-Bus service\n\
-          --dbus-own <NAME>        Allow owning D-Bus name\n\
-          --dbus-see <NAME>        Allow seeing D-Bus name\n\
-          --dbus-arg <ARG>         Raw argument forwarded to xdg-dbus-proxy\n\
-          --landlock               Enable Landlock signal scoping (default)\n\
-          --no-landlock            Disable Landlock\n\
-          --tmpfs                  Use ephemeral tmpfs home directory\n\
-          --share-pid              Share PID namespace with host\n\
-          --portals / --no-portals Enable/disable XDG portals\n\
-          --shm <MODE>             Shared memory (/dev/shm): sandboxed | passthrough\n\
-          --tmp <MODE>             Temporary directory (/tmp): sandboxed | passthrough\n\
-          --ro <SRC[:DST]>         Mount path read-only\n\
-          --rw <SRC[:DST]>         Mount path read-write\n\
-          --dev <SRC[:DST]>        Mount device node\n\
-          --env <KEY=VAL>          Set environment variable\n\
-          --bwrap-arg <ARG>        Pass raw argument directly to Bubblewrap\n\
-          --executor-bin <PATH>    Path to custom sb-executor binary"
+          -h, --help                 Show this help message and exit\n\
+          --config <PATH>            Override declarative config JSON\n\
+          --id <APP_ID>              Sandbox application identifier\n\
+          --dir <PATH>               Custom home directory persistence path\n\
+          --net <MODE>               Network: sandboxed | singbox | passthrough | off\n\
+          --singbox-config <PATH>    Custom sing-box config JSON file\n\
+          --singbox-json <JSON>      Inline sing-box config JSON string\n\
+          --edit-singbox             Edit sing-box config in $EDITOR before launch\n\
+          --seccomp / --no-seccomp   Enable/disable seccomp syscall filter\n\
+          --seccomp-allow <LIST>     Allow additional comma-separated syscalls\n\
+          --seccomp-block <LIST>     Remove comma-separated syscalls from whitelist\n\
+          --seccomp-file <PATH>      Custom allowed syscalls file (JSON array or lines)\n\
+          --seccomp-list             Print effective allowed syscalls\n\
+          --edit-seccomp             Edit allowed syscalls in $EDITOR\n\
+          --gpu / --no-gpu           Toggle GPU acceleration\n\
+          --gamepad / --no-gamepad   Toggle gamepad/controller access\n\
+          --pulse <MODE>             PulseAudio: sandboxed | passthrough | off\n\
+          --pipewire <MODE>          PipeWire: sandboxed | passthrough | off\n\
+          --wayland <MODE>           Wayland: sandboxed | passthrough | off\n\
+          --x11 <MODE>               X11: sandboxed | passthrough | off\n\
+          --webcam <COUNT>           Number of webcam video nodes\n\
+          --dbus <MODE>              D-Bus: sandboxed | passthrough | off\n\
+          --dbus-talk/own/see <NAME> D-Bus session policy rules\n\
+          --landlock / --no-landlock Toggle Landlock signal scoping\n\
+          --tmpfs / --share-pid      Ephemeral home / shared host PID namespace\n\
+          --portals / --no-portals   Toggle XDG portals\n\
+          --shm <MODE> / --tmp <M>   sandboxed | passthrough\n\
+          --ro / --rw / --dev <P>    Bind mounts\n\
+          --env <KEY=VAL>            Set environment variable\n\
+          --bwrap-arg <ARG>          Raw argument for Bubblewrap"
     );
     exit(0);
 }
 
-fn add_base_ro_binds(cmd: &mut Command) {
-    for path in RO_SYSTEM_PATHS {
+// ---------------------------------------------------------------------------
+// Bubblewrap & Subsystem Bind Builders
+// ---------------------------------------------------------------------------
+
+fn add_base_and_theme_binds(
+    cmd: &mut Command,
+    decl: &DeclConfig,
+    home: &str,
+    xdg_config: &str,
+    xdg_data: &str,
+) {
+    for path in &decl.ro_system_paths {
         if Path::new(path).exists() {
             cmd.arg("--ro-bind-try").arg(path).arg(path);
         }
     }
-}
-
-fn add_user_theme_binds(cmd: &mut Command, home: &str, xdg_config: &str, xdg_data: &str) {
-    for sub in USER_THEME_SUBPATHS {
+    for sub in &decl.user_theme_subpaths {
         let p = format!("{home}/{sub}");
         if Path::new(&p).exists() {
             cmd.arg("--ro-bind-try").arg(&p).arg(&p);
         }
     }
-    for sub in XDG_CONFIG_SUBPATHS {
+    for sub in &decl.xdg_config_subpaths {
         let p = format!("{xdg_config}/{sub}");
         if Path::new(&p).exists() {
             cmd.arg("--ro-bind-try").arg(&p).arg(&p);
         }
     }
-    for sub in XDG_DATA_SUBPATHS {
+    for sub in &decl.xdg_data_subpaths {
         let p = format!("{xdg_data}/{sub}");
         if Path::new(&p).exists() {
             cmd.arg("--ro-bind-try").arg(&p).arg(&p);
@@ -1416,55 +2509,46 @@ fn add_user_theme_binds(cmd: &mut Command, home: &str, xdg_config: &str, xdg_dat
     }
 }
 
-fn add_gpu_binds(cmd: &mut Command) {
+fn add_gpu_binds(cmd: &mut Command, decl: &DeclConfig) {
     cmd.arg("--dev-bind").arg("/dev/dri").arg("/dev/dri");
-    for node in NVIDIA_NODES {
+    for node in &decl.nvidia_nodes {
         if Path::new(node).exists() {
             cmd.arg("--dev-bind").arg(node).arg(node);
         }
     }
-    cmd.arg("--ro-bind-try")
-        .arg("/run/opengl-driver")
-        .arg("/run/opengl-driver");
-    if Path::new("/run/opengl-driver-32").exists() {
-        cmd.arg("--ro-bind-try")
-            .arg("/run/opengl-driver-32")
-            .arg("/run/opengl-driver-32");
+    for ro in [
+        "/run/opengl-driver",
+        "/run/opengl-driver-32",
+        "/sys/dev/char",
+        "/sys/devices/pci0000:00",
+        "/sys/class/drm",
+        "/sys/devices",
+        "/sys/bus/pci",
+    ] {
+        if Path::new(ro).exists() {
+            cmd.arg("--ro-bind-try").arg(ro).arg(ro);
+        }
     }
-    cmd.arg("--ro-bind-try")
-        .arg("/sys/dev/char")
-        .arg("/sys/dev/char");
-    if Path::new("/sys/devices/pci0000:00").exists() {
-        cmd.arg("--ro-bind-try")
-            .arg("/sys/devices/pci0000:00")
-            .arg("/sys/devices/pci0000:00");
-    }
-    cmd.arg("--ro-bind-try")
-        .arg("/sys/class/drm")
-        .arg("/sys/class/drm");
-    cmd.arg("--ro-bind-try")
-        .arg("/sys/devices")
-        .arg("/sys/devices");
-    cmd.arg("--ro-bind-try")
-        .arg("/sys/bus/pci")
-        .arg("/sys/bus/pci");
 }
 
-fn add_audio_binds(cmd: &mut Command, cfg: &SandboxConfig, runtime_dir: &str) {
+fn add_audio_display_binds(
+    cmd: &mut Command,
+    cfg: &SandboxConfig,
+    runtime_dir: &str,
+    sandbox_runtime: &Path,
+) {
     match cfg.pulse_mode.as_str() {
         "sandboxed" => {
-            let pulse_rest = format!("{runtime_dir}/pulse/restricted");
-            let pulse_native = format!("{runtime_dir}/pulse/native");
-            if Path::new(&pulse_rest).exists() {
-                cmd.arg("--ro-bind-try").arg(&pulse_rest).arg(&pulse_native);
+            let src = format!("{runtime_dir}/pulse/restricted");
+            let dst = format!("{runtime_dir}/pulse/native");
+            if Path::new(&src).exists() {
+                cmd.arg("--ro-bind-try").arg(&src).arg(&dst);
             }
         }
         "passthrough" => {
-            let pulse_native = format!("{runtime_dir}/pulse/native");
-            if Path::new(&pulse_native).exists() {
-                cmd.arg("--ro-bind-try")
-                    .arg(&pulse_native)
-                    .arg(&pulse_native);
+            let p = format!("{runtime_dir}/pulse/native");
+            if Path::new(&p).exists() {
+                cmd.arg("--ro-bind-try").arg(&p).arg(&p);
             }
         }
         _ => {}
@@ -1472,44 +2556,35 @@ fn add_audio_binds(cmd: &mut Command, cfg: &SandboxConfig, runtime_dir: &str) {
 
     match cfg.pipewire_mode.as_str() {
         "sandboxed" => {
-            let pw_rest = format!("{runtime_dir}/pipewire-0-restricted");
-            let pw_native = format!("{runtime_dir}/pipewire-0");
-            if Path::new(&pw_rest).exists() {
-                cmd.arg("--ro-bind-try").arg(&pw_rest).arg(&pw_native);
+            let src = format!("{runtime_dir}/pipewire-0-restricted");
+            let dst = format!("{runtime_dir}/pipewire-0");
+            if Path::new(&src).exists() {
+                cmd.arg("--ro-bind-try").arg(&src).arg(&dst);
             }
         }
         "passthrough" => {
-            let pw_native = format!("{runtime_dir}/pipewire-0");
-            if Path::new(&pw_native).exists() {
-                cmd.arg("--ro-bind-try").arg(&pw_native).arg(&pw_native);
+            let p = format!("{runtime_dir}/pipewire-0");
+            if Path::new(&p).exists() {
+                cmd.arg("--ro-bind-try").arg(&p).arg(&p);
             }
         }
         _ => {}
     }
-}
 
-fn add_display_binds(
-    cmd: &mut Command,
-    cfg: &SandboxConfig,
-    runtime_dir: &str,
-    sandbox_runtime: &Path,
-) {
     match cfg.wayland_mode.as_str() {
         "sandboxed" => {
             let wayland_disp = env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
             let wayland_sock = format!("{runtime_dir}/{wayland_disp}");
             let wayland_filtered = sandbox_runtime.join("wayland-secure");
-            if wayland_filtered.exists() {
-                cmd.arg("--ro-bind")
-                    .arg(&wayland_filtered)
-                    .arg(&wayland_sock);
-            } else {
-                eprintln!(
-                    "[sb-run] Error: sandboxed Wayland requested but way-secure socket '{}' does not exist",
+            if !wayland_filtered.exists() {
+                fail_exit(&format!(
+                    "sandboxed Wayland requested but '{}' does not exist",
                     wayland_filtered.display()
-                );
-                exit(1);
+                ));
             }
+            cmd.arg("--ro-bind")
+                .arg(&wayland_filtered)
+                .arg(&wayland_sock);
             cmd.arg("--setenv")
                 .arg("WAYLAND_DISPLAY")
                 .arg(&wayland_disp);
@@ -1543,15 +2618,14 @@ fn add_display_binds(
 fn add_subsystem_binds(
     cmd: &mut Command,
     cfg: &SandboxConfig,
+    decl: &DeclConfig,
     runtime_dir: &str,
     sandbox_runtime: &Path,
 ) {
     if (cfg.subsystems & SUBSYS_GPU) != 0 {
-        add_gpu_binds(cmd);
+        add_gpu_binds(cmd, decl);
     }
-
-    add_audio_binds(cmd, cfg, runtime_dir);
-    add_display_binds(cmd, cfg, runtime_dir, sandbox_runtime);
+    add_audio_display_binds(cmd, cfg, runtime_dir, sandbox_runtime);
 
     let wivrn_socket = format!("{runtime_dir}/wivrn");
     if Path::new(&wivrn_socket).exists() {
@@ -1559,7 +2633,6 @@ fn add_subsystem_binds(
             .arg(&wivrn_socket)
             .arg(&wivrn_socket);
     }
-
     if (cfg.subsystems & SUBSYS_GAMEPAD) != 0 {
         if Path::new("/dev/input").exists() {
             cmd.arg("--dev-bind-try")
@@ -1572,53 +2645,12 @@ fn add_subsystem_binds(
                 .arg("/dev/uinput");
         }
     }
-
-    if cfg.webcam_count > 0 {
-        for idx in 0..cfg.webcam_count {
-            let dev_node = format!("/dev/video{idx}");
-            if Path::new(&dev_node).exists() {
-                cmd.arg("--dev-bind-try").arg(&dev_node).arg(&dev_node);
-            }
+    for idx in 0..cfg.webcam_count {
+        let dev_node = format!("/dev/video{idx}");
+        if Path::new(&dev_node).exists() {
+            cmd.arg("--dev-bind-try").arg(&dev_node).arg(&dev_node);
         }
     }
-}
-
-fn is_trusted_executor_path(p: &Path) -> bool {
-    let s = p.to_string_lossy();
-    s.starts_with("/nix/store/") || s.starts_with("/run/current-system/")
-}
-
-fn resolve_executor_bin(cfg: &SandboxConfig) -> PathBuf {
-    if let Some(ref p) = cfg.executor_path
-        && p.exists()
-    {
-        return p.clone();
-    }
-    if let Ok(env_p) = env::var("SB_EXECUTOR_BIN") {
-        let pb = PathBuf::from(env_p);
-        if pb.exists() && is_trusted_executor_path(&pb) {
-            return pb;
-        }
-    }
-    if let Ok(current_exe) = env::current_exe()
-        && let Some(parent) = current_exe.parent()
-    {
-        let sibling = parent.join("sb-executor");
-        if sibling.is_file() && is_trusted_executor_path(&sibling) {
-            return sibling;
-        }
-    }
-    if let Ok(path_var) = env::var("PATH") {
-        for entry in env::split_paths(&path_var) {
-            if is_trusted_executor_path(&entry) {
-                let candidate = entry.join("sb-executor");
-                if candidate.is_file() {
-                    return candidate;
-                }
-            }
-        }
-    }
-    PathBuf::from("/run/current-system/sw/bin/sb-executor")
 }
 
 fn add_ipc_and_dbus_binds(
@@ -1627,13 +2659,12 @@ fn add_ipc_and_dbus_binds(
     runtime: &str,
     sandbox_runtime: &Path,
 ) {
-    let host_executor = resolve_executor_bin(cfg);
-    let in_sandbox_dest = format!("{runtime}/bin/sb-executor");
-    if host_executor.exists() {
-        cmd.arg("--ro-bind")
-            .arg(&host_executor)
-            .arg(&in_sandbox_dest);
-    }
+    let Some(ref host_executor) = cfg.executor_path else {
+        fail_exit("missing sb-executor path");
+    };
+    cmd.arg("--ro-bind")
+        .arg(host_executor)
+        .arg(format!("{runtime}/bin/sb-executor"));
 
     if cfg.dbus_mode == "sandboxed" {
         let dbus_proxy_sock = sandbox_runtime.join("nixpak-bus");
@@ -1677,7 +2708,7 @@ fn add_ipc_and_dbus_binds(
     }
 }
 
-fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
+fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig, decl: &DeclConfig) -> PathBuf {
     let instance_id = format!("nixpak-app-{}", cfg.app_id);
     let uid = libc_getuid();
     let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
@@ -1689,7 +2720,6 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
         "[Application]\nname={}\nruntime=runtime/com.nixpak.Platform/x86_64/1\n\n[Context]\n",
         cfg.app_id
     );
-
     let mut shared = Vec::new();
     if (cfg.flags & CFG_SHARE_IPC) != 0 {
         shared.push("ipc");
@@ -1703,11 +2733,15 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
 
     let _ = write!(
         content,
-        "\n[Instance]\ninstance-id={instance_id}\napp-path=/app\nruntime-path=/usr\n"
+        "\n[Instance]\ninstance-id={instance_id}\napp-path=/app\nruntime-path=/usr\n\n[Session Bus Policy]\n"
     );
 
-    content.push_str(DEFAULT_FLATPAK_POLICY_BUS);
-
+    for talk in &decl.dbus_talks {
+        let _ = writeln!(content, "{talk}=talk");
+    }
+    for own in &decl.dbus_owns {
+        let _ = writeln!(content, "{own}=own");
+    }
     for talk in &cfg.dbus_talk {
         let _ = writeln!(content, "{talk}=talk");
     }
@@ -1720,9 +2754,7 @@ fn create_flatpak_info(sandbox_runtime: &Path, cfg: &SandboxConfig) -> PathBuf {
 
     let _ = fs::write(&info_path, &content);
     let _ = fs::write(flatpak_dir.join("info"), &content);
-    unsafe {
-        env::set_var("FLATPAK_METADATA_FILE", flatpak_dir.join("info"));
-    }
+    unsafe { env::set_var("FLATPAK_METADATA_FILE", flatpak_dir.join("info")) };
     info_path
 }
 
@@ -1730,10 +2762,14 @@ fn add_network_bwrap_args(cmd: &mut Command, cfg: &SandboxConfig, sandbox_runtim
     if cfg.network == "singbox" {
         cmd.arg("--unshare-net");
         cmd.arg("--uid").arg("0").arg("--gid").arg("0");
-        cmd.arg("--cap-add").arg("CAP_NET_ADMIN");
-        cmd.arg("--cap-add").arg("CAP_SETFCAP");
-        cmd.arg("--cap-add").arg("CAP_NET_RAW");
-        cmd.arg("--cap-add").arg("CAP_NET_BIND_SERVICE");
+        for cap in [
+            "CAP_NET_ADMIN",
+            "CAP_SETFCAP",
+            "CAP_NET_RAW",
+            "CAP_NET_BIND_SERVICE",
+        ] {
+            cmd.arg("--cap-add").arg(cap);
+        }
         cmd.arg("--dir").arg("/dev/net");
         cmd.arg("--dev-bind-try")
             .arg("/dev/net/tun")
@@ -1753,7 +2789,26 @@ fn add_network_bwrap_args(cmd: &mut Command, cfg: &SandboxConfig, sandbox_runtim
     }
 }
 
-fn add_custom_binds_and_env(cmd: &mut Command, cfg: &SandboxConfig) {
+fn add_custom_binds_and_env(
+    cmd: &mut Command,
+    cfg: &SandboxConfig,
+    sandbox_runtime: &Path,
+    runtime: &str,
+) {
+    if cfg.network == "singbox" {
+        let runtime_sb_cfg = sandbox_runtime.join("sing-box.json");
+        if cfg.singbox_config != runtime_sb_cfg {
+            if !runtime_sb_cfg.exists() {
+                let _ = fs::write(&runtime_sb_cfg, "");
+            }
+            cmd.arg("--ro-bind")
+                .arg(&cfg.singbox_config)
+                .arg(format!("{runtime}/sing-box.json"));
+        }
+    }
+    for d in &cfg.mkdir_dirs {
+        cmd.arg("--dir").arg(d);
+    }
     for b in &cfg.ro_binds {
         let (src, dst) = b.split_once(':').unwrap_or((b.as_str(), b.as_str()));
         cmd.arg("--ro-bind-try").arg(src).arg(dst);
@@ -1779,10 +2834,11 @@ fn add_custom_binds_and_env(cmd: &mut Command, cfg: &SandboxConfig) {
     }
 }
 
-fn add_bwrap_cgroup_pre_exec(
+fn add_bwrap_pre_exec(
     cmd: &mut Command,
     pasta_sync: Option<(i32, i32)>,
     extra_info_fd: Option<i32>,
+    use_landlock: bool,
 ) {
     let cgroup = env::var("MY_CGROUP").ok();
     let c_path = cgroup.and_then(|cg| CString::new(format!("{cg}/helpers/cgroup.procs")).ok());
@@ -1809,7 +2865,7 @@ fn add_bwrap_cgroup_pre_exec(
                     } else {
                         let mut count = 0;
                         while n > 0 {
-                            rev[count] = b'0' + (n % 10) as u8;
+                            rev[count] = b'0' + u8::try_from(n % 10).unwrap_or(0);
                             n /= 10;
                             count += 1;
                         }
@@ -1827,6 +2883,9 @@ fn add_bwrap_cgroup_pre_exec(
                     let _ = close(fd);
                 }
             }
+            if use_landlock {
+                apply_landlock_signal_scoping();
+            }
             Ok(())
         });
     }
@@ -1836,76 +2895,79 @@ fn add_bwrap_executor_args(
     cmd: &mut Command,
     cfg: &SandboxConfig,
     runtime: &str,
-    in_sandbox_socket: &str,
-    in_sandbox_ready_pipe: &str,
-    auth_token_hex: Option<&str>,
+    auth_token_hex: &str,
+    has_seccomp: bool,
 ) {
-    let host_executor = resolve_executor_bin(cfg);
-    let exec_target = if host_executor.exists() {
-        format!("{runtime}/bin/sb-executor")
-    } else {
-        "sb-executor".to_string()
-    };
-
-    cmd.arg(&exec_target)
+    cmd.arg(format!("{runtime}/bin/sb-executor"))
         .arg("--socket")
-        .arg(in_sandbox_socket)
+        .arg(format!("{runtime}/ipc.sock"))
         .arg("--ready-pipe")
-        .arg(in_sandbox_ready_pipe);
+        .arg(format!("{runtime}/ready_pipe"))
+        .arg("--token")
+        .arg(auth_token_hex);
 
-    if let Some(token_hex) = auth_token_hex {
-        cmd.arg("--token").arg(token_hex);
+    if (cfg.flags & CFG_SCOPE) != 0 {
+        cmd.arg("--migrator-socket")
+            .arg(format!("{runtime}/migrator.sock"));
+    }
+
+    if has_seccomp {
+        cmd.arg("--seccomp-socket")
+            .arg(format!("{runtime}/seccomp.sock"));
     }
 
     if cfg.network == "singbox" {
-        if let Some(ref sb_bin) = cfg.singbox_bin {
-            cmd.arg("--singbox-bin").arg(sb_bin);
-        }
-        if let Some(ref sb_cfg) = cfg.singbox_config {
-            cmd.arg("--singbox-config").arg(sb_cfg);
-        }
-        cmd.arg("--singbox-sock")
-            .arg(format!("{runtime}/sing-box.sock"));
-        let user_id = libc_getuid();
-        let group_id = libc_getgid();
-        cmd.arg("--orig-uid").arg(user_id.to_string());
-        cmd.arg("--orig-gid").arg(group_id.to_string());
+        cmd.arg("--singbox-bin")
+            .arg(&cfg.singbox_bin)
+            .arg("--singbox-config")
+            .arg(format!("{runtime}/sing-box.json"))
+            .arg("--singbox-sock")
+            .arg(format!("{runtime}/sing-box.sock"))
+            .arg("--orig-uid")
+            .arg(libc_getuid().to_string())
+            .arg("--orig-gid")
+            .arg(libc_getgid().to_string());
     }
 
     if cfg.x11_mode == "sandboxed" {
-        cmd.arg("--x11-mode").arg("sandboxed");
-        if let Some(ref xwayland) = cfg.xwayland_satellite_bin {
-            cmd.arg("--xwayland-bin").arg(xwayland);
-        }
+        cmd.arg("--x11-mode")
+            .arg("sandboxed")
+            .arg("--xwayland-bin")
+            .arg(&cfg.xwayland_satellite_bin);
     }
 
     for init_cmd in &cfg.inside_init {
         cmd.arg("--inside-init").arg(init_cmd);
     }
-    let in_sandbox_migrator = format!("{runtime}/migrator.sock");
-    cmd.arg("--migrator-socket").arg(&in_sandbox_migrator);
+}
+
+#[derive(Clone, Copy)]
+struct BwrapLaunchOpts {
+    pasta_sync: Option<(i32, i32)>,
+    extra_info_fd: Option<i32>,
+    has_seccomp: bool,
 }
 
 fn build_bwrap_command(
     cfg: &SandboxConfig,
+    decl: &DeclConfig,
     sandbox_runtime: &Path,
     sandbox_home: &Path,
-    auth_token_hex: Option<&str>,
-    pasta_sync: Option<(i32, i32)>,
-    extra_info_fd: Option<i32>,
+    auth_token_hex: &str,
+    opts: BwrapLaunchOpts,
 ) -> Command {
     let mut cmd = if (cfg.flags & CFG_USE_VPNIFY) != 0 {
-        let mut v = Command::new("vpnify");
-        v.arg("bwrap");
+        let mut v = Command::new(&cfg.vpnify_bin);
+        v.arg(&cfg.bwrap_bin);
         v
     } else {
-        Command::new("bwrap")
+        Command::new(&cfg.bwrap_bin)
     };
 
-    if let Some((r_block, w_info)) = pasta_sync {
+    if let Some((r_block, w_info)) = opts.pasta_sync {
         cmd.arg("--block-fd").arg(r_block.to_string());
         cmd.arg("--info-fd").arg(w_info.to_string());
-    } else if let Some(w_info) = extra_info_fd {
+    } else if let Some(w_info) = opts.extra_info_fd {
         cmd.arg("--info-fd").arg(w_info.to_string());
     }
 
@@ -1916,8 +2978,7 @@ fn build_bwrap_command(
 
     cmd.arg("--die-with-parent");
     if let Some(uid) = cfg.custom_uid {
-        cmd.arg("--unshare-user");
-        cmd.arg("--uid").arg(uid.to_string());
+        cmd.arg("--unshare-user").arg("--uid").arg(uid.to_string());
         if let Some(gid) = cfg.custom_gid {
             cmd.arg("--gid").arg(gid.to_string());
         }
@@ -1930,11 +2991,8 @@ fn build_bwrap_command(
     if (cfg.flags & CFG_SHARE_PID) == 0 {
         cmd.arg("--unshare-pid");
     }
-    cmd.arg("--unshare-uts");
-    cmd.arg("--unshare-cgroup-try");
-
-    cmd.arg("--proc").arg("/proc");
-    cmd.arg("--dev").arg("/dev");
+    cmd.arg("--unshare-uts").arg("--unshare-cgroup-try");
+    cmd.arg("--proc").arg("/proc").arg("--dev").arg("/dev");
 
     add_network_bwrap_args(&mut cmd, cfg, sandbox_runtime);
 
@@ -1957,9 +3015,7 @@ fn build_bwrap_command(
         cmd.arg("--bind-try").arg(&tmp_dir).arg("/tmp");
     }
 
-    let bin_dir = sandbox_runtime.join("bin");
-    let _ = fs::create_dir_all(&bin_dir);
-
+    let _ = fs::create_dir_all(sandbox_runtime.join("bin"));
     if let Ok(p) = env::var("XDG_RUNTIME_DIR") {
         let host_sesatt = format!("{p}/sesatt/{}", cfg.app_id);
         let in_sandbox_sesatt = format!("{runtime}/sesatt/{}", cfg.app_id);
@@ -1969,17 +3025,17 @@ fn build_bwrap_command(
             .arg(&in_sandbox_sesatt);
 
         let host_doc = format!("{p}/doc/by-app/{}", cfg.app_id);
-        let in_sandbox_doc = format!("{runtime}/doc");
-        cmd.arg("--bind-try").arg(&host_doc).arg(&in_sandbox_doc);
+        cmd.arg("--bind-try")
+            .arg(&host_doc)
+            .arg(format!("{runtime}/doc"));
     }
 
-    add_base_ro_binds(&mut cmd);
-    add_user_theme_binds(&mut cmd, &home, &xdg_config, &xdg_data);
-    add_subsystem_binds(&mut cmd, cfg, &runtime, sandbox_runtime);
+    add_base_and_theme_binds(&mut cmd, decl, &home, &xdg_config, &xdg_data);
+    add_subsystem_binds(&mut cmd, cfg, decl, &runtime, sandbox_runtime);
     add_ipc_and_dbus_binds(&mut cmd, cfg, &runtime, sandbox_runtime);
 
     if (cfg.flags & CFG_FLATPAK_INFO) != 0 {
-        let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg);
+        let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg, decl);
         cmd.arg("--ro-bind")
             .arg(&flatpak_info_path)
             .arg("/.flatpak-info");
@@ -1992,28 +3048,24 @@ fn build_bwrap_command(
         }
     }
 
-    if cfg.verbose {
+    if (cfg.flags & CFG_VERBOSE) != 0 {
         cmd.arg("--setenv").arg("SB_RUN_VERBOSE").arg("1");
     }
 
-    add_custom_binds_and_env(&mut cmd, cfg);
-
-    let in_sandbox_socket = format!("{runtime}/ipc.sock");
-    let in_sandbox_ready_pipe = format!("{runtime}/ready_pipe");
-
-    add_bwrap_executor_args(
+    add_custom_binds_and_env(&mut cmd, cfg, sandbox_runtime, &runtime);
+    add_bwrap_executor_args(&mut cmd, cfg, &runtime, auth_token_hex, opts.has_seccomp);
+    add_bwrap_pre_exec(
         &mut cmd,
-        cfg,
-        &runtime,
-        &in_sandbox_socket,
-        &in_sandbox_ready_pipe,
-        auth_token_hex,
+        opts.pasta_sync,
+        opts.extra_info_fd,
+        (cfg.flags & CFG_LANDLOCK) != 0,
     );
-
-    add_bwrap_cgroup_pre_exec(&mut cmd, pasta_sync, extra_info_fd);
-
     cmd
 }
+
+// ---------------------------------------------------------------------------
+// Helpers, Bridges, D-Bus Proxies, Way-Secure, Pasta
+// ---------------------------------------------------------------------------
 
 fn wait_for_file_created(dir: &Path, file_name: &str, timeout_ms: i32) -> bool {
     let full_path = dir.join(file_name);
@@ -2028,13 +3080,9 @@ fn wait_for_file_created(dir: &Path, file_name: &str, timeout_ms: i32) -> bool {
         return full_path.exists();
     }
     let wd = unsafe { inotify_add_watch(ifd, c_dir.as_ptr(), 0x0000_0100) };
-    if wd < 0 {
+    if wd < 0 || full_path.exists() {
         let _ = unsafe { close(ifd) };
         return full_path.exists();
-    }
-    if full_path.exists() {
-        let _ = unsafe { close(ifd) };
-        return true;
     }
     let mut pfd = PollFd {
         fd: ifd,
@@ -2056,8 +3104,7 @@ fn wait_for_file_created(dir: &Path, file_name: &str, timeout_ms: i32) -> bool {
             break;
         }
         let elapsed = u32::try_from(start.elapsed().as_millis()).unwrap_or(0);
-        let elapsed_i32 = i32::try_from(elapsed).unwrap_or(remaining);
-        remaining -= elapsed_i32;
+        remaining -= i32::try_from(elapsed).unwrap_or(remaining);
     }
     let _ = unsafe { close(ifd) };
     full_path.exists()
@@ -2069,108 +3116,18 @@ fn move_bridge_listener_to_helpers(cgroup_path: &Path, runner_pid: u32) -> Optio
     let runner_i32 = i32::try_from(runner_pid).unwrap_or(0);
 
     for _ in 0..50 {
-        let pids = read_pids_from_file(&inside_procs);
-        for pid in pids {
-            if pid != runner_i32 {
-                let cmdline_path = format!("/proc/{pid}/cmdline");
-                if let Ok(cmd) = fs::read_to_string(&cmdline_path)
-                    && cmd.contains("rust-bridge")
-                {
-                    let _ = fs::write(&helpers_procs, format!("{pid}\n"));
-                    return Some(pid);
-                }
+        for pid in read_pids_from_file(&inside_procs) {
+            if pid != runner_i32
+                && let Ok(cmd) = fs::read_to_string(format!("/proc/{pid}/cmdline"))
+                && cmd.contains("rust-bridge")
+            {
+                let _ = fs::write(&helpers_procs, format!("{pid}\n"));
+                return Some(pid);
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(10));
     }
     None
-}
-
-fn setup_bridge_from_sandbox(
-    cfg: &SandboxConfig,
-    bridge: &BridgeRule,
-    host_sock: &Path,
-    in_sandbox_sock: &str,
-    ipc_sock: &Path,
-    cgroup_path: Option<&Path>,
-    runner_pid: u32,
-) -> (Option<i32>, Option<i32>) {
-    let addr_spec = format!("{}:[{}]", bridge.address, bridge.ports);
-    let child = Command::new("rust-bridge")
-        .args(["-r", "pass", "--address", &addr_spec, "-s"])
-        .arg(host_sock)
-        .spawn()
-        .ok();
-
-    let pid = child.and_then(|c| i32::try_from(c.id()).ok());
-
-    if let Some(parent) = host_sock.parent()
-        && let Some(name) = host_sock.file_name().and_then(|n| n.to_str())
-    {
-        wait_for_file_created(parent, name, 500);
-    }
-
-    let listen_cmd = vec![
-        "rust-bridge".to_string(),
-        "-r".to_string(),
-        "listen".to_string(),
-        "--address".to_string(),
-        addr_spec,
-        "-s".to_string(),
-        in_sandbox_sock.to_string(),
-        "-d".to_string(),
-    ];
-    let bridge_cfg = SandboxConfig {
-        app_id: cfg.app_id.clone(),
-        command: listen_cmd,
-        is_helper_request: true,
-        ..Default::default()
-    };
-    let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
-
-    let listener_pid = cgroup_path.and_then(|cg| move_bridge_listener_to_helpers(cg, runner_pid));
-    (pid, listener_pid)
-}
-
-fn setup_bridge_to_sandbox(
-    cfg: &SandboxConfig,
-    bridge: &BridgeRule,
-    host_sock: &Path,
-    in_sandbox_sock: &str,
-    ipc_sock: &Path,
-) -> Option<i32> {
-    let addr_spec = format!("{}:[{}]", bridge.address, bridge.ports);
-    let pass_cmd = vec![
-        "rust-bridge".to_string(),
-        "-r".to_string(),
-        "pass".to_string(),
-        "--address".to_string(),
-        addr_spec.clone(),
-        "-s".to_string(),
-        in_sandbox_sock.to_string(),
-    ];
-    let bridge_cfg = SandboxConfig {
-        app_id: cfg.app_id.clone(),
-        command: pass_cmd,
-        is_helper_request: true,
-        ..Default::default()
-    };
-    let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg);
-
-    if let Some(parent) = host_sock.parent()
-        && let Some(name) = host_sock.file_name().and_then(|n| n.to_str())
-    {
-        wait_for_file_created(parent, name, 500);
-    }
-
-    let child = Command::new("rust-bridge")
-        .args(["-r", "listen", "--address", &addr_spec, "-s"])
-        .arg(host_sock)
-        .arg("-d")
-        .spawn()
-        .ok()?;
-
-    i32::try_from(child.id()).ok()
 }
 
 fn setup_bridges(
@@ -2191,28 +3148,56 @@ fn setup_bridges(
         let host_sock = sandbox_runtime.join(&sock_name);
         let in_sandbox_sock = format!("{runtime}/{sock_name}");
         let _ = fs::remove_file(&host_sock);
+        let addr_spec = format!("{}:[{}]", bridge.address, bridge.ports);
 
         match bridge.direction {
             BridgeDirection::FromSandbox => {
-                let (host_pid, listener_pid) = setup_bridge_from_sandbox(
-                    cfg,
-                    bridge,
-                    &host_sock,
-                    &in_sandbox_sock,
-                    ipc_sock,
-                    cgroup_path,
-                    runner_pid,
-                );
-                if let Some(p) = host_pid {
+                if let Ok(c) = Command::new(&cfg.rust_bridge_bin)
+                    .args(["-r", "pass", "--address", &addr_spec, "-s"])
+                    .arg(&host_sock)
+                    .spawn()
+                    && let Ok(p) = i32::try_from(c.id())
+                {
                     pids.push(p);
                 }
-                if let Some(p) = listener_pid {
+                wait_for_file_created(sandbox_runtime, &sock_name, 500);
+                let mut bridge_cfg = SandboxConfig::from_decl_stub(cfg);
+                bridge_cfg.command = vec![
+                    cfg.rust_bridge_bin.to_string_lossy().to_string(),
+                    "-r".into(),
+                    "listen".into(),
+                    "--address".into(),
+                    addr_spec,
+                    "-s".into(),
+                    in_sandbox_sock,
+                    "-d".into(),
+                ];
+                let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg, None);
+                if let Some(p) =
+                    cgroup_path.and_then(|cg| move_bridge_listener_to_helpers(cg, runner_pid))
+                {
                     pids.push(p);
                 }
             }
             BridgeDirection::ToSandbox => {
-                if let Some(p) =
-                    setup_bridge_to_sandbox(cfg, bridge, &host_sock, &in_sandbox_sock, ipc_sock)
+                let mut bridge_cfg = SandboxConfig::from_decl_stub(cfg);
+                bridge_cfg.command = vec![
+                    cfg.rust_bridge_bin.to_string_lossy().to_string(),
+                    "-r".into(),
+                    "pass".into(),
+                    "--address".into(),
+                    addr_spec.clone(),
+                    "-s".into(),
+                    in_sandbox_sock,
+                ];
+                let _ = try_connect_running_sandbox(ipc_sock, &bridge_cfg, None);
+                wait_for_file_created(sandbox_runtime, &sock_name, 500);
+                if let Ok(c) = Command::new(&cfg.rust_bridge_bin)
+                    .args(["-r", "listen", "--address", &addr_spec, "-s"])
+                    .arg(&host_sock)
+                    .arg("-d")
+                    .spawn()
+                    && let Ok(p) = i32::try_from(c.id())
                 {
                     pids.push(p);
                 }
@@ -2222,12 +3207,59 @@ fn setup_bridges(
     pids
 }
 
-fn cleanup_bridges(pids: &[i32], sandbox_runtime: &Path, count: usize) {
-    for pid in pids {
-        unsafe { kill(*pid, 15) };
-    }
-    for idx in 0..count {
-        let _ = fs::remove_file(sandbox_runtime.join(format!("bridge_{idx}.sock")));
+impl SandboxConfig {
+    fn from_decl_stub(parent: &Self) -> Self {
+        Self {
+            app_id: parent.app_id.clone(),
+            custom_dir: None,
+            network: parent.network.clone(),
+            wayland_mode: parent.wayland_mode.clone(),
+            x11_mode: parent.x11_mode.clone(),
+            pulse_mode: parent.pulse_mode.clone(),
+            pipewire_mode: parent.pipewire_mode.clone(),
+            dbus_mode: parent.dbus_mode.clone(),
+            shm_mode: parent.shm_mode.clone(),
+            tmp_mode: parent.tmp_mode.clone(),
+            bridges: Vec::new(),
+            subsystems: 0,
+            flags: CFG_HELPER_REQ | (parent.flags & CFG_VERBOSE),
+            webcam_count: 0,
+            executor_path: None,
+            dbus_talk: Vec::new(),
+            dbus_own: Vec::new(),
+            dbus_see: Vec::new(),
+            dbus_extra_args: Vec::new(),
+            system_dbus_talk: Vec::new(),
+            system_dbus_own: Vec::new(),
+            system_dbus_see: Vec::new(),
+            system_dbus_extra_args: Vec::new(),
+            rw_binds: Vec::new(),
+            ro_binds: Vec::new(),
+            dev_binds: Vec::new(),
+            mkdir_dirs: Vec::new(),
+            bwrap_extra_args: Vec::new(),
+            extra_env: Vec::new(),
+            singbox_bin: parent.singbox_bin.clone(),
+            singbox_config: parent.singbox_config.clone(),
+            singbox_json: None,
+            dbus_proxy_bin: parent.dbus_proxy_bin.clone(),
+            way_secure_bin: parent.way_secure_bin.clone(),
+            pasta_bin: parent.pasta_bin.clone(),
+            xwayland_satellite_bin: parent.xwayland_satellite_bin.clone(),
+            bwrap_bin: parent.bwrap_bin.clone(),
+            rust_bridge_bin: parent.rust_bridge_bin.clone(),
+            app2unit_bin: parent.app2unit_bin.clone(),
+            systemctl_bin: parent.systemctl_bin.clone(),
+            vpnify_bin: parent.vpnify_bin.clone(),
+            notify_send_bin: parent.notify_send_bin.clone(),
+            seccomp_allow: Vec::new(),
+            seccomp_block: Vec::new(),
+            seccomp_file: None,
+            custom_uid: None,
+            custom_gid: None,
+            inside_init: Vec::new(),
+            command: Vec::new(),
+        }
     }
 }
 
@@ -2240,47 +3272,22 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
     let _ = fs::remove_file(sandbox_runtime.join("wayland-secure.lock"));
 
     let mut ready_pipe = [0i32; 2];
-    if unsafe { pipe(ready_pipe.as_mut_ptr()) } != 0 {
-        eprintln!("[sb-run] Error: Failed to create pipe for way-secure readiness");
-        exit(1);
+    let mut close_pipe = [0i32; 2];
+    if unsafe { pipe(ready_pipe.as_mut_ptr()) } != 0
+        || unsafe { pipe(close_pipe.as_mut_ptr()) } != 0
+    {
+        fail_exit("failed to create pipes for way-secure");
     }
     let [ready_r, ready_w] = ready_pipe;
-
-    let mut close_pipe = [0i32; 2];
-    if unsafe { pipe(close_pipe.as_mut_ptr()) } != 0 {
-        unsafe {
-            close(ready_r);
-            close(ready_w);
-        }
-        eprintln!("[sb-run] Error: Failed to create pipe for way-secure close");
-        exit(1);
-    }
     let [close_r, close_w] = close_pipe;
 
-    let bin_name = cfg.way_secure_bin.as_ref().map_or_else(
-        || {
-            let sys = PathBuf::from("/run/current-system/sw/bin/way-secure");
-            if sys.exists() {
-                sys
-            } else {
-                PathBuf::from("way-secure")
-            }
-        },
-        Clone::clone,
-    );
-
-    let mut cmd = Command::new(bin_name);
-    if !cfg.verbose {
-        cmd.stdout(Stdio::null());
-        cmd.stderr(Stdio::null());
+    let mut cmd = Command::new(&cfg.way_secure_bin);
+    if (cfg.flags & CFG_VERBOSE) == 0 {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
-    cmd.arg("--socket-path")
+    cmd.args(["--socket-path"])
         .arg(&sock_path)
-        .arg("-a")
-        .arg(&cfg.app_id)
-        .arg("-e")
-        .arg("flatpak")
-        .arg("-r")
+        .args(["-a", &cfg.app_id, "-e", "flatpak", "-r"])
         .arg(ready_w.to_string())
         .arg("-c")
         .arg(close_r.to_string());
@@ -2304,13 +3311,12 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
             let n = unsafe { read(ready_r, buf.as_mut_ptr().cast(), 8) };
             unsafe { close(ready_r) };
             if n <= 0 && !sock_path.exists() {
-                eprintln!(
-                    "[sb-run] Error: way-secure failed before signaling readiness on '{}'",
-                    sock_path.display()
-                );
                 let _ = child.kill();
                 unsafe { close(close_w) };
-                exit(1);
+                fail_exit(&format!(
+                    "way-secure failed before readiness on '{}'",
+                    sock_path.display()
+                ));
             }
             let _ = child.wait();
             Some(close_w)
@@ -2322,95 +3328,40 @@ fn start_way_secure(cfg: &SandboxConfig, sandbox_runtime: &Path) -> Option<i32> 
                 close(close_r);
                 close(close_w);
             }
-            eprintln!("[sb-run] Error: Failed to spawn way-secure: {err}");
-            exit(1);
+            fail_exit(&format!("failed to spawn way-secure: {err}"));
         }
     }
 }
 
-fn add_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
-    if !cfg.app_id.is_empty() {
-        proxy_cmd.arg(format!("--own={}", cfg.app_id));
-        proxy_cmd.arg(format!("--own={}.*", cfg.app_id));
-    }
-    for talk in DEFAULT_DBUS_TALKS {
-        proxy_cmd.arg(format!("--talk={talk}"));
-    }
-    for talk in &cfg.dbus_talk {
-        proxy_cmd.arg(format!("--talk={talk}"));
-    }
-    for own in DEFAULT_DBUS_OWNS {
-        proxy_cmd.arg(format!("--own={own}"));
-    }
-    for own in &cfg.dbus_own {
-        proxy_cmd.arg(format!("--own={own}"));
-    }
-    for see in &cfg.dbus_see {
-        proxy_cmd.arg(format!("--see={see}"));
-    }
-    for arg in &cfg.dbus_extra_args {
-        proxy_cmd.arg(arg);
-    }
-}
-
-fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path) -> Option<Child> {
-    let Ok(session_bus) = env::var("DBUS_SESSION_BUS_ADDRESS") else {
-        return None;
-    };
+fn spawn_dbus_proxy_bwrap(
+    cfg: &SandboxConfig,
+    bus_addr: &str,
+    proxy_sock: &Path,
+    flatpak_info: &Path,
+    extra_rules: &[String],
+) -> Option<Child> {
     let _ = fs::remove_file(proxy_sock);
-
-    let bin_name = cfg.dbus_proxy_bin.as_ref().map_or_else(
-        || {
-            let sys = PathBuf::from("/run/current-system/sw/bin/xdg-dbus-proxy");
-            if sys.exists() {
-                sys
-            } else {
-                PathBuf::from("xdg-dbus-proxy")
-            }
-        },
-        Clone::clone,
-    );
-
-    let bwrap_bin = {
-        let sys = PathBuf::from("/run/current-system/sw/bin/bwrap");
-        if sys.exists() {
-            sys
-        } else {
-            PathBuf::from("bwrap")
-        }
-    };
-
-    let mut proxy_cmd = Command::new(bwrap_bin);
+    let mut proxy_cmd = Command::new(&cfg.bwrap_bin);
     proxy_cmd
-        .arg("--die-with-parent")
-        .arg("--ro-bind")
-        .arg("/etc")
-        .arg("/etc")
-        .arg("--ro-bind")
-        .arg("/nix/store")
-        .arg("/nix/store")
-        .arg("--bind")
-        .arg("/var")
-        .arg("/var")
-        .arg("--bind")
-        .arg("/tmp")
-        .arg("/tmp")
-        .arg("--bind")
-        .arg("/run")
-        .arg("/run")
+        .args(["--die-with-parent", "--ro-bind", "/etc", "/etc"])
+        .args(["--ro-bind", "/nix/store", "/nix/store"])
+        .args([
+            "--bind", "/var", "/var", "--bind", "/tmp", "/tmp", "--bind", "/run", "/run",
+        ])
         .arg("--ro-bind-try")
         .arg(flatpak_info)
         .arg("/.flatpak-info")
         .arg("--")
-        .arg(bin_name)
-        .arg(&session_bus)
+        .arg(&cfg.dbus_proxy_bin)
+        .arg(bus_addr)
         .arg(proxy_sock)
         .arg("--filter");
 
-    add_dbus_proxy_rules(&mut proxy_cmd, cfg);
-    if !cfg.verbose {
-        proxy_cmd.stdout(Stdio::null());
-        proxy_cmd.stderr(Stdio::null());
+    for r in extra_rules {
+        proxy_cmd.arg(r);
+    }
+    if (cfg.flags & CFG_VERBOSE) == 0 {
+        proxy_cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
     unsafe {
         proxy_cmd.pre_exec(|| {
@@ -2428,26 +3379,40 @@ fn start_dbus_proxy(cfg: &SandboxConfig, proxy_sock: &Path, flatpak_info: &Path)
             }
             Some(child)
         }
-        Err(err) => {
-            eprintln!("[sb-run] Failed to spawn xdg-dbus-proxy via bwrap: {err}");
-            None
-        }
+        Err(err) => fail_exit(&format!("failed to spawn xdg-dbus-proxy via bwrap: {err}")),
     }
 }
 
-fn add_system_dbus_proxy_rules(proxy_cmd: &mut Command, cfg: &SandboxConfig) {
-    for talk in &cfg.system_dbus_talk {
-        proxy_cmd.arg(format!("--talk={talk}"));
+fn start_session_dbus_proxy(
+    cfg: &SandboxConfig,
+    decl: &DeclConfig,
+    proxy_sock: &Path,
+    flatpak_info: &Path,
+) -> Option<Child> {
+    let session_bus = env::var("DBUS_SESSION_BUS_ADDRESS")
+        .unwrap_or_else(|_| fail_exit("DBUS_SESSION_BUS_ADDRESS not set for sandboxed dbus"));
+    let mut rules = Vec::new();
+    if !cfg.app_id.is_empty() {
+        rules.push(format!("--own={}", cfg.app_id));
+        rules.push(format!("--own={}.*", cfg.app_id));
     }
-    for own in &cfg.system_dbus_own {
-        proxy_cmd.arg(format!("--own={own}"));
+    for talk in &decl.dbus_talks {
+        rules.push(format!("--talk={talk}"));
     }
-    for see in &cfg.system_dbus_see {
-        proxy_cmd.arg(format!("--see={see}"));
+    for talk in &cfg.dbus_talk {
+        rules.push(format!("--talk={talk}"));
     }
-    for arg in &cfg.system_dbus_extra_args {
-        proxy_cmd.arg(arg);
+    for own in &decl.dbus_owns {
+        rules.push(format!("--own={own}"));
     }
+    for own in &cfg.dbus_own {
+        rules.push(format!("--own={own}"));
+    }
+    for see in &cfg.dbus_see {
+        rules.push(format!("--see={see}"));
+    }
+    rules.extend(cfg.dbus_extra_args.iter().cloned());
+    spawn_dbus_proxy_bwrap(cfg, &session_bus, proxy_sock, flatpak_info, &rules)
 }
 
 fn start_system_dbus_proxy(
@@ -2458,113 +3423,39 @@ fn start_system_dbus_proxy(
     if !Path::new("/run/dbus/system_bus_socket").exists() {
         return None;
     }
-    let _ = fs::remove_file(proxy_sock);
-
-    let bin_name = cfg.dbus_proxy_bin.as_ref().map_or_else(
-        || {
-            let sys = PathBuf::from("/run/current-system/sw/bin/xdg-dbus-proxy");
-            if sys.exists() {
-                sys
-            } else {
-                PathBuf::from("xdg-dbus-proxy")
-            }
-        },
-        Clone::clone,
-    );
-
-    let bwrap_bin = {
-        let sys = PathBuf::from("/run/current-system/sw/bin/bwrap");
-        if sys.exists() {
-            sys
-        } else {
-            PathBuf::from("bwrap")
-        }
-    };
-
-    let mut proxy_cmd = Command::new(bwrap_bin);
-    proxy_cmd
-        .arg("--die-with-parent")
-        .arg("--ro-bind")
-        .arg("/etc")
-        .arg("/etc")
-        .arg("--ro-bind")
-        .arg("/nix/store")
-        .arg("/nix/store")
-        .arg("--bind")
-        .arg("/var")
-        .arg("/var")
-        .arg("--bind")
-        .arg("/tmp")
-        .arg("/tmp")
-        .arg("--bind")
-        .arg("/run")
-        .arg("/run")
-        .arg("--ro-bind-try")
-        .arg(flatpak_info)
-        .arg("/.flatpak-info")
-        .arg("--")
-        .arg(bin_name)
-        .arg("unix:path=/run/dbus/system_bus_socket")
-        .arg(proxy_sock)
-        .arg("--filter");
-
-    add_system_dbus_proxy_rules(&mut proxy_cmd, cfg);
-    if !cfg.verbose {
-        proxy_cmd.stdout(Stdio::null());
-        proxy_cmd.stderr(Stdio::null());
+    let mut rules = Vec::new();
+    for talk in &cfg.system_dbus_talk {
+        rules.push(format!("--talk={talk}"));
     }
-    unsafe {
-        proxy_cmd.pre_exec(|| {
-            prctl(1, 15, 0, 0, 0);
-            Ok(())
-        });
+    for own in &cfg.system_dbus_own {
+        rules.push(format!("--own={own}"));
     }
-
-    match proxy_cmd.spawn() {
-        Ok(child) => {
-            if let Some(parent) = proxy_sock.parent()
-                && let Some(name) = proxy_sock.file_name().and_then(|n| n.to_str())
-            {
-                wait_for_file_created(parent, name, 1000);
-            }
-            Some(child)
-        }
-        Err(err) => {
-            eprintln!("[sb-run] Failed to spawn system xdg-dbus-proxy via bwrap: {err}");
-            None
-        }
+    for see in &cfg.system_dbus_see {
+        rules.push(format!("--see={see}"));
     }
+    rules.extend(cfg.system_dbus_extra_args.iter().cloned());
+    spawn_dbus_proxy_bwrap(
+        cfg,
+        "unix:path=/run/dbus/system_bus_socket",
+        proxy_sock,
+        flatpak_info,
+        &rules,
+    )
 }
 
-fn start_pasta(cfg: &SandboxConfig, child_pid: u32) -> Option<Child> {
+fn start_pasta(cfg: &SandboxConfig, decl: &DeclConfig, child_pid: u32) -> Option<Child> {
     if cfg.network != "sandboxed" {
         return None;
     }
-    let pasta_bin = cfg.pasta_bin.as_ref().map_or_else(
-        || {
-            let sys = PathBuf::from("/run/current-system/sw/bin/pasta");
-            if sys.exists() {
-                sys
-            } else {
-                PathBuf::from("pasta")
-            }
-        },
-        Clone::clone,
-    );
-
-    let mut cmd = Command::new(pasta_bin);
-    if !cfg.verbose {
-        cmd.stdout(Stdio::null());
-        cmd.stderr(Stdio::null());
+    let mut cmd = Command::new(&cfg.pasta_bin);
+    if (cfg.flags & CFG_VERBOSE) == 0 {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
-    cmd.args(PASTA_DEFAULT_ARGS);
+    cmd.args(&decl.pasta_args);
     cmd.arg(child_pid.to_string());
     match cmd.spawn() {
         Ok(child) => Some(child),
-        Err(err) => {
-            eprintln!("[sb-run] Warning: Failed to spawn pasta: {err}");
-            None
-        }
+        Err(err) => fail_exit(&format!("failed to spawn pasta: {err}")),
     }
 }
 
@@ -2572,15 +3463,14 @@ fn resolve_sandbox_home(cfg: &SandboxConfig, runtime_base: &str) -> PathBuf {
     cfg.custom_dir.as_ref().map_or_else(
         || {
             if (cfg.flags & CFG_TMPFS) != 0 {
-                let tmpfs_path =
-                    PathBuf::from(format!("{runtime_base}/sb-run/{}/home", cfg.app_id));
-                let _ = fs::create_dir_all(&tmpfs_path);
-                tmpfs_path
+                let p = PathBuf::from(format!("{runtime_base}/sb-run/{}/home", cfg.app_id));
+                let _ = fs::create_dir_all(&p);
+                p
             } else {
                 let home = env::var("HOME").unwrap_or_else(|_| "/home/user".into());
-                let default_home = PathBuf::from(format!("{home}/.nixpak/{}/home", cfg.app_id));
-                let _ = fs::create_dir_all(&default_home);
-                default_home
+                let p = PathBuf::from(format!("{home}/.nixpak/{}/home", cfg.app_id));
+                let _ = fs::create_dir_all(&p);
+                p
             }
         },
         |dir| {
@@ -2595,13 +3485,19 @@ fn cleanup_session(
     paths: &SandboxPaths,
     bridge_pids: &[i32],
     mut helpers: HelperProcesses,
+    seccomp_mon: Option<&mut SeccompMonitorHandle>,
 ) {
+    if let Some(mon) = seccomp_mon {
+        mon.shutdown();
+    }
     if let Some(fd) = helpers.way_secure_close_fd {
         unsafe { close(fd) };
     }
-    if let Some(ref mut c) = helpers.dbus_proxy {
-        let pid = c.id();
-        if let Ok(pid_i32) = i32::try_from(pid) {
+    for c in [&mut helpers.dbus_proxy, &mut helpers.system_dbus_proxy]
+        .into_iter()
+        .flatten()
+    {
+        if let Ok(pid_i32) = i32::try_from(c.id()) {
             unsafe {
                 kill(-pid_i32, 15);
                 kill(pid_i32, 15);
@@ -2610,36 +3506,34 @@ fn cleanup_session(
         let _ = c.kill();
         let _ = c.wait();
     }
-    if let Some(ref mut c) = helpers.system_dbus_proxy {
-        let pid = c.id();
-        if let Ok(pid_i32) = i32::try_from(pid) {
-            unsafe {
-                kill(-pid_i32, 15);
-                kill(pid_i32, 15);
-            }
-        }
+    for c in [&mut helpers.singbox_bridge, &mut helpers.pasta]
+        .into_iter()
+        .flatten()
+    {
         let _ = c.kill();
         let _ = c.wait();
     }
-    if let Some(ref mut c) = helpers.singbox_bridge {
-        let _ = c.kill();
-        let _ = c.wait();
+    for pid in bridge_pids {
+        unsafe { kill(*pid, 15) };
     }
-    if let Some(ref mut c) = helpers.pasta {
-        let _ = c.kill();
-        let _ = c.wait();
+    for idx in 0..cfg.bridges.len() {
+        let _ = fs::remove_file(paths.runtime.join(format!("bridge_{idx}.sock")));
     }
-    let _ = fs::remove_file(paths.runtime.join("wayland-secure"));
-    let _ = fs::remove_file(paths.runtime.join("wayland-secure.lock"));
-    cleanup_bridges(bridge_pids, &paths.runtime, cfg.bridges.len());
+    for name in [
+        "wayland-secure",
+        "wayland-secure.lock",
+        "migrator.sock",
+        "sing-box.sock",
+        "seccomp.sock",
+    ] {
+        let _ = fs::remove_file(paths.runtime.join(name));
+    }
     let _ = fs::remove_file(&paths.ipc_sock);
-    let _ = fs::remove_file(paths.runtime.join("migrator.sock"));
-    let _ = fs::remove_file(paths.runtime.join("sing-box.sock"));
     cleanup_token_for_app(&cfg.app_id);
-    let instance_id = format!("nixpak-app-{}", cfg.app_id);
+
     let uid = libc_getuid();
     let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
-    let _ = fs::remove_dir_all(format!("{runtime_base}/.flatpak/{instance_id}"));
+    let _ = fs::remove_dir_all(format!("{runtime_base}/.flatpak/nixpak-app-{}", cfg.app_id));
     if (cfg.flags & CFG_TMPFS) != 0 {
         let _ = fs::remove_dir_all(&paths.runtime);
         let _ = fs::remove_dir_all(&paths.home);
@@ -2647,11 +3541,15 @@ fn cleanup_session(
     if let Ok(scope) = env::var("MY_SCOPE")
         && scope_matches_app(&scope, cfg)
     {
-        let _ = Command::new("systemctl")
+        let _ = Command::new(&cfg.systemctl_bin)
             .args(["--user", "--no-block", "stop", &scope])
             .spawn();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Epoll, Cgroup Scope Monitor, Bwrap Sync
+// ---------------------------------------------------------------------------
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -2703,8 +3601,7 @@ impl Epoll {
         };
         let n = unsafe { epoll_wait(self.0, events.as_mut_ptr(), len, timeout_ms) };
         if n < 0 {
-            let err = std::io::Error::last_os_error();
-            Err(err.raw_os_error().unwrap_or(0))
+            Err(std::io::Error::last_os_error().raw_os_error().unwrap_or(0))
         } else {
             usize::try_from(n).map_err(|_| 0)
         }
@@ -2726,7 +3623,7 @@ fn pidfd_open(pid: i32) -> Option<i32> {
     if fd >= 0 { Some(fd) } else { None }
 }
 
-fn read_pids_from_file(path: &Path) -> std::collections::HashSet<i32> {
+fn read_pids_from_file(path: &Path) -> BTreeSet<i32> {
     fs::read_to_string(path)
         .unwrap_or_default()
         .lines()
@@ -2744,35 +3641,32 @@ struct UCred {
 }
 
 fn handle_migration(listener: &UnixListener, inside_procs: Option<&Path>) -> Option<i32> {
-    match listener.accept() {
-        Ok((mut stream, _)) => {
-            let mut ucred = UCred::default();
-            let mut len = u32::try_from(size_of::<UCred>()).unwrap_or(0);
-            let fd = stream.as_raw_fd();
-            let res = unsafe {
-                getsockopt(
-                    fd,
-                    SOL_SOCKET,
-                    SO_PEERCRED,
-                    (&raw mut ucred).cast(),
-                    &raw mut len,
-                )
-            };
-            if let Some(p) = inside_procs
-                && res == 0
-                && ucred.pid > 0
-            {
-                let _ = fs::write(p, format!("{}\n", ucred.pid));
-            }
-            let _ = stream.write_all(b"G");
-            let _ = stream.flush();
-            if res == 0 && ucred.pid > 0 {
-                Some(ucred.pid)
-            } else {
-                None
-            }
-        }
-        Err(_) => None,
+    let Ok((mut stream, _)) = listener.accept() else {
+        return None;
+    };
+    let mut ucred = UCred::default();
+    let mut len = u32::try_from(size_of::<UCred>()).unwrap_or(0);
+    let res = unsafe {
+        getsockopt(
+            stream.as_raw_fd(),
+            SOL_SOCKET,
+            SO_PEERCRED,
+            (&raw mut ucred).cast(),
+            &raw mut len,
+        )
+    };
+    if let Some(p) = inside_procs
+        && res == 0
+        && ucred.pid > 0
+    {
+        let _ = fs::write(p, format!("{}\n", ucred.pid));
+    }
+    let _ = stream.write_all(b"G");
+    let _ = stream.flush();
+    if res == 0 && ucred.pid > 0 {
+        Some(ucred.pid)
+    } else {
+        None
     }
 }
 
@@ -2788,7 +3682,7 @@ struct MonitorContext<'a> {
 fn process_epoll_events(
     ctx: &MonitorContext<'_>,
     events: &[EpollEvent],
-    monitored: &mut std::collections::HashSet<i32>,
+    monitored: &mut BTreeSet<i32>,
 ) -> bool {
     for event in events {
         let Ok(fd) = i32::try_from(event.data) else {
@@ -2832,6 +3726,7 @@ fn monitor_scope_and_cleanup(
     paths: &SandboxPaths,
     bridge_pids: &[i32],
     helpers: HelperProcesses,
+    mut seccomp_mon: Option<SeccompMonitorHandle>,
     child: &mut Child,
     migrator_listener: Option<&UnixListener>,
 ) {
@@ -2840,97 +3735,87 @@ fn monitor_scope_and_cleanup(
         let events_path = PathBuf::from(&cgroup_path).join("inside/cgroup.events");
         let mut has_seen_apps = false;
 
-        let Some(epoll) = Epoll::new() else {
-            let _ = child.wait();
-            cleanup_session(cfg, paths, bridge_pids, helpers);
-            return;
-        };
-
-        let c_events = CString::new(events_path.into_os_string().as_bytes()).ok();
-        let cgroup_events_fd = c_events.map_or(-1, |p| unsafe { open(p.as_ptr(), 0) });
-        if cgroup_events_fd >= 0 {
-            let mut drain_buf = [0u8; 256];
-            unsafe {
-                lseek(cgroup_events_fd, 0, 0);
-                read(
-                    cgroup_events_fd,
-                    drain_buf.as_mut_ptr().cast(),
-                    drain_buf.len(),
-                );
-            };
-            epoll.add_pri(cgroup_events_fd);
-        }
-
-        let child_i32 = i32::try_from(child.id()).unwrap_or(0);
-        let child_fd = pidfd_open(child_i32).unwrap_or(-1);
-        if child_fd >= 0 {
-            epoll.add(child_fd);
-        }
-
-        let migrator_fd = migrator_listener.map_or(-1, AsRawFd::as_raw_fd);
-        if migrator_fd >= 0 {
-            epoll.add(migrator_fd);
-        }
-
-        let ctx = MonitorContext {
-            epoll: &epoll,
-            cgroup_events_fd,
-            child_fd,
-            migrator_fd,
-            migrator_listener,
-            procs_path: &procs_path,
-        };
-
-        let mut monitored = std::collections::HashSet::new();
-
-        loop {
-            let inside_pids = read_pids_from_file(&procs_path);
-
-            if has_seen_apps && inside_pids.is_empty() {
-                break;
+        if let Some(epoll) = Epoll::new() {
+            let c_events = CString::new(events_path.into_os_string().as_bytes()).ok();
+            let cgroup_events_fd = c_events.map_or(-1, |p| unsafe { open(p.as_ptr(), 0) });
+            if cgroup_events_fd >= 0 {
+                let mut drain_buf = [0u8; 256];
+                unsafe {
+                    lseek(cgroup_events_fd, 0, 0);
+                    read(
+                        cgroup_events_fd,
+                        drain_buf.as_mut_ptr().cast(),
+                        drain_buf.len(),
+                    );
+                };
+                epoll.add_pri(cgroup_events_fd);
             }
 
-            for &pid in &inside_pids {
-                has_seen_apps = true;
-                if monitored.contains(&pid) {
-                    continue;
+            let child_i32 = i32::try_from(child.id()).unwrap_or(0);
+            let child_fd = pidfd_open(child_i32).unwrap_or(-1);
+            if child_fd >= 0 {
+                epoll.add(child_fd);
+            }
+            let migrator_fd = migrator_listener.map_or(-1, AsRawFd::as_raw_fd);
+            if migrator_fd >= 0 {
+                epoll.add(migrator_fd);
+            }
+
+            let ctx = MonitorContext {
+                epoll: &epoll,
+                cgroup_events_fd,
+                child_fd,
+                migrator_fd,
+                migrator_listener,
+                procs_path: &procs_path,
+            };
+            let mut monitored = BTreeSet::new();
+
+            loop {
+                let inside_pids = read_pids_from_file(&procs_path);
+                if has_seen_apps && inside_pids.is_empty() {
+                    break;
                 }
-                if let Some(pfd) = pidfd_open(pid) {
-                    if epoll.add(pfd) {
-                        monitored.insert(pid);
-                    } else {
-                        unsafe { close(pfd) };
+                for &pid in &inside_pids {
+                    has_seen_apps = true;
+                    if monitored.contains(&pid) {
+                        continue;
+                    }
+                    if let Some(pfd) = pidfd_open(pid) {
+                        if epoll.add(pfd) {
+                            monitored.insert(pid);
+                        } else {
+                            unsafe { close(pfd) };
+                        }
                     }
                 }
+                let mut events = [EpollEvent { events: 0, data: 0 }; 16];
+                let n = match epoll.wait(&mut events, -1) {
+                    Ok(n) => n,
+                    Err(4) => continue,
+                    Err(_) => break,
+                };
+                if process_epoll_events(&ctx, &events[..n], &mut monitored) {
+                    break;
+                }
             }
-
-            let mut events = [EpollEvent { events: 0, data: 0 }; 16];
-            let n = match epoll.wait(&mut events, -1) {
-                Ok(n) => n,
-                Err(4) => continue, // EINTR
-                Err(_) => break,
-            };
-
-            if process_epoll_events(&ctx, &events[..n], &mut monitored) {
-                break;
+            if cgroup_events_fd >= 0 {
+                unsafe { close(cgroup_events_fd) };
             }
-        }
-
-        if cgroup_events_fd >= 0 {
-            unsafe { close(cgroup_events_fd) };
+        } else {
+            let _ = child.wait();
         }
     } else {
         let _ = child.wait();
     }
 
-    cleanup_session(cfg, paths, bridge_pids, helpers);
+    cleanup_session(cfg, paths, bridge_pids, helpers, seccomp_mon.as_mut());
 }
 
 fn parse_child_pid_from_info(buf: &[u8]) -> Option<u32> {
     let s = std::str::from_utf8(buf).ok()?;
-    let needle = "\"child-pid\":";
-    let idx = s.find(needle)?;
-    let rem = s[idx + needle.len()..].trim_start();
+    let idx = s.find("\"child-pid\":")?;
+    let rem = s[idx + "\"child-pid\":".len()..].trim_start();
     let num_str: String = rem.chars().take_while(char::is_ascii_digit).collect();
     num_str.parse().ok()
 }
@@ -2963,6 +3848,7 @@ fn read_info_fd_data(r_fd: i32) -> Vec<u8> {
 fn handle_pasta_sync(
     pasta_sync_fds: Option<([i32; 2], [i32; 2])>,
     cfg: &SandboxConfig,
+    decl: &DeclConfig,
 ) -> (Option<Child>, u32) {
     let Some(([r_block, w_block], [r_info, w_info])) = pasta_sync_fds else {
         return (None, 0);
@@ -2972,21 +3858,17 @@ fn handle_pasta_sync(
         close(w_info);
     };
     let data = read_info_fd_data(r_info);
-
     let runner_pid = parse_child_pid_from_info(&data).unwrap_or(0);
     if runner_pid > 0 {
         write_bwrap_info(&cfg.app_id, &data);
     }
-
     let pasta_child = if runner_pid > 0 {
-        start_pasta(cfg, runner_pid)
+        start_pasta(cfg, decl, runner_pid)
     } else {
         None
     };
-
     let _ = unsafe { write(w_block, b"x".as_ptr().cast(), 1) };
     unsafe { close(w_block) };
-
     (pasta_child, runner_pid)
 }
 
@@ -3000,7 +3882,6 @@ struct SandboxPaths {
 fn prepare_sandbox_paths(cfg: &SandboxConfig) -> SandboxPaths {
     let uid = libc_getuid();
     let runtime_base = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| format!("/run/user/{uid}"));
-
     let sandbox_dir = PathBuf::from(format!("{runtime_base}/.nixpak/{}", cfg.app_id));
     let sandbox_runtime = sandbox_dir.join("runtime");
     let _ = fs::create_dir_all(&sandbox_runtime);
@@ -3011,15 +3892,12 @@ fn prepare_sandbox_paths(cfg: &SandboxConfig) -> SandboxPaths {
             ipc_sock = alt;
         }
     }
-
     let sandbox_home = resolve_sandbox_home(cfg, &runtime_base);
-
     let ready_pipe = sandbox_runtime.join("ready_pipe");
     let _ = fs::remove_file(&ready_pipe);
     if let Ok(c_pipe) = CString::new(ready_pipe.as_os_str().as_bytes()) {
         unsafe { mkfifo(c_pipe.as_ptr(), 0o600) };
     }
-
     SandboxPaths {
         runtime: sandbox_runtime,
         home: sandbox_home,
@@ -3028,27 +3906,29 @@ fn prepare_sandbox_paths(cfg: &SandboxConfig) -> SandboxPaths {
     }
 }
 
-fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperProcesses {
+fn spawn_initial_helpers(
+    cfg: &SandboxConfig,
+    decl: &DeclConfig,
+    sandbox_runtime: &Path,
+) -> HelperProcesses {
     let mut helpers = HelperProcesses::default();
-    let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg);
+    let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg, decl);
 
     if cfg.dbus_mode == "sandboxed" {
         let proxy_sock = sandbox_runtime.join("nixpak-bus");
-        helpers.dbus_proxy = start_dbus_proxy(cfg, &proxy_sock, &flatpak_info_path);
+        helpers.dbus_proxy = start_session_dbus_proxy(cfg, decl, &proxy_sock, &flatpak_info_path);
     }
-
     if (cfg.flags & CFG_SYSTEM_DBUS) != 0 {
         let sys_proxy_sock = sandbox_runtime.join("nixpak-system-bus");
         helpers.system_dbus_proxy =
             start_system_dbus_proxy(cfg, &sys_proxy_sock, &flatpak_info_path);
     }
-
     helpers.way_secure_close_fd = start_way_secure(cfg, sandbox_runtime);
 
     if cfg.network == "singbox" {
         let sb_bridge_sock = sandbox_runtime.join("sing-box.sock");
         let _ = fs::remove_file(&sb_bridge_sock);
-        let mut bridge_cmd = Command::new("rust-bridge");
+        let mut bridge_cmd = Command::new(&cfg.rust_bridge_bin);
         bridge_cmd.args(["-r", "pass", "--address", "127.0.0.1:[1919,2121]", "-s"]);
         bridge_cmd.arg(&sb_bridge_sock);
         unsafe {
@@ -3057,9 +3937,12 @@ fn spawn_initial_helpers(cfg: &SandboxConfig, sandbox_runtime: &Path) -> HelperP
                 Ok(())
             });
         }
-        helpers.singbox_bridge = bridge_cmd.spawn().ok();
+        helpers.singbox_bridge = Some(
+            bridge_cmd
+                .spawn()
+                .unwrap_or_else(|e| fail_exit(&format!("failed to spawn rust-bridge: {e}"))),
+        );
     }
-
     helpers
 }
 
@@ -3100,77 +3983,21 @@ fn apply_landlock_signal_scoping() {
     }
 }
 
-fn spawn_bwrap_and_get_runner(
-    cfg: &SandboxConfig,
-    paths: &SandboxPaths,
-    token_hex: &str,
-    pasta_sync_pass: Option<(i32, i32)>,
-    extra_info_w: Option<i32>,
-    extra_info_r: Option<i32>,
-) -> (Child, u32) {
-    let mut bwrap = build_bwrap_command(
-        cfg,
-        &paths.runtime,
-        &paths.home,
-        Some(token_hex),
-        pasta_sync_pass,
-        extra_info_w,
-    );
-
-    if (cfg.flags & CFG_LANDLOCK) != 0 {
-        unsafe {
-            bwrap.pre_exec(|| {
-                apply_landlock_signal_scoping();
-                Ok(())
-            });
-        }
-    }
-
-    let child = match bwrap.spawn() {
-        Ok(c) => c,
-        Err(err) => {
-            eprintln!("[sb-run] Failed to spawn bwrap: {err}");
-            cleanup_token_for_app(&cfg.app_id);
-            exit(1);
-        }
-    };
-
-    let runner_pid = extra_info_r.map_or(0, |r_fd| {
-        if let Some(w) = extra_info_w {
-            unsafe { close(w) };
-        }
-        let data = read_info_fd_data(r_fd);
-        if data.is_empty() {
-            0
-        } else {
-            write_bwrap_info(&cfg.app_id, &data);
-            parse_child_pid_from_info(&data).unwrap_or(0)
-        }
-    });
-
-    (child, runner_pid)
-}
-
 fn systemd_unescape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == '\\' && chars.peek() == Some(&'x') {
             chars.next();
-            let h1 = chars.next();
-            let h2 = chars.next();
-            if let (Some(c1), Some(c2)) = (h1, h2) {
-                let mut buf = [0u8; 2];
-                buf[0] = c1 as u8;
-                buf[1] = c2 as u8;
+            if let (Some(c1), Some(c2)) = (chars.next(), chars.next()) {
+                let buf = [c1 as u8, c2 as u8];
                 if let Ok(hex_str) = std::str::from_utf8(&buf)
                     && let Ok(byte) = u8::from_str_radix(hex_str, 16)
                 {
                     out.push(byte as char);
                     continue;
                 }
-                out.push('\\');
-                out.push('x');
+                out.push_str("\\x");
                 out.push(c1);
                 out.push(c2);
                 continue;
@@ -3182,8 +4009,7 @@ fn systemd_unescape(s: &str) -> String {
 }
 
 fn scope_matches_app(scope_str: &str, cfg: &SandboxConfig) -> bool {
-    let unescaped = systemd_unescape(scope_str);
-    unescaped.contains(&cfg.app_id)
+    systemd_unescape(scope_str).contains(&cfg.app_id)
 }
 
 fn ensure_app2unit_scope(cfg: &SandboxConfig) {
@@ -3207,13 +4033,10 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
 
     let args: Vec<String> = env::args().collect();
     let current_exe = env::current_exe().unwrap_or_else(|_| PathBuf::from(&args[0]));
-
-    let Ok(c_app2unit) = CString::new("app2unit") else {
+    let Ok(c_app2unit) = CString::new(cfg.app2unit_bin.as_os_str().as_bytes()) else {
         return;
     };
-    let Ok(c_a) = CString::new("-a") else {
-        return;
-    };
+    let Ok(c_a) = CString::new("-a") else { return };
     let Ok(c_app_id) = CString::new(cfg.app_id.as_bytes()) else {
         return;
     };
@@ -3225,7 +4048,7 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     };
 
     let mut c_args = vec![c_app2unit.clone(), c_a, c_app_id.clone(), c_dashdash, c_exe];
-    if cfg.verbose
+    if (cfg.flags & CFG_VERBOSE) != 0
         && !args.iter().any(|a| a == "-v" || a == "--verbose")
         && let Ok(c_v_flag) = CString::new("-v")
     {
@@ -3244,10 +4067,7 @@ fn ensure_app2unit_scope(cfg: &SandboxConfig) {
     }
     let mut c_ptrs: Vec<*const i8> = c_args.iter().map(|cs| cs.as_ptr()).collect();
     c_ptrs.push(std::ptr::null());
-
-    unsafe {
-        execvp(c_app2unit.as_ptr(), c_ptrs.as_ptr());
-    }
+    unsafe { execvp(c_app2unit.as_ptr(), c_ptrs.as_ptr()) };
 }
 
 fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
@@ -3271,7 +4091,6 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
     while let Some(parent) = rel_path.strip_suffix("/inside") {
         rel_path = parent;
     }
-
     if !scope_matches_app(rel_path, cfg) {
         return;
     }
@@ -3287,8 +4106,7 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
     let _ = fs::create_dir_all(&helpers_dir);
     let _ = fs::create_dir_all(&inside_dir);
 
-    let root_procs = read_pids_from_file(&cgroup_path.join("cgroup.procs"));
-    for p in root_procs {
+    for p in read_pids_from_file(&cgroup_path.join("cgroup.procs")) {
         let _ = fs::write(helpers_dir.join("cgroup.procs"), format!("{p}\n"));
     }
     let pid = unsafe { getpid() };
@@ -3313,8 +4131,24 @@ fn setup_cgroup_and_scope(cfg: &SandboxConfig) {
     }
 }
 
-fn create_pasta_sync_pipes(network: &str) -> Option<([i32; 2], [i32; 2])> {
-    if network == "sandboxed" {
+fn ensure_start_time() {
+    if env::var_os("START_TIME").is_none() {
+        let now_ns = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        unsafe { env::set_var("START_TIME", now_ns.to_string()) };
+    }
+}
+
+fn spawn_bwrap_session(
+    cfg: &SandboxConfig,
+    decl: &DeclConfig,
+    paths: &SandboxPaths,
+    token_hex: &str,
+    has_seccomp: bool,
+    helpers: &mut HelperProcesses,
+) -> (Child, u32) {
+    let pasta_sync_fds = if cfg.network == "sandboxed" {
         let mut block_fds = [0i32; 2];
         let mut info_fds = [0i32; 2];
         let _ = unsafe { pipe(block_fds.as_mut_ptr()) };
@@ -3322,81 +4156,50 @@ fn create_pasta_sync_pipes(network: &str) -> Option<([i32; 2], [i32; 2])> {
         Some((block_fds, info_fds))
     } else {
         None
-    }
-}
-
-fn create_extra_info_pipes() -> (Option<i32>, Option<i32>) {
-    let mut fds = [0i32; 2];
-    if unsafe { pipe(fds.as_mut_ptr()) } == 0 {
-        (Some(fds[0]), Some(fds[1]))
-    } else {
-        (None, None)
-    }
-}
-
-fn ensure_start_time() {
-    if env::var_os("START_TIME").is_none() {
-        let now_ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        unsafe {
-            env::set_var("START_TIME", now_ns.to_string());
-        }
-    }
-}
-
-fn setup_migrator_listener(runtime: &Path) -> Option<UnixListener> {
-    let migrator_sock = runtime.join("migrator.sock");
-    let _ = fs::remove_file(&migrator_sock);
-    let listener = UnixListener::bind(&migrator_sock).ok()?;
-    let _ = listener.set_nonblocking(true);
-    Some(listener)
-}
-
-fn main() {
-    ensure_start_time();
-
-    let raw_args: Vec<String> = env::args().collect();
-    let cfg = parse_cli_args();
-    if cfg.verbose && raw_args.len() > 1 {
-        eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
-    }
-    let paths = prepare_sandbox_paths(&cfg);
-
-    if let Some(exit_code) = try_connect_running_sandbox(&paths.ipc_sock, &cfg) {
-        exit(exit_code);
-    }
-
-    ensure_app2unit_scope(&cfg);
-    setup_cgroup_and_scope(&cfg);
-
-    let mut helpers = spawn_initial_helpers(&cfg, &paths.runtime);
-    let migrator_listener = setup_migrator_listener(&paths.runtime);
-
-    let auth_token = create_token_for_app(&cfg.app_id);
-    let token_hex = bytes_to_hex(&auth_token);
-
-    let pasta_sync_fds = create_pasta_sync_pipes(&cfg.network);
+    };
     let pasta_sync_pass = pasta_sync_fds.map(|([r_b, _], [_, w_i])| (r_b, w_i));
-
     let (extra_info_r, extra_info_w) = if pasta_sync_fds.is_none() {
-        create_extra_info_pipes()
+        let mut fds = [0i32; 2];
+        if unsafe { pipe(fds.as_mut_ptr()) } == 0 {
+            (Some(fds[0]), Some(fds[1]))
+        } else {
+            (None, None)
+        }
     } else {
         (None, None)
     };
 
-    let (mut child, extra_runner_pid) = spawn_bwrap_and_get_runner(
-        &cfg,
-        &paths,
-        &token_hex,
-        pasta_sync_pass,
-        extra_info_w,
-        extra_info_r,
+    let mut bwrap = build_bwrap_command(
+        cfg,
+        decl,
+        &paths.runtime,
+        &paths.home,
+        token_hex,
+        BwrapLaunchOpts {
+            pasta_sync: pasta_sync_pass,
+            extra_info_fd: extra_info_w,
+            has_seccomp,
+        },
     );
+    let child = bwrap.spawn().unwrap_or_else(|err| {
+        cleanup_token_for_app(&cfg.app_id);
+        fail_exit(&format!("failed to spawn bwrap: {err}"));
+    });
+    let extra_runner_pid = extra_info_r.map_or(0, |r_fd| {
+        if let Some(w) = extra_info_w {
+            unsafe { close(w) };
+        }
+        let data = read_info_fd_data(r_fd);
+        if data.is_empty() {
+            0
+        } else {
+            write_bwrap_info(&cfg.app_id, &data);
+            parse_child_pid_from_info(&data).unwrap_or(0)
+        }
+    });
 
-    let (pasta_child, pasta_runner_pid) = handle_pasta_sync(pasta_sync_fds, &cfg);
+    let (pasta_child, pasta_runner_pid) = handle_pasta_sync(pasta_sync_fds, cfg, decl);
     helpers.pasta = pasta_child;
-
     let runner_pid = if pasta_runner_pid > 0 {
         pasta_runner_pid
     } else {
@@ -3412,9 +4215,114 @@ fn main() {
     if let Ok(cgroup) = env::var("MY_CGROUP")
         && runner_pid > 0
     {
-        let helpers_procs = format!("{cgroup}/helpers/cgroup.procs");
-        let _ = fs::write(helpers_procs, format!("{runner_pid}\n"));
+        let _ = fs::write(
+            format!("{cgroup}/helpers/cgroup.procs"),
+            format!("{runner_pid}\n"),
+        );
     }
+
+    (child, runner_pid)
+}
+
+fn setup_migrator_and_handle_initial(
+    runtime: &Path,
+    cfg: &SandboxConfig,
+    seccomp_bpf: Option<&[u8]>,
+) -> Option<UnixListener> {
+    let _ = seccomp_bpf;
+    if (cfg.flags & CFG_SCOPE) == 0 {
+        return None;
+    }
+    let migrator_sock = runtime.join("migrator.sock");
+    let _ = fs::remove_file(&migrator_sock);
+    let listener = UnixListener::bind(&migrator_sock).ok();
+    if let Some(ref l) = listener {
+        let _ = l.set_nonblocking(true);
+    }
+    listener
+}
+
+fn migrate_first_process(listener: Option<&UnixListener>) {
+    let inside_procs = env::var("MY_CGROUP")
+        .ok()
+        .map(|cg| PathBuf::from(format!("{cg}/inside/cgroup.procs")));
+    if let Some(l) = listener {
+        let mut pfd = PollFd {
+            fd: l.as_raw_fd(),
+            events: 1,
+            revents: 0,
+        };
+        if unsafe { poll(&raw mut pfd, 1, 5000) } > 0 {
+            handle_migration(l, inside_procs.as_deref());
+        }
+    }
+}
+
+fn main() {
+    ensure_start_time();
+    let raw_args: Vec<String> = env::args().collect();
+    for arg in raw_args.iter().skip(1) {
+        if arg == "--" {
+            break;
+        }
+        if arg == "-h" || arg == "--help" {
+            print_help_and_exit();
+        }
+    }
+    let decl = load_layered_config();
+    let mut cfg = parse_cli_args(&decl);
+    if (cfg.flags & CFG_VERBOSE) != 0 && raw_args.len() > 1 {
+        eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
+    }
+    validate_required_binaries(&cfg);
+
+    let paths = prepare_sandbox_paths(&cfg);
+    let syscall_table = Arc::new(SyscallTable::load(&decl.syscalls_file));
+    let seccomp_bpf = if (cfg.flags & CFG_SECCOMP) != 0 {
+        let allowed = resolve_allowed_syscalls(&decl, &cfg, &syscall_table, &paths.runtime);
+        Some(compile_seccomp_bpf(
+            &allowed,
+            &decl.silent_errno,
+            &syscall_table,
+        ))
+    } else {
+        None
+    };
+
+    prepare_singbox_config(&mut cfg, &paths.runtime);
+
+    if let Some(exit_code) =
+        try_connect_running_sandbox(&paths.ipc_sock, &cfg, seccomp_bpf.as_deref())
+    {
+        exit(exit_code);
+    }
+
+    ensure_app2unit_scope(&cfg);
+    setup_cgroup_and_scope(&cfg);
+
+    let mut seccomp_mon = seccomp_bpf.as_ref().map(|_| {
+        start_seccomp_monitor(
+            &paths.runtime,
+            Arc::clone(&syscall_table),
+            cfg.notify_send_bin.clone(),
+            cfg.app_id.clone(),
+        )
+    });
+
+    let mut helpers = spawn_initial_helpers(&cfg, &decl, &paths.runtime);
+    let migrator_listener =
+        setup_migrator_and_handle_initial(&paths.runtime, &cfg, seccomp_bpf.as_deref());
+
+    let auth_token = create_token_for_app(&cfg.app_id);
+    let token_hex = bytes_to_hex(&auth_token);
+    let (mut child, runner_pid) = spawn_bwrap_session(
+        &cfg,
+        &decl,
+        &paths,
+        &token_hex,
+        seccomp_bpf.is_some(),
+        &mut helpers,
+    );
 
     let cgroup_opt = env::var("MY_CGROUP").ok().map(PathBuf::from);
     let bridge_pids = if cfg.bridges.is_empty() {
@@ -3431,37 +4339,32 @@ fn main() {
 
     if cfg.command.is_empty() {
         let status = child.wait().map_or(1, |s| s.code().unwrap_or(1));
-        cleanup_session(&cfg, &paths, &bridge_pids, helpers);
+        cleanup_session(&cfg, &paths, &bridge_pids, helpers, seccomp_mon.as_mut());
         exit(status);
     }
 
-    let _ = try_connect_running_sandbox(&paths.ipc_sock, &cfg);
-    let inside_procs = env::var("MY_CGROUP")
-        .ok()
-        .map(|cg| PathBuf::from(format!("{cg}/inside/cgroup.procs")));
-    if let Some(ref listener) = migrator_listener {
-        let mut pfd = PollFd {
-            fd: listener.as_raw_fd(),
-            events: 1, // POLLIN
-            revents: 0,
-        };
-        if unsafe { poll(&raw mut pfd, 1, 5000) } > 0 {
-            handle_migration(listener, inside_procs.as_deref());
-        }
-    }
-
     if (cfg.flags & CFG_IS_CLI) != 0 {
+        let migrator_thread =
+            migrator_listener.map(|l| thread::spawn(move || migrate_first_process(Some(&l))));
+        let _ = try_connect_running_sandbox(&paths.ipc_sock, &cfg, seccomp_bpf.as_deref());
+        if let Some(h) = migrator_thread {
+            let _ = h.join();
+        }
         let _ = child.kill();
         let _ = child.wait();
-        cleanup_session(&cfg, &paths, &bridge_pids, helpers);
+        cleanup_session(&cfg, &paths, &bridge_pids, helpers, seccomp_mon.as_mut());
         exit(0);
     }
+
+    let _ = try_connect_running_sandbox(&paths.ipc_sock, &cfg, seccomp_bpf.as_deref());
+    migrate_first_process(migrator_listener.as_ref());
 
     monitor_scope_and_cleanup(
         &cfg,
         &paths,
         &bridge_pids,
         helpers,
+        seccomp_mon,
         &mut child,
         migrator_listener.as_ref(),
     );
@@ -3488,6 +4391,14 @@ unsafe extern "C" {
     fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32;
     fn epoll_wait(epfd: i32, events: *mut EpollEvent, maxevents: i32, timeout: i32) -> i32;
     fn execvp(file: *const i8, argv: *const *const i8) -> i32;
+    fn sendmsg(sockfd: i32, msg: *const LibcMsghdr, flags: i32) -> isize;
+    fn recvmsg(sockfd: i32, msg: *mut LibcMsghdr, flags: i32) -> isize;
+    fn isatty(fd: i32) -> i32;
+    fn raise(sig: i32) -> i32;
+    fn mkfifo(pathname: *const i8, mode: u32) -> i32;
+    fn ioctl(fd: i32, request: usize, ...) -> i32;
+    fn signal(sig: i32, handler: usize) -> usize;
+    fn kill(pid: i32, sig: i32) -> i32;
     fn getsockopt(
         sockfd: i32,
         level: i32,

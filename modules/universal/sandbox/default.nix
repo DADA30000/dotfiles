@@ -1,9 +1,8 @@
-{
+args@{
   lib,
   options,
   pkgs,
   inputs,
-  osConfig,
   config,
   ...
 }:
@@ -34,8 +33,8 @@ let
   sloth = import ./sloth.nix { inherit lib; };
 
   processes_to_proxy =
-    if osConfig ? sing-box.processes_to_proxy then
-      osConfig.sing-box.processes_to_proxy
+    if (args ? osConfig) && (args.osConfig ? sing-box.processes_to_proxy) then
+      args.osConfig.sing-box.processes_to_proxy
     else if config ? sing-box.processes_to_proxy then
       config.sing-box.processes_to_proxy
     else
@@ -167,6 +166,583 @@ let
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
   };
 
+  syscallsJson =
+    pkgs.runCommand "sb-syscalls.json"
+      { nativeBuildInputs = [ pkgs.python3 ]; }
+      ''
+        python3 - "${pkgs.linuxHeaders}/include/asm/unistd_64.h" "${pkgs.linuxHeaders}/include/asm/unistd_32.h" "$out" << 'EOF'
+        import json, re, sys
+
+        def parse_header(path):
+            res = {}
+            with open(path, "r") as f:
+                for line in f:
+                    m = re.match(r"^\s*#define\s+__NR_([a-zA-Z0-9_]+)\s+(\d+)\s*$", line)
+                    if m:
+                        res[m.group(1)] = int(m.group(2))
+            return res
+
+        data = {
+            "x86_64": parse_header(sys.argv[1]),
+            "i386": parse_header(sys.argv[2]),
+        }
+        with open(sys.argv[3], "w") as out:
+            json.dump(data, out, sort_keys=True)
+        EOF
+      '';
+
+  sbRunConfigData = {
+    defaults = {
+      network = "sandboxed";
+      wayland = "sandboxed";
+      x11 = "off";
+      pulse = "sandboxed";
+      pipewire = "sandboxed";
+      dbus = "sandboxed";
+      shm = "sandboxed";
+      tmp = "sandboxed";
+      webcam = 0;
+      gpu = false;
+      gamepad = false;
+      landlock = true;
+      seccomp = true;
+      portals = true;
+      tmpfs = false;
+      share_pid = false;
+      share_ipc = false;
+      vpnify = false;
+      flatpak_info = true;
+      scope = true;
+    };
+    bins = {
+      bwrap = "${staticBwrap}/bin/bwrap";
+      sb_executor = "/run/current-system/sw/bin/sb-executor";
+      dbus_proxy = "${staticDbusProxy}/bin/xdg-dbus-proxy";
+      way_secure = "${way-secure-pkg}/bin/way-secure";
+      pasta = "${pasta-pkg}/bin/pasta";
+      xwayland_satellite = "${pkgs.xwayland-satellite}/bin/xwayland-satellite";
+      singbox = "${sing-box-lite}/bin/sing-box";
+      rust_bridge = "/run/current-system/sw/bin/rust-bridge";
+      app2unit = "app2unit";
+      systemctl = "${pkgs.systemd}/bin/systemctl";
+      vpnify = "/run/wrappers/bin/vpnify";
+      notify_send = "${pkgs.libnotify}/bin/notify-send";
+      neovide = "neovide";
+    };
+    singbox_config = "/etc/sb-run/sing-box.json";
+    syscalls_file = "/etc/sb-run/syscalls.json";
+    seccomp = {
+      default_allowed = [
+        # Process / thread / runtime / scheduling
+        "exit"
+        "exit_group"
+        "fork"
+        "vfork"
+        "clone"
+        "clone3"
+        "execve"
+        "execveat"
+        "wait4"
+        "waitid"
+        "waitpid"
+        "getpid"
+        "getppid"
+        "gettid"
+        "getpgid"
+        "getpgrp"
+        "setpgid"
+        "getsid"
+        "setsid"
+        "getuid"
+        "geteuid"
+        "getgid"
+        "getegid"
+        "getresuid"
+        "getresgid"
+        "getgroups"
+        "setuid"
+        "setgid"
+        "setreuid"
+        "setregid"
+        "setresuid"
+        "setresgid"
+        "setfsuid"
+        "setfsgid"
+        "setgroups"
+        "getuid32"
+        "geteuid32"
+        "getgid32"
+        "getegid32"
+        "getresuid32"
+        "getresgid32"
+        "getgroups32"
+        "setuid32"
+        "setgid32"
+        "setreuid32"
+        "setregid32"
+        "setresuid32"
+        "setresgid32"
+        "setfsuid32"
+        "setfsgid32"
+        "setgroups32"
+        "capget"
+        "capset"
+        "prctl"
+        "arch_prctl"
+        "seccomp"
+        "landlock_create_ruleset"
+        "landlock_add_rule"
+        "landlock_restrict_self"
+        "lsm_get_self_attr"
+        "lsm_list_modules"
+        "getrlimit"
+        "setrlimit"
+        "ugetrlimit"
+        "prlimit64"
+        "getrusage"
+        "times"
+        "uname"
+        "sysinfo"
+        "umask"
+        "getpriority"
+        "setpriority"
+        "nice"
+        "sched_yield"
+        "sched_getaffinity"
+        "sched_setaffinity"
+        "sched_getparam"
+        "sched_setparam"
+        "sched_getscheduler"
+        "sched_setscheduler"
+        "sched_getattr"
+        "sched_setattr"
+        "sched_get_priority_max"
+        "sched_get_priority_min"
+        "sched_rr_get_interval"
+        "sched_rr_get_interval_time64"
+        "ioprio_get"
+        "ioprio_set"
+        "set_tid_address"
+        "set_robust_list"
+        "get_robust_list"
+        "set_thread_area"
+        "get_thread_area"
+        "rseq"
+        "rseq_slice_yield"
+        "pidfd_open"
+        "pidfd_getfd"
+        "pidfd_send_signal"
+
+        # Signals / timers / clocks (read-only)
+        "rt_sigaction"
+        "rt_sigprocmask"
+        "rt_sigreturn"
+        "rt_sigpending"
+        "rt_sigtimedwait"
+        "rt_sigtimedwait_time64"
+        "rt_sigqueueinfo"
+        "rt_tgsigqueueinfo"
+        "rt_sigsuspend"
+        "sigaction"
+        "signal"
+        "sigpending"
+        "sigprocmask"
+        "sigreturn"
+        "sigsuspend"
+        "sgetmask"
+        "ssetmask"
+        "sigaltstack"
+        "restart_syscall"
+        "kill"
+        "tkill"
+        "tgkill"
+        "pause"
+        "alarm"
+        "nanosleep"
+        "clock_nanosleep"
+        "clock_nanosleep_time64"
+        "clock_gettime"
+        "clock_gettime64"
+        "clock_getres"
+        "clock_getres_time64"
+        "gettimeofday"
+        "time"
+        "getitimer"
+        "setitimer"
+        "timer_create"
+        "timer_delete"
+        "timer_getoverrun"
+        "timer_gettime"
+        "timer_gettime64"
+        "timer_settime"
+        "timer_settime64"
+        "timerfd_create"
+        "timerfd_gettime"
+        "timerfd_gettime64"
+        "timerfd_settime"
+        "timerfd_settime64"
+
+        # Memory management & futex
+        "brk"
+        "mmap"
+        "mmap2"
+        "munmap"
+        "mprotect"
+        "mremap"
+        "msync"
+        "mincore"
+        "madvise"
+        "mlock"
+        "mlock2"
+        "munlock"
+        "mlockall"
+        "munlockall"
+        "membarrier"
+        "memfd_create"
+        "mseal"
+        "map_shadow_stack"
+        "pkey_alloc"
+        "pkey_free"
+        "pkey_mprotect"
+        "cachestat"
+        "mbind"
+        "get_mempolicy"
+        "set_mempolicy"
+        "futex"
+        "futex_time64"
+        "futex_wait"
+        "futex_wake"
+        "futex_requeue"
+        "futex_waitv"
+        "getcpu"
+        "getrandom"
+
+        # Filesystem / FD / I/O
+        "read"
+        "write"
+        "open"
+        "openat"
+        "openat2"
+        "creat"
+        "close"
+        "close_range"
+        "lseek"
+        "_llseek"
+        "pread64"
+        "pwrite64"
+        "readv"
+        "writev"
+        "preadv"
+        "pwritev"
+        "preadv2"
+        "pwritev2"
+        "readahead"
+        "stat"
+        "fstat"
+        "lstat"
+        "stat64"
+        "fstat64"
+        "lstat64"
+        "newfstatat"
+        "fstatat64"
+        "statx"
+        "statfs"
+        "fstatfs"
+        "statfs64"
+        "fstatfs64"
+        "ustat"
+        "access"
+        "faccessat"
+        "faccessat2"
+        "chdir"
+        "fchdir"
+        "getcwd"
+        "getdents"
+        "getdents64"
+        "readlink"
+        "readlinkat"
+        "link"
+        "linkat"
+        "unlink"
+        "unlinkat"
+        "symlink"
+        "symlinkat"
+        "rename"
+        "renameat"
+        "renameat2"
+        "mkdir"
+        "mkdirat"
+        "rmdir"
+        "mknod"
+        "mknodat"
+        "chmod"
+        "fchmod"
+        "fchmodat"
+        "fchmodat2"
+        "chown"
+        "fchown"
+        "lchown"
+        "fchownat"
+        "chown32"
+        "fchown32"
+        "lchown32"
+        "truncate"
+        "ftruncate"
+        "truncate64"
+        "ftruncate64"
+        "fallocate"
+        "fadvise64"
+        "fadvise64_64"
+        "fsync"
+        "fdatasync"
+        "sync"
+        "syncfs"
+        "sync_file_range"
+        "utime"
+        "utimes"
+        "futimesat"
+        "utimensat"
+        "utimensat_time64"
+        "dup"
+        "dup2"
+        "dup3"
+        "fcntl"
+        "fcntl64"
+        "flock"
+        "ioctl"
+        "getxattr"
+        "lgetxattr"
+        "fgetxattr"
+        "getxattrat"
+        "setxattr"
+        "lsetxattr"
+        "fsetxattr"
+        "setxattrat"
+        "listxattr"
+        "llistxattr"
+        "flistxattr"
+        "listxattrat"
+        "removexattr"
+        "lremovexattr"
+        "fremovexattr"
+        "removexattrat"
+        "file_getattr"
+        "file_setattr"
+        "copy_file_range"
+        "sendfile"
+        "sendfile64"
+        "splice"
+        "vmsplice"
+        "tee"
+
+        # Event loops / pipes / async I/O / IPC
+        "pipe"
+        "pipe2"
+        "poll"
+        "ppoll"
+        "ppoll_time64"
+        "select"
+        "_newselect"
+        "pselect6"
+        "pselect6_time64"
+        "epoll_create"
+        "epoll_create1"
+        "epoll_ctl"
+        "epoll_ctl_old"
+        "epoll_wait"
+        "epoll_wait_old"
+        "epoll_pwait"
+        "epoll_pwait2"
+        "eventfd"
+        "eventfd2"
+        "signalfd"
+        "signalfd4"
+        "inotify_init"
+        "inotify_init1"
+        "inotify_add_watch"
+        "inotify_rm_watch"
+        "io_setup"
+        "io_destroy"
+        "io_submit"
+        "io_cancel"
+        "io_getevents"
+        "io_pgetevents"
+        "io_pgetevents_time64"
+        "io_uring_setup"
+        "io_uring_enter"
+        "io_uring_register"
+        "mq_open"
+        "mq_unlink"
+        "mq_timedsend"
+        "mq_timedsend_time64"
+        "mq_timedreceive"
+        "mq_timedreceive_time64"
+        "mq_notify"
+        "mq_getsetattr"
+        "shmget"
+        "shmat"
+        "shmdt"
+        "shmctl"
+        "semget"
+        "semop"
+        "semtimedop"
+        "semtimedop_time64"
+        "semctl"
+        "msgget"
+        "msgsnd"
+        "msgrcv"
+        "msgctl"
+        "ipc"
+
+        # Networking & sockets
+        "socket"
+        "socketpair"
+        "socketcall"
+        "bind"
+        "listen"
+        "accept"
+        "accept4"
+        "connect"
+        "shutdown"
+        "getsockname"
+        "getpeername"
+        "setsockopt"
+        "getsockopt"
+        "sendto"
+        "sendmsg"
+        "sendmmsg"
+        "recvfrom"
+        "recvmsg"
+        "recvmmsg"
+        "recvmmsg_time64"
+      ];
+      silent_errno = [
+        "clone_newuser"
+        "unshare"
+        "setns"
+        "ptrace"
+      ];
+    };
+    dbus = {
+      default_talks = [
+        "org.freedesktop.portal.Desktop"
+        "org.freedesktop.portal.Documents"
+        "org.freedesktop.portal.Secret"
+        "org.freedesktop.Notifications"
+        "org.freedesktop.FileManager1"
+        "org.freedesktop.ScreenSaver"
+        "org.gnome.Mutter.IdleMonitor"
+        "org.kde.StatusNotifierWatcher"
+        "org.ayatana.indicator.application"
+        "com.canonical.AppMenu.Registrar"
+        "org.mpris.MediaPlayer2.Player"
+      ];
+      default_owns = [
+        "org.kde.StatusNotifierItem.*"
+        "org.kde.StatusNotifierItem"
+        "org.mpris.MediaPlayer2.*"
+      ];
+    };
+    pasta_args = [
+      "--config-net"
+      "--no-dhcp"
+      "--no-dhcpv6"
+      "--no-ra"
+      "--no-map-gw"
+      "-t"
+      "none"
+      "-u"
+      "none"
+      "-T"
+      "none"
+      "-U"
+      "none"
+      "--ns-ifname"
+      "eth0"
+      "--address"
+      "192.168.1.100"
+      "--netmask"
+      "255.255.255.0"
+      "--gateway"
+      "192.168.1.1"
+      "--dns-forward"
+      "192.168.1.1"
+      "--search"
+      "none"
+    ];
+    paths = {
+      allowed_env_vars = [
+        "HOME"
+        "XDG_RUNTIME_DIR"
+        "XDG_CONFIG_HOME"
+        "XDG_DATA_HOME"
+        "XDG_STATE_HOME"
+        "XDG_CACHE_HOME"
+        "USER"
+      ];
+      ro_system_paths = [
+        "/nix/store"
+        "/bin"
+        "/usr/bin"
+        "/run/current-system"
+        "/etc/xdg"
+        "/etc/fonts"
+        "/etc/localtime"
+        "/etc/zoneinfo"
+        "/etc/profiles"
+        "/etc/static"
+        "/nix/profile"
+        "/nix/var/nix/profiles"
+        "/etc/ssl/certs"
+        "/etc/static/ssl/certs"
+        "/etc/pki"
+        "/etc/hosts"
+        "/etc/nsswitch.conf"
+        "/etc/machine-id"
+        "/etc/os-release"
+        "/etc/mime.types"
+        "/etc/passwd"
+        "/etc/group"
+        "/sys/class/hwmon"
+        "/etc/xdg/openxr"
+      ];
+      user_theme_subpaths = [
+        ".nix-profile"
+        ".local/state/nix/profile"
+        ".icons"
+        ".themes"
+      ];
+      xdg_config_subpaths = [
+        "user-dirs.dirs"
+        "user-dirs.conf"
+        "gtk-4.0"
+        "gtk-3.0"
+        "qt6ct"
+        "qt5ct"
+        "Kvantum"
+        "starship.toml"
+        "fastfetch"
+        "openvr"
+        "openxr"
+      ];
+      xdg_data_subpaths = [
+        "zsh/.zshenv"
+        "zsh/.zshrc"
+        "icons"
+        "themes"
+      ];
+      nvidia_nodes = [
+        "/dev/nvidia0"
+        "/dev/nvidiactl"
+        "/dev/nvidia-modeset"
+        "/dev/nvidia-uvm"
+        "/dev/nvidia-uvm-tools"
+      ];
+    };
+  };
+
+  sbRunConfigFile = (pkgs.formats.json { }).generate "sb-run-config.json" sbRunConfigData;
+
   portal-xdg-open = pkgs.writeShellScriptBin "xdg-open" ''
     exec ${pkgs.systemd}/bin/busctl --user call \
       org.freedesktop.portal.Desktop \
@@ -209,6 +785,9 @@ let
       wayland ? "off", # "off" | "sandboxed" | "passthrough"
       x11 ? "off", # "off" | "sandboxed" | "passthrough"
       use_landlock ? true,
+      use_seccomp ? true,
+      seccomp_allow ? [ ],
+      seccomp_block ? [ ],
       portals_for_files ? true,
       sandbox_shm ? true,
       sandbox_tmp ? true,
@@ -290,17 +869,7 @@ let
         appId
         "--net"
         network
-        (lib.optionals (network == "singbox") [
-          "--singbox-bin"
-          "${sing-box-lite}/bin/sing-box"
-          "--singbox-config"
-          "${sing-box-sandbox-config}"
-        ])
-        (lib.optionals (network == "sandboxed") [
-          "--pasta-bin"
-          "${pasta-pkg}/bin/pasta"
-        ])
-        (lib.optional gpu "--gpu")
+        (if gpu then "--gpu" else "--no-gpu")
         [
           "--pulse"
           audio_pulse
@@ -308,22 +877,23 @@ let
           audio_pipewire
           "--wayland"
           wayland
-          (lib.optionals (wayland == "sandboxed") [
-            "--way-secure-bin"
-            "${way-secure-pkg}/bin/way-secure"
-          ])
           "--x11"
           x11
-          (lib.optionals (x11 == "sandboxed") [
-            "--xwayland-satellite-bin"
-            "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
-          ])
           "--shm"
           (if sandbox_shm then "sandboxed" else "passthrough")
           "--tmp"
           (if sandbox_tmp then "sandboxed" else "passthrough")
         ]
         landlockFlag
+        (if use_seccomp then "--seccomp" else "--no-seccomp")
+        (lib.optionals (seccomp_allow != [ ]) [
+          "--seccomp-allow"
+          (lib.concatStringsSep "," seccomp_allow)
+        ])
+        (lib.optionals (seccomp_block != [ ]) [
+          "--seccomp-block"
+          (lib.concatStringsSep "," seccomp_block)
+        ])
         portalsFlag
         portalEnvFlags
         (lib.optional (webcam != 0) [
@@ -335,8 +905,6 @@ let
             [
               "--dbus"
               "sandboxed"
-              "--dbus-proxy-bin"
-              "${staticDbusProxy}/bin/xdg-dbus-proxy"
             ]
           else
             [
@@ -597,13 +1165,20 @@ in
       ];
       file.".not-a-sandbox".text = "not a sandbox";
     };
-    xdg.configFile = {
-      "pipewire/pipewire.conf.d/99-restricted-socket.conf".text =
-        builtins.toJSON pipewireRestrictedSocketConfig;
-      "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf".text =
-        builtins.toJSON pipewirePulseRestrictedSocketConfig;
-      "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf".text =
-        builtins.toJSON wireplumberRestrictedPermissionsConfig;
+    xdg = {
+      configFile = {
+        "pipewire/pipewire.conf.d/99-restricted-socket.conf".text =
+          builtins.toJSON pipewireRestrictedSocketConfig;
+        "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf".text =
+          builtins.toJSON pipewirePulseRestrictedSocketConfig;
+        "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf".text =
+          builtins.toJSON wireplumberRestrictedPermissionsConfig;
+      };
+      dataFile = {
+        "sb-run/config.json".source = sbRunConfigFile;
+        "sb-run/syscalls.json".source = syscallsJson;
+        "sb-run/sing-box.json".source = sing-box-sandbox-config;
+      };
     };
   }
   // lib.optionalAttrs (options ? environment.etc) {
@@ -613,7 +1188,12 @@ in
         pasta-pkg
         way-secure-pkg
       ];
-      etc.".not-a-sandbox".text = "not a sandbox";
+      etc = {
+        ".not-a-sandbox".text = "not a sandbox";
+        "sb-run/config.json".source = sbRunConfigFile;
+        "sb-run/syscalls.json".source = syscallsJson;
+        "sb-run/sing-box.json".source = sing-box-sandbox-config;
+      };
     };
     services.pipewire = {
       package = pkgs.pipewire.overrideAttrs (old: {

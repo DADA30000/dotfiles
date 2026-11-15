@@ -48,6 +48,22 @@
         "type": "github"
       }
     },
+    "antigravity2api": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794513973,
+        "narHash": "sha256-Vvy7I59Btv+9MLTVCD6GBgBDfpvCnt0Mpstalge5oOA=",
+        "owner": "Mag1cFall",
+        "repo": "Antigravity2API",
+        "rev": "300e8cd3a49e1cfd69c788ab9a54f7529ee6d32d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mag1cFall",
+        "repo": "Antigravity2API",
+        "type": "github"
+      }
+    },
     "aquamarine": {
       "inputs": {
         "hyprutils": [
@@ -532,6 +548,22 @@
       "original": {
         "owner": "fptn-project",
         "repo": "yaff",
+        "type": "github"
+      }
+    },
+    "gemini-web2api": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794368866,
+        "narHash": "sha256-LOJYaRRcq1d0ZKWrlgj5yFYbYV+Q5BN4ZFyEy4RFr2k=",
+        "owner": "Mag1cFall",
+        "repo": "Gemini-Web2API",
+        "rev": "77ed59cd9a4b7d611a2ef26e66b689619c1bba97",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mag1cFall",
+        "repo": "Gemini-Web2API",
         "type": "github"
       }
     },
@@ -1527,6 +1559,7 @@
         "aero-control-center": "aero-control-center",
         "aistudio2api": "aistudio2api",
         "anicli-ru": "anicli-ru",
+        "antigravity2api": "antigravity2api",
         "bibata-modern-hyprcursor": "bibata-modern-hyprcursor",
         "btop": "btop",
         "chaotic": "chaotic",
@@ -1540,6 +1573,7 @@
         "fptn-ntpclient-src": "fptn-ntpclient-src",
         "fptn-src": "fptn-src",
         "fptn-yaff-src": "fptn-yaff-src",
+        "gemini-web2api": "gemini-web2api",
         "gigabyte-laptop-wmi": "gigabyte-laptop-wmi",
         "gtkshutdown": "gtkshutdown",
         "hazy": "hazy",
@@ -1607,11 +1641,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791414266,
-        "narHash": "sha256-97keo0uH7bx0pYiSaI0VPRQ7X1q41NcqC5DCkJixN98=",
+        "lastModified": 1794732914,
+        "narHash": "sha256-Xht+P7durrpWvviphRItM8uEA5oqW4rqB00oksRGi1Q=",
         "owner": "DADA30000",
         "repo": "rust-helpers",
-        "rev": "ee5c2ba7fac31315a9d22e2bf2a61502a9192f3d",
+        "rev": "1205f1989ddc451792ab533f9ef7f95647725406",
         "type": "github"
       },
       "original": {
