@@ -1159,7 +1159,6 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
-      pkgs.hyprland-preview-share-picker
       pkgs.dnsutils
       pkgs.nmap
       pkgs.podman-compose

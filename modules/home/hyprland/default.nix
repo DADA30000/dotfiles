@@ -7,6 +7,18 @@
 }:
 let
   cfg = config.hyprland;
+  hyprlandPreviewSharePickerPkg = pkgs.hyprland-preview-share-picker.overrideAttrs (prev: {
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/hyprland-preview-share-picker.patch ];
+    nativeBuildInputs = (prev.nativeBuildInputs or [ ]) ++ [
+      pkgs.wayland-protocols
+      pkgs.hyprland-protocols
+    ];
+    buildInputs = (prev.buildInputs or [ ]) ++ [
+      pkgs.libgbm
+      pkgs.wayland-protocols
+      pkgs.hyprland-protocols
+    ];
+  });
   nautilus-extensions = pkgs.callPackage ./nautilus-extensions.nix { };
   mkPluginPermissionEntries = list: map mkPluginPermissionEntry list;
   mkPluginExecEntries = list: lib.concatLines (map mkPluginExecEntry list);
@@ -109,7 +121,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    home.sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
+    home = {
+      sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
+      packages = [
+        oo7-portal
+        hyprlandPreviewSharePickerPkg
+      ];
+    };
     wayland.windowManager.hyprland = {
       enable = true;
       systemd.enable = false;
@@ -665,6 +683,10 @@ in
           window_rule = [
             {
               float = true;
+              match.class = "ch.wysbd.hyprland-preview-share-picker";
+            }
+            {
+              float = true;
               match.title = "Извлечённый текст";
             }
             {
@@ -689,6 +711,11 @@ in
             {
               binary = lib.escapeRegex "${config.programs.noctalia.package}/bin/.noctalia-wrapped";
               type = "cursorpos";
+              mode = "allow";
+            }
+            {
+              binary = lib.escapeRegex "${hyprlandPreviewSharePickerPkg}/bin/hyprland-preview-share-picker";
+              type = "screencopy";
               mode = "allow";
             }
             {
@@ -752,10 +779,6 @@ in
         ];
       };
     };
-
-    home.packages = [
-      oo7
-    ];
 
     systemd.user.services = {
       noctalia.Service.Slice = "session-graphical.slice";

@@ -1,0 +1,2992 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 06cd9a4..0107134 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -10,7 +10,7 @@ clap = { version = "4.5.28", features = ["derive"] }
+ dirs = "6.0.0"
+ env_logger = "0.11.6"
+ glib = "0.20.7"
+-gtk4 = { version = "0.9.5", features = ["v4_8"] }
++gtk4 = { version = "0.9.5", features = ["v4_14"] }
+ gtk4-layer-shell = "0.4.0"
+ hyprland-preview-share-picker-lib = { path = "./lib" }
+ image = "0.25.5"
+diff --git a/lib/build.rs b/lib/build.rs
+new file mode 100644
+index 0000000..fd1c35c
+--- /dev/null
++++ b/lib/build.rs
+@@ -0,0 +1,58 @@
++use std::path::PathBuf;
++use std::process::Command;
++
++fn get_pkg_dir(pkg: &str) -> Option<PathBuf> {
++    std::env::var(format!("{}_DIR", pkg.to_uppercase().replace('-', "_")))
++        .ok()
++        .map(PathBuf::from)
++        .or_else(|| {
++            Command::new("pkg-config")
++                .args(["--variable=pkgdatadir", pkg])
++                .output()
++                .ok()
++                .and_then(|out| {
++                    if out.status.success() {
++                        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
++                        (!s.is_empty()).then(|| PathBuf::from(s))
++                    } else {
++                        None
++                    }
++                })
++        })
++        .or_else(|| {
++            let p = PathBuf::from(format!("/usr/share/{pkg}"));
++            p.exists().then_some(p)
++        })
++}
++
++fn main() {
++    println!("cargo:rustc-link-lib=gbm");
++
++    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
++    let proto_dir = manifest_dir.join("protocols");
++    std::fs::create_dir_all(&proto_dir).unwrap();
++
++    let wp = get_pkg_dir("wayland-protocols").expect("wayland-protocols not found");
++    let hp = get_pkg_dir("hyprland-protocols")
++        .or_else(|| {
++            let sub = manifest_dir.join("hyprland-protocols");
++            sub.exists().then_some(sub)
++        })
++        .expect("hyprland-protocols not found");
++
++    let files = [
++        (wp.join("staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml"), "ext-image-copy-capture-v1.xml"),
++        (wp.join("staging/ext-image-capture-source/ext-image-capture-source-v1.xml"), "ext-image-capture-source-v1.xml"),
++        (wp.join("staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml"), "ext-foreign-toplevel-list-v1.xml"),
++        (wp.join("staging/ext-workspace/ext-workspace-v1.xml"), "ext-workspace-v1.xml"),
++        (wp.join("stable/linux-dmabuf/linux-dmabuf-v1.xml"), "linux-dmabuf-v1.xml"),
++        (hp.join("protocols/hyprland-workspace-image-capture-source-v1.xml"), "hyprland-workspace-image-capture-source-v1.xml"),
++    ];
++
++    for (src, name) in files {
++        let dst = proto_dir.join(name);
++        if !dst.exists() {
++            let _ = std::fs::copy(&src, &dst);
++        }
++    }
++}
+diff --git a/lib/src/buffer.rs b/lib/src/buffer.rs
+index dd007db..0d47945 100644
+--- a/lib/src/buffer.rs
++++ b/lib/src/buffer.rs
+@@ -1,69 +1,144 @@
+-use std::io::Read;
+-use std::os::fd::AsFd;
+-
+-use wayland_client::protocol::wl_buffer::WlBuffer;
+-use wayland_client::protocol::wl_shm::{Format, WlShm};
+-use wayland_client::protocol::wl_shm_pool::WlShmPool;
+-use wayland_client::{Dispatch, QueueHandle};
++use std::ffi::{c_int, c_uint};
++use std::fs::OpenOptions;
++use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
++use std::os::unix::fs::MetadataExt;
+ 
+ use crate::error::Error;
+ 
++pub const DRM_FORMAT_MOD_INVALID: u64 = 0x00ff_ffff_ffff_ffff;
++const GBM_BO_USE_RENDERING: u32 = 1 << 2;
++
++#[repr(C)]
++struct gbm_device {
++    _private: [u8; 0],
++}
++
++#[repr(C)]
++struct gbm_bo {
++    _private: [u8; 0],
++}
++
++unsafe extern "C" {
++    fn gbm_create_device(fd: c_int) -> *mut gbm_device;
++    fn gbm_device_destroy(gbm: *mut gbm_device);
++    fn gbm_bo_create(gbm: *mut gbm_device, width: u32, height: u32, format: u32, flags: u32) -> *mut gbm_bo;
++    fn gbm_bo_create_with_modifiers2(
++        gbm: *mut gbm_device,
++        width: u32,
++        height: u32,
++        format: u32,
++        modifiers: *const u64,
++        count: c_uint,
++        flags: u32,
++    ) -> *mut gbm_bo;
++    fn gbm_bo_get_plane_count(bo: *mut gbm_bo) -> c_int;
++    fn gbm_bo_get_fd_for_plane(bo: *mut gbm_bo, plane: c_int) -> c_int;
++    fn gbm_bo_get_stride_for_plane(bo: *mut gbm_bo, plane: c_int) -> u32;
++    fn gbm_bo_get_offset(bo: *mut gbm_bo, plane: c_int) -> u32;
++    fn gbm_bo_get_modifier(bo: *mut gbm_bo) -> u64;
++    fn gbm_bo_destroy(bo: *mut gbm_bo);
++}
++
++#[derive(Debug)]
++pub struct DmabufPlane {
++    pub fd: OwnedFd,
++    pub offset: u32,
++    pub stride: u32,
++}
++
+ #[derive(Debug)]
+-pub struct Buffer {
+-    pub buffer: WlBuffer,
++pub struct Dmabuf {
+     pub width: u32,
+     pub height: u32,
+-    pub stride: u32,
+-    pub format: Format,
+-    fd: memfd::Memfd,
++    pub fourcc: u32,
++    pub modifier: u64,
++    pub planes: Vec<DmabufPlane>,
+ }
+ 
+-impl Buffer {
+-    /// create a new buffer to store a single frame
+-    pub fn new<
+-        K: Send + Sync + Clone + 'static,
+-        T: Dispatch<WlBuffer, K> + Dispatch<WlShmPool, K> + Dispatch<WlShm, K> + 'static,
+-    >(
+-        shm: &WlShm,
+-        width: u32,
+-        height: u32,
+-        stride: u32,
+-        format: Format,
+-        handle: &QueueHandle<T>,
+-        udata: K,
+-    ) -> Result<Self, Error> {
+-        let size = stride as u64 * height as u64;
+-        if width == 0 || height == 0 || stride < width * 4 || size > i32::MAX as u64 {
+-            return Err(Error::BufferCreate(
+-                format!("unsupported buffer size {width}x{height} with stride {stride}").into(),
+-            ));
+-        }
+-        log::debug!("creating {width}x{height} buffer with stride {stride} and format {format:?}");
+-        let mfd = memfd::MemfdOptions::default().create("buffer").map_err(|err| Error::BufferCreate(err.into()))?;
+-        mfd.as_file().set_len(size).map_err(|err| Error::BufferCreate(err.into()))?;
+-        let pool = shm.create_pool(mfd.as_file().as_fd(), size as i32, handle, udata.clone());
+-        let buffer = pool.create_buffer(0, width as i32, height as i32, stride as i32, format, handle, udata);
+-
+-        pool.destroy();
+-        Ok(Self { buffer, width, height, stride, format, fd: mfd })
++pub struct GbmDevice {
++    ptr: *mut gbm_device,
++    _file: std::fs::File,
++}
++
++unsafe impl Send for GbmDevice {}
++unsafe impl Sync for GbmDevice {}
++
++impl Drop for GbmDevice {
++    fn drop(&mut self) {
++        unsafe { gbm_device_destroy(self.ptr) };
+     }
++}
+ 
+-    /// read the bytes from the temporary buffer file
+-    pub fn get_bytes(&self) -> Result<Vec<u8>, Error> {
+-        // let mut file = unsafe { File::from_raw_fd(self.fd) };
+-        let mut bytes = Vec::new();
+-        self.fd.as_file().read_to_end(&mut bytes).map_err(|err| Error::BufferRead(err))?;
+-        let row = self.width as usize * 4;
+-        if self.stride as usize == row {
+-            return Ok(bytes);
++impl GbmDevice {
++    pub fn open(dev: u64) -> Result<Self, Error> {
++        let entries = std::fs::read_dir("/dev/dri").map_err(|e| Error::BufferCreate(format!("read_dir /dev/dri: {e}")))?;
++        for entry in entries.flatten() {
++            let path = entry.path();
++            let Ok(meta) = std::fs::metadata(&path) else { continue };
++            if meta.rdev() == dev {
++                let file = OpenOptions::new()
++                    .read(true)
++                    .write(true)
++                    .open(&path)
++                    .map_err(|e| Error::BufferCreate(format!("open {}: {e}", path.display())))?;
++                let ptr = unsafe { gbm_create_device(file.as_raw_fd()) };
++                if ptr.is_null() {
++                    return Err(Error::BufferCreate(format!("gbm_create_device failed for {}", path.display())));
++                }
++                return Ok(Self { ptr, _file: file });
++            }
+         }
+-        Ok(bytes.chunks_exact(self.stride as usize).flat_map(|line| line[..row].iter().copied()).collect())
++        Err(Error::BufferCreate(format!("no DRM node matching dev_t {dev}")))
+     }
+ 
+-    /// clear the wayland buffer and remove the temporary file
+-    ///
+-    /// should only be called after [`get_bytes`] since all data gets deleted by this function
+-    pub fn destroy(&self) {
+-        self.buffer.destroy();
++    pub fn alloc(&self, width: u32, height: u32, fourcc: u32, modifiers: &[u64]) -> Result<Dmabuf, Error> {
++        let explicit: Vec<u64> = modifiers.iter().copied().filter(|&m| m != DRM_FORMAT_MOD_INVALID).collect();
++        let mut bo = if !explicit.is_empty() {
++            unsafe {
++                gbm_bo_create_with_modifiers2(
++                    self.ptr,
++                    width,
++                    height,
++                    fourcc,
++                    explicit.as_ptr(),
++                    explicit.len() as c_uint,
++                    GBM_BO_USE_RENDERING,
++                )
++            }
++        } else {
++            std::ptr::null_mut()
++        };
++
++        if bo.is_null() && (explicit.is_empty() || modifiers.contains(&DRM_FORMAT_MOD_INVALID)) {
++            bo = unsafe { gbm_bo_create(self.ptr, width, height, fourcc, GBM_BO_USE_RENDERING) };
++        }
++
++        if bo.is_null() {
++            return Err(Error::BufferCreate(format!("gbm_bo_create failed for {width}x{height} fourcc {fourcc:#x}")));
++        }
++
++        let plane_count = unsafe { gbm_bo_get_plane_count(bo) };
++        let modifier = unsafe { gbm_bo_get_modifier(bo) };
++        let mut planes = Vec::with_capacity(plane_count.max(0) as usize);
++
++        for i in 0..plane_count {
++            let raw_fd = unsafe { gbm_bo_get_fd_for_plane(bo, i) };
++            if raw_fd < 0 {
++                unsafe { gbm_bo_destroy(bo) };
++                return Err(Error::BufferCreate(format!("gbm_bo_get_fd_for_plane({i}) failed")));
++            }
++            let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
++            let offset = unsafe { gbm_bo_get_offset(bo, i) };
++            let stride = unsafe { gbm_bo_get_stride_for_plane(bo, i) };
++            planes.push(DmabufPlane { fd, offset, stride });
++        }
++
++        unsafe { gbm_bo_destroy(bo) };
++
++        if planes.is_empty() {
++            return Err(Error::BufferCreate("gbm_bo had 0 planes".into()));
++        }
++
++        Ok(Dmabuf { width, height, fourcc, modifier, planes })
+     }
+ }
+diff --git a/lib/src/capture.rs b/lib/src/capture.rs
+new file mode 100644
+index 0000000..20ca288
+--- /dev/null
++++ b/lib/src/capture.rs
+@@ -0,0 +1,629 @@
++use std::collections::{HashMap, HashSet};
++use std::os::fd::AsFd;
++use std::sync::{Arc, Mutex};
++
++use wayland_client::protocol::wl_buffer::WlBuffer;
++use wayland_client::protocol::wl_output::{self, WlOutput};
++use wayland_client::protocol::wl_registry;
++use wayland_client::{Connection, Dispatch, EventQueue, Proxy, delegate_noop, event_created_child};
++
++use crate::buffer::{Dmabuf, GbmDevice};
++use crate::error::Error;
++use crate::protocols::ext_foreign_toplevel_list_v1::ext_foreign_toplevel_handle_v1::{
++    self, ExtForeignToplevelHandleV1,
++};
++use crate::protocols::ext_foreign_toplevel_list_v1::ext_foreign_toplevel_list_v1::{
++    self, ExtForeignToplevelListV1,
++};
++use crate::protocols::ext_image_capture_source_v1::ext_foreign_toplevel_image_capture_source_manager_v1::ExtForeignToplevelImageCaptureSourceManagerV1;
++use crate::protocols::ext_image_capture_source_v1::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
++use crate::protocols::ext_image_capture_source_v1::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1;
++use crate::protocols::ext_image_copy_capture_v1::ext_image_copy_capture_frame_v1::{
++    self, ExtImageCopyCaptureFrameV1, FailureReason,
++};
++use crate::protocols::ext_image_copy_capture_v1::ext_image_copy_capture_manager_v1::{
++    ExtImageCopyCaptureManagerV1, Options,
++};
++use crate::protocols::ext_image_copy_capture_v1::ext_image_copy_capture_session_v1::{
++    self, ExtImageCopyCaptureSessionV1,
++};
++use crate::protocols::ext_workspace_v1::ext_workspace_group_handle_v1::{
++    self, ExtWorkspaceGroupHandleV1,
++};
++use crate::protocols::ext_workspace_v1::ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1};
++use crate::protocols::ext_workspace_v1::ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1};
++use crate::protocols::hyprland_toplevel_mapping_v1::hyprland_toplevel_mapping_manager_v1::HyprlandToplevelMappingManagerV1;
++use crate::protocols::hyprland_toplevel_mapping_v1::hyprland_toplevel_window_mapping_handle_v1::{
++    self, HyprlandToplevelWindowMappingHandleV1,
++};
++use crate::protocols::hyprland_workspace_image_capture_source_v1::hyprland_workspace_image_capture_source_manager_v1::{
++    CaptureMode, HyprlandWorkspaceImageCaptureSourceManagerV1,
++};
++use crate::protocols::linux_dmabuf_v1::zwp_linux_buffer_params_v1::{Flags, ZwpLinuxBufferParamsV1};
++use crate::protocols::linux_dmabuf_v1::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1;
++
++#[derive(Clone)]
++struct TrackedWorkspace {
++    name: String,
++    outputs: Vec<String>,
++    handle: ExtWorkspaceHandleV1,
++}
++
++#[derive(Clone)]
++pub struct CaptureManager {
++    connection: Connection,
++    dmabuf: ZwpLinuxDmabufV1,
++    icc_manager: ExtImageCopyCaptureManagerV1,
++    output_source_manager: ExtOutputImageCaptureSourceManagerV1,
++    toplevel_source_manager: ExtForeignToplevelImageCaptureSourceManagerV1,
++    workspace_source_manager: Option<HyprlandWorkspaceImageCaptureSourceManagerV1>,
++    outputs: HashMap<String, WlOutput>,
++    toplevels: HashMap<u64, ExtForeignToplevelHandleV1>,
++    workspaces: Vec<TrackedWorkspace>,
++    supported_dmabuf_formats: Arc<HashSet<(u32, u64)>>,
++    gbm: Arc<Mutex<Option<(u64, GbmDevice)>>>,
++    _toplevel_list: ExtForeignToplevelListV1,
++    _mapping_manager: HyprlandToplevelMappingManagerV1,
++    _workspace_manager: Option<ExtWorkspaceManagerV1>,
++}
++
++impl CaptureManager {
++    pub fn new(connection: &Connection, supported_dmabuf_formats: HashSet<(u32, u64)>) -> Result<Self, Error> {
++        let mut event_queue = connection.new_event_queue();
++        let qhandle = event_queue.handle();
++
++        let mut init = InitState::default();
++        connection.display().get_registry(&qhandle, ());
++
++        event_queue.roundtrip(&mut init).map_err(Error::WaylandDispatch)?;
++
++        let mapping_manager = init
++            .mapping_manager
++            .clone()
++            .ok_or(Error::ProtocolNotAvailable(std::any::type_name::<HyprlandToplevelMappingManagerV1>()))?;
++
++        for (i, (handle, mapped, _)) in init.pending_toplevels.iter_mut().enumerate() {
++            if !*mapped {
++                mapping_manager.get_window_for_toplevel(handle, &qhandle, i);
++                *mapped = true;
++            }
++        }
++
++        event_queue.roundtrip(&mut init).map_err(Error::WaylandDispatch)?;
++        event_queue.roundtrip(&mut init).map_err(Error::WaylandDispatch)?;
++
++        let dmabuf = init.dmabuf.ok_or(Error::ProtocolNotAvailable(std::any::type_name::<ZwpLinuxDmabufV1>()))?;
++        let icc_manager =
++            init.icc_manager.ok_or(Error::ProtocolNotAvailable(std::any::type_name::<ExtImageCopyCaptureManagerV1>()))?;
++        let output_source_manager = init
++            .output_source_manager
++            .ok_or(Error::ProtocolNotAvailable(std::any::type_name::<ExtOutputImageCaptureSourceManagerV1>()))?;
++        let toplevel_source_manager = init.toplevel_source_manager.ok_or(Error::ProtocolNotAvailable(
++            std::any::type_name::<ExtForeignToplevelImageCaptureSourceManagerV1>(),
++        ))?;
++        let toplevel_list =
++            init.toplevel_list.ok_or(Error::ProtocolNotAvailable(std::any::type_name::<ExtForeignToplevelListV1>()))?;
++
++        let mut outputs = HashMap::new();
++        let mut output_names_by_id = HashMap::new();
++        for (wl_output, name) in init.outputs {
++            if let Some(name) = name {
++                output_names_by_id.insert(wl_output.id(), name.clone());
++                outputs.insert(name, wl_output);
++            }
++        }
++
++        let mut toplevels = HashMap::new();
++        for (handle, _, addr) in init.pending_toplevels {
++            if let Some(addr) = addr {
++                toplevels.insert(addr, handle);
++            }
++        }
++
++        let mut workspaces = Vec::new();
++        for ws in init.pending_workspaces {
++            if ws.removed {
++                continue;
++            }
++            let ws_id = ws.handle.id();
++            let mut ws_outputs = Vec::new();
++            for group in &init.workspace_groups {
++                if !group.removed && group.workspaces.iter().any(|w| w.id() == ws_id) {
++                    for out in &group.outputs {
++                        if let Some(name) = output_names_by_id.get(&out.id()) {
++                            ws_outputs.push(name.clone());
++                        }
++                    }
++                    break;
++                }
++            }
++            workspaces.push(TrackedWorkspace { name: ws.name, outputs: ws_outputs, handle: ws.handle });
++        }
++
++        Ok(Self {
++            connection: connection.clone(),
++            dmabuf,
++            icc_manager,
++            output_source_manager,
++            toplevel_source_manager,
++            workspace_source_manager: init.workspace_source_manager,
++            outputs,
++            toplevels,
++            workspaces,
++            supported_dmabuf_formats: Arc::new(supported_dmabuf_formats),
++            gbm: Arc::new(Mutex::new(None)),
++            _toplevel_list: toplevel_list,
++            _mapping_manager: mapping_manager,
++            _workspace_manager: init.workspace_manager,
++        })
++    }
++
++    pub fn capture_output(&self, name: &str) -> Result<Dmabuf, Error> {
++        let wl_output = self.outputs.get(name).ok_or_else(|| Error::NotFound(format!("output {name}")))?;
++        let mut event_queue = self.connection.new_event_queue();
++        let qhandle = event_queue.handle();
++        let source = self.output_source_manager.create_source(wl_output, &qhandle, ());
++        self.capture_source(source, &mut event_queue)
++    }
++
++    pub fn capture_toplevel(&self, window_address: u64) -> Result<Dmabuf, Error> {
++        let handle = self
++            .toplevels
++            .get(&window_address)
++            .ok_or_else(|| Error::NotFound(format!("toplevel {window_address}")))?;
++        let mut event_queue = self.connection.new_event_queue();
++        let qhandle = event_queue.handle();
++        let source = self.toplevel_source_manager.create_source(handle, &qhandle, ());
++        self.capture_source(source, &mut event_queue)
++    }
++
++    pub fn capture_workspace(&self, name: &str, outputs: &[String]) -> Result<Dmabuf, Error> {
++        let ws_mgr = self
++            .workspace_source_manager
++            .as_ref()
++            .ok_or(Error::ProtocolNotAvailable(std::any::type_name::<HyprlandWorkspaceImageCaptureSourceManagerV1>()))?;
++
++        let ws = self
++            .workspaces
++            .iter()
++            .find(|w| w.name == name && outputs.iter().all(|o| w.outputs.contains(o)) && w.outputs.len() == outputs.len())
++            .or_else(|| self.workspaces.iter().find(|w| w.name == name))
++            .ok_or_else(|| Error::NotFound(format!("workspace {name}")))?;
++
++        let mut event_queue = self.connection.new_event_queue();
++        let qhandle = event_queue.handle();
++        let source = ws_mgr.create_source(&ws.handle, CaptureMode::Everything, &qhandle, ());
++        self.capture_source(source, &mut event_queue)
++    }
++
++    fn alloc_dmabuf(&self, state: &CaptureState) -> Result<Dmabuf, Error> {
++        let dev = state
++            .dmabuf_device
++            .ok_or_else(|| Error::BufferCreate("compositor advertised no dmabuf_device".into()))?;
++        let mut guard = self.gbm.lock().expect("lock should not be poisoned");
++        let gbm = match &*guard {
++            Some((cached_dev, gbm)) if *cached_dev == dev => gbm,
++            _ => {
++                *guard = Some((dev, GbmDevice::open(dev)?));
++                &guard.as_ref().unwrap().1
++            }
++        };
++
++        let mut last_err = None;
++        for (fourcc, mods) in &state.dmabuf_formats {
++            let matching: Vec<u64> =
++                mods.iter().copied().filter(|&m| self.supported_dmabuf_formats.contains(&(*fourcc, m))).collect();
++            if matching.is_empty() {
++                continue;
++            }
++            match gbm.alloc(state.width, state.height, *fourcc, &matching) {
++                Ok(dmabuf) => return Ok(dmabuf),
++                Err(err) => last_err = Some(err),
++            }
++        }
++
++        Err(last_err.unwrap_or_else(|| Error::BufferCreate("no mutually supported dmabuf format".into())))
++    }
++
++    fn capture_source(&self, source: ExtImageCaptureSourceV1, event_queue: &mut EventQueue<CaptureState>) -> Result<Dmabuf, Error> {
++        let qhandle = event_queue.handle();
++        let session = self.icc_manager.create_session(&source, Options::empty(), &qhandle, ());
++        let mut state = CaptureState::default();
++
++        for _attempt in 0..3 {
++            while !state.constraints_done && !state.stopped {
++                event_queue.blocking_dispatch(&mut state).map_err(Error::WaylandDispatch)?;
++            }
++            if state.stopped || state.width == 0 || state.height == 0 {
++                session.destroy();
++                source.destroy();
++                return Err(Error::Stopped);
++            }
++
++            let dmabuf = match self.alloc_dmabuf(&state) {
++                Ok(buf) => buf,
++                Err(err) => {
++                    session.destroy();
++                    source.destroy();
++                    return Err(err);
++                }
++            };
++
++            let params = self.dmabuf.create_params(&qhandle, ());
++            for (i, plane) in dmabuf.planes.iter().enumerate() {
++                params.add(
++                    plane.fd.as_fd(),
++                    i as u32,
++                    plane.offset,
++                    plane.stride,
++                    (dmabuf.modifier >> 32) as u32,
++                    dmabuf.modifier as u32,
++                );
++            }
++            let wl_buffer = params.create_immed(
++                state.width as i32,
++                state.height as i32,
++                dmabuf.fourcc,
++                Flags::empty(),
++                &qhandle,
++                (),
++            );
++            params.destroy();
++
++            state.frame_ready = false;
++            state.frame_failed = None;
++            let frame = session.create_frame(&qhandle, ());
++            frame.attach_buffer(&wl_buffer);
++            frame.damage_buffer(0, 0, state.width as i32, state.height as i32);
++            frame.capture();
++
++            while !state.frame_ready && state.frame_failed.is_none() && !state.stopped {
++                event_queue.blocking_dispatch(&mut state).map_err(Error::WaylandDispatch)?;
++            }
++
++            frame.destroy();
++            wl_buffer.destroy();
++
++            if state.frame_ready {
++                session.destroy();
++                source.destroy();
++                return Ok(dmabuf);
++            }
++
++            if matches!(state.frame_failed, Some(FailureReason::BufferConstraints)) && !state.stopped {
++                state.constraints_done = false;
++                continue;
++            }
++
++            session.destroy();
++            source.destroy();
++            return Err(Error::Failed);
++        }
++
++        session.destroy();
++        source.destroy();
++        Err(Error::Failed)
++    }
++}
++
++#[derive(Default)]
++struct PendingGroup {
++    handle: Option<ExtWorkspaceGroupHandleV1>,
++    outputs: Vec<WlOutput>,
++    workspaces: Vec<ExtWorkspaceHandleV1>,
++    removed: bool,
++}
++
++struct PendingWorkspace {
++    handle: ExtWorkspaceHandleV1,
++    name: String,
++    removed: bool,
++}
++
++#[derive(Default)]
++struct InitState {
++    dmabuf: Option<ZwpLinuxDmabufV1>,
++    icc_manager: Option<ExtImageCopyCaptureManagerV1>,
++    output_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
++    toplevel_source_manager: Option<ExtForeignToplevelImageCaptureSourceManagerV1>,
++    workspace_source_manager: Option<HyprlandWorkspaceImageCaptureSourceManagerV1>,
++    toplevel_list: Option<ExtForeignToplevelListV1>,
++    mapping_manager: Option<HyprlandToplevelMappingManagerV1>,
++    workspace_manager: Option<ExtWorkspaceManagerV1>,
++    outputs: Vec<(WlOutput, Option<String>)>,
++    pending_toplevels: Vec<(ExtForeignToplevelHandleV1, bool, Option<u64>)>,
++    workspace_groups: Vec<PendingGroup>,
++    pending_workspaces: Vec<PendingWorkspace>,
++}
++
++impl Dispatch<wl_registry::WlRegistry, ()> for InitState {
++    fn event(
++        state: &mut Self,
++        registry: &wl_registry::WlRegistry,
++        event: wl_registry::Event,
++        _: &(),
++        _: &Connection,
++        qhandle: &wayland_client::QueueHandle<Self>,
++    ) {
++        if let wl_registry::Event::Global { name, interface, version } = event {
++            match interface.as_str() {
++                "wl_output" => {
++                    let output: WlOutput = registry.bind(name, version.min(4), qhandle, ());
++                    state.outputs.push((output, None));
++                }
++                "zwp_linux_dmabuf_v1" => {
++                    state.dmabuf = Some(registry.bind(name, version.min(5), qhandle, ()));
++                }
++                "ext_image_copy_capture_manager_v1" => {
++                    state.icc_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "ext_output_image_capture_source_manager_v1" => {
++                    state.output_source_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "ext_foreign_toplevel_image_capture_source_manager_v1" => {
++                    state.toplevel_source_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "hyprland_workspace_image_capture_source_manager_v1" => {
++                    state.workspace_source_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "ext_foreign_toplevel_list_v1" => {
++                    state.toplevel_list = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "hyprland_toplevel_mapping_manager_v1" => {
++                    state.mapping_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                "ext_workspace_manager_v1" => {
++                    state.workspace_manager = Some(registry.bind(name, 1, qhandle, ()));
++                }
++                _ => {}
++            }
++        }
++    }
++}
++
++impl Dispatch<WlOutput, ()> for InitState {
++    fn event(
++        state: &mut Self,
++        proxy: &WlOutput,
++        event: wl_output::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        if let wl_output::Event::Name { name } = event
++            && let Some((_, slot)) = state.outputs.iter_mut().find(|(o, _)| o == proxy)
++        {
++            *slot = Some(name);
++        }
++    }
++}
++
++impl Dispatch<ExtForeignToplevelListV1, ()> for InitState {
++    event_created_child!(InitState, ExtForeignToplevelListV1, [
++        ext_foreign_toplevel_list_v1::EVT_TOPLEVEL_OPCODE => (ExtForeignToplevelHandleV1, ())
++    ]);
++
++    fn event(
++        state: &mut Self,
++        _: &ExtForeignToplevelListV1,
++        event: ext_foreign_toplevel_list_v1::Event,
++        _: &(),
++        _: &Connection,
++        qhandle: &wayland_client::QueueHandle<Self>,
++    ) {
++        if let ext_foreign_toplevel_list_v1::Event::Toplevel { toplevel } = event {
++            let idx = state.pending_toplevels.len();
++            let mapped = if let Some(mgr) = &state.mapping_manager {
++                mgr.get_window_for_toplevel(&toplevel, qhandle, idx);
++                true
++            } else {
++                false
++            };
++            state.pending_toplevels.push((toplevel, mapped, None));
++        }
++    }
++}
++
++impl Dispatch<ExtForeignToplevelHandleV1, ()> for InitState {
++    fn event(
++        _: &mut Self,
++        _: &ExtForeignToplevelHandleV1,
++        _: ext_foreign_toplevel_handle_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++    }
++}
++
++impl Dispatch<HyprlandToplevelWindowMappingHandleV1, usize> for InitState {
++    fn event(
++        state: &mut Self,
++        proxy: &HyprlandToplevelWindowMappingHandleV1,
++        event: hyprland_toplevel_window_mapping_handle_v1::Event,
++        idx: &usize,
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        match event {
++            hyprland_toplevel_window_mapping_handle_v1::Event::WindowAddress { address_hi, address } => {
++                if let Some(entry) = state.pending_toplevels.get_mut(*idx) {
++                    entry.2 = Some(((address_hi as u64) << 32) | (address as u64));
++                }
++                proxy.destroy();
++            }
++            hyprland_toplevel_window_mapping_handle_v1::Event::Failed => proxy.destroy(),
++        }
++    }
++}
++
++impl Dispatch<ExtWorkspaceManagerV1, ()> for InitState {
++    event_created_child!(InitState, ExtWorkspaceManagerV1, [
++        ext_workspace_manager_v1::EVT_WORKSPACE_GROUP_OPCODE => (ExtWorkspaceGroupHandleV1, ()),
++        ext_workspace_manager_v1::EVT_WORKSPACE_OPCODE => (ExtWorkspaceHandleV1, ())
++    ]);
++
++    fn event(
++        state: &mut Self,
++        _: &ExtWorkspaceManagerV1,
++        event: ext_workspace_manager_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        match event {
++            ext_workspace_manager_v1::Event::WorkspaceGroup { workspace_group } => {
++                state.workspace_groups.push(PendingGroup {
++                    handle: Some(workspace_group),
++                    ..Default::default()
++                });
++            }
++            ext_workspace_manager_v1::Event::Workspace { workspace } => {
++                state.pending_workspaces.push(PendingWorkspace {
++                    handle: workspace,
++                    name: String::new(),
++                    removed: false,
++                });
++            }
++            _ => {}
++        }
++    }
++}
++
++impl Dispatch<ExtWorkspaceGroupHandleV1, ()> for InitState {
++    fn event(
++        state: &mut Self,
++        proxy: &ExtWorkspaceGroupHandleV1,
++        event: ext_workspace_group_handle_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        let Some(group) = state.workspace_groups.iter_mut().find(|g| g.handle.as_ref() == Some(proxy)) else {
++            return;
++        };
++        match event {
++            ext_workspace_group_handle_v1::Event::OutputEnter { output } => {
++                if !group.outputs.contains(&output) {
++                    group.outputs.push(output);
++                }
++            }
++            ext_workspace_group_handle_v1::Event::OutputLeave { output } => {
++                group.outputs.retain(|o| o != &output);
++            }
++            ext_workspace_group_handle_v1::Event::WorkspaceEnter { workspace } => {
++                if !group.workspaces.contains(&workspace) {
++                    group.workspaces.push(workspace);
++                }
++            }
++            ext_workspace_group_handle_v1::Event::WorkspaceLeave { workspace } => {
++                group.workspaces.retain(|w| w != &workspace);
++            }
++            ext_workspace_group_handle_v1::Event::Removed => {
++                group.removed = true;
++            }
++            _ => {}
++        }
++    }
++}
++
++impl Dispatch<ExtWorkspaceHandleV1, ()> for InitState {
++    fn event(
++        state: &mut Self,
++        proxy: &ExtWorkspaceHandleV1,
++        event: ext_workspace_handle_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        let Some(ws) = state.pending_workspaces.iter_mut().find(|w| &w.handle == proxy) else {
++            return;
++        };
++        match event {
++            ext_workspace_handle_v1::Event::Name { name } => ws.name = name,
++            ext_workspace_handle_v1::Event::Removed => ws.removed = true,
++            _ => {}
++        }
++    }
++}
++
++delegate_noop!(InitState: ignore ZwpLinuxDmabufV1);
++delegate_noop!(InitState: ignore ExtImageCopyCaptureManagerV1);
++delegate_noop!(InitState: ignore ExtOutputImageCaptureSourceManagerV1);
++delegate_noop!(InitState: ignore ExtForeignToplevelImageCaptureSourceManagerV1);
++delegate_noop!(InitState: ignore HyprlandWorkspaceImageCaptureSourceManagerV1);
++delegate_noop!(InitState: ignore HyprlandToplevelMappingManagerV1);
++
++#[derive(Default)]
++struct CaptureState {
++    width: u32,
++    height: u32,
++    dmabuf_device: Option<u64>,
++    dmabuf_formats: Vec<(u32, Vec<u64>)>,
++    pending_formats: Vec<(u32, Vec<u64>)>,
++    constraints_done: bool,
++    stopped: bool,
++    frame_ready: bool,
++    frame_failed: Option<FailureReason>,
++}
++
++impl Dispatch<ExtImageCopyCaptureSessionV1, ()> for CaptureState {
++    fn event(
++        state: &mut Self,
++        _: &ExtImageCopyCaptureSessionV1,
++        event: ext_image_copy_capture_session_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        match event {
++            ext_image_copy_capture_session_v1::Event::BufferSize { width, height } => {
++                state.width = width;
++                state.height = height;
++            }
++            ext_image_copy_capture_session_v1::Event::DmabufDevice { device } => {
++                if let Ok(bytes) = device.try_into() {
++                    state.dmabuf_device = Some(u64::from_ne_bytes(bytes));
++                }
++            }
++            ext_image_copy_capture_session_v1::Event::DmabufFormat { format, modifiers } => {
++                let mods = modifiers
++                    .chunks_exact(8)
++                    .map(|c| u64::from_ne_bytes(c.try_into().unwrap()))
++                    .collect();
++                state.pending_formats.push((format, mods));
++            }
++            ext_image_copy_capture_session_v1::Event::Done => {
++                state.dmabuf_formats = std::mem::take(&mut state.pending_formats);
++                state.constraints_done = true;
++            }
++            ext_image_copy_capture_session_v1::Event::Stopped => {
++                state.stopped = true;
++            }
++            _ => {}
++        }
++    }
++}
++
++impl Dispatch<ExtImageCopyCaptureFrameV1, ()> for CaptureState {
++    fn event(
++        state: &mut Self,
++        _: &ExtImageCopyCaptureFrameV1,
++        event: ext_image_copy_capture_frame_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &wayland_client::QueueHandle<Self>,
++    ) {
++        match event {
++            ext_image_copy_capture_frame_v1::Event::Ready => state.frame_ready = true,
++            ext_image_copy_capture_frame_v1::Event::Failed { reason } => {
++                state.frame_failed = Some(reason.into_result().unwrap_or(FailureReason::Unknown));
++            }
++            _ => {}
++        }
++    }
++}
++
++delegate_noop!(CaptureState: ignore ExtImageCaptureSourceV1);
++delegate_noop!(CaptureState: ignore ZwpLinuxBufferParamsV1);
++delegate_noop!(CaptureState: ignore WlBuffer);
+diff --git a/lib/src/error.rs b/lib/src/error.rs
+index 67153bb..59c4fe8 100644
+--- a/lib/src/error.rs
++++ b/lib/src/error.rs
+@@ -5,16 +5,16 @@ use wayland_client::DispatchError;
+ pub enum Error {
+     #[error("the frame capture failed")]
+     Failed,
++    #[error("the capture session stopped")]
++    Stopped,
+     #[error("no protocol object of type {0} was registered")]
+     ProtocolNotAvailable(&'static str),
+     #[error("unable to parse protocol enum: {0}")]
+     ProtocolInvalidEnum(WEnumError),
+     #[error("error whilst dispatching: {0}")]
+     WaylandDispatch(DispatchError),
+-    #[error("tried to create buffer without having shm registered")]
+-    NoShm,
+-    #[error("unable to read buffer: {0}")]
+-    BufferRead(std::io::Error),
+-    #[error("unable to create buffer: {0}")]
+-    BufferCreate(Box<dyn std::error::Error + Sync + Send>),
++    #[error("target {0} not found")]
++    NotFound(String),
++    #[error("unable to allocate dma buffer: {0}")]
++    BufferCreate(String),
+ }
+diff --git a/lib/src/frame.rs b/lib/src/frame.rs
+deleted file mode 100644
+index 538c117..0000000
+--- a/lib/src/frame.rs
++++ /dev/null
+@@ -1,176 +0,0 @@
+-use std::sync::{Arc, Mutex, Weak};
+-
+-use wayland_client::protocol::wl_buffer::WlBuffer;
+-use wayland_client::protocol::wl_registry;
+-use wayland_client::protocol::wl_shm::WlShm;
+-use wayland_client::protocol::wl_shm_pool::WlShmPool;
+-use wayland_client::{Connection, Dispatch, delegate_noop};
+-
+-use crate::Frame;
+-use crate::buffer::Buffer;
+-use crate::error::Error;
+-use crate::protocols::hyprland_toplevel_export_v1::hyprland_toplevel_export_frame_v1::{
+-    self, HyprlandToplevelExportFrameV1,
+-};
+-use crate::protocols::hyprland_toplevel_export_v1::hyprland_toplevel_export_manager_v1::HyprlandToplevelExportManagerV1;
+-
+-#[derive(Clone)]
+-pub struct FrameManager {
+-    shm: Option<WlShm>,
+-    manager: Option<HyprlandToplevelExportManagerV1>,
+-    connection: Connection,
+-}
+-
+-impl FrameManager {
+-    /// setup a new frame manager which can be used to capture one or more frames for windows
+-    pub fn new(connection: &Connection) -> Result<Self, Error> {
+-        let display = connection.display();
+-
+-        let mut event_queue = connection.new_event_queue();
+-        let handle = event_queue.handle();
+-
+-        let mut manager = Self { shm: None, manager: None, connection: connection.clone() };
+-
+-        display.get_registry(&handle, ());
+-
+-        event_queue.roundtrip(&mut manager).map_err(|err| Error::WaylandDispatch(err))?;
+-
+-        if let None = manager.manager {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<HyprlandToplevelExportManagerV1>()))?
+-        }
+-        if let None = manager.shm {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<WlShm>()))?
+-        }
+-
+-        Ok(manager)
+-    }
+-
+-    /// capture a single frame buffer of a window
+-    pub fn capture_frame(&mut self, window_handle: u64) -> Result<Buffer, Error> {
+-        log::debug!("attempting to capture frame for window {window_handle}");
+-
+-        let Some(hl_manager) = &self.manager else {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<HyprlandToplevelExportManagerV1>()))?
+-        };
+-
+-        let frame = Arc::new(Mutex::new(Frame::default()));
+-        let mut event_queue = self.connection.new_event_queue();
+-        let handle = event_queue.handle();
+-        let hl_frame = hl_manager.capture_toplevel(0, window_handle as u32, &handle, Arc::downgrade(&frame));
+-        loop {
+-            if let Err(err) = event_queue.blocking_dispatch(self) {
+-                Err(Error::WaylandDispatch(err))?;
+-            }
+-            let frame = frame.clone();
+-            let mut current = frame.lock().expect("lock should not be poisoned");
+-            match (current.ready, current.requested, &current.error, &current.buffer) {
+-                (_, _, Some(_), _) | (true, _, _, Some(_)) => {
+-                    hl_frame.destroy();
+-                    break;
+-                }
+-                (false, false, _, Some(buffer)) => {
+-                    hl_frame.copy(&buffer.buffer, 1);
+-                    current.requested = true;
+-                }
+-                _ => continue,
+-            };
+-        }
+-
+-        match Arc::into_inner(frame) {
+-            Some(frame) => {
+-                let frame = frame.into_inner().expect("lock should not be poisoned");
+-                if let Some(err) = frame.error {
+-                    return Err(err);
+-                }
+-                if let Some(buffer) = frame.buffer {
+-                    return Ok(buffer);
+-                } else {
+-                    unreachable!("we only exit the loop when buffer or error is some")
+-                }
+-            }
+-            None => unreachable!("we only exit the loop after waiting blockingly for all dispatchers"),
+-        }
+-    }
+-
+-    /// destroy the internal objects of the frame manager
+-    pub fn destroy(&mut self) {
+-        if let Some(hl_manager) = &self.manager {
+-            hl_manager.destroy();
+-            self.manager = None;
+-        }
+-    }
+-}
+-
+-impl Dispatch<wl_registry::WlRegistry, ()> for FrameManager {
+-    fn event(
+-        state: &mut Self,
+-        registry: &wl_registry::WlRegistry,
+-        event: <wl_registry::WlRegistry as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &Connection,
+-        handle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        match event {
+-            wl_registry::Event::Global { name, interface, version } => match interface.as_str() {
+-                "wl_shm" => {
+-                    let shm: WlShm = registry.bind(name, version, handle, ());
+-                    state.shm = Some(shm);
+-                }
+-                "hyprland_toplevel_export_manager_v1" => {
+-                    let manager: HyprlandToplevelExportManagerV1 = registry.bind(name, version, handle, ());
+-                    state.manager = Some(manager);
+-                }
+-                _ => {}
+-            },
+-            _ => {}
+-        }
+-    }
+-}
+-
+-impl Dispatch<HyprlandToplevelExportFrameV1, Weak<Mutex<Frame>>> for FrameManager {
+-    fn event(
+-        state: &mut Self,
+-        _proxy: &HyprlandToplevelExportFrameV1,
+-        event: <HyprlandToplevelExportFrameV1 as wayland_client::Proxy>::Event,
+-        data: &Weak<Mutex<Frame>>,
+-        _conn: &Connection,
+-        qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        let Some(data) = data.upgrade() else {
+-            log::debug!(
+-                "dispatcher for HyprlandToplevelExportFrameV1 was called with event {event:?} but frame was already dropped"
+-            );
+-            return;
+-        };
+-        let mut frame = data.lock().expect("lock should not be poisoned");
+-        match event {
+-            hyprland_toplevel_export_frame_v1::Event::Buffer { format, width, height, stride } => {
+-                let format = match format.into_result() {
+-                    Ok(format) => format,
+-                    Err(err) => return frame.error = Some(Error::ProtocolInvalidEnum(err)),
+-                };
+-                if let Some(shm) = &state.shm {
+-                    match Buffer::new(shm, width, height, stride, format, qhandle, ()) {
+-                        Ok(buffer) => frame.buffer = Some(buffer),
+-                        Err(err) => frame.error = Some(err),
+-                    }
+-                } else {
+-                    frame.error = Some(Error::ProtocolNotAvailable(std::any::type_name::<WlShm>()));
+-                }
+-            }
+-            hyprland_toplevel_export_frame_v1::Event::Damage { .. } => {}
+-            hyprland_toplevel_export_frame_v1::Event::Flags { .. } => {}
+-            hyprland_toplevel_export_frame_v1::Event::Ready { .. } => {
+-                frame.ready = true;
+-            }
+-            hyprland_toplevel_export_frame_v1::Event::Failed => frame.error = Some(Error::Failed),
+-            hyprland_toplevel_export_frame_v1::Event::LinuxDmabuf { .. } => {}
+-            hyprland_toplevel_export_frame_v1::Event::BufferDone => {}
+-        }
+-    }
+-}
+-
+-delegate_noop!(FrameManager: ignore WlShm);
+-delegate_noop!(FrameManager: ignore WlShmPool);
+-delegate_noop!(FrameManager: ignore WlBuffer);
+-delegate_noop!(FrameManager: ignore HyprlandToplevelExportManagerV1);
+diff --git a/lib/src/image.rs b/lib/src/image.rs
+deleted file mode 100644
+index dd915b0..0000000
+--- a/lib/src/image.rs
++++ /dev/null
+@@ -1,113 +0,0 @@
+-use image::imageops::resize;
+-use image::{RgbImage, RgbaImage};
+-
+-use crate::buffer::Buffer;
+-
+-/// Xrgb8888 buffered image (as returned by hyprland) stored as a rgba image
+-pub type XrgbImage = RgbaImage;
+-
+-pub enum ImageKind {
+-    Rgb(RgbImage),
+-    Xrgb(XrgbImage),
+-}
+-
+-pub struct Image {
+-    pub buffer: ImageKind,
+-    pub aspect_ratio: f64,
+-}
+-
+-impl Image {
+-    /// create a new image from a buffer storing a frame
+-    pub fn new(buffer: Buffer) -> Result<Self, Box<dyn std::error::Error>> {
+-        let bytes = buffer.get_bytes()?;
+-        buffer.destroy();
+-        let img = match XrgbImage::from_vec(buffer.width, buffer.height, bytes) {
+-            Some(img) => Self { buffer: ImageKind::Xrgb(img), aspect_ratio: buffer.width as f64 / buffer.height as f64 },
+-            None => return Err(Box::from("failed to create xrgb image from buffer")),
+-        };
+-        drop(buffer);
+-        Ok(img)
+-    }
+-
+-    /// resize the image buffer to the specified dimensions
+-    pub fn resize(&mut self, width: u32, height: u32) {
+-        match &self.buffer {
+-            ImageKind::Rgb(image_buffer) => {
+-                let sized = resize(image_buffer, width, height, image::imageops::FilterType::Triangle);
+-                self.buffer = ImageKind::Rgb(sized);
+-            }
+-            ImageKind::Xrgb(image_buffer) => {
+-                let sized = resize(image_buffer, width, height, image::imageops::FilterType::Triangle);
+-                self.buffer = ImageKind::Xrgb(sized);
+-            }
+-        }
+-    }
+-
+-    /// resize the image buffer such that the bigger of the two dimensions is `size` long
+-    pub fn resize_to_fit(&mut self, size: u32) {
+-        let (width, height) = match &self.buffer {
+-            ImageKind::Rgb(image_buffer) => (image_buffer.width(), image_buffer.height()),
+-            ImageKind::Xrgb(image_buffer) => (image_buffer.width(), image_buffer.height()),
+-        };
+-        if height > width && width > size {
+-            let height = (size as f64 / self.aspect_ratio) as u32;
+-            self.resize(size, height);
+-        } else if width > height && height > size {
+-            let width = (size as f64 * self.aspect_ratio) as u32;
+-            self.resize(width, size);
+-        }
+-    }
+-
+-    /// convert a possible xrgb image instance into a rgb image instance
+-    ///
+-    /// if the instance is already a rgb instance nothing happens
+-    pub fn into_rgb(self) -> Result<Self, Box<dyn std::error::Error>> {
+-        let ImageKind::Xrgb(xrgb_buffer) = self.buffer else {
+-            return Ok(self);
+-        };
+-        let aspect_ratio = self.aspect_ratio;
+-
+-        Ok(Self { buffer: ImageKind::Rgb(Self::convert_xrgb_to_rgb(xrgb_buffer)?), aspect_ratio })
+-    }
+-
+-    /// convert a xrgb buffer into a rgb buffer
+-    fn convert_xrgb_to_rgb(buffer: XrgbImage) -> Result<RgbImage, Box<dyn std::error::Error>> {
+-        let height = buffer.height();
+-        let width = buffer.width();
+-
+-        let raw = buffer.into_vec();
+-        let bytes =
+-            raw.chunks_exact(4).into_iter().flat_map(|chunk| chunk.iter().take(3).rev().copied()).collect::<Vec<u8>>();
+-        match RgbImage::from_vec(width, height, bytes) {
+-            Some(img) => Ok(img),
+-            None => Err(Box::from("failed to convert xrgb image to rgb image")),
+-        }
+-    }
+-}
+-
+-pub enum Transforms {
+-    Normal,
+-    Normal90,
+-    Normal180,
+-    Normal270,
+-    Flipped,
+-    Flipped90,
+-    Flipped180,
+-    Flipped270,
+-}
+-
+-#[cfg(feature = "hyprland-rs")]
+-impl From<hyprland::data::Transforms> for Transforms {
+-    fn from(value: hyprland::data::Transforms) -> Self {
+-        match value {
+-            hyprland::data::Transforms::Normal => Transforms::Normal,
+-            hyprland::data::Transforms::Normal90 => Transforms::Normal90,
+-            hyprland::data::Transforms::Normal180 => Transforms::Normal180,
+-            hyprland::data::Transforms::Normal270 => Transforms::Normal270,
+-            hyprland::data::Transforms::Flipped => Transforms::Flipped,
+-            hyprland::data::Transforms::Flipped90 => Transforms::Flipped90,
+-            hyprland::data::Transforms::Flipped180 => Transforms::Flipped180,
+-            hyprland::data::Transforms::Flipped270 => Transforms::Flipped270,
+-        }
+-    }
+-}
+diff --git a/lib/src/lib.rs b/lib/src/lib.rs
+index 6583c60..5eef661 100644
+--- a/lib/src/lib.rs
++++ b/lib/src/lib.rs
+@@ -1,15 +1,7 @@
+ pub mod buffer;
++pub mod capture;
+ pub mod error;
+-pub mod frame;
+-pub mod image;
+ pub mod output;
+ mod protocols;
+ pub mod toplevel;
+-
+-#[derive(Default)]
+-struct Frame {
+-    pub ready: bool,
+-    pub requested: bool,
+-    pub buffer: Option<buffer::Buffer>,
+-    pub error: Option<error::Error>,
+-}
++pub mod workspace;
+diff --git a/lib/src/output.rs b/lib/src/output.rs
+index 0ddde5f..129b053 100644
+--- a/lib/src/output.rs
++++ b/lib/src/output.rs
+@@ -1,415 +1,43 @@
+-use std::sync::{Arc, Mutex, Weak};
+-
+-use derive_builder::Builder;
+-use wayland_client::protocol::wl_buffer::WlBuffer;
+-use wayland_client::protocol::wl_output::{self, Transform, WlOutput};
+-use wayland_client::protocol::wl_registry;
+-use wayland_client::protocol::wl_shm::WlShm;
+-use wayland_client::protocol::wl_shm_pool::WlShmPool;
+-use wayland_client::{Connection, Dispatch, EventQueue, delegate_noop, event_created_child};
+-use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::{self, ZwlrOutputHeadV1};
+-use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::{self, ZwlrOutputManagerV1};
+-use wayland_protocols_wlr::output_management::v1::client::zwlr_output_mode_v1::{self, ZwlrOutputModeV1};
+-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{self, ZwlrScreencopyFrameV1};
+-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+-
+-use crate::Frame;
+-use crate::buffer::Buffer;
+-use crate::error::Error;
+-
+-#[derive(Clone, Debug, Builder)]
++#[derive(Clone, Debug)]
+ pub struct Output {
+-    /// Unique name of the output.
+     pub name: String,
+-    /// Human-readable description of the output.
+-    pub description: String,
+-    /// Scale of the output in global compositor space.
+-    pub scale: f64,
+-    /// Position on the x-axis in global compositor space.
+     pub x: i32,
+-    /// Position on the y-axis in global compositor space.
+     pub y: i32,
+-    /// Width of the output in millimeters.
+-    pub physical_width: i32,
+-    /// Height of the output in millimeters.
+-    pub physical_height: i32,
+-    /// Width of the output in pixels.
+     pub width: i32,
+-    /// Height of the output in pixels.
+     pub height: i32,
+-    /// Transformation applied to the output.
+-    pub transform: Transform,
+-    /// Underlying `wl_output` object.
+-    pub wl_output: WlOutput,
+-}
+-
+-impl PartialEq for Output {
+-    fn eq(&self, other: &Self) -> bool {
+-        self.wl_output == other.wl_output
+-    }
+ }
+ 
+ impl Output {
+-    /// Get a tuple containing the (width, height) dimensions
+-    /// of the output after applying the output's transform.
+-    pub fn transformed_dimensions(&self) -> (i32, i32) {
+-        match self.transform {
+-            Transform::Normal | Transform::_180 | Transform::Flipped | Transform::Flipped180 => (self.width, self.height),
+-            Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270 => (self.height, self.width),
+-            transform => {
+-                log::error!("received unsupported output transform: {transform:?}");
+-                (self.width, self.height)
+-            }
+-        }
+-    }
+-
+-    /// Get whether a non-one scaling factor is applied to the output.
+-    pub fn is_scaled(&self) -> bool {
+-        self.scale != 1.0
+-    }
+-}
+-
+-#[derive(Clone)]
+-pub struct OutputManager {
+-    shm: Option<WlShm>,
+-    screencopy_manager: Option<ZwlrScreencopyManagerV1>,
+-    output_manager: Option<ZwlrOutputManagerV1>,
+-    output_manager_done: bool,
+-    pub outputs: Vec<Output>,
+-    pending_outputs: Vec<(WlOutput, Option<String>)>,
+-    pending_heads: Vec<(ZwlrOutputHeadV1, OutputBuilder, Option<ZwlrOutputModeV1>)>,
+-    modes: Vec<(ZwlrOutputModeV1, i32, i32)>,
+-    connection: Connection,
+-}
+-
+-impl OutputManager {
+-    /// setup a new output manager which can be used to capture one or more frames of outputs or of selected regions
+-    pub fn new(connection: &Connection) -> Result<Self, Error> {
+-        let display = connection.display();
+-
+-        let mut event_queue = connection.new_event_queue();
+-        let handle = event_queue.handle();
+-
+-        let mut manager = Self {
+-            shm: None,
+-            screencopy_manager: None,
+-            output_manager: None,
+-            output_manager_done: false,
+-            outputs: Vec::new(),
+-            pending_outputs: Vec::new(),
+-            pending_heads: Vec::new(),
+-            connection: connection.clone(),
+-            modes: Vec::new(),
+-        };
+-
+-        display.get_registry(&handle, ());
+-
+-        event_queue.roundtrip(&mut manager).map_err(|err| Error::WaylandDispatch(err))?;
+-
+-        if let None = manager.screencopy_manager {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<ZwlrScreencopyManagerV1>()))?
+-        }
+-        if let None = manager.output_manager {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<ZwlrOutputManagerV1>()))?
+-        }
+-        if let None = manager.shm {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<WlShm>()))?
+-        }
+-
+-        event_queue.roundtrip(&mut manager).map_err(|err| Error::WaylandDispatch(err))?;
+-
+-        Ok(manager)
+-    }
+-
+-    /// capture a single frame buffer of an output
+-    pub fn capture_output(&mut self, output: &WlOutput) -> Result<Buffer, Error> {
+-        let Some(zwlr_manager) = &self.screencopy_manager else {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<ZwlrScreencopyManagerV1>()))?
+-        };
+-
+-        let frame = Arc::new(Mutex::new(Frame::default()));
+-        let mut event_queue = self.connection.new_event_queue();
+-        let handle = event_queue.handle();
+-        let zwlr_frame = zwlr_manager.capture_output(0, output, &handle, Arc::downgrade(&frame));
+-        self.finish_capture(frame, zwlr_frame, &mut event_queue)
+-    }
+-
+-    /// capture a selected region of an output
+-    pub fn capture_output_region(
+-        &mut self,
+-        output: &WlOutput,
+-        x: i32,
+-        y: i32,
+-        width: i32,
+-        height: i32,
+-    ) -> Result<Buffer, Error> {
+-        let Some(zwlr_manager) = &self.screencopy_manager else {
+-            Err(Error::ProtocolNotAvailable(std::any::type_name::<ZwlrScreencopyManagerV1>()))?
+-        };
+-
+-        let frame = Arc::new(Mutex::new(Frame::default()));
+-        let mut event_queue = self.connection.new_event_queue();
+-        let handle = event_queue.handle();
+-        let zwlr_frame = zwlr_manager.capture_output_region(0, output, x, y, width, height, &handle, Arc::downgrade(&frame));
+-        self.finish_capture(frame, zwlr_frame, &mut event_queue)
+-    }
+-
+-    fn finish_capture(
+-        &mut self,
+-        frame: Arc<Mutex<Frame>>,
+-        zwlr_frame: ZwlrScreencopyFrameV1,
+-        event_queue: &mut EventQueue<OutputManager>,
+-    ) -> Result<Buffer, Error> {
+-        loop {
+-            if let Err(err) = event_queue.blocking_dispatch(self) {
+-                Err(Error::WaylandDispatch(err))?;
+-            }
+-            let frame = frame.clone();
+-            let mut current = frame.lock().expect("lock should not be poisoned");
+-            match (current.ready, current.requested, &current.error, &current.buffer) {
+-                (_, _, Some(_), _) | (true, _, _, Some(_)) => {
+-                    zwlr_frame.destroy();
+-                    break;
+-                }
+-                (false, false, _, Some(buffer)) => {
+-                    zwlr_frame.copy(&buffer.buffer);
+-                    current.requested = true;
+-                }
+-                _ => continue,
+-            };
+-        }
+-
+-        match Arc::into_inner(frame) {
+-            Some(frame) => {
+-                let frame = frame.into_inner().expect("lock should not be poisoned");
+-                if let Some(err) = frame.error {
+-                    return Err(err);
+-                }
+-                if let Some(buffer) = frame.buffer {
+-                    return Ok(buffer);
+-                } else {
+-                    unreachable!("we only exit the loop when buffer or error is some")
+-                }
+-            }
+-            None => unreachable!("we only exit the loop after waiting blockingly for all dispatchers"),
+-        }
+-    }
+-
+-    /// For all `pending_outputs` check whether they can successfully be finalized.
+-    /// If that's the case, the pending output is inserted into `outputs`.
+-    fn build_outputs(&mut self) {
+-        if !self.output_manager_done {
+-            return;
+-        };
+-
+-        self.pending_outputs.retain(|(wl_output, name)| {
+-            let Some(name) = name else { return true };
+-            let Some(idx) = self
+-                .pending_heads
+-                .iter()
+-                .position(|(_, output, _)| output.name.as_ref().is_some_and(|output_name| output_name == name))
++    /// Parse `XDPH_OUTPUT_SHARING_LIST` (`<len>:<name>:<x>:<y>:<width>:<height>;...`).
++    pub fn parse_list(list: &str) -> Vec<Output> {
++        let mut outputs = Vec::new();
++        let mut s = list;
++        while !s.is_empty() {
++            let Some((len_str, rest)) = s.split_once(':') else { break };
++            let Ok(len) = len_str.parse::<usize>() else { break };
++            if rest.len() < len || !rest.is_char_boundary(len) {
++                break;
++            }
++            let name = rest[..len].to_string();
++            let Some(rest) = rest[len..].strip_prefix(':') else { break };
++            let Some((coords, next)) = rest.split_once(';') else { break };
++            s = next;
++
++            let mut parts = coords.split(':');
++            let (Some(x), Some(y), Some(w), Some(h), None) =
++                (parts.next(), parts.next(), parts.next(), parts.next(), parts.next())
+             else {
+-                return true;
++                continue;
+             };
+-            let (_, _, current_mode) = &self.pending_heads[idx];
+-            let Some((_, width, height)) =
+-                current_mode.as_ref().and_then(|current_mode| self.modes.iter().find(|(mode, _, _)| mode == current_mode))
++            let (Ok(x), Ok(y), Ok(width), Ok(height)) =
++                (x.parse::<i32>(), y.parse::<i32>(), w.parse::<i32>(), h.parse::<i32>())
+             else {
+-                return true;
++                continue;
+             };
+-
+-            let (_, mut output, _) = self.pending_heads.remove(idx);
+-            output.width(*width);
+-            output.height(*height);
+-            output.wl_output(wl_output.clone());
+-
+-            self.outputs.push(output.build().expect("all fields should be populated"));
+-
+-            false
+-        });
+-    }
+-}
+-
+-impl Dispatch<wl_registry::WlRegistry, ()> for OutputManager {
+-    fn event(
+-        state: &mut Self,
+-        registry: &wl_registry::WlRegistry,
+-        event: <wl_registry::WlRegistry as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &Connection,
+-        handle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        match event {
+-            wl_registry::Event::Global { name, interface, version } => match interface.as_str() {
+-                "wl_shm" => {
+-                    let shm: WlShm = registry.bind(name, version, handle, ());
+-                    state.shm = Some(shm);
+-                }
+-                "zwlr_screencopy_manager_v1" => {
+-                    let manager: ZwlrScreencopyManagerV1 = registry.bind(name, version, handle, ());
+-                    state.screencopy_manager = Some(manager);
+-                }
+-                "zwlr_output_manager_v1" => {
+-                    let manager: ZwlrOutputManagerV1 = registry.bind(name, version, handle, ());
+-                    state.output_manager = Some(manager);
+-                }
+-                "wl_output" => {
+-                    let output: WlOutput = registry.bind(name, version, handle, ());
+-                    state.pending_outputs.push((output, None));
+-                }
+-                _ => {}
+-            },
+-            _ => {}
+-        }
+-    }
+-}
+-
+-impl Dispatch<wl_output::WlOutput, ()> for OutputManager {
+-    fn event(
+-        state: &mut Self,
+-        proxy: &wl_output::WlOutput,
+-        event: <wl_output::WlOutput as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &wayland_client::Connection,
+-        _qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        let Some((_, name_opt)) = state.pending_outputs.iter_mut().find(|(output, _)| output == proxy) else { return };
+-
+-        match event {
+-            wl_output::Event::Name { name } => *name_opt = Some(name),
+-            wl_output::Event::Done => state.build_outputs(),
+-            _ => {}
+-        }
+-    }
+-}
+-
+-impl Dispatch<ZwlrOutputManagerV1, ()> for OutputManager {
+-    event_created_child!(OutputManager, ZwlrOutputManagerV1, [
+-        zwlr_output_manager_v1::EVT_HEAD_OPCODE => (ZwlrOutputHeadV1, ())
+-    ]);
+-
+-    fn event(
+-        state: &mut Self,
+-        _proxy: &ZwlrOutputManagerV1,
+-        event: <ZwlrOutputManagerV1 as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &Connection,
+-        _qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        match event {
+-            zwlr_output_manager_v1::Event::Head { head } => state.pending_heads.push((head, OutputBuilder::default(), None)),
+-            zwlr_output_manager_v1::Event::Done { .. } => {
+-                // All output data should be sent.
+-                state.output_manager_done = true;
+-                state.build_outputs();
+-            }
+-            _ => {}
+-        }
+-    }
+-}
+-
+-impl Dispatch<ZwlrOutputHeadV1, ()> for OutputManager {
+-    event_created_child!(OutputManager, ZwlrOutputHeadV1, [
+-        zwlr_output_head_v1::EVT_MODE_OPCODE => (ZwlrOutputModeV1, ())
+-    ]);
+-
+-    fn event(
+-        state: &mut Self,
+-        proxy: &ZwlrOutputHeadV1,
+-        event: <ZwlrOutputHeadV1 as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &Connection,
+-        _qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        let Some((_, output, mode_opt)) = state.pending_heads.iter_mut().find(|(head, _, _)| head == proxy) else { return };
+-
+-        match event {
+-            zwlr_output_head_v1::Event::Name { name } => {
+-                output.name(name);
+-            }
+-            zwlr_output_head_v1::Event::Description { description } => {
+-                output.description(description);
+-            }
+-            zwlr_output_head_v1::Event::PhysicalSize { width, height } => {
+-                output.physical_width(width);
+-                output.physical_height(height);
+-            }
+-            zwlr_output_head_v1::Event::CurrentMode { mode } => *mode_opt = Some(mode),
+-            zwlr_output_head_v1::Event::Position { x, y } => {
+-                output.x(x);
+-                output.y(y);
+-            }
+-            zwlr_output_head_v1::Event::Transform { transform } => match transform.into_result() {
+-                Ok(transform) => {
+-                    output.transform(transform);
+-                }
+-                Err(err) => log::error!("received invalid monitor transform: {err}"),
+-            },
+-            zwlr_output_head_v1::Event::Scale { scale } => {
+-                output.scale(scale);
+-            }
+-            _ => {}
+-        }
+-    }
+-}
+-
+-impl Dispatch<ZwlrOutputModeV1, ()> for OutputManager {
+-    fn event(
+-        state: &mut Self,
+-        proxy: &ZwlrOutputModeV1,
+-        event: <ZwlrOutputModeV1 as wayland_client::Proxy>::Event,
+-        _data: &(),
+-        _conn: &Connection,
+-        _qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        // We're only interested in the size event.
+-        if let zwlr_output_mode_v1::Event::Size { width, height } = event {
+-            state.modes.push((proxy.clone(), width, height));
+-            state.build_outputs();
+-        }
+-    }
+-}
+-
+-impl Dispatch<ZwlrScreencopyFrameV1, Weak<Mutex<Frame>>> for OutputManager {
+-    fn event(
+-        state: &mut Self,
+-        _proxy: &ZwlrScreencopyFrameV1,
+-        event: <ZwlrScreencopyFrameV1 as wayland_client::Proxy>::Event,
+-        data: &Weak<Mutex<Frame>>,
+-        _conn: &wayland_client::Connection,
+-        qhandle: &wayland_client::QueueHandle<Self>,
+-    ) {
+-        let Some(data) = data.upgrade() else { return };
+-        let mut frame = data.lock().expect("lock should not be poisoned");
+-        match event {
+-            zwlr_screencopy_frame_v1::Event::Buffer { format, width, height, stride } => {
+-                let format = match format.into_result() {
+-                    Ok(format) => format,
+-                    Err(err) => return frame.error = Some(Error::ProtocolInvalidEnum(err)),
+-                };
+-                if let Some(shm) = &state.shm {
+-                    match Buffer::new(shm, width, height, stride, format, qhandle, ()) {
+-                        Ok(buffer) => frame.buffer = Some(buffer),
+-                        Err(err) => frame.error = Some(err),
+-                    }
+-                } else {
+-                    frame.error = Some(Error::ProtocolNotAvailable(std::any::type_name::<WlShm>()));
+-                }
++            if width > 0 && height > 0 {
++                outputs.push(Output { name, x, y, width, height });
+             }
+-            zwlr_screencopy_frame_v1::Event::Flags { .. } => {}
+-            zwlr_screencopy_frame_v1::Event::Ready { .. } => {
+-                frame.ready = true;
+-            }
+-            zwlr_screencopy_frame_v1::Event::Failed => frame.error = Some(Error::Failed),
+-            zwlr_screencopy_frame_v1::Event::Damage { .. } => {}
+-            zwlr_screencopy_frame_v1::Event::LinuxDmabuf { .. } => {}
+-            zwlr_screencopy_frame_v1::Event::BufferDone => {}
+-            _ => {}
+         }
++        outputs
+     }
+ }
+-
+-delegate_noop!(OutputManager: ignore WlShm);
+-delegate_noop!(OutputManager: ignore WlShmPool);
+-delegate_noop!(OutputManager: ignore WlBuffer);
+-delegate_noop!(OutputManager: ignore ZwlrScreencopyManagerV1);
+diff --git a/lib/src/protocols/hyprland_toplevel_export_v1.rs b/lib/src/protocols/hyprland_toplevel_export_v1.rs
+deleted file mode 100644
+index 7803041..0000000
+--- a/lib/src/protocols/hyprland_toplevel_export_v1.rs
++++ /dev/null
+@@ -1,13 +0,0 @@
+-use wayland_client;
+-use wayland_client::protocol::*;
+-
+-pub mod __interfaces {
+-    use wayland_client::protocol::__interfaces::*;
+-    use wayland_protocols_wlr::foreign_toplevel::v1::client::__interfaces::*;
+-    wayland_scanner::generate_interfaces!("./hyprland-protocols/protocols/hyprland-toplevel-export-v1.xml");
+-}
+-use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_handle_v1;
+-
+-use self::__interfaces::*;
+-
+-wayland_scanner::generate_client_code!("./hyprland-protocols/protocols/hyprland-toplevel-export-v1.xml");
+diff --git a/lib/src/protocols/mod.rs b/lib/src/protocols/mod.rs
+index c149adf..fea8ce8 100644
+--- a/lib/src/protocols/mod.rs
++++ b/lib/src/protocols/mod.rs
+@@ -1 +1,82 @@
+-pub mod hyprland_toplevel_export_v1;
++pub mod ext_foreign_toplevel_list_v1 {
++    use wayland_client;
++    pub mod __interfaces {
++        wayland_scanner::generate_interfaces!("./protocols/ext-foreign-toplevel-list-v1.xml");
++    }
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/ext-foreign-toplevel-list-v1.xml");
++}
++
++pub mod ext_image_capture_source_v1 {
++    use wayland_client;
++    use wayland_client::protocol::*;
++    pub mod __interfaces {
++        use wayland_client::protocol::__interfaces::*;
++        use crate::protocols::ext_foreign_toplevel_list_v1::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./protocols/ext-image-capture-source-v1.xml");
++    }
++    use crate::protocols::ext_foreign_toplevel_list_v1::ext_foreign_toplevel_handle_v1;
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/ext-image-capture-source-v1.xml");
++}
++
++pub mod ext_image_copy_capture_v1 {
++    use wayland_client;
++    use wayland_client::protocol::*;
++    pub mod __interfaces {
++        use wayland_client::protocol::__interfaces::*;
++        use crate::protocols::ext_image_capture_source_v1::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./protocols/ext-image-copy-capture-v1.xml");
++    }
++    use crate::protocols::ext_image_capture_source_v1::ext_image_capture_source_v1;
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/ext-image-copy-capture-v1.xml");
++}
++
++pub mod ext_workspace_v1 {
++    use wayland_client;
++    use wayland_client::protocol::*;
++    pub mod __interfaces {
++        use wayland_client::protocol::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./protocols/ext-workspace-v1.xml");
++    }
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/ext-workspace-v1.xml");
++}
++
++pub mod linux_dmabuf_v1 {
++    use wayland_client;
++    use wayland_client::protocol::*;
++    pub mod __interfaces {
++        use wayland_client::protocol::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./protocols/linux-dmabuf-v1.xml");
++    }
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/linux-dmabuf-v1.xml");
++}
++
++pub mod hyprland_workspace_image_capture_source_v1 {
++    use wayland_client;
++    pub mod __interfaces {
++        use crate::protocols::ext_image_capture_source_v1::__interfaces::*;
++        use crate::protocols::ext_workspace_v1::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./protocols/hyprland-workspace-image-capture-source-v1.xml");
++    }
++    use crate::protocols::ext_image_capture_source_v1::ext_image_capture_source_v1;
++    use crate::protocols::ext_workspace_v1::ext_workspace_handle_v1;
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./protocols/hyprland-workspace-image-capture-source-v1.xml");
++}
++
++pub mod hyprland_toplevel_mapping_v1 {
++    use wayland_client;
++    pub mod __interfaces {
++        use crate::protocols::ext_foreign_toplevel_list_v1::__interfaces::*;
++        use wayland_protocols_wlr::foreign_toplevel::v1::client::__interfaces::*;
++        wayland_scanner::generate_interfaces!("./hyprland-protocols/protocols/hyprland-toplevel-mapping-v1.xml");
++    }
++    use crate::protocols::ext_foreign_toplevel_list_v1::ext_foreign_toplevel_handle_v1;
++    use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_handle_v1;
++    use self::__interfaces::*;
++    wayland_scanner::generate_client_code!("./hyprland-protocols/protocols/hyprland-toplevel-mapping-v1.xml");
++}
+diff --git a/lib/src/workspace.rs b/lib/src/workspace.rs
+new file mode 100644
+index 0000000..5eaab41
+--- /dev/null
++++ b/lib/src/workspace.rs
+@@ -0,0 +1,46 @@
++#[derive(Clone, Debug)]
++pub struct Workspace {
++    pub id: u64,
++    pub name: String,
++    pub outputs: Vec<String>,
++}
++
++fn take_len_prefixed(s: &str) -> Option<(String, &str)> {
++    let (len_str, rest) = s.split_once(':')?;
++    let len = len_str.parse::<usize>().ok()?;
++    if rest.len() < len || !rest.is_char_boundary(len) {
++        return None;
++    }
++    Some((rest[..len].to_string(), &rest[len..]))
++}
++
++impl Workspace {
++    /// Parse `XDPH_WORKSPACE_SHARING_LIST_V3`
++    /// (`<id>[HN>]<name_len>:<name>[HM>]<out_count>:<out_len>:<out>...[HE>]`).
++    pub fn parse_list(list: &str) -> Vec<Workspace> {
++        let mut workspaces = Vec::new();
++        let mut s = list;
++        while !s.is_empty() {
++            let Some((id_str, rest)) = s.split_once("[HN>]") else { break };
++            let Ok(id) = id_str.parse::<u64>() else { break };
++            if id == 0 {
++                break;
++            }
++            let Some((name, rest)) = take_len_prefixed(rest) else { break };
++            let Some(rest) = rest.strip_prefix("[HM>]") else { break };
++            let Some((count_str, mut rest)) = rest.split_once(':') else { break };
++            let Ok(count) = count_str.parse::<usize>() else { break };
++
++            let mut outputs = Vec::with_capacity(count);
++            for _ in 0..count {
++                let Some((out, next)) = take_len_prefixed(rest) else { return workspaces };
++                outputs.push(out);
++                rest = next;
++            }
++            let Some(next) = rest.strip_prefix("[HE>]") else { break };
++            s = next;
++            workspaces.push(Workspace { id, name, outputs });
++        }
++        workspaces
++    }
++}
+diff --git a/src/app.rs b/src/app.rs
+index a073f07..74ad2d7 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -1,6 +1,8 @@
+ use std::cell::RefCell;
++use std::collections::HashSet;
+ use std::process::exit;
+ use std::rc::Rc;
++use std::sync::Arc;
+ 
+ use glib::variant::StaticVariantType;
+ use gtk4::gdk::Display;
+@@ -8,13 +10,16 @@ use gtk4::gio::ActionEntry;
+ use gtk4::gio::prelude::{ActionMapExtManual, ApplicationExt, ApplicationExtManual};
+ use gtk4::glib::object::IsA;
+ use gtk4::glib::{ExitCode, clone};
+-use gtk4::prelude::{BoxExt, CheckButtonExt, GtkWindowExt, WidgetExt};
++use gtk4::prelude::{BoxExt, CheckButtonExt, DisplayExt, GtkWindowExt, WidgetExt};
+ use gtk4::{
+     Application, ApplicationWindow, Box, CheckButton, CssProvider, EventControllerKey, Notebook,
+     STYLE_PROVIDER_PRIORITY_APPLICATION, Widget,
+ };
+ use gtk4_layer_shell::*;
++use hyprland_preview_share_picker_lib::capture::CaptureManager;
++use hyprland_preview_share_picker_lib::output::Output;
+ use hyprland_preview_share_picker_lib::toplevel::Toplevel;
++use hyprland_preview_share_picker_lib::workspace::Workspace;
+ use rsass::{compile_scss, output};
+ use wayland_client::Connection;
+ 
+@@ -23,6 +28,7 @@ use crate::views::View;
+ use crate::views::outputs::OutputsView;
+ use crate::views::region::RegionView;
+ use crate::views::windows::WindowsView;
++use crate::views::workspaces::WorkspacesView;
+ 
+ const APP_ID: &str = "ch.wysbd.hyprland-preview-share-picker";
+ 
+@@ -31,7 +37,14 @@ pub struct App {
+ }
+ 
+ impl App {
+-    pub fn build(interactive_debug: bool, config: Config, toplevels: Vec<Toplevel>, restore_token: bool) -> Self {
++    pub fn build(
++        interactive_debug: bool,
++        config: Config,
++        toplevels: Vec<Toplevel>,
++        outputs: Vec<Output>,
++        workspaces: Vec<Workspace>,
++        restore_token: bool,
++    ) -> Self {
+         let gtk_app = Application::builder().application_id(APP_ID).build();
+ 
+         let app = Self { gtk_app };
+@@ -54,7 +67,7 @@ impl App {
+ 
+         app.gtk_app.connect_activate(move |app| {
+             log::debug!("gtk app is activated");
+-            build_ui(app, &config, &toplevels, restore_token);
++            build_ui(app, &config, &toplevels, &outputs, &workspaces, restore_token);
+         });
+ 
+         app
+@@ -66,7 +79,14 @@ impl App {
+     }
+ }
+ 
+-fn build_ui(app: &Application, config: &Config, toplevels: &[Toplevel], default_restore_token: bool) {
++fn build_ui(
++    app: &Application,
++    config: &Config,
++    toplevels: &[Toplevel],
++    outputs: &[Output],
++    workspaces: &[Workspace],
++    default_restore_token: bool,
++) {
+     let window = build_window(app, config);
+     log::debug!("built application window");
+     let window_container = Box::new(gtk4::Orientation::Vertical, 0);
+@@ -80,6 +100,19 @@ fn build_ui(app: &Application, config: &Config, toplevels: &[Toplevel], default_
+         }
+     };
+ 
++    let display = Display::default().expect("should have display");
++    let dmabuf_formats = display.dmabuf_formats();
++    let supported_formats: HashSet<(u32, u64)> =
++        (0..dmabuf_formats.n_formats()).map(|i| dmabuf_formats.format(i)).collect();
++
++    let manager = match CaptureManager::new(&con, supported_formats) {
++        Ok(manager) => Some(Arc::new(manager)),
++        Err(err) => {
++            log::error!("unable to create capture manager from connection: {err}");
++            None
++        }
++    };
++
+     let restore_token = Rc::new(RefCell::new(default_restore_token));
+     let exit_action = ActionEntry::builder("select")
+         .parameter_type(Some(&String::static_variant_type()))
+@@ -101,24 +134,24 @@ fn build_ui(app: &Application, config: &Config, toplevels: &[Toplevel], default_
+ 
+     let notebook = Notebook::builder().css_classes([config.classes.notebook.as_str()]).vexpand(true).build();
+ 
+-    match WindowsView::new(&con, toplevels, config) {
+-        Ok(view) => {
+-            let page_num = notebook.append_page(&view.build(), Some(&view.label()));
+-            if let config::Page::Windows = config.default_page {
+-                notebook.set_current_page(Some(page_num));
+-            }
++    if let Some(manager) = &manager {
++        let windows_view = WindowsView::new(toplevels, config, manager.clone());
++        let page_num = notebook.append_page(&windows_view.build(), Some(&windows_view.label()));
++        if let config::Page::Windows = config.default_page {
++            notebook.set_current_page(Some(page_num));
+         }
+-        Err(err) => log::error!("unable to build windows view: {err}"),
+-    };
+ 
+-    match OutputsView::new(&con, config) {
+-        Ok(view) => {
+-            let page_num = notebook.append_page(&view.build(), Some(&view.label()));
+-            if let config::Page::Outputs = config.default_page {
+-                notebook.set_current_page(Some(page_num));
+-            }
++        let outputs_view = OutputsView::new(outputs, config, manager.clone());
++        let page_num = notebook.append_page(&outputs_view.build(), Some(&outputs_view.label()));
++        if let config::Page::Outputs = config.default_page {
++            notebook.set_current_page(Some(page_num));
++        }
++
++        let workspaces_view = WorkspacesView::new(workspaces, config, manager.clone());
++        let page_num = notebook.append_page(&workspaces_view.build(), Some(&workspaces_view.label()));
++        if let config::Page::Workspaces = config.default_page {
++            notebook.set_current_page(Some(page_num));
+         }
+-        Err(err) => log::error!("unable to build outputs view: {err}"),
+     }
+ 
+     match RegionView::new(config) {
+@@ -184,6 +217,7 @@ fn build_window(app: &Application, config: &Config) -> ApplicationWindow {
+     let window = ApplicationWindow::builder()
+         .application(app)
+         .destroy_with_parent(true)
++        .title("Select what to share")
+         .default_width(config.window.width)
+         .default_height(config.window.height)
+         .vexpand(false)
+@@ -201,11 +235,13 @@ fn build_window(app: &Application, config: &Config) -> ApplicationWindow {
+     });
+     window.add_controller(event_controller);
+ 
+-    window.init_layer_shell();
+-    window.set_namespace(APP_ID);
+-    window.set_layer(Layer::Overlay);
+-    window.set_keyboard_mode(KeyboardMode::OnDemand);
+-    window.set_exclusive_zone(-1);
++    if config.window.as_layer {
++        window.init_layer_shell();
++        window.set_namespace(APP_ID);
++        window.set_layer(Layer::Overlay);
++        window.set_keyboard_mode(KeyboardMode::OnDemand);
++        window.set_exclusive_zone(-1);
++    }
+ 
+     window
+ }
+diff --git a/src/config.rs b/src/config.rs
+index ce00d38..98659f5 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -28,6 +28,8 @@ pub struct Config {
+     pub region: RegionConfig,
+     /// config related to the windows page
+     pub windows: WindowsConfig,
++    /// config related to the workspaces page
++    pub workspaces: WorkspacesConfig,
+     /// config related to the outputs page
+     pub outputs: OutputsConfig,
+     /// enable debug logs by default
+@@ -112,6 +114,7 @@ impl Default for Config {
+             region: RegionConfig::default(),
+             outputs: OutputsConfig::default(),
+             windows: WindowsConfig::default(),
++            workspaces: WorkspacesConfig::default(),
+             hide_token_restore: false,
+             default_page: Page::default(),
+             debug: false,
+@@ -127,11 +130,13 @@ pub struct WindowConfig {
+     pub width: i32,
+     /// target height of the application window
+     pub height: i32,
++    /// whether to spawn as a layer-shell surface instead of a normal window
++    pub as_layer: bool,
+ }
+ 
+ impl Default for WindowConfig {
+     fn default() -> Self {
+-        Self { width: 1000, height: 500 }
++        Self { width: 1000, height: 500, as_layer: false }
+     }
+ }
+ 
+@@ -139,6 +144,8 @@ impl Default for WindowConfig {
+ #[schemars(rename = "Image config")]
+ #[serde(default)]
+ pub struct ImageConfig {
++    /// disable internal downscaling of preview images
++    pub disable_resize: bool,
+     /// internally downscale every image to this height
+     ///
+     /// if the image's height is already smaller than this height, nothing happens
+@@ -149,7 +156,7 @@ pub struct ImageConfig {
+ 
+ impl Default for ImageConfig {
+     fn default() -> Self {
+-        Self { resize_size: 200, widget_size: 150 }
++        Self { disable_resize: true, resize_size: 200, widget_size: 150 }
+     }
+ }
+ 
+@@ -260,11 +267,32 @@ impl Default for WindowsConfig {
+     }
+ }
+ 
++#[derive(Deserialize, Debug, Clone, JsonSchema)]
++#[schemars(rename = "Workspaces config")]
++#[serde(default)]
++pub struct WorkspacesConfig {
++    /// minimum amount of cards per row
++    pub min_per_row: u32,
++    /// maximum amount of cards per row
++    pub max_per_row: u32,
++    /// number of clicks to trigger selection
++    pub clicks: u32,
++    /// spacing in pixels between the workspace cards
++    pub spacing: u32,
++}
++
++impl Default for WorkspacesConfig {
++    fn default() -> Self {
++        Self { min_per_row: 3, max_per_row: 4, clicks: 2, spacing: 12 }
++    }
++}
++
+ #[derive(Deserialize, Debug, Clone, JsonSchema, Default)]
+ #[serde(rename_all = "kebab-case")]
+ pub enum Page {
+     #[default]
+     Windows,
+     Outputs,
++    Workspaces,
+     Region,
+ }
+diff --git a/src/image.rs b/src/image.rs
+index db3d1d0..6b83a87 100644
+--- a/src/image.rs
++++ b/src/image.rs
+@@ -1,23 +1,65 @@
+-use gtk4::gdk_pixbuf::Pixbuf;
+-use hyprland_preview_share_picker_lib::image::{Image, ImageKind};
++use std::os::fd::AsRawFd;
+ 
+-pub trait ImageExt {
+-    /// turn the image into a gdk pixbuf which can directly be displayed inside a gtk image
+-    fn into_pixbuf(self) -> Result<Pixbuf, Box<dyn std::error::Error>>;
++use gtk4::gdk::{self, DmabufTextureBuilder};
++use gtk4::gsk::prelude::GskRendererExt;
++use gtk4::prelude::SnapshotExt;
++use gtk4::{Snapshot, graphene, gsk};
++use hyprland_preview_share_picker_lib::buffer::Dmabuf;
++
++pub trait DmabufExt {
++    fn into_texture(
++        self,
++        display: &gdk::Display,
++        resize_size: Option<u32>,
++        renderer: Option<&gsk::Renderer>,
++    ) -> Result<gdk::Texture, Box<dyn std::error::Error>>;
+ }
+ 
+-impl ImageExt for Image {
+-    fn into_pixbuf(self) -> Result<Pixbuf, Box<dyn std::error::Error>> {
+-        let rgb_image = match self.into_rgb()?.buffer {
+-            ImageKind::Xrgb(_) => unreachable!("the image just got converted to rgb"),
+-            ImageKind::Rgb(image_buffer) => image_buffer,
++impl DmabufExt for Dmabuf {
++    fn into_texture(
++        self,
++        display: &gdk::Display,
++        resize_size: Option<u32>,
++        renderer: Option<&gsk::Renderer>,
++    ) -> Result<gdk::Texture, Box<dyn std::error::Error>> {
++        let builder = DmabufTextureBuilder::new();
++        builder.set_display(display);
++        builder.set_width(self.width);
++        builder.set_height(self.height);
++        builder.set_fourcc(self.fourcc);
++        builder.set_modifier(self.modifier);
++        builder.set_n_planes(self.planes.len() as u32);
++        for (i, plane) in self.planes.iter().enumerate() {
++            builder.set_fd(i as u32, plane.fd.as_raw_fd());
++            builder.set_stride(i as u32, plane.stride);
++            builder.set_offset(i as u32, plane.offset);
++        }
++
++        let (w, h) = (self.width, self.height);
++        let texture = unsafe { builder.build_with_release_func(move || drop(self)) }?;
++
++        let Some(size) = resize_size else {
++            return Ok(texture);
++        };
++        let Some(renderer) = renderer else {
++            return Ok(texture);
+         };
+ 
+-        let height = rgb_image.height() as i32;
+-        let width = rgb_image.width() as i32;
++        let aspect = w as f64 / h as f64;
++        let (new_w, new_h) = if h > w && w > size {
++            (size, (size as f64 / aspect) as u32)
++        } else if w > h && h > size {
++            ((size as f64 * aspect) as u32, size)
++        } else {
++            return Ok(texture);
++        };
+ 
+-        let bytes = gtk4::glib::Bytes::from(&rgb_image.into_vec());
+-        let pixbuf = Pixbuf::from_bytes(&bytes, gtk4::gdk_pixbuf::Colorspace::Rgb, false, 8, width, height, width * 3);
+-        Ok(pixbuf)
++        let bounds = graphene::Rect::new(0.0, 0.0, new_w.max(1) as f32, new_h.max(1) as f32);
++        let snapshot = Snapshot::new();
++        snapshot.append_scaled_texture(&texture, gsk::ScalingFilter::Trilinear, &bounds);
++        match snapshot.to_node() {
++            Some(node) => Ok(renderer.render_texture(&node, Some(&bounds))),
++            None => Ok(texture),
++        }
+     }
+ }
+diff --git a/src/main.rs b/src/main.rs
+index 7127ebc..30ae925 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -4,7 +4,9 @@ use app::App;
+ use clap::Parser;
+ use cli::Cli;
+ use config::Config;
++use hyprland_preview_share_picker_lib::output::Output;
+ use hyprland_preview_share_picker_lib::toplevel::Toplevel;
++use hyprland_preview_share_picker_lib::workspace::Workspace;
+ use log::LevelFilter;
+ use schemars::r#gen::SchemaSettings;
+ 
+@@ -39,12 +41,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+     match cli.command {
+         None => {
+             let toplevel_sharing_list = std::env::var("XDPH_WINDOW_SHARING_LIST").unwrap_or_default();
++            let output_sharing_list = std::env::var("XDPH_OUTPUT_SHARING_LIST").unwrap_or_default();
++            let workspace_sharing_list = std::env::var("XDPH_WORKSPACE_SHARING_LIST_V3").unwrap_or_default();
+             log::debug!("XDPH_WINDOW_SHARING_LIST = {toplevel_sharing_list}");
++            log::debug!("XDPH_OUTPUT_SHARING_LIST = {output_sharing_list}");
++            log::debug!("XDPH_WORKSPACE_SHARING_LIST_V3 = {workspace_sharing_list}");
+             let toplevels = Toplevel::parse_list(&toplevel_sharing_list);
++            let outputs = Output::parse_list(&output_sharing_list);
++            let workspaces = Workspace::parse_list(&workspace_sharing_list);
+             log::debug!("using config: {config:#?}");
+             log::debug!("got toplevels {toplevels:#?}");
++            log::debug!("got outputs {outputs:#?}");
++            log::debug!("got workspaces {workspaces:#?}");
+ 
+-            let app = App::build(cli.inspect, config, toplevels, cli.allow_token_by_default);
++            let app = App::build(cli.inspect, config, toplevels, outputs, workspaces, cli.allow_token_by_default);
+             app.run();
+         }
+         Some(cli::Command::Schema) => {
+diff --git a/src/views/mod.rs b/src/views/mod.rs
+index 8d6686e..f2f2fd0 100644
+--- a/src/views/mod.rs
++++ b/src/views/mod.rs
+@@ -3,6 +3,7 @@ use gtk4::{Label, ScrolledWindow};
+ pub mod outputs;
+ pub mod region;
+ pub mod windows;
++pub mod workspaces;
+ 
+ pub trait View {
+     fn build(&self) -> ScrolledWindow;
+diff --git a/src/views/outputs.rs b/src/views/outputs.rs
+index d13f894..87d7dc3 100644
+--- a/src/views/outputs.rs
++++ b/src/views/outputs.rs
+@@ -3,171 +3,68 @@ use std::sync::Arc;
+ 
+ use glib::clone;
+ use glib::variant::ToVariant;
+-use gtk4::prelude::{BoxExt, ButtonExt, EventControllerExt, FixedExt, WidgetExt, WidgetExtManual};
++use gtk4::prelude::{BoxExt, ButtonExt, EventControllerExt, FixedExt, NativeExt, WidgetExt, WidgetExtManual};
+ use gtk4::{Box, Button, Fixed, GestureClick, Label, Picture, ScrolledWindow};
+-use hyprland_preview_share_picker_lib::image::Image;
+-use hyprland_preview_share_picker_lib::output::{Output, OutputManager};
++use hyprland_preview_share_picker_lib::buffer::Dmabuf;
++use hyprland_preview_share_picker_lib::capture::CaptureManager;
++use hyprland_preview_share_picker_lib::output::Output;
+ use tokio::sync::oneshot::{Receiver, Sender};
+-use wayland_client::Connection;
+ 
+ use super::View;
+ use crate::config::Config;
+-use crate::image::ImageExt;
++use crate::image::DmabufExt;
+ use crate::views::outputs::area::OutputArea;
+ 
+-/// A rectangular geometry consisting of (x, y, width, height).
+ type Geometry = (i32, i32, i32, i32);
+ 
+ mod area {
+-    use std::collections::hash_map::Values;
+-
+     use super::*;
+ 
+-    /// The area spanned by all outputs after having their rotations and scaling
+-    /// applied.
+     pub struct OutputArea(HashMap<String, Geometry>, Geometry);
+ 
+     impl OutputArea {
+-        /// Create a new [`OutputArea`] and apply the scaling of the [`Output`]s
+-        /// to their geometry.
+-        pub fn new_with_scaling(outputs: &[Output]) -> Self {
+-            let mut transformed = Self::new_without_scaling(outputs).0;
+-
+-            // First, sort all outputs by ascending x-coordinate and apply the
+-            // transformations on the x-axis to them. If multiple outputs overlap,
+-            // the one which is further on the right is moved further to the right
+-            // such that the outputs no longer overlap.
+-            let mut sorted_by_x = outputs.iter().collect::<Vec<_>>();
+-            sorted_by_x.sort_by_key(|o| o.x);
+-
+-            let mut translations_x = HashMap::<String, i32>::new();
+-            for output in &sorted_by_x {
+-                if output.is_scaled() {
+-                    let (_, _, width, height) = transformed[&output.name];
+-                    let new_width = (width as f64 / output.scale) as i32;
+-                    let translation_x = new_width - width;
+-
+-                    for other in &sorted_by_x {
+-                        let (_, other_y, _, other_height) = transformed[&other.name];
+-                        let is_to_the_right = other.x >= output.x + width;
+-                        let overlaps_y = other_y <= output.y + height && other_y + other_height >= output.y;
+-
+-                        if is_to_the_right && overlaps_y {
+-                            *translations_x.entry(other.name.clone()).or_default() += translation_x;
+-                        }
+-                    }
+-
+-                    transformed.get_mut(&output.name).unwrap().2 = new_width;
+-                }
+-            }
+-            for (name, shift) in translations_x {
+-                transformed.get_mut(&name).unwrap().0 += shift;
+-            }
+-
+-            // Repeat the same thing for the y-axis. Meaning, all outputs
+-            // are sorted by ascending y-coordinate and then their transformations
+-            // are applied on the y-axis. If multiple outputs overlap, the one which
+-            // is further down is moved further down such that the outputs no longer
+-            // overlap.
+-            let mut sorted_by_y = outputs.iter().collect::<Vec<_>>();
+-            sorted_by_y.sort_by_key(|o| o.y);
+-
+-            let mut translations_y = HashMap::<String, i32>::new();
+-            for output in &sorted_by_y {
+-                if output.is_scaled() {
+-                    let (_, _, width, height) = transformed[&output.name];
+-                    let new_height = (height as f64 / output.scale) as i32;
+-                    let translation_y = new_height - height;
+-
+-                    for other in &sorted_by_y {
+-                        let (other_x, _, other_width, _) = transformed[&other.name];
+-                        let is_below = other.y >= output.y + height;
+-                        let overlaps_x = other_x <= output.x + width && other_x + other_width >= output.x;
+-
+-                        if is_below && overlaps_x {
+-                            *translations_y.entry(other.name.clone()).or_default() += translation_y;
+-                        }
+-                    }
+-
+-                    transformed.get_mut(&output.name).unwrap().3 = new_height;
+-                }
+-            }
+-            for (name, shift) in translations_y {
+-                transformed.get_mut(&name).unwrap().1 += shift;
+-            }
+-
+-            let geometry = Self::calculate_geometry(transformed.values());
+-            Self(transformed, geometry)
+-        }
++        pub fn new(outputs: &[Output]) -> Self {
++            let map: HashMap<String, Geometry> =
++                outputs.iter().map(|o| (o.name.clone(), (o.x, o.y, o.width, o.height))).collect();
++
++            let geometry = if outputs.is_empty() {
++                (0, 0, 0, 0)
++            } else {
++                let min_x = outputs.iter().map(|o| o.x).min().unwrap();
++                let min_y = outputs.iter().map(|o| o.y).min().unwrap();
++                let max_x = outputs.iter().map(|o| o.x + o.width).max().unwrap();
++                let max_y = outputs.iter().map(|o| o.y + o.height).max().unwrap();
++                (min_x, min_y, max_x - min_x, max_y - min_y)
++            };
+ 
+-        /// Create a new [`OutputArea`] without applying the scaling of the [`Output`]s
+-        /// to their geometry.
+-        pub fn new_without_scaling(outputs: &[Output]) -> Self {
+-            let outputs = outputs
+-                .iter()
+-                .map(|output| {
+-                    let (width, height) = output.transformed_dimensions();
+-                    let &Output { name, x, y, .. } = &output;
+-                    (name.clone(), (*x, *y, width, height))
+-                })
+-                .collect::<HashMap<_, _>>();
+-
+-            let geometry = Self::calculate_geometry(outputs.values());
+-            Self(outputs, geometry)
++            Self(map, geometry)
+         }
+ 
+-        /// Geometry of the rectangular space spanned by all outputs
+-        /// of the [`OutputArea`].
+         pub fn geometry(&self) -> Geometry {
+             self.1
+         }
+ 
+-        /// Geometry of an output of the [`OutputArea`].
+         pub fn output(&self, output: &Output) -> Geometry {
+             *self.0.get(&output.name).expect("output should exist")
+         }
+ 
+-        /// Tuple containing the offsets which need to be applied to all
+-        /// outputs to have (0,0) at the top-right corner of the [`OutputArea`].
+         pub fn offsets(&self) -> (i32, i32) {
+-            let (x, y, _, _) = self.1;
+-            (-x, -y)
+-        }
+-
+-        /// Get the overall rectangular geometry of the area spanned by
+-        /// all outputs of the [`OutputArea`].
+-        fn calculate_geometry(outputs: Values<String, Geometry>) -> Geometry {
+-            let min_x = outputs.clone().min_by_key(|(x, _, _, _)| x).map(|(x, _, _, _)| *x).unwrap();
+-            let min_y = outputs.clone().min_by_key(|(_, y, _, _)| y).map(|(_, y, _, _)| *y).unwrap();
+-            let max_x = outputs.clone().max_by_key(|(x, _, width, _)| x + width).map(|(x, _, width, _)| x + width).unwrap();
+-            let max_y = outputs.max_by_key(|(_, y, _, height)| y + height).map(|(_, y, _, height)| y + height).unwrap();
+-
+-            (min_x, min_y, max_x - min_x, max_y - min_y)
++            (-self.1.0, -self.1.1)
+         }
+     }
+ }
+ 
+ pub struct OutputsView<'a> {
++    outputs: &'a [Output],
+     config: &'a Config,
+-    manager: Arc<OutputManager>,
++    manager: Arc<CaptureManager>,
+     area: OutputArea,
+ }
+ 
+ impl<'a> OutputsView<'a> {
+-    pub fn new(connection: &'a Connection, config: &'a Config) -> Result<Self, String> {
+-        let manager = OutputManager::new(connection)
+-            .map(Arc::new)
+-            .map_err(|err| format!("unable to create new output manager from connection: {err}"))?;
+-
+-        log::debug!("got outputs {:#?}", manager.outputs);
+-
+-        let area = if config.outputs.respect_output_scaling {
+-            OutputArea::new_with_scaling(&manager.outputs)
+-        } else {
+-            OutputArea::new_without_scaling(&manager.outputs)
+-        };
+-
+-        Ok(OutputsView { config, manager, area })
++    pub fn new(outputs: &'a [Output], config: &'a Config, manager: Arc<CaptureManager>) -> Self {
++        let area = OutputArea::new(outputs);
++        Self { outputs, config, manager, area }
+     }
+ }
+ 
+@@ -177,12 +74,9 @@ impl View for OutputsView<'_> {
+         let scrolled_window =
+             ScrolledWindow::builder().child(&container).css_classes([self.config.classes.notebook_page.as_str()]).build();
+ 
+-        self.manager.outputs.iter().for_each(|output| {
++        self.outputs.iter().for_each(|output| {
+             let output_card = OutputCard::new(output, self.config, &self.area, self.manager.clone());
+-            let card = match output_card.build() {
+-                Ok(card) => card,
+-                Err(err) => return log::error!("unable to build output card for output {}: {err}", output.name),
+-            };
++            let card = output_card.build();
+             output_card.append_on_allocation(&container, &card);
+         });
+ 
+@@ -197,25 +91,25 @@ impl View for OutputsView<'_> {
+ struct OutputCard<'a> {
+     output: &'a Output,
+     config: &'a Config,
+-    manager: Arc<OutputManager>,
++    manager: Arc<CaptureManager>,
+     area: &'a OutputArea,
+ }
+ 
+ impl<'a> OutputCard<'a> {
+-    fn new(output: &'a Output, config: &'a Config, area: &'a OutputArea, manager: Arc<OutputManager>) -> Self {
++    fn new(output: &'a Output, config: &'a Config, area: &'a OutputArea, manager: Arc<CaptureManager>) -> Self {
+         Self { output, config, manager, area }
+     }
+ 
+-    pub fn build(&self) -> Result<Button, String> {
++    pub fn build(&self) -> Button {
+         let (tx, rx) = tokio::sync::oneshot::channel();
+         let picture = self.build_picture();
+         let card = self.build_card(&picture);
+         let container = self.build_card_container(&card);
+ 
+         self.request_frame(tx);
+-        self.update_frame_lazily(card.clone(), picture.clone(), rx);
++        self.update_frame_lazily(card, picture, rx);
+ 
+-        Ok(container)
++        container
+     }
+ 
+     fn build_picture(&self) -> Picture {
+@@ -276,7 +170,7 @@ impl<'a> OutputCard<'a> {
+ 
+         let gesture = GestureClick::new();
+         gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
+-        let clicks = self.config.windows.clicks;
++        let clicks = self.config.outputs.clicks;
+         let name = &self.output.name;
+         gesture.connect_released(clone!(
+             #[strong]
+@@ -306,6 +200,9 @@ impl<'a> OutputCard<'a> {
+ 
+     pub fn append_on_allocation(&self, container: &Fixed, card: &Button) {
+         let (_, _, area_width, area_height) = self.area.geometry();
++        if area_width <= 0 || area_height <= 0 {
++            return;
++        }
+         let (x, y, width, height) = self.area.output(self.output);
+         let (offset_x, offset_y) = self.area.offsets();
+ 
+@@ -318,17 +215,12 @@ impl<'a> OutputCard<'a> {
+             card,
+             move |container, _| {
+                 let allocation = container.allocation();
+-                // listen to ticks until we have an allocation
+                 if allocation.width() == 0 || allocation.height() == 0 {
+                     glib::ControlFlow::Continue
+                 } else {
+                     let (allocation_width, allocation_height) = (allocation.width() as f64, allocation.height() as f64);
+-
+-                    // Uniform scale factor that fits the area inside the container
+-                    // without stretching.
+                     let scale = (allocation_width / area_width).min(allocation_height / area_height);
+ 
+-                    // Apply transformed dimensions to the card.
+                     card.set_width_request((width * scale) as i32);
+                     card.set_height_request((height * scale) as i32);
+ 
+@@ -342,61 +234,43 @@ impl<'a> OutputCard<'a> {
+         ));
+     }
+ 
+-    fn request_frame(&self, tx: Sender<Image>) {
+-        let resize_size = self.config.image.resize_size;
++    fn request_frame(&self, tx: Sender<Dmabuf>) {
+         let manager = self.manager.clone();
+-        let name = &self.output.name;
+-        let output = self.output;
++        let name = self.output.name.clone();
+ 
+-        tokio::spawn(clone!(
+-            #[strong]
+-            name,
+-            #[strong]
+-            output,
+-            #[to_owned]
+-            manager,
+-            async move {
+-                let buffer = match manager.to_owned().capture_output(&output.wl_output) {
+-                    Ok(buffer) => buffer,
+-                    Err(err) => return log::error!("unable to capture output {name}: {err}"),
+-                };
+-                let mut img = match Image::new(buffer) {
+-                    Ok(img) => match img.into_rgb() {
+-                        Ok(img) => img,
+-                        Err(err) => return log::error!("unable to convert Xrgb image to rgb: {err}"),
+-                    },
+-                    Err(err) => return log::error!("unable to create image from buffer: {err}"),
+-                };
+-
+-                img.resize_to_fit(resize_size);
+-
+-                if tx.send(img).is_err() {
+-                    log::error!("unable to transmit image for name {name}: channel is closed");
+-                };
+-                log::debug!("transmitted image for output {name}");
++        tokio::spawn(async move {
++            let dmabuf = match manager.capture_output(&name) {
++                Ok(dmabuf) => dmabuf,
++                Err(err) => return log::error!("unable to capture output {name}: {err}"),
++            };
++
++            if tx.send(dmabuf).is_err() {
++                log::error!("unable to transmit dmabuf for output {name}: channel is closed");
+             }
+-        ));
++            log::debug!("transmitted dmabuf for output {name}");
++        });
+     }
+ 
+-    fn update_frame_lazily(&self, card: Box, picture: Picture, rx: Receiver<Image>) {
++    fn update_frame_lazily(&self, card: Box, picture: Picture, rx: Receiver<Dmabuf>) {
+         let loading_class = self.config.classes.image_card_loading.clone();
+         let name = self.output.name.clone();
++        let resize_size = (!self.config.image.disable_resize).then_some(self.config.image.resize_size);
+         glib::spawn_future_local(async move {
+-            let img = match rx.await {
+-                Ok(img) => img,
++            let dmabuf = match rx.await {
++                Ok(dmabuf) => dmabuf,
+                 Err(err) => {
+-                    log::error!("unable to receive image for output {name}: {err}");
++                    log::error!("unable to receive dmabuf for output {name}: {err}");
+                     card.remove_css_class(&loading_class);
+                     return;
+                 }
+             };
+ 
+-            let pixbuf = match img.into_pixbuf() {
+-                Ok(pixbuf) => pixbuf,
+-                Err(err) => return log::error!("unable to create pixbuf for output {name} image: {err}"),
+-            };
+-
+-            picture.set_pixbuf(Some(&pixbuf));
++            let display = picture.display();
++            let renderer = picture.native().and_then(|n| n.renderer());
++            match dmabuf.into_texture(&display, resize_size, renderer.as_ref()) {
++                Ok(texture) => picture.set_paintable(Some(&texture)),
++                Err(err) => log::error!("unable to create texture for output {name}: {err}"),
++            }
+             card.remove_css_class(&loading_class);
+         });
+     }
+diff --git a/src/views/windows.rs b/src/views/windows.rs
+index ecbebdd..a67b83c 100644
+--- a/src/views/windows.rs
++++ b/src/views/windows.rs
+@@ -1,32 +1,26 @@
+ use std::sync::Arc;
+ 
+-use glib::clone;
+ use glib::variant::ToVariant;
+-use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, WidgetExt};
++use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, NativeExt, WidgetExt};
+ use gtk4::{Box, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
+-use hyprland_preview_share_picker_lib::frame::FrameManager;
+-use hyprland_preview_share_picker_lib::image::Image;
++use hyprland_preview_share_picker_lib::buffer::Dmabuf;
++use hyprland_preview_share_picker_lib::capture::CaptureManager;
+ use hyprland_preview_share_picker_lib::toplevel::Toplevel;
+ use tokio::sync::oneshot::{Receiver, Sender};
+-use wayland_client::Connection;
+ 
+ use super::View;
+ use crate::config::Config;
+-use crate::image::ImageExt;
++use crate::image::DmabufExt;
+ 
+ pub struct WindowsView<'a> {
+     toplevels: &'a [Toplevel],
+     config: &'a Config,
+-    manager: Arc<FrameManager>,
++    manager: Arc<CaptureManager>,
+ }
+ 
+ impl<'a> WindowsView<'a> {
+-    pub fn new(connection: &'a Connection, toplevels: &'a [Toplevel], config: &'a Config) -> Result<Self, String> {
+-        let manager = FrameManager::new(connection)
+-            .map(Arc::new)
+-            .map_err(|err| format!("unable to create new frame manager from connection: {err}"))?;
+-
+-        Ok(Self { toplevels, config, manager })
++    pub fn new(toplevels: &'a [Toplevel], config: &'a Config, manager: Arc<CaptureManager>) -> Self {
++        Self { toplevels, config, manager }
+     }
+ }
+ 
+@@ -49,17 +43,13 @@ impl View for WindowsView<'_> {
+             log::debug!("toplevel = {toplevel:?}");
+ 
+             let window_card = WindowCard::new(toplevel, self.config, self.manager.clone());
+-            let card = match window_card.build() {
+-                Ok(card) => card,
+-                Err(err) => return log::error!("unable to build window card for toplevel {}: {err}", toplevel.id),
+-            };
++            let card = window_card.build();
+ 
+             cards += 1;
+             container.insert(&card, 0);
+         });
+ 
+-        // if there are less cards than max, spread them evenly on a single row
+-        container.set_max_children_per_line(self.config.windows.max_per_row.min(cards));
++        container.set_max_children_per_line(self.config.windows.max_per_row.min(cards).max(1));
+ 
+         scrolled_window
+     }
+@@ -72,24 +62,24 @@ impl View for WindowsView<'_> {
+ struct WindowCard<'a> {
+     toplevel: &'a Toplevel,
+     config: &'a Config,
+-    manager: Arc<FrameManager>,
++    manager: Arc<CaptureManager>,
+ }
+ 
+ impl<'a> WindowCard<'a> {
+-    pub fn new(toplevel: &'a Toplevel, config: &'a Config, manager: Arc<FrameManager>) -> Self {
++    pub fn new(toplevel: &'a Toplevel, config: &'a Config, manager: Arc<CaptureManager>) -> Self {
+         WindowCard { toplevel, config, manager }
+     }
+ 
+-    pub fn build(self) -> Result<FlowBoxChild, String> {
++    pub fn build(self) -> FlowBoxChild {
+         let (tx, rx) = tokio::sync::oneshot::channel();
+         let picture = self.build_picture();
+         let card = self.build_card(&picture);
+         let container = self.build_card_container(&card);
+ 
+         self.request_frame(tx);
+-        self.update_frame_lazily(card.clone(), picture.clone(), rx);
++        self.update_frame_lazily(card, picture, rx);
+ 
+-        Ok(container)
++        container
+     }
+ 
+     fn build_picture(&self) -> Picture {
+@@ -150,57 +140,44 @@ impl<'a> WindowCard<'a> {
+         container
+     }
+ 
+-    fn request_frame(&self, tx: Sender<Image>) {
++    fn request_frame(&self, tx: Sender<Dmabuf>) {
+         let handle = self.toplevel.window_address;
+         let id = self.toplevel.id;
+-        let resize_size = self.config.image.resize_size;
+         let manager = self.manager.clone();
+ 
+-        tokio::spawn(clone!(
+-            #[to_owned]
+-            manager,
+-            async move {
+-                let buffer = match manager.to_owned().capture_frame(handle) {
+-                    Ok(buffer) => buffer,
+-                    Err(err) => return log::error!("unable to capture frame for toplevel {id}: {err}"),
+-                };
+-                let mut img = match Image::new(buffer) {
+-                    Ok(img) => match img.into_rgb() {
+-                        Ok(img) => img,
+-                        Err(err) => return log::error!("unable to convert Xrgb image to rgb: {err}"),
+-                    },
+-                    Err(err) => return log::error!("unable to create image from buffer: {err}"),
+-                };
+-
+-                img.resize_to_fit(resize_size);
+-
+-                if tx.send(img).is_err() {
+-                    log::error!("unable to transmit image for toplevel {id}: channel is closed");
+-                };
+-                log::debug!("transmitted image for toplevel {id}");
++        tokio::spawn(async move {
++            let dmabuf = match manager.capture_toplevel(handle) {
++                Ok(dmabuf) => dmabuf,
++                Err(err) => return log::error!("unable to capture frame for toplevel {id}: {err}"),
++            };
++
++            if tx.send(dmabuf).is_err() {
++                log::error!("unable to transmit dmabuf for toplevel {id}: channel is closed");
+             }
+-        ));
++            log::debug!("transmitted dmabuf for toplevel {id}");
++        });
+     }
+ 
+-    fn update_frame_lazily(&self, card: Box, picture: Picture, rx: Receiver<Image>) {
++    fn update_frame_lazily(&self, card: Box, picture: Picture, rx: Receiver<Dmabuf>) {
+         let id = self.toplevel.id;
+         let loading_class = self.config.classes.image_card_loading.clone();
++        let resize_size = (!self.config.image.disable_resize).then_some(self.config.image.resize_size);
+         glib::spawn_future_local(async move {
+-            let img = match rx.await {
+-                Ok(img) => img,
++            let dmabuf = match rx.await {
++                Ok(dmabuf) => dmabuf,
+                 Err(err) => {
+-                    log::error!("unable to receive image for toplevel {id}: {err}");
++                    log::error!("unable to receive dmabuf for toplevel {id}: {err}");
+                     card.remove_css_class(&loading_class);
+                     return;
+                 }
+             };
+ 
+-            let pixbuf = match img.into_pixbuf() {
+-                Ok(pixbuf) => pixbuf,
+-                Err(err) => return log::error!("unable to create pixbuf for toplevel {id} image: {err}"),
+-            };
+-
+-            picture.set_pixbuf(Some(&pixbuf));
++            let display = picture.display();
++            let renderer = picture.native().and_then(|n| n.renderer());
++            match dmabuf.into_texture(&display, resize_size, renderer.as_ref()) {
++                Ok(texture) => picture.set_paintable(Some(&texture)),
++                Err(err) => log::error!("unable to create texture for toplevel {id}: {err}"),
++            }
+             card.remove_css_class(&loading_class);
+         });
+     }
+diff --git a/src/views/workspaces.rs b/src/views/workspaces.rs
+new file mode 100644
+index 0000000..067320e
+--- /dev/null
++++ b/src/views/workspaces.rs
+@@ -0,0 +1,186 @@
++use std::sync::Arc;
++
++use glib::variant::ToVariant;
++use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, NativeExt, WidgetExt};
++use gtk4::{Box, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
++use hyprland_preview_share_picker_lib::buffer::Dmabuf;
++use hyprland_preview_share_picker_lib::capture::CaptureManager;
++use hyprland_preview_share_picker_lib::workspace::Workspace;
++use tokio::sync::oneshot::{Receiver, Sender};
++
++use super::View;
++use crate::config::Config;
++use crate::image::DmabufExt;
++
++pub struct WorkspacesView<'a> {
++    workspaces: &'a [Workspace],
++    config: &'a Config,
++    manager: Arc<CaptureManager>,
++}
++
++impl<'a> WorkspacesView<'a> {
++    pub fn new(workspaces: &'a [Workspace], config: &'a Config, manager: Arc<CaptureManager>) -> Self {
++        Self { workspaces, config, manager }
++    }
++}
++
++impl View for WorkspacesView<'_> {
++    fn build(&self) -> ScrolledWindow {
++        let container = FlowBox::builder()
++            .vexpand(false)
++            .row_spacing(self.config.workspaces.spacing)
++            .column_spacing(self.config.workspaces.spacing)
++            .orientation(gtk4::Orientation::Horizontal)
++            .homogeneous(true)
++            .min_children_per_line(self.config.workspaces.min_per_row)
++            .build();
++        let scrolled_window =
++            ScrolledWindow::builder().child(&container).css_classes([self.config.classes.notebook_page.as_str()]).build();
++
++        let mut cards = 0;
++        self.workspaces.iter().for_each(|workspace| {
++            let card = WorkspaceCard::new(workspace, self.config, self.manager.clone()).build();
++            cards += 1;
++            container.insert(&card, -1);
++        });
++
++        container.set_max_children_per_line(self.config.workspaces.max_per_row.min(cards).max(1));
++
++        scrolled_window
++    }
++
++    fn label(&self) -> Label {
++        Label::builder().css_classes([self.config.classes.tab_label.as_str()]).label("Workspaces").build()
++    }
++}
++
++struct WorkspaceCard<'a> {
++    workspace: &'a Workspace,
++    config: &'a Config,
++    manager: Arc<CaptureManager>,
++}
++
++impl<'a> WorkspaceCard<'a> {
++    fn new(workspace: &'a Workspace, config: &'a Config, manager: Arc<CaptureManager>) -> Self {
++        Self { workspace, config, manager }
++    }
++
++    fn build(self) -> FlowBoxChild {
++        let (tx, rx) = tokio::sync::oneshot::channel();
++        let picture = self.build_picture();
++        let card = self.build_card(&picture);
++        let container = self.build_card_container(&card);
++
++        self.request_frame(tx);
++        self.update_frame_lazily(card, picture, rx);
++
++        container
++    }
++
++    fn build_picture(&self) -> Picture {
++        Picture::builder()
++            .vexpand(true)
++            .valign(gtk4::Align::Center)
++            .height_request(self.config.image.widget_size)
++            .content_fit(gtk4::ContentFit::Contain)
++            .css_classes([self.config.classes.image.as_str()])
++            .build()
++    }
++
++    fn build_card(&self, picture: &Picture) -> Box {
++        let container = Box::builder()
++            .orientation(gtk4::Orientation::Vertical)
++            .vexpand(false)
++            .hexpand(false)
++            .halign(gtk4::Align::Fill)
++            .valign(gtk4::Align::Start)
++            .css_classes([self.config.classes.image_card.as_str(), self.config.classes.image_card_loading.as_str()])
++            .build();
++
++        let label_text = if self.workspace.outputs.is_empty() {
++            self.workspace.name.clone()
++        } else {
++            format!("{} ({})", self.workspace.name, self.workspace.outputs.join(", "))
++        };
++
++        let label = Label::builder()
++            .max_width_chars(1)
++            .label(&label_text)
++            .ellipsize(gtk4::pango::EllipsizeMode::End)
++            .single_line_mode(true)
++            .css_classes([self.config.classes.image_label.as_str()])
++            .hexpand(false)
++            .build();
++
++        container.append(picture);
++        container.append(&label);
++        container
++    }
++
++    fn build_card_container(&self, card: &Box) -> FlowBoxChild {
++        let container = FlowBoxChild::builder().halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(card).build();
++
++        let gesture = GestureClick::new();
++        let clicks = self.config.workspaces.clicks;
++        let id = self.workspace.id;
++        gesture.connect_released(move |gesture, n, _, _| {
++            if n as i64 == clicks as i64
++                && let Some(widget) = gesture.widget()
++            {
++                widget
++                    .activate_action("win.select", Some(&format!("workspace-id:{id}").to_variant()))
++                    .expect("select action should be registered on the window")
++            }
++        });
++        container.add_controller(gesture);
++        container.connect_activate(move |child| {
++            child
++                .activate_action("win.select", Some(&format!("workspace-id:{id}").to_variant()))
++                .expect("select action should be registered on the window")
++        });
++        container
++    }
++
++    fn request_frame(&self, tx: Sender<Dmabuf>) {
++        let id = self.workspace.id;
++        let name = self.workspace.name.clone();
++        let outputs = self.workspace.outputs.clone();
++        let manager = self.manager.clone();
++
++        tokio::spawn(async move {
++            let dmabuf = match manager.capture_workspace(&name, &outputs) {
++                Ok(dmabuf) => dmabuf,
++                Err(err) => return log::error!("unable to capture frame for workspace {id} ({name}): {err}"),
++            };
++
++            if tx.send(dmabuf).is_err() {
++                log::error!("unable to transmit dmabuf for workspace {id}: channel is closed");
++            }
++            log::debug!("transmitted dmabuf for workspace {id}");
++        });
++    }
++
++    fn update_frame_lazily(&self, card: Box, picture: Picture, rx: Receiver<Dmabuf>) {
++        let id = self.workspace.id;
++        let loading_class = self.config.classes.image_card_loading.clone();
++        let resize_size = (!self.config.image.disable_resize).then_some(self.config.image.resize_size);
++        glib::spawn_future_local(async move {
++            let dmabuf = match rx.await {
++                Ok(dmabuf) => dmabuf,
++                Err(err) => {
++                    log::error!("unable to receive dmabuf for workspace {id}: {err}");
++                    card.remove_css_class(&loading_class);
++                    return;
++                }
++            };
++
++            let display = picture.display();
++            let renderer = picture.native().and_then(|n| n.renderer());
++            match dmabuf.into_texture(&display, resize_size, renderer.as_ref()) {
++                Ok(texture) => picture.set_paintable(Some(&texture)),
++                Err(err) => log::error!("unable to create texture for workspace {id}: {err}"),
++            }
++            card.remove_css_class(&loading_class);
++        });
++    }
++}
