@@ -2625,7 +2625,7 @@ index d13f894..87d7dc3 100644
          });
      }
 diff --git a/src/views/windows.rs b/src/views/windows.rs
-index ecbebdd..a67b83c 100644
+index ecbebdd..be972d2 100644
 --- a/src/views/windows.rs
 +++ b/src/views/windows.rs
 @@ -1,32 +1,26 @@
@@ -2634,10 +2634,11 @@ index ecbebdd..a67b83c 100644
 -use glib::clone;
  use glib::variant::ToVariant;
 -use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, WidgetExt};
-+use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, NativeExt, WidgetExt};
- use gtk4::{Box, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
+-use gtk4::{Box, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
 -use hyprland_preview_share_picker_lib::frame::FrameManager;
 -use hyprland_preview_share_picker_lib::image::Image;
++use gtk4::prelude::{BoxExt, ButtonExt, EventControllerExt, NativeExt, WidgetExt};
++use gtk4::{Box, Button, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
 +use hyprland_preview_share_picker_lib::buffer::Dmabuf;
 +use hyprland_preview_share_picker_lib::capture::CaptureManager;
  use hyprland_preview_share_picker_lib::toplevel::Toplevel;
@@ -2668,7 +2669,15 @@ index ecbebdd..a67b83c 100644
      }
  }
  
-@@ -49,17 +43,13 @@ impl View for WindowsView<'_> {
+@@ -38,6 +32,7 @@ impl View for WindowsView<'_> {
+             .column_spacing(self.config.windows.spacing)
+             .orientation(gtk4::Orientation::Horizontal)
+             .homogeneous(true)
++            .selection_mode(gtk4::SelectionMode::None)
+             .min_children_per_line(self.config.windows.min_per_row)
+             .build();
+         let scrolled_window =
+@@ -49,17 +44,13 @@ impl View for WindowsView<'_> {
              log::debug!("toplevel = {toplevel:?}");
  
              let window_card = WindowCard::new(toplevel, self.config, self.manager.clone());
@@ -2688,7 +2697,7 @@ index ecbebdd..a67b83c 100644
  
          scrolled_window
      }
-@@ -72,24 +62,24 @@ impl View for WindowsView<'_> {
+@@ -72,24 +63,24 @@ impl View for WindowsView<'_> {
  struct WindowCard<'a> {
      toplevel: &'a Toplevel,
      config: &'a Config,
@@ -2718,7 +2727,31 @@ index ecbebdd..a67b83c 100644
      }
  
      fn build_picture(&self) -> Picture {
-@@ -150,57 +140,44 @@ impl<'a> WindowCard<'a> {
+@@ -127,9 +118,11 @@ impl<'a> WindowCard<'a> {
+     }
+ 
+     fn build_card_container(&self, card: &Box) -> FlowBoxChild {
+-        let container = FlowBoxChild::builder().halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(card).build();
++        let button = Button::builder().focusable(true).child(card).build();
++        let container = FlowBoxChild::builder().focusable(false).halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(&button).build();
+ 
+         let gesture = GestureClick::new();
++        gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
+         let clicks = self.config.windows.clicks;
+         let id = self.toplevel.id;
+         gesture.connect_released(move |gesture, n, _, _| {
+@@ -141,8 +134,8 @@ impl<'a> WindowCard<'a> {
+                     .expect("select action should be registered on the window")
+             }
+         });
+-        container.add_controller(gesture);
+-        container.connect_activate(move |child| {
++        button.add_controller(gesture);
++        button.connect_activate(move |child| {
+             child
+                 .activate_action("win.select", Some(&format!("window:{id}").to_variant()))
+                 .expect("select action should be registered on the window")
+@@ -150,57 +143,44 @@ impl<'a> WindowCard<'a> {
          container
      }
  
@@ -2800,15 +2833,15 @@ index ecbebdd..a67b83c 100644
      }
 diff --git a/src/views/workspaces.rs b/src/views/workspaces.rs
 new file mode 100644
-index 0000000..067320e
+index 0000000..fb37a3d
 --- /dev/null
 +++ b/src/views/workspaces.rs
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,189 @@
 +use std::sync::Arc;
 +
 +use glib::variant::ToVariant;
-+use gtk4::prelude::{BoxExt, EventControllerExt, FlowBoxChildExt, NativeExt, WidgetExt};
-+use gtk4::{Box, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
++use gtk4::prelude::{BoxExt, ButtonExt, EventControllerExt, NativeExt, WidgetExt};
++use gtk4::{Box, Button, FlowBox, FlowBoxChild, GestureClick, Label, Picture, ScrolledWindow};
 +use hyprland_preview_share_picker_lib::buffer::Dmabuf;
 +use hyprland_preview_share_picker_lib::capture::CaptureManager;
 +use hyprland_preview_share_picker_lib::workspace::Workspace;
@@ -2838,6 +2871,7 @@ index 0000000..067320e
 +            .column_spacing(self.config.workspaces.spacing)
 +            .orientation(gtk4::Orientation::Horizontal)
 +            .homogeneous(true)
++            .selection_mode(gtk4::SelectionMode::None)
 +            .min_children_per_line(self.config.workspaces.min_per_row)
 +            .build();
 +        let scrolled_window =
@@ -2924,9 +2958,11 @@ index 0000000..067320e
 +    }
 +
 +    fn build_card_container(&self, card: &Box) -> FlowBoxChild {
-+        let container = FlowBoxChild::builder().halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(card).build();
++        let button = Button::builder().focusable(true).child(card).build();
++        let container = FlowBoxChild::builder().focusable(false).halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(&button).build();
 +
 +        let gesture = GestureClick::new();
++        gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
 +        let clicks = self.config.workspaces.clicks;
 +        let id = self.workspace.id;
 +        gesture.connect_released(move |gesture, n, _, _| {
@@ -2938,8 +2974,8 @@ index 0000000..067320e
 +                    .expect("select action should be registered on the window")
 +            }
 +        });
-+        container.add_controller(gesture);
-+        container.connect_activate(move |child| {
++        button.add_controller(gesture);
++        button.connect_activate(move |child| {
 +            child
 +                .activate_action("win.select", Some(&format!("workspace-id:{id}").to_variant()))
 +                .expect("select action should be registered on the window")
