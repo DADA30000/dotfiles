@@ -2625,7 +2625,7 @@ index d13f894..87d7dc3 100644
          });
      }
 diff --git a/src/views/windows.rs b/src/views/windows.rs
-index ecbebdd..be972d2 100644
+index ecbebdd..8728718 100644
 --- a/src/views/windows.rs
 +++ b/src/views/windows.rs
 @@ -1,32 +1,26 @@
@@ -2669,7 +2669,12 @@ index ecbebdd..be972d2 100644
      }
  }
  
-@@ -38,6 +32,7 @@ impl View for WindowsView<'_> {
+@@ -34,10 +28,12 @@ impl View for WindowsView<'_> {
+     fn build(&self) -> ScrolledWindow {
+         let container = FlowBox::builder()
+             .vexpand(false)
++            .valign(gtk4::Align::Start)
+             .row_spacing(self.config.windows.spacing)
              .column_spacing(self.config.windows.spacing)
              .orientation(gtk4::Orientation::Horizontal)
              .homogeneous(true)
@@ -2677,7 +2682,7 @@ index ecbebdd..be972d2 100644
              .min_children_per_line(self.config.windows.min_per_row)
              .build();
          let scrolled_window =
-@@ -49,17 +44,13 @@ impl View for WindowsView<'_> {
+@@ -49,17 +45,13 @@ impl View for WindowsView<'_> {
              log::debug!("toplevel = {toplevel:?}");
  
              let window_card = WindowCard::new(toplevel, self.config, self.manager.clone());
@@ -2697,7 +2702,7 @@ index ecbebdd..be972d2 100644
  
          scrolled_window
      }
-@@ -72,24 +63,24 @@ impl View for WindowsView<'_> {
+@@ -72,30 +64,30 @@ impl View for WindowsView<'_> {
  struct WindowCard<'a> {
      toplevel: &'a Toplevel,
      config: &'a Config,
@@ -2727,20 +2732,47 @@ index ecbebdd..be972d2 100644
      }
  
      fn build_picture(&self) -> Picture {
-@@ -127,9 +118,11 @@ impl<'a> WindowCard<'a> {
+         Picture::builder()
+-            .vexpand(true)
+-            .valign(gtk4::Align::Center)
++            .vexpand(false)
++            .valign(gtk4::Align::Start)
+             .height_request(self.config.image.widget_size)
+             .content_fit(gtk4::ContentFit::Contain)
+             .css_classes([self.config.classes.image.as_str()])
+@@ -107,7 +99,7 @@ impl<'a> WindowCard<'a> {
+             .orientation(gtk4::Orientation::Vertical)
+             .vexpand(false)
+             .hexpand(false)
+-            .halign(gtk4::Align::Fill)
++            .halign(gtk4::Align::Center)
+             .valign(gtk4::Align::Start)
+             .css_classes([self.config.classes.image_card.as_str(), self.config.classes.image_card_loading.as_str()])
+             .build();
+@@ -127,9 +119,21 @@ impl<'a> WindowCard<'a> {
      }
  
      fn build_card_container(&self, card: &Box) -> FlowBoxChild {
 -        let container = FlowBoxChild::builder().halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(card).build();
-+        let button = Button::builder().focusable(true).child(card).build();
-+        let container = FlowBoxChild::builder().focusable(false).halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(&button).build();
++        let button = Button::builder()
++            .focusable(true)
++            .halign(gtk4::Align::Center)
++            .valign(gtk4::Align::Start)
++            .child(card)
++            .build();
++        let container = FlowBoxChild::builder()
++            .focusable(false)
++            .halign(gtk4::Align::Fill)
++            .valign(gtk4::Align::Start)
++            .child(&button)
++            .build();
  
          let gesture = GestureClick::new();
 +        gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
          let clicks = self.config.windows.clicks;
          let id = self.toplevel.id;
          gesture.connect_released(move |gesture, n, _, _| {
-@@ -141,8 +134,8 @@ impl<'a> WindowCard<'a> {
+@@ -141,8 +145,8 @@ impl<'a> WindowCard<'a> {
                      .expect("select action should be registered on the window")
              }
          });
@@ -2751,7 +2783,7 @@ index ecbebdd..be972d2 100644
              child
                  .activate_action("win.select", Some(&format!("window:{id}").to_variant()))
                  .expect("select action should be registered on the window")
-@@ -150,57 +143,44 @@ impl<'a> WindowCard<'a> {
+@@ -150,57 +154,44 @@ impl<'a> WindowCard<'a> {
          container
      }
  
@@ -2833,10 +2865,10 @@ index ecbebdd..be972d2 100644
      }
 diff --git a/src/views/workspaces.rs b/src/views/workspaces.rs
 new file mode 100644
-index 0000000..fb37a3d
+index 0000000..358f9e4
 --- /dev/null
 +++ b/src/views/workspaces.rs
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,200 @@
 +use std::sync::Arc;
 +
 +use glib::variant::ToVariant;
@@ -2867,6 +2899,7 @@ index 0000000..fb37a3d
 +    fn build(&self) -> ScrolledWindow {
 +        let container = FlowBox::builder()
 +            .vexpand(false)
++            .valign(gtk4::Align::Start)
 +            .row_spacing(self.config.workspaces.spacing)
 +            .column_spacing(self.config.workspaces.spacing)
 +            .orientation(gtk4::Orientation::Horizontal)
@@ -2919,8 +2952,8 @@ index 0000000..fb37a3d
 +
 +    fn build_picture(&self) -> Picture {
 +        Picture::builder()
-+            .vexpand(true)
-+            .valign(gtk4::Align::Center)
++            .vexpand(false)
++            .valign(gtk4::Align::Start)
 +            .height_request(self.config.image.widget_size)
 +            .content_fit(gtk4::ContentFit::Contain)
 +            .css_classes([self.config.classes.image.as_str()])
@@ -2932,7 +2965,7 @@ index 0000000..fb37a3d
 +            .orientation(gtk4::Orientation::Vertical)
 +            .vexpand(false)
 +            .hexpand(false)
-+            .halign(gtk4::Align::Fill)
++            .halign(gtk4::Align::Center)
 +            .valign(gtk4::Align::Start)
 +            .css_classes([self.config.classes.image_card.as_str(), self.config.classes.image_card_loading.as_str()])
 +            .build();
@@ -2958,8 +2991,18 @@ index 0000000..fb37a3d
 +    }
 +
 +    fn build_card_container(&self, card: &Box) -> FlowBoxChild {
-+        let button = Button::builder().focusable(true).child(card).build();
-+        let container = FlowBoxChild::builder().focusable(false).halign(gtk4::Align::Fill).valign(gtk4::Align::Fill).child(&button).build();
++        let button = Button::builder()
++            .focusable(true)
++            .halign(gtk4::Align::Center)
++            .valign(gtk4::Align::Start)
++            .child(card)
++            .build();
++        let container = FlowBoxChild::builder()
++            .focusable(false)
++            .halign(gtk4::Align::Fill)
++            .valign(gtk4::Align::Start)
++            .child(&button)
++            .build();
 +
 +        let gesture = GestureClick::new();
 +        gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
