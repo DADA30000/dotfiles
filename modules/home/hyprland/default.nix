@@ -761,8 +761,18 @@ in
         };
     };
     xdg = {
-      configFile."hypr/plugins/split-monitor-workspaces".source = inputs.split-monitor-workspaces;
       dataFile.nautilus-python.source = "${nautilus-extensions}/share/nautilus-python";
+      configFile = {
+        "hypr/plugins/split-monitor-workspaces".source = inputs.split-monitor-workspaces;
+        "hyprland-preview-share-picker/config.yaml".text = lib.generators.toYAML { } {
+          workspaces.clicks = 1;
+          windows.clicks = 1;
+          outputs = {
+            clicks = 1;
+            show_label = true;
+          };
+        };
+      };
       portal = {
         enable = true;
         config.common.default = "*";
