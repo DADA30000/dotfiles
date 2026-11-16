@@ -1,3 +1,17 @@
+--- a/src/nvim/channel.c
++++ b/src/nvim/channel.c
+@@ -943,7 +943,10 @@
+ {
+   Channel *chan = argv[0];
+   if (chan->stream.proc.in.pending_reqs || chan->stream.proc.out.s.pending_reqs) {
+-    multiqueue_put(chan->events, term_delayed_free, chan);
++    if (exiting || main_loop.closing) {
++      return;
++    }
++    loop_schedule_deferred(&main_loop, event_create(term_delayed_free, chan));
+     return;
+   }
+ 
 --- a/src/nvim/drawscreen.c
 +++ b/src/nvim/drawscreen.c
 @@ -437,12 +437,11 @@
