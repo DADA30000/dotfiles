@@ -429,7 +429,7 @@ let
       spidermonkey = pkgs.fetchzip {
         name = "spidermonkey-${spidermonkeyVersion}-linux-${targetArch}-gnu";
         url = "https://github.com/Mag1cFall/firefox/releases/download/${spidermonkeyVersion}/spidermonkey-${spidermonkeyVersion}-linux-${targetArch}-gnu.tar.gz";
-        hash = "sha256-9Pk455NANu9za+NG/70+maM7eHVaG758YQkWu0At7ew=";
+        hash = "sha256-bxQhqD3+REqItpPT5tvYDiyfj1D7Tn9VVH2X3ul8vts=";
         stripRoot = false;
       };
 
@@ -501,7 +501,7 @@ let
         buildInputs = [
           pkgs.gtk3
           pkgs.webkitgtk_4_1
-          pkgs.libwebp
+          pkgs.pkgsStatic.libwebp
         ];
 
         env = {
@@ -594,7 +594,9 @@ let
         ];
 
         pnpmDeps = pkgs.fetchPnpmDeps {
-          pname = "gemini-web2api-web-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")}";
+          pname = "gemini-web2api-web-${
+            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")
+          }";
           inherit version;
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
@@ -655,20 +657,20 @@ let
         '';
 
         postInstall = ''
-          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
-          mkdir -p $out/share/applications
-          cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
-[Desktop Entry]
-Version=1.0
-Name=Gemini-Web2API
-Comment=Gemini Web to OpenAI, Anthropic and Gemini compatible API
-Exec=gemini-web2api
-Terminal=false
-Type=Application
-Icon=gemini-web2api
-Categories=Network;Development;
-StartupWMClass=gemini-web2api
-DESKTOP
+                    install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
+                    mkdir -p $out/share/applications
+                    cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
+          [Desktop Entry]
+          Version=1.0
+          Name=Gemini-Web2API
+          Comment=Gemini Web to OpenAI, Anthropic and Gemini compatible API
+          Exec=gemini-web2api
+          Terminal=false
+          Type=Application
+          Icon=gemini-web2api
+          Categories=Network;Development;
+          StartupWMClass=gemini-web2api
+          DESKTOP
         '';
       };
 
@@ -745,7 +747,9 @@ DESKTOP
         ];
 
         pnpmDeps = pkgs.fetchPnpmDeps {
-          pname = "antigravity2api-web-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")}";
+          pname = "antigravity2api-web-${
+            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/web/pnpm-lock.yaml")
+          }";
           inherit version;
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
@@ -770,7 +774,7 @@ DESKTOP
         pname = "antigravity2api";
         inherit version src;
 
-        vendorHash = "sha256-WBysuWN0PO+hWQTNUxx/q6W0OU6acmhOBe/G812yffk=";
+        vendorHash = "sha256-HEEM+588ADTB1APvDKfeIgZ3jPe7p2hzV8Gc/H4LGhU=";
         overrideModAttrs = _: {
           name = "antigravity2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
@@ -805,20 +809,20 @@ DESKTOP
         '';
 
         postInstall = ''
-          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/antigravity2api.png
-          mkdir -p $out/share/applications
-          cat << 'DESKTOP' > $out/share/applications/antigravity2api.desktop
-[Desktop Entry]
-Version=1.0
-Name=Antigravity2API
-Comment=Antigravity to OpenAI, Anthropic and Gemini compatible API
-Exec=antigravity2api
-Terminal=false
-Type=Application
-Icon=antigravity2api
-Categories=Network;Development;
-StartupWMClass=antigravity2api
-DESKTOP
+                    install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/antigravity2api.png
+                    mkdir -p $out/share/applications
+                    cat << 'DESKTOP' > $out/share/applications/antigravity2api.desktop
+          [Desktop Entry]
+          Version=1.0
+          Name=Antigravity2API
+          Comment=Antigravity to OpenAI, Anthropic and Gemini compatible API
+          Exec=antigravity2api
+          Terminal=false
+          Type=Application
+          Icon=antigravity2api
+          Categories=Network;Development;
+          StartupWMClass=antigravity2api
+          DESKTOP
         '';
       };
 
@@ -1155,6 +1159,7 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
+      pkgs.hyprland-preview-share-picker
       pkgs.dnsutils
       pkgs.nmap
       pkgs.podman-compose
