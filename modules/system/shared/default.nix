@@ -1,4 +1,5 @@
 {
+  options,
   pkgs,
   user-hash,
   user,
@@ -31,6 +32,8 @@ in
   disabledModules = [ "profiles/base.nix" ];
 
   qt.enable = true;
+
+  environment.memoryAllocator.provider = options.environment.memoryAllocator.provider.default;
 
   nixpkgs.config.allowUnfree = true;
 
@@ -115,7 +118,6 @@ in
 
   nix-mineral = {
     enable = true;
-    preset = "performance";
     filesystems.enable = false;
     settings = {
       etc.harden-gitconfig = false;
@@ -129,10 +131,9 @@ in
         icmp.ignore-all = false;
       };
       kernel = {
-        amd-iommu-force-isolation = false;
-        strict-iommu = false;
+        cpu-mitigations = "smt-on";
+        slab-debug = false;
         binfmt-misc = true;
-        io-uring = true;
         kfence = false;
       };
       system = {
@@ -140,47 +141,6 @@ in
         yama = "relaxed";
       };
     };
-  };
-
-  fonts = {
-
-    enableDefaultPackages = true;
-
-    fontDir = {
-      enable = true;
-      decompressFonts = true;
-    };
-
-    packages = [
-      pkgs.vista-fonts
-      pkgs.corefonts
-      pkgs.noto-fonts
-      pkgs.noto-fonts-monochrome-emoji
-      pkgs.liberation_ttf
-      pkgs.nerd-fonts.jetbrains-mono
-    ];
-
-    fontconfig.defaultFonts = {
-      emoji = [
-        "JetBrainsMono Nerd Font"
-        "Noto Emoji"
-        "Noto Color Emoji"
-      ];
-      serif = [
-        "Noto Serif"
-        "Liberation Serif"
-      ];
-      sansSerif = [
-        "Noto Sans"
-        "Arial"
-        "Liberation Sans"
-      ];
-      monospace = [
-        "JetBrainsMono Nerd Font"
-        "Liberation Mono"
-      ];
-    };
-
   };
 
   users = {
@@ -268,9 +228,12 @@ in
 
   boot = {
 
+    lockKernelModules = true;
+
     blacklistedKernelModules = [
       "hid-uclogic"
       "wacom"
+      "sctp"
     ];
 
     zfs.forceImportRoot = false;
@@ -298,8 +261,6 @@ in
       "audit=0"
       "workqueue.power_efficient=Y"
       "drm.panic_screen=qr_code"
-      "iommu=pt"
-      "iommu.passthrough=1"
       "zfs.spa_slop_shift=8"
     ];
 
@@ -366,19 +327,6 @@ in
       "zfs"
     ];
 
-  };
-
-  environment = {
-    variables = {
-      __GL_SHADER_DISK_CACHE_SIZE = 107374182400;
-      __GL_SHADER_DISK_CACHE_SKIP_CLEANUP = 1;
-    };
-    etc = {
-      texinfo.source = pkgs.texinfo;
-      stdenvNoCC.source = pkgs.stdenvNoCC;
-      bashInteractive.source = pkgs.bashInteractive;
-      "determinate/config.json".text = builtins.toJSON { garbageCollector.strategy = "disabled"; };
-    };
   };
 
   virtualisation = {
@@ -482,16 +430,6 @@ in
           Type = "notify";
           ExecReload = "${pkgs.systemd}/bin/busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig";
         };
-        cgroup-executioner = {
-          description = "Automatically terminate any application scope that hits TasksMax";
-          wantedBy = [ "graphical-session.target" ];
-          after = [ "graphical-session.target" ];
-          serviceConfig = {
-            Restart = "always";
-            RestartSec = "2s";
-            ExecStart = "/run/current-system/sw/bin/cgroup-executioner";
-          };
-        };
       };
     };
 
@@ -513,19 +451,6 @@ in
           Environment = "HOME=/root";
           ExecStartPre = "${pkgs.bash}/bin/bash -c \"${pkgs.psmisc}/bin/killall adb || true\"";
           ExecStart = "${pkgs.android-tools}/bin/adb reverse tcp:9757 tcp:9757";
-        };
-      };
-
-      load-aorus-laptop = {
-        description = "Load Gigabyte Aorus Laptop driver asynchronously";
-        wantedBy = [ "multi-user.target" ];
-        serviceConfig = {
-          Type = "simple";
-          ExecStart = "-${pkgs.kmod}/bin/modprobe -q aorus_laptop";
-          Restart = "no";
-          RemainAfterExit = false;
-          StandardOutput = "null";
-          StandardError = "null";
         };
       };
 
@@ -596,44 +521,7 @@ in
 
     };
 
-    user.services.sunshine = {
-      description = "Sunshine Game Streaming Host";
-      wantedBy = [ "graphical-session.target" ];
-      partOf = [ "graphical-session.target" ];
-      after = [ "graphical-session.target" ];
-
-      serviceConfig = {
-        Type = "simple";
-        Restart = "on-failure";
-        RestartSec = "3s";
-        ExecStartPre = pkgs.writeShellScript "sunshine-env-forward" (
-          builtins.readFile ../../../stuff/system/shared/sunshine-env-forward.sh
-        );
-        ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
-        ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
-      };
-    };
-
-    user.services.opentabletdriver = {
-      description = "OpenTabletDriver User Bridge";
-      wantedBy = [ "graphical-session.target" ];
-      partOf = [ "graphical-session.target" ];
-      after = [ "graphical-session.target" ];
-
-      serviceConfig = {
-        Type = "simple";
-        Restart = "on-failure";
-        RestartSec = "3s";
-        ExecStart = "${pkgs.systemd}/bin/systemctl start --wait opentabletdriver@%u.service";
-        ExecStop = "${pkgs.systemd}/bin/systemctl stop opentabletdriver@%u.service";
-      };
-    };
-
   };
-
-  environment.systemPackages = [
-    pkgs.opentabletdriver
-  ];
 
   services = {
 
@@ -669,6 +557,32 @@ in
     journald.settings.Journal = {
       SystemMaxUse = "1G";
       RuntimeMaxUse = "1G";
+    };
+
+    chrony = {
+      enable = true;
+      enableNTS = true;
+      extraConfig = ''
+        minsources 2
+        authselectmode require
+        cmdport 0
+      '';
+      servers = [
+        "://cloudflare.com"
+        "nts.netnod.se"
+        "ptbtime1.ptb.de"
+        "ntppool1.time.nl"
+      ];
+    };
+
+    usbguard = {
+      enable = true;
+      dbus.enable = true;
+      presentDevicePolicy = "allow";
+      implicitPolicyTarget = "block";
+      IPCAllowedUsers = [
+        user
+      ];
     };
 
     openssh = {
@@ -725,7 +639,6 @@ in
       enable = true;
       alsa.enable = true;
       alsa.support32Bit = true;
-      jack.enable = true;
       pulse.enable = true;
     };
 
@@ -822,18 +735,16 @@ in
 
   programs = {
 
-    ssh.extraConfig = ''
-      ServerAliveInterval 60
-      ServerAliveCountMax 3
-    '';
-
     zsh.enable = true;
 
     nix-ld.enable = true;
 
-    seahorse.enable = true;
-
     dconf.enable = true;
+
+    appimage = {
+      enable = true;
+      binfmt = true;
+    };
 
     uwsm = {
       enable = true;
@@ -846,21 +757,6 @@ in
         '';
       });
     };
-
-    appimage = {
-      enable = true;
-      binfmt = true;
-    };
-
-  };
-
-  xdg.terminal-exec = {
-
-    enable = true;
-
-    settings.default = [
-      "neovide-term.desktop"
-    ];
 
   };
 

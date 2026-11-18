@@ -33,6 +33,9 @@
   };
 
   boot = {
+    kernelModules = [
+      "aorus_laptop"
+    ];
     kernelParams = [ "rd.shell=0" ];
     lanzaboote = {
       enable = true;

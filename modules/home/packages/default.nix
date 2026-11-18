@@ -1159,6 +1159,14 @@ in
       (lib.hiPrio pkgs.clang)
       (lib.hiPrio pkgs.gnutar)
       (lib.hiPrio pkgs.procps)
+      pkgs.seahorse
+      pkgs.vista-fonts
+      pkgs.corefonts
+      pkgs.noto-fonts
+      pkgs.noto-fonts-monochrome-emoji
+      pkgs.liberation_ttf
+      pkgs.nerd-fonts.jetbrains-mono
+      pkgs.usbguard-notifier
       pkgs.dnsutils
       pkgs.nmap
       pkgs.podman-compose
