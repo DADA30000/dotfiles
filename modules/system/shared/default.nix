@@ -518,7 +518,7 @@ in
         };
 
       log-module-autoloads = {
-        description = "Log blocked kernel module load & autoload attempts";
+        description = "Log blocked kernel module load & autoload attempts with caller & args";
         wantedBy = [ "disable-kernel-module-loading.service" ];
         after = [ "disable-kernel-module-loading.service" ];
         serviceConfig = {
@@ -528,20 +528,24 @@ in
             T="/sys/kernel/tracing"
             [ -d "$T" ] || T="/sys/kernel/debug/tracing"
 
-            echo 'p:mod_autoload __request_module fmt=+0(%si):string a1=%dx:u32 a2=%cx:u32 a3=%r8:u32 s1=+0(%dx):string' >> "$T/kprobe_events"
-            echo 'p:mod_sys_init __x64_sys_init_module' >> "$T/kprobe_events"
-            echo 'p:mod_sys_finit __x64_sys_finit_module' >> "$T/kprobe_events"
+            echo 'p:mod_autoload __request_module caller=$comm fmt=+0(%si):string a1=%dx:u32 a2=%cx:u32 a3=%r8:u32 s1=+0(%dx):string' >> "$T/kprobe_events"
 
-            echo 1 > "$T/events/kprobes/mod_autoload/enable"
-            echo 1 > "$T/events/kprobes/mod_sys_init/enable"
-            echo 1 > "$T/events/kprobes/mod_sys_finit/enable"
+            echo 'p:mod_exec __x64_sys_execve caller=$comm bin=+0(+112(%di)):ustring arg1=+0(+8(+104(%di))):ustring arg2=+0(+16(+104(%di))):ustring' >> "$T/kprobe_events"
+            echo 'bin ~ "*modprobe*"' > "$T/events/kprobes/mod_exec/filter"
+
+            echo 'p:mod_sys_init __x64_sys_init_module caller=$comm' >> "$T/kprobe_events"
+            echo 'p:mod_sys_finit __x64_sys_finit_module caller=$comm' >> "$T/kprobe_events"
+
+            for ev in mod_autoload mod_exec mod_sys_init mod_sys_finit; do
+              echo 1 > "$T/events/kprobes/$ev/enable"
+            done
 
             exec ${pkgs.coreutils}/bin/stdbuf -oL ${pkgs.coreutils}/bin/cat "$T/trace_pipe" | ${pkgs.util-linux}/bin/logger -t mod-autoload
           '';
           ExecStopPost = pkgs.writeShellScript "cleanup-module-autoloads" ''
             T="/sys/kernel/tracing"
             [ -d "$T" ] || T="/sys/kernel/debug/tracing"
-            for ev in mod_autoload mod_sys_init mod_sys_finit; do
+            for ev in mod_autoload mod_exec mod_sys_init mod_sys_finit; do
               echo 0 > "$T/events/kprobes/$ev/enable" 2>/dev/null || true
               echo "-:$ev" >> "$T/kprobe_events" 2>/dev/null || true
             done
