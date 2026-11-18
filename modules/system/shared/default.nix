@@ -255,6 +255,15 @@ in
         )
       );
 
+    kernelModules = [
+      "vhost_net"
+      "vfat"
+      "exfat"
+      "ntfs3"
+      "bridge"
+      "ntfs"
+    ];
+
     kernelParams = [
       "audit=0"
       "workqueue.power_efficient=Y"
@@ -338,6 +347,7 @@ in
 
     libvirtd = {
       enable = true;
+      firewallBackend = "nftables";
       qemu = {
         swtpm.enable = true;
         verbatimConfig = "max_core = 0";
@@ -714,11 +724,16 @@ in
     rtkit.enable = true;
 
     wrappers = {
+      fusermount3.enable = false;
       newgrp.enable = false;
       su.enable = false;
       sg.enable = false;
       mount.enable = false;
       umount.enable = false;
+      qemu-bridge-helper = {
+        setuid = lib.mkForce false;
+        capabilities = "cap_net_admin+ep";
+      };
     };
 
     polkit = {
