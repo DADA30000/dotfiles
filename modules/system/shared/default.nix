@@ -228,8 +228,6 @@ in
 
   boot = {
 
-    lockKernelModules = true;
-
     blacklistedKernelModules = [
       "hid-uclogic"
       "wacom"
@@ -672,6 +670,8 @@ in
   };
 
   security = {
+
+    lockKernelModules = true;
 
     sudo.enable = false;
 

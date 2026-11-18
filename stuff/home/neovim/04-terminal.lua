@@ -267,6 +267,32 @@ vim.keymap.set({ "n", "v", "x", "s" }, "<LeftRelease>", function()
 	return "<LeftRelease>"
 end, { expr = true, silent = true, desc = "Stop auto-scroll on release" })
 
+-- === KITTY-STYLE TERMINAL PASTE (STRIP TRAILING NEWLINES AFTER TEXT, BRACKETED PASTE) ===
+local function strip_trailing_newlines(text)
+	text = text:gsub("\r\n", "\n"):gsub("\r", "\n")
+	return (text:gsub("([^\n])\n+$", "%1"))
+end
+
+vim.paste = (function(overridden)
+	return function(lines, phase)
+		if vim.bo.buftype == "terminal" and not vim.b.is_pager and (phase == -1 or phase == 3) then
+			local last_nonempty = 0
+			for i = #lines, 1, -1 do
+				if lines[i] ~= "" then
+					last_nonempty = i
+					break
+				end
+			end
+			if last_nonempty > 0 then
+				while #lines > last_nonempty do
+					table.remove(lines)
+				end
+			end
+		end
+		return overridden(lines, phase)
+	end
+end)(vim.paste)
+
 -- === TERM OPEN HANDLERS ===
 vim.api.nvim_create_autocmd("TermOpen", {
 	pattern = "term://*",
@@ -351,15 +377,26 @@ vim.api.nvim_create_autocmd("TermOpen", {
 		vim.keymap.set("x", "<Esc>", "<Esc>", { buffer = bufnr, silent = true, desc = "Cancel selection" })
 
 		local function term_paste()
-			local job_id = vim.b[bufnr].terminal_job_id
+			if vim.b[bufnr].is_pager or not vim.b[bufnr].terminal_job_id then
+				return
+			end
 			local text = vim.fn.getreg("+")
-			if job_id and text ~= "" then
-				vim.api.nvim_chan_send(job_id, text)
+			if text == "" then
+				return
+			end
+			text = strip_trailing_newlines(text)
+			local m = vim.api.nvim_get_mode().mode
+			if m:match("^[vV\22sS\19]") then
+				vim.api.nvim_feedkeys("\27", "nx", false)
+			end
+			vim.api.nvim_paste(text, false, -1)
+			if vim.api.nvim_get_mode().mode ~= "t" then
 				vim.cmd("startinsert")
 			end
 		end
 
 		vim.keymap.set({ "t", "n", "v" }, "<C-S-v>", term_paste, { buffer = bufnr, silent = true })
+		vim.keymap.set({ "t", "n", "v" }, "<S-Insert>", term_paste, { buffer = bufnr, silent = true })
 
 		local mouse_events = {
 			"<C-LeftMouse>",

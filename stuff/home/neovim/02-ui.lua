@@ -48,13 +48,124 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
 	end,
 })
 
+local fidget_client_names = {}
+local fidget_non_lsp_tabs = {}
+
 require("fidget").setup({
+	progress = {
+		ignore = {
+			function(msg)
+				local client = msg.lsp_client
+				if not client or client:is_stopped() or next(client.attached_buffers or {}) == nil then
+					return true
+				end
+				return false
+			end,
+		},
+		notification_group = function(msg)
+			local client = msg.lsp_client
+			local name = client.name == "rust_analyzer" and "rust-analyzer" or client.name
+			fidget_client_names[client.id] = name
+			return client.id
+		end,
+		clear_on_detach = function(client_id)
+			return client_id
+		end,
+		display = {
+			format_group_name = function(group)
+				return fidget_client_names[group] or tostring(group)
+			end,
+		},
+	},
 	notification = {
 		window = {
 			winblend = 100,
 		},
 	},
 })
+
+do
+	local fidget_notif = require("fidget.notification")
+	local fidget_view = require("fidget.notification.view")
+
+	local orig_notify = fidget_notif.notify
+	fidget_notif.notify = function(msg, level, opts)
+		if not opts or type(opts.group) ~= "number" then
+			local gkey = (opts and opts.group) or "default"
+			fidget_non_lsp_tabs[gkey] = vim.api.nvim_get_current_tabpage()
+		end
+		return orig_notify(msg, level, opts)
+	end
+
+	local orig_render = fidget_view.render
+	fidget_view.render = function(now, groups)
+		local cur_tab = vim.api.nvim_get_current_tabpage()
+		local visible_bufs = {}
+		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(cur_tab)) do
+			if vim.api.nvim_win_is_valid(win) then
+				visible_bufs[vim.api.nvim_win_get_buf(win)] = true
+			end
+		end
+
+		local filtered_groups = {}
+		local stale_keys = {}
+		for _, group in ipairs(groups) do
+			if type(group.key) == "number" then
+				local client = vim.lsp.get_client_by_id(group.key)
+				if not client or client:is_stopped() or next(client.attached_buffers or {}) == nil then
+					table.insert(stale_keys, group.key)
+				else
+					local in_cur_tab = false
+					for bufnr in pairs(client.attached_buffers) do
+						if visible_bufs[bufnr] then
+							in_cur_tab = true
+							break
+						end
+					end
+					if in_cur_tab then
+						table.insert(filtered_groups, group)
+					end
+				end
+			else
+				local owner_tab = fidget_non_lsp_tabs[group.key]
+				if owner_tab ~= nil and not vim.api.nvim_tabpage_is_valid(owner_tab) then
+					fidget_non_lsp_tabs[group.key] = nil
+					table.insert(stale_keys, group.key)
+				elseif owner_tab == nil or owner_tab == cur_tab then
+					table.insert(filtered_groups, group)
+				end
+			end
+		end
+
+		if #stale_keys > 0 then
+			vim.schedule(function()
+				for _, key in ipairs(stale_keys) do
+					fidget_notif.clear(key)
+				end
+			end)
+		end
+
+		return orig_render(now, filtered_groups)
+	end
+
+	local fidget_tab_group = vim.api.nvim_create_augroup("FidgetTabScoping", { clear = true })
+	vim.api.nvim_create_autocmd("TabLeave", {
+		group = fidget_tab_group,
+		callback = function()
+			pcall(fidget_notif.close)
+		end,
+	})
+	vim.api.nvim_create_autocmd({ "TabEnter", "TabClosed", "BufEnter" }, {
+		group = fidget_tab_group,
+		callback = function()
+			if #fidget_notif.group_keys() > 0 then
+				pcall(function()
+					fidget_notif.poller:start_polling(fidget_notif.options.poll_rate)
+				end)
+			end
+		end,
+	})
+end
 
 -- === WINDOW TITLE ===
 vim.opt.title = true
