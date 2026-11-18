@@ -39,210 +39,6 @@ let
     patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/sing-box.patch ];
   });
 
-  # sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
-  #   log = {
-  #     level = "debug";
-  #   };
-  #   route = {
-  #     rules = [
-  #       {
-  #         ip_version = 6;
-  #         action = "reject";
-  #       }
-  #       {
-  #         inbound = [ "vless-in" ];
-  #         outbound = "proxy";
-  #       }
-  #       {
-  #         outbound = "proxy";
-  #         source_ip_cidr = [
-  #           "10.200.0.0/24"
-  #           "fd00:200::/126"
-  #         ];
-  #       }
-  #       {
-  #         outbound = "proxy";
-  #         process_name = processes;
-  #       }
-  #       { action = "sniff"; }
-  #       {
-  #         outbound = "proxy";
-  #         domain_suffix = [
-  #           "dis.gd"
-  #           "discord.co"
-  #           "discord.com"
-  #           "discord.design"
-  #           "discord.dev"
-  #           "discord.gg"
-  #           "discord.gift"
-  #           "discord.gifts"
-  #           "discord.media"
-  #           "discord.new"
-  #           "discord.store"
-  #           "discord.tools"
-  #           "discordapp.com"
-  #           "discordapp.net"
-  #           "discordmerch.com"
-  #           "discordpartygames.com"
-  #           "discord-activities.com"
-  #           "discordactivities.com"
-  #           "discordsays.com"
-  #           "discordstatus.com"
-  #           "googlevideo.com"
-  #           "youtu.be"
-  #           "youtube.com"
-  #           "ytimg.com"
-  #           "ggpht.com"
-  #           "animego.org"
-  #           "animego.one"
-  #           "animego.bz"
-  #           "aniboom.one"
-  #           "ya-ligh.com"
-  #           "jut.su"
-  #           "aistudio.google.com"
-  #           "chatgpt.com"
-  #           "ai.google.dev"
-  #           "generativelanguage.googleapis.com"
-  #           "content-generativelanguage.googleapis.com"
-  #           "makersuite.google.com"
-  #           "alkalimakersuite-pa.clients6.google.com"
-  #           "cachix.org"
-  #           "garnix.io"
-  #           "gemini.google.com"
-  #           "s3.dualstack.us-east-2.amazonaws.com"
-  #           "beatsaver.com"
-  #           "sagernet.com"
-  #           "cloudflare-ech.com"
-  #           "aiplatform.googleapis.com"
-  #           "oauth2.googleapis.com"
-  #           "apis.google.com"
-  #           "googleapis.com"
-  #           "cloudfront.net"
-  #           "flakehub.com"
-  #           "votv.dev"
-  #           "itch.io"
-  #           "itch.zone"
-  #           "spotify.com"
-  #           "quora.com"
-  #           "geekbench.com"
-  #           "website-files.com"
-  #           "localizeapi.com"
-  #           "steamcmd.net"
-  #           "tonelib.vip"
-  #           "exa.ai"
-  #           "rutracker.org"
-  #           "rutracker.cc"
-  #           "cache.nixos.org"
-  #           "bitwarden.com"
-  #         ];
-  #       }
-  #       {
-  #         outbound = "zen-toggle";
-  #         process_name = [
-  #           "zen"
-  #           ".zen-wrapped"
-  #           "zen-bin"
-  #           "zen.bin"
-  #           ".zen-twilight-wrapped"
-  #           "zen-twilight"
-  #           ".zen-twilight-wrapper"
-  #           "zen-twilight"
-  #         ];
-  #       }
-  #       {
-  #         inbound = [ "direct-in" ];
-  #         outbound = "direct";
-  #       }
-  #     ];
-  #     auto_detect_interface = true;
-  #     final = "final-toggle";
-  #   };
-  #   inbounds = [
-  #     {
-  #       type = "vless";
-  #       tag = "direct-in";
-  #       listen = "127.0.0.1";
-  #       listen_port = 2121;
-  #       users = [
-  #         {
-  #           uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
-  #           name = "sandbox-user";
-  #         }
-  #       ];
-  #     }
-  #     {
-  #       type = "vless";
-  #       tag = "vless-in";
-  #       listen = "127.0.0.1";
-  #       listen_port = 1919;
-  #       users = [
-  #         {
-  #           uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
-  #           name = "sandbox-user";
-  #         }
-  #       ];
-  #     }
-  #     {
-  #       type = "tun";
-  #       interface_name = "tun0";
-  #       mtu = MTU;
-  #       strict_route = true;
-  #       auto_route = true;
-  #       auto_redirect = true;
-  #       address = [
-  #         "172.19.0.1/30"
-  #         "fd00::1/126"
-  #       ];
-  #       route_exclude_address = [
-  #         "${dns}/32"
-  #         "${dns-ipv6}/128"
-  #         "192.168.0.0/16"
-  #       ];
-  #     }
-  #   ];
-  #   outbounds = [
-  #     {
-  #       outbounds = [
-  #         "direct"
-  #         "proxy"
-  #       ];
-  #       tag = "zen-toggle";
-  #       type = "selector";
-  #     }
-  #     {
-  #       tag = "final-toggle";
-  #       type = "selector";
-  #       outbounds = [
-  #         "direct"
-  #         "proxy"
-  #       ];
-  #     }
-  #     {
-  #       type = "direct";
-  #       tag = "zapret";
-  #       inet4_bind_address = "10.201.0.1";
-  #       inet6_bind_address = "fd00:201::1";
-  #     }
-  #     {
-  #       type = "selector";
-  #       tag = "proxy";
-  #       outbounds = [
-  #         "zapret"
-  #         "direct"
-  #       ];
-  #     }
-  #     {
-  #       tag = "direct";
-  #       type = "direct";
-  #     }
-  #   ];
-  #   experimental = {
-  #     clash_api = {
-  #       external_controller = "127.0.0.1:9090";
-  #     };
-  #   };
-  # };
-
   sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
     experimental.clash_api.external_controller = "127.0.0.1:9090";
     log.level = "info";
@@ -601,8 +397,8 @@ let
         tag = "proxy";
         type = "selector";
         outbounds = [
-          "zapret"
           "direct"
+          "zapret"
           "fptn"
         ];
       }
@@ -744,6 +540,28 @@ in
 
   config = mkIf cfg.enable {
     sing-box.processes_to_proxy = processes;
+
+    boot.kernelModules = [
+      "veth"
+      "nf_tables"
+      "inet_diag"
+      "tcp_diag"
+      "udp_diag"
+      "nfnetlink_queue"
+      "nf_conntrack"
+      "nf_nat"
+      "nft_ct"
+      "nft_nat"
+      "nft_chain_nat"
+      "nft_queue"
+      "nft_redir"
+      "nft_masq"
+      "nft_reject"
+      "nft_reject_inet"
+      "nft_fib_inet"
+      "nft_socket"
+      "nft_tproxy"
+    ];
 
     systemd.services = {
       stubby.wantedBy = lib.mkForce [ ];

@@ -517,6 +517,38 @@ in
           };
         };
 
+      log-module-autoloads = {
+        description = "Log blocked kernel module load & autoload attempts";
+        wantedBy = [ "disable-kernel-module-loading.service" ];
+        after = [ "disable-kernel-module-loading.service" ];
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = pkgs.writeShellScript "log-module-autoloads" ''
+            set -euo pipefail
+            T="/sys/kernel/tracing"
+            [ -d "$T" ] || T="/sys/kernel/debug/tracing"
+
+            echo 'p:mod_autoload __request_module fmt=+0(%si):string a1=%dx:u32 a2=%cx:u32 a3=%r8:u32 s1=+0(%dx):string' >> "$T/kprobe_events"
+            echo 'p:mod_sys_init __x64_sys_init_module' >> "$T/kprobe_events"
+            echo 'p:mod_sys_finit __x64_sys_finit_module' >> "$T/kprobe_events"
+
+            echo 1 > "$T/events/kprobes/mod_autoload/enable"
+            echo 1 > "$T/events/kprobes/mod_sys_init/enable"
+            echo 1 > "$T/events/kprobes/mod_sys_finit/enable"
+
+            exec ${pkgs.coreutils}/bin/stdbuf -oL ${pkgs.coreutils}/bin/cat "$T/trace_pipe" | ${pkgs.util-linux}/bin/logger -t mod-autoload
+          '';
+          ExecStopPost = pkgs.writeShellScript "cleanup-module-autoloads" ''
+            T="/sys/kernel/tracing"
+            [ -d "$T" ] || T="/sys/kernel/debug/tracing"
+            for ev in mod_autoload mod_sys_init mod_sys_finit; do
+              echo 0 > "$T/events/kprobes/$ev/enable" 2>/dev/null || true
+              echo "-:$ev" >> "$T/kprobe_events" 2>/dev/null || true
+            done
+          '';
+        };
+      };
+
     };
 
   };
