@@ -16,11 +16,10 @@ fi
 STATE_FILE="$HOME/.cache/update-state"
 NIXOS_DIR="/etc/nixos"
 
-# Builder selection for debug mode: prefer nom, fallback to nix build
-if command -v nom &>/dev/null; then
-  DEBUG_BUILD_CMD=(nom build)
-else
-  DEBUG_BUILD_CMD=(nix build)
+# Output monitor selection for debug mode: pipe nix build stderr into rom if available
+USE_ROM_DEBUG=0
+if command -v rom &>/dev/null; then
+  USE_ROM_DEBUG=1
 fi
 
 # Default arguments passed to underlying commands
@@ -71,7 +70,7 @@ run_action() {
       NH_PASSTHROUGH+=("--dry")
       shift
       ;;
-    --no-validate | --show-activation-logs | --install-bootloader | -R | --bypass-root-check | --no-nom)
+    --no-validate | --show-activation-logs | --install-bootloader | -R | --bypass-root-check | --no-rom | --no-nom)
       NH_PASSTHROUGH+=("$1")
       shift
       ;;
@@ -117,12 +116,17 @@ run_action() {
   echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivation:\e[0m $DRV" >&2
 
   # ----------------------------------------------------------------------------
-  # Stage 2: Build / Action stage (single nom build run by nh, or direct for debug)
+  # Stage 2: Build / Action stage (run by nh, or direct nix build + rom for debug)
   # ----------------------------------------------------------------------------
   case "$action" in
   debug)
-    echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Realising derivation with ${DEBUG_BUILD_CMD[0]} (debugger enabled)...\e[0m" >&2
-    "${DEBUG_BUILD_CMD[@]}" "${DRV}^*" --no-link "${NH_PASSTHROUGH[@]}" "${NIX_ARGS[@]}"
+    if ((USE_ROM_DEBUG == 1)); then
+      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Realising derivation with rom (debugger enabled)...\e[0m" >&2
+      nix build --log-format internal-json -v "${DRV}^*" --no-link "${NH_PASSTHROUGH[@]}" "${NIX_ARGS[@]}" 2> >(rom)
+    else
+      echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Realising derivation with nix (debugger enabled)...\e[0m" >&2
+      nix build "${DRV}^*" --no-link "${NH_PASSTHROUGH[@]}" "${NIX_ARGS[@]}"
+    fi
     ;;
   build)
     echo -e "\e[1;34m==>\e[0m \e[1m[2/2] Building NixOS configuration with nh...\e[0m" >&2
@@ -157,7 +161,7 @@ Commands:
   test      Evaluate, then run 'nh os test'
   boot      Evaluate, then run 'nh os boot'
   build     Evaluate, then run 'nh os build'
-  debug     Evaluate with debugger enabled, then build with nom
+  debug     Evaluate with debugger enabled, then build with rom
   switch    Evaluate, then run 'nh os switch'
   (none)    Same as switch
 

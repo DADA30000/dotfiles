@@ -1010,18 +1010,29 @@ let
     ]
   );
 
-  nhPkg = pkgs.nh.override {
-    nix-output-monitor = nixOutputMonitorSandbox;
-  };
+  nhPkg = pkgs.nh.overrideAttrs (prev: {
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nh-rom-config.patch ];
+    postPatch = (prev.postPatch or "") + ''
+      substituteInPlace Cargo.toml \
+        --replace-fail \
+          'rom = { default-features = false, version = "0.5.0" }' \
+          'rom = { default-features = false, path = "${inputs.rom}/rom" }'
+      cp ${../../../stuff/patches/nh-rom.Cargo.lock} Cargo.lock
+    '';
+    cargoDeps = pkgs.rustPlatform.importCargoLock {
+      lockFile = ../../../stuff/patches/nh-rom.Cargo.lock;
+    };
+  });
 
-  nixOutputMonitorSandbox = pkgs.runCommand "nom-sandboxed" { } ''
+  romSandbox = pkgs.runCommand "rom-sandboxed" { } ''
     mkdir -p "$out/bin" "$out/libexec"
     cp -L "${
-      inputs.nom-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
-    }/bin/nom" "$out/libexec/nom"
+      inputs.rom.packages.${pkgs.stdenv.hostPlatform.system}.default
+    }/bin/rom" "$out/libexec/rom"
 
-    substitute "${pkgs.writeShellScript "nom-bwrap-runner" ''
-      STATE_DIR="$XDG_STATE_HOME/nix-output-monitor"
+    substitute "${pkgs.writeShellScript "rom-bwrap-runner" ''
+      STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/rom"
+      CONFIG_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/rom"
       mkdir -p "$STATE_DIR" 2>/dev/null || true
       exec ${staticBwrap}/bin/bwrap \
         --unshare-all \
@@ -1029,12 +1040,14 @@ let
         --dev /dev \
         --tmpfs /tmp \
         --bind "$STATE_DIR" "$STATE_DIR" \
+        --ro-bind-try "$CONFIG_DIR" "$CONFIG_DIR" \
+        --ro-bind-try /sys/fs/cgroup /sys/fs/cgroup \
         --chdir /tmp \
-        @NOM_BIN@ "$@"
-    ''}" "$out/bin/nom" \
-      --replace-fail "@NOM_BIN@" "$out/libexec/nom"
+        @ROM_BIN@ "$@"
+    ''}" "$out/bin/rom" \
+      --replace-fail "@ROM_BIN@" "$out/libexec/rom"
 
-    chmod +x "$out/bin/nom"
+    chmod +x "$out/bin/rom"
   '';
 
   nixSearchPkg = inputs.nix-search.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -1400,7 +1413,7 @@ in
       aistudio2apiSandbox
       geminiWeb2ApiSandbox
       antigravity2apiSandbox
-      nixOutputMonitorSandbox
+      romSandbox
       sounduxSandbox
       prismLauncherSandbox
       discordCanarySandbox

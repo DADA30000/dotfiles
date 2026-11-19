@@ -127,7 +127,7 @@ in
             fi
           }
 
-          # Internal replacement for nix develop (evaluates .drv first, then realizes with nom)
+          # Internal replacement for nix develop (evaluates .drv first, then realizes with rom)
           _nix-develop() {
             local has_help=0
             for arg in "$@"; do
@@ -176,7 +176,7 @@ in
             local env_file
             env_file=$(mktemp /tmp/nix-shell-env.XXXXXX)
             export PREV_SHELL="$SHELL"
-            if OUT_SHELL="$(nix print-dev-env --log-format internal-json -v "''${build_flags[@]}" "$DRV" 2> >(nom --json))"; then
+            if OUT_SHELL="$(nix print-dev-env --log-format internal-json -v "''${build_flags[@]}" "$DRV" 2> >(rom))"; then
               printf "%s" "$OUT_SHELL" > "$env_file"
               ${pkgs.bash}/bin/bash -c "source $env_file; rm -f $env_file; export SHELL=$PREV_SHELL; exec $SHELL"
             else
@@ -259,7 +259,7 @@ in
             echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivations:\e[0m ''${drvs[*]}" >&2
 
             local OUT_PATH
-            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths "''${drvs[@]/%/^*}" 2> >(nom --json))"
+            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths "''${drvs[@]/%/^*}" 2> >(rom))"
             printf "$OUT_PATH" | wl-copy
             echo "$OUT_PATH"
           }
@@ -267,7 +267,7 @@ in
           ns-eval () {
             _ns_parse_args "$@"
             local OUT_PATH
-            OUT_PATH="$(nix eval --offline "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(nom --json))"
+            OUT_PATH="$(nix eval --offline "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(rom))"
             printf "$OUT_PATH" | wl-copy
             echo "$OUT_PATH"
           }

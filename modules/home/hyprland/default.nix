@@ -410,6 +410,10 @@ in
           bind =
             bind-exec [
               [
+                "ALT + TAB"
+                "noctalia msg window-switcher"
+              ]
+              [
                 "${mod} + M"
                 "noctalia msg panel-toggle session"
               ]

@@ -53,8 +53,6 @@
     TERMINAL = "neovide-term";
     EGL_PLATFORM = "wayland";
     NIXPKGS_ALLOW_UNFREE = "1";
-    NOM_SORT_BY_SIZE = true;
-    NOM_HOST_CAP = 5;
   };
 
   systemd.user.services = {

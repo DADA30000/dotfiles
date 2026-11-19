@@ -203,6 +203,24 @@ in
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Interface stylesheets "${config.xdg.configHome}/qt6ct/qss/kek.qss"
           ${pkgs.crudini}/bin/crudini --ini-options=nospace --set $out/qt6ct.conf Appearance color_scheme_path "${config.xdg.dataHome}/color-schemes/Transparent.colors"
         '';
+        "rom/config.toml".source = (pkgs.formats.toml { }).generate "config.toml" {
+          tree-direction = "up";
+          legend = "nom";
+          summary = "nom";
+          icons = "unicode";
+          curl-progress = true;
+          host-sort = "download-size";
+          max-hosts = 5;
+          #progress-bars = false;
+          #show-percentages = false;
+          decimal-bytes = true;
+          theme = {
+            connector = "reset";
+            log-prefix = "blue";
+            download = "yellow";
+            transfer-bytes = "green";
+          };
+        };
       }
       // (mkSourcePrefix "easyeffects/db" {
         "graphrc" = ../../../stuff/home/theming/graphrc;

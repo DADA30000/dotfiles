@@ -137,8 +137,8 @@
       url = "github:LOSEARDES77/Bibata-Cursor-hyprcursor";
       flake = false;
     };
-    nom-rs = {
-      url = "github:mastershifuishere77/nom-rs";
+    rom = {
+      url = "github:DADA30000/rom";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     rust-helpers = {

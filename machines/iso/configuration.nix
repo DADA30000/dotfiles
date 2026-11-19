@@ -137,19 +137,11 @@ in
     {
       nixpkgs.hostPlatform = "x86_64-linux";
       graphics.nvidia.enable = true;
-      boot.loader.systemd-boot.enable = true;
-      fonts.fontconfig.enable = true;
       boot.initrd.availableKernelModules = [ "erofs" ];
 
       hardware = {
         enableAllHardware = true;
         enableRedistributableFirmware = true;
-      };
-
-      xdg = {
-        mime.enable = true;
-        icons.enable = true;
-        autostart.enable = true;
       };
 
       systemd.services.init-repo = {
