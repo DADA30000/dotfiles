@@ -1524,11 +1524,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795107561,
-        "narHash": "sha256-MxOflgVWpdeyI1NEGyoqP/XDv1hmDenNpDHR+H/O9MY=",
+        "lastModified": 1795114788,
+        "narHash": "sha256-hGI/6lvKC0mXtU36K68noY6IFoWijwZsQ/RRhLKoHgs=",
         "owner": "DADA30000",
         "repo": "rom",
-        "rev": "07598ce8c0f15cdafbba099b9d360d08bb1f53ad",
+        "rev": "19fb98173a6acb05178d29a542c646453122257a",
         "type": "github"
       },
       "original": {

@@ -1011,17 +1011,13 @@ let
   );
 
   nhPkg = pkgs.nh.overrideAttrs (prev: {
-    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/nh-rom-config.patch ];
     postPatch = (prev.postPatch or "") + ''
-      substituteInPlace Cargo.toml \
-        --replace-fail \
-          'rom = { default-features = false, version = "0.5.0" }' \
-          'rom = { default-features = false, path = "${inputs.rom}/rom" }'
-      cp ${../../../stuff/patches/nh-rom.Cargo.lock} Cargo.lock
+      rom_vendor="$(find "$cargoDepsCopy" -maxdepth 2 -type d -name 'rom-*' -print -quit)"
+      test -n "$rom_vendor"
+      rm -rf "$rom_vendor/src"
+      cp -r "${inputs.rom}/rom/src" "$rom_vendor/src"
+      chmod -R u+w "$rom_vendor/src"
     '';
-    cargoDeps = pkgs.rustPlatform.importCargoLock {
-      lockFile = ../../../stuff/patches/nh-rom.Cargo.lock;
-    };
   });
 
   romSandbox = pkgs.runCommand "rom-sandboxed" { } ''
