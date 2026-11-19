@@ -62,6 +62,7 @@ let
     seccomp_allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
+      rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
       SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
       SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
       SANDBOX_CACHE_REL="''${XDG_CACHE_HOME#"$HOME/"}"
@@ -87,6 +88,7 @@ let
     '';
     additional_inside_commands = ''
       rust-bridge -r pass --address 127.0.0.1:2048 -s "$XDG_RUNTIME_DIR/aistudio" -d
+      rust-bridge -r listen --address 127.0.0.1:2080 -s "$XDG_RUNTIME_DIR/aistudio_proxy" -d
     '';
   };
 
@@ -101,6 +103,7 @@ let
     additional_args.dbus.policies."com.mag1cfall.gemini-web2api.*" = "own";
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8007 -s "$SANDBOXED_RUNTIME_DIR/gemini-web2api" &
+      rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
       SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
       SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
       SANDBOX_CFG="$SANDBOX_HOME/$SANDBOX_CFG_REL/Gemini-Web2API"
@@ -118,6 +121,7 @@ let
     '';
     additional_inside_commands = ''
       rust-bridge -r pass --address 127.0.0.1:8007 -s "$XDG_RUNTIME_DIR/gemini-web2api" -d
+      rust-bridge -r listen --address 127.0.0.1:2080 -s "$XDG_RUNTIME_DIR/aistudio_proxy" -d
     '';
   };
 
@@ -131,6 +135,7 @@ let
     seccomp_allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8017 -s "$SANDBOXED_RUNTIME_DIR/antigravity2api" &
+      rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
       SANDBOX_HOME="$HOME/.nixpak/${appId}/home"
       SANDBOX_CFG_REL="''${XDG_CONFIG_HOME#"$HOME/"}"
       SANDBOX_CFG="$SANDBOX_HOME/$SANDBOX_CFG_REL/Antigravity2API"
@@ -148,6 +153,7 @@ let
     '';
     additional_inside_commands = ''
       rust-bridge -r pass --address 127.0.0.1:8017 -s "$XDG_RUNTIME_DIR/antigravity2api" -d
+      rust-bridge -r listen --address 127.0.0.1:2080 -s "$XDG_RUNTIME_DIR/aistudio_proxy" -d
     '';
   };
 

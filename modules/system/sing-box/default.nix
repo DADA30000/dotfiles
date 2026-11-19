@@ -167,7 +167,7 @@ let
                 "generativelanguage.googleapis.com"
                 "content-generativelanguage.googleapis.com"
                 "makersuite.google.com"
-                "alkalimakersuite-pa.clients6.google.com"
+                "clients6.google.com"
                 "cachix.org"
                 "garnix.io"
                 "gemini.google.com"
