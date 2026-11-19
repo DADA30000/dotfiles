@@ -584,8 +584,9 @@ let
 
       webDist = pkgs.stdenv.mkDerivation {
         pname = "gemini-web2api-web";
-        inherit version;
-        src = "${src}/web";
+        inherit version src;
+
+        pnpmRoot = "web";
 
         nativeBuildInputs = [
           pkgs.nodejs_22
@@ -601,18 +602,18 @@ let
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
           fetcherVersion = 5;
-          hash = "sha256-0zkeevUZ99vp2bEKr8CGVDDM92pUiYuFyPWGkEemBpQ=";
+          hash = "sha256-1hrLOH292DeI0G2gelodR33AiKH2vJd4vww4oTUkChs=";
         };
 
         buildPhase = ''
           runHook preBuild
-          pnpm run build
+          pnpm --dir web run build
           runHook postBuild
         '';
 
         installPhase = ''
           runHook preInstall
-          cp -r ../internal/webui/dist $out
+          cp -r internal/webui/dist $out
           runHook postInstall
         '';
       };
@@ -620,7 +621,7 @@ let
         pname = "gemini-web2api";
         inherit version src;
 
-        vendorHash = "sha256-HuWU1neEojrjQUTNlc1YfaUseLG91gAGKd4YtQVS42s=";
+        vendorHash = "sha256-9qH33RD7DnIBoh5Cg9/c2jvl1X8nhSE+8n2H9RCbdwQ=";
         overrideModAttrs = _: {
           name = "gemini-web2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
@@ -774,7 +775,7 @@ let
         pname = "antigravity2api";
         inherit version src;
 
-        vendorHash = "sha256-HEEM+588ADTB1APvDKfeIgZ3jPe7p2hzV8Gc/H4LGhU=";
+        vendorHash = "sha256-VWIvuz1QrZmZceTcgdqchkslC8sn16EkC4Ke6bUYoF0=";
         overrideModAttrs = _: {
           name = "antigravity2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
