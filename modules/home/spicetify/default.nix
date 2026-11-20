@@ -80,7 +80,6 @@ in
         adblock
         hidePodcasts
         shuffle
-        beautifulLyrics
       ];
       theme = {
         name = "Hazy";
