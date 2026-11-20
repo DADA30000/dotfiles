@@ -31,6 +31,8 @@ in
 {
   disabledModules = [ "profiles/base.nix" ];
 
+  systemd-hardening.enable = true;
+
   environment.memoryAllocator.provider = options.environment.memoryAllocator.provider.default;
 
   nixpkgs.config.allowUnfree = true;

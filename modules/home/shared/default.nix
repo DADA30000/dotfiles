@@ -142,6 +142,8 @@
 
   replays.enable = true;
 
+  systemd-hardening.enable = true;
+
   sandboxing.enable = true;
 
   umu.enable = true;
