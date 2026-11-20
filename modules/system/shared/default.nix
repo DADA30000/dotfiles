@@ -31,8 +31,6 @@ in
 {
   disabledModules = [ "profiles/base.nix" ];
 
-  qt.enable = true;
-
   environment.memoryAllocator.provider = options.environment.memoryAllocator.provider.default;
 
   nixpkgs.config.allowUnfree = true;
@@ -48,8 +46,6 @@ in
   wivrn.enable = true;
 
   sing-box.enable = true;
-
-  replays.enable = true;
 
   umu.enable = true;
 
@@ -79,6 +75,7 @@ in
     uinput.enable = true;
 
     xpadneo.enable = true;
+
     xone.enable = true;
 
     cpu.amd = {
@@ -586,8 +583,6 @@ in
 
     logind.settings.Login.HandlePowerKey = "suspend";
 
-    blueman.enable = true;
-
     accounts-daemon.enable = true;
 
     gvfs.enable = true;
@@ -595,8 +590,6 @@ in
     systembus-notify.enable = true;
 
     speechd.enable = false;
-
-    gnome.gnome-keyring.enable = false;
 
     journald.settings.Journal = {
       SystemMaxUse = "1G";
@@ -785,6 +778,8 @@ in
   };
 
   programs = {
+
+    gpu-screen-recorder.enable = true;
 
     zsh.enable = true;
 

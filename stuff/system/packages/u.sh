@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 GIT_CREDENTIALS="$XDG_CONFIG_HOME/git/credentials"
 if [[ -f "$GIT_CREDENTIALS" ]]; then
   GH_TOKEN=$(grep -oP 'https://[^:]+:\K[^@]+(?=@github\.com)' "$GIT_CREDENTIALS" | head -1)
@@ -23,7 +21,7 @@ if command -v rom &>/dev/null; then
 fi
 
 # Default arguments passed to underlying commands
-NH_ARGS=(--keep-going)
+NH_ARGS=(--diff=full --keep-going)
 NIX_ARGS=()
 
 get_target_host() {

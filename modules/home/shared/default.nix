@@ -140,6 +140,8 @@
     };
   };
 
+  replays.enable = true;
+
   sandboxing.enable = true;
 
   umu.enable = true;

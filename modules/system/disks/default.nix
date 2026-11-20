@@ -21,6 +21,7 @@ let
       ".umu"
       ".nixpak"
       ".thunderbird"
+      ".local/state/rom"
       ".local/state/noctalia"
       ".local/state/wireplumber"
       ".local/share/zsh"
