@@ -337,6 +337,8 @@ in
         serviceConfig = {
           Type = "simple";
           DynamicUser = true;
+          User = "replays-%i";
+          Group = "replays-%i";
           SupplementaryGroups = [
             "replays"
             "video"
