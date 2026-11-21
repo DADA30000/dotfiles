@@ -286,7 +286,7 @@ in
             ReadWritePaths = [
               "-/home/%i/.config/sunshine"
               "-/home/%i/.cache"
-              "/run/user"
+              "/run/user/%U"
             ];
             RestrictAddressFamilies = netAF;
             SystemCallFilter = safeSyscalls;
@@ -305,7 +305,7 @@ in
             ReadWritePaths = [
               "-/home/%i/.config/OpenTabletDriver"
               "-/home/%i/.local/share/OpenTabletDriver"
-              "/run/user"
+              "/run/user/%U"
             ];
             RestrictAddressFamilies = [
               "AF_UNIX"
@@ -550,9 +550,9 @@ in
       })
 
       (lib.mkIf config.services.usbguard.enable {
+        # libqb IPC uses abstract @usbguard socket + /dev/shm/qb-* (needs shared IPC/netns)
         usbguard.serviceConfig = mkDefaults {
           KeyringMode = "private";
-          PrivateIPC = true;
           ProtectClock = true;
           ProtectHostname = true;
           ProtectKernelLogs = true;
@@ -565,8 +565,9 @@ in
           tight
           // {
             CapabilityBoundingSet = "";
-            PrivateNetwork = true;
+            PrivateIPC = false;
             IPAddressDeny = "any";
+            ReadWritePaths = [ "/dev/shm" ];
             RestrictAddressFamilies = [ "AF_UNIX" ];
           }
         );

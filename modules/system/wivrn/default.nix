@@ -133,9 +133,10 @@ with lib;
         ReadWritePaths = [
           "-/home/%i/.config/wivrn"
           "-/home/%i/.config/openxr"
+          "-/home/%i/.local/share/wivrn"
           "-/home/%i/.cache/wivrn"
           "-/home/%i/.cache/nvidia"
-          "/run/user"
+          "/run/user/%U"
         ];
         PrivateTmp = true;
         ProtectClock = true;

@@ -187,7 +187,19 @@ in
           }
         );
 
-        usbguard-notifier.Service = mkDefaults bridge;
+        # libqb IPC needs host netns for @usbguard abstract socket + /dev/shm/qb-*
+        usbguard-notifier.Service = mkDefaults (
+          bridge
+          // {
+            PrivateNetwork = false;
+            PrivateIPC = false;
+            PrivateUsers = false;
+            ReadWritePaths = [
+              "%t"
+              "/dev/shm"
+            ];
+          }
+        );
         sunshine.Service = mkDefaults bridge;
         opentabletdriver.Service = mkDefaults bridge;
 
@@ -224,8 +236,13 @@ in
       })
 
       (lib.mkIf config.replays.enable {
-        # User bridge forwarding env & starting replays@%U.service
-        replays.Service = mkDefaults bridge;
+        # User bridge forwarding env + setfacl (needs host UID map so replays UID resolves)
+        replays.Service = mkDefaults (
+          bridge
+          // {
+            PrivateUsers = false;
+          }
+        );
       })
 
       (lib.mkIf config.hyprland.enable {
