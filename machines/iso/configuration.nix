@@ -1,7 +1,6 @@
 {
   pkgs,
   lib,
-  user,
   wrapped,
   orig,
   config,
@@ -73,7 +72,7 @@ in
       '';
 
       system.build.isoImage = lib.mkForce (
-        config.system.build.isoImage.overrideAttrs (oldAttrs: {
+        orig.config.system.build.isoImage.overrideAttrs (oldAttrs: {
           sources = map (x: x.source) patchedContents;
           nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
             pkgs.erofs-utils
