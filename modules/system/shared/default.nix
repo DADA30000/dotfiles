@@ -707,6 +707,7 @@ in
         AMDGPU_ABM_LEVEL_ON_SAV = 0;
         SOUND_POWER_SAVE_ON_AC = 0;
         USB_EXCLUDE_AUDIO = 0;
+        USB_AUTOSUSPEND = 0;
       };
     };
 
