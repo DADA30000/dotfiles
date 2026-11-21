@@ -794,6 +794,14 @@ in
       };
     };
 
+    systemd.user.dbusProxy.services = {
+      oo7-daemon.own = [ "org.freedesktop.secrets" ];
+      oo7-portal = {
+        own = [ "org.freedesktop.impl.portal.desktop.oo7" ];
+        talk = [ "org.freedesktop.secrets" ];
+      };
+    };
+
     systemd.user.services = {
       noctalia.Service.Slice = "session-graphical.slice";
       oo7-daemon = {
@@ -807,6 +815,43 @@ in
           Restart = "on-failure";
           SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
           BusName = "org.freedesktop.secrets";
+
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          PrivateTmp = true;
+          PrivateDevices = true;
+          DevicePolicy = "closed";
+          PrivateNetwork = true;
+          PrivateUsers = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          ProtectProc = "invisible";
+          ProcSubset = "pid";
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          ReadWritePaths = [
+            "-%D/keyrings"
+            "%t"
+          ];
+          InaccessiblePaths = [ "-/run/dbus/system_bus_socket" ];
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+          UMask = "0077";
         };
       };
 
@@ -821,6 +866,43 @@ in
           Type = "dbus";
           BusName = "org.freedesktop.impl.portal.desktop.oo7";
           ExecStart = "${oo7-portal}/libexec/oo7-portal";
+
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          PrivateTmp = true;
+          PrivateDevices = true;
+          DevicePolicy = "closed";
+          PrivateNetwork = true;
+          PrivateUsers = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          ProtectProc = "invisible";
+          ProcSubset = "pid";
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          ReadWritePaths = [
+            "-%D/keyrings"
+            "%t"
+          ];
+          InaccessiblePaths = [ "-/run/dbus/system_bus_socket" ];
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+          UMask = "0077";
         };
       };
     };

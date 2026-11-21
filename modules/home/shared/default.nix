@@ -55,6 +55,10 @@
     NIXPKGS_ALLOW_UNFREE = "1";
   };
 
+  systemd.user.dbusProxy.services.usbguard-notifier = {
+    talk = [ "org.freedesktop.Notifications" ];
+  };
+
   systemd.user.services = {
     easyeffects.Service.TimeoutStopSec = lib.mkForce 1;
     cgroup-executioner = {
@@ -67,6 +71,49 @@
         ExecStart = "/run/current-system/sw/bin/cgroup-executioner";
         Restart = "always";
         RestartSec = "2s";
+
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        PrivateTmp = true;
+        PrivateDevices = true;
+        DevicePolicy = "closed";
+        PrivateNetwork = true;
+        PrivateUsers = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = false;
+        ProtectProc = "default";
+        ProcSubset = "all";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        InaccessiblePaths = [
+          "%h"
+          "-/run/dbus/system_bus_socket"
+        ];
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@mount"
+          "~@module"
+          "~@raw-io"
+          "~@reboot"
+          "~@swap"
+          "~@clock"
+          "~@debug"
+          "~@obsolete"
+          "~@cpu-emulation"
+        ];
+        UMask = "0077";
       };
     };
     usbguard-notifier = {
@@ -74,6 +121,44 @@
       Service = {
         ExecStart = "${pkgs.usbguard-notifier}/bin/usbguard-notifier";
         Restart = "on-failure";
+
+        # libqb IPC needs host netns for @usbguard abstract socket + /dev/shm/qb-*
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        PrivateTmp = true;
+        PrivateDevices = true;
+        DevicePolicy = "closed";
+        PrivateNetwork = false;
+        PrivateUsers = false;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        ReadWritePaths = [
+          "%t"
+          "/dev/shm"
+        ];
+        InaccessiblePaths = [ "-/run/dbus/system_bus_socket" ];
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
       Unit = {
         Description = "USBGuard desktop notification service";
@@ -97,6 +182,43 @@
         );
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
+
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        PrivateTmp = true;
+        PrivateDevices = true;
+        DevicePolicy = "closed";
+        PrivateNetwork = true;
+        PrivateUsers = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        ReadWritePaths = [ "%t" ];
+        InaccessiblePaths = [
+          "-%t/bus"
+          "-%t/systemd/private"
+        ];
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
     };
     opentabletdriver = {
@@ -112,6 +234,43 @@
         RestartSec = "3s";
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait opentabletdriver@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop opentabletdriver@%u.service";
+
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        PrivateTmp = true;
+        PrivateDevices = true;
+        DevicePolicy = "closed";
+        PrivateNetwork = true;
+        PrivateUsers = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        ReadWritePaths = [ "%t" ];
+        InaccessiblePaths = [
+          "-%t/bus"
+          "-%t/systemd/private"
+        ];
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
     };
   };

@@ -1442,6 +1442,35 @@ in
       Environment = "SSH_AUTH_SOCK=%t/ssh-agent";
       Restart = "on-failure";
       RestartSec = 3;
+
+      # Uses xdg-desktop-portal -> stays in host userns (no mount/UTS/net ns)
+      NoNewPrivileges = true;
+      LockPersonality = true;
+      RestrictNamespaces = true;
+      RestrictRealtime = true;
+      RestrictSUIDSGID = true;
+      KeyringMode = "private";
+      RestrictAddressFamilies = [
+        "AF_UNIX"
+        "AF_INET"
+        "AF_INET6"
+        "AF_NETLINK"
+        "AF_BLUETOOTH"
+      ];
+      SystemCallArchitectures = "native";
+      SystemCallErrorNumber = "EPERM";
+      SystemCallFilter = [
+        "@system-service"
+        "~@mount"
+        "~@module"
+        "~@raw-io"
+        "~@reboot"
+        "~@swap"
+        "~@clock"
+        "~@debug"
+        "~@obsolete"
+        "~@cpu-emulation"
+      ];
     };
   };
 }

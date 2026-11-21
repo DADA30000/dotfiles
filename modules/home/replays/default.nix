@@ -39,6 +39,25 @@ in
         ExecStop = "${pkgs.systemd}/bin/systemctl stop replays@%U.service";
         Restart = "on-failure";
         RestartSec = "5s";
+
+        # Host-userns hardening: ExecStartPre runs setfacl for the `replays` UID
+        # which requires host uid_map (no mount/UTS/net namespace directives).
+        NoNewPrivileges = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
     };
   };

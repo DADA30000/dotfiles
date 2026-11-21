@@ -117,7 +117,48 @@ in
           description = "Update Cloudflare DDNS Records";
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /etc/credstore/cloudflare-ddns";
+            DynamicUser = true;
+            LoadCredential = "cloudflare-ddns:/etc/credstore/cloudflare-ddns";
+            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns %d/cloudflare-ddns";
+
+            NoNewPrivileges = true;
+            CapabilityBoundingSet = "";
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            DevicePolicy = "closed";
+            PrivateIPC = true;
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            ProtectProc = "invisible";
+            ProcSubset = "pid";
+            LockPersonality = true;
+            MemoryDenyWriteExecute = true;
+            RestrictNamespaces = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
+            KeyringMode = "private";
+            RestrictAddressFamilies = [
+              "AF_INET"
+              "AF_INET6"
+            ];
+            InaccessiblePaths = [
+              "-/run/dbus/system_bus_socket"
+              "-/run/systemd/private"
+            ];
+            SystemCallArchitectures = "native";
+            SystemCallErrorNumber = "EPERM";
+            SystemCallFilter = [
+              "@system-service"
+              "~@privileged"
+              "~@resources"
+            ];
+            UMask = "0077";
           };
         };
       };

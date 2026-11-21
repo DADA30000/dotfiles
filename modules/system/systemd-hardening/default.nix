@@ -10,6 +10,8 @@ let
   # ---------------------------------------------------------------------------
   # MAXIMUM LOCKDOWN REFERENCE EXAMPLE (NixOS System Services)
   # Start from this template for a new service, then relax ONLY what it needs.
+  # This module hardens UPSTREAM / NixOS-provided services only; custom
+  # dotfiles services carry their hardening directly in their own modules.
   #
   # serviceConfig = {
   #   # --- Identity & Privilege Dropping ---
@@ -25,6 +27,10 @@ let
   #   PrivateDevices = true;         # minimal /dev (/dev/null, zero, urandom); implies DevicePolicy=closed (breaks GPU, disks, /dev/net/tun)
   #   DevicePolicy = "closed";       # or "strict" with explicit DeviceAllow= lines
   #   UMask = "0077";                # owner-only permissions on newly created files/sockets
+  #   # Close root-UID sandbox escape via systemd/D-Bus sockets:
+  #   # - Non-D-Bus services: hide both /run/dbus/system_bus_socket and /run/systemd/private
+  #   # - D-Bus services: route through systemd.dbusProxy.services.<name> (shared xdg-dbus-proxy)
+  #   InaccessiblePaths = [ "-/run/dbus/system_bus_socket" "-/run/systemd/private" ];
   #
   #   # --- Kernel, Hardware & Procfs Protection ---
   #   ProtectKernelTunables = true;  # /proc/sys, /sys, /proc/irq, /proc/bus read-only (breaks sysfs/hwmon/tracing/sysctl writers)
@@ -34,7 +40,7 @@ let
   #   ProtectClock = true;           # blocks clock changes (breaks chronyd/NTP)
   #   ProtectHostname = true;        # private UTS namespace (blocks hostname changes)
   #   ProtectProc = "invisible";     # hides other users' /proc/<pid> entries
-  #   ProcSubset = "pid";            # hides non-PID /proc files like /proc/stat, /proc/net
+  #   ProcSubset = "pid";            # hides non-PID /proc files like /proc/stat, /proc/net, /proc/sys
   #
   #   # --- Namespace & IPC Isolation ---
   #   PrivateNetwork = true;         # loopback-only netns (breaks real networking & netlink)
@@ -96,6 +102,12 @@ let
     "AF_NETLINK"
   ];
 
+  noSystemdPriv = [ "-/run/systemd/private" ];
+  noDbusOrSystemd = [
+    "-/run/dbus/system_bus_socket"
+    "-/run/systemd/private"
+  ];
+
   base = {
     NoNewPrivileges = true;
     PrivateTmp = true;
@@ -148,6 +160,7 @@ let
       "CAP_CHOWN"
     ];
     RestrictAddressFamilies = [ "AF_UNIX" ];
+    InaccessiblePaths = noDbusOrSystemd;
     # Based on upstream libvirt virtlogd lockdown (allows @resources for libnuma constructor)
     SystemCallFilter = [
       "@system-service"
@@ -168,17 +181,50 @@ let
   hasZfs = config.boot.supportedFilesystems.zfs or false;
 in
 {
-  options.systemd-hardening.enable = lib.mkEnableOption "per-service NixOS systemd security hardening";
+  options.systemd-hardening.enable = lib.mkEnableOption "per-service NixOS upstream systemd security hardening";
 
   config = lib.mkIf cfg.enable {
+    # Shared filtered system D-Bus proxy for upstream root-running services
+    # whose D-Bus peer list is strictly bounded (closes UID-0 org.freedesktop.systemd1 escape).
+    systemd.dbusProxy.services = lib.mkMerge [
+      (lib.mkIf (config.graphics.nvidia.enable or false) {
+        nvidia-powerd.own = [ "nvidia.powerd.server" ];
+      })
+      (lib.mkIf config.services.tlp.pd.enable {
+        tlp-pd = {
+          own = [
+            "org.freedesktop.UPower.PowerProfiles"
+            "net.hadess.PowerProfiles"
+          ];
+          talk = [ "org.freedesktop.PolicyKit1" ];
+        };
+      })
+      (lib.mkIf config.services.usbguard.enable {
+        usbguard-dbus = {
+          own = [ "org.usbguard1" ];
+          talk = [ "org.freedesktop.PolicyKit1" ];
+        };
+      })
+      (lib.mkIf config.services.upower.enable {
+        upower = {
+          own = [ "org.freedesktop.UPower" ];
+          talk = [
+            "org.freedesktop.login1"
+            "org.bluez"
+          ];
+        };
+      })
+    ];
+
     systemd.services = lib.mkMerge [
-      # Core System Services
+      # Core Upstream System Services
       {
         nscd.serviceConfig = mkDefaults (
           tight
           // {
             CapabilityBoundingSet = "";
             RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noDbusOrSystemd;
             UMask = "0022";
           }
         );
@@ -197,56 +243,6 @@ in
           }
         );
         # nix-daemon spawns sandboxed builds (CLONE_NEWUTS/sethostname, 32-bit i686 builds); leave unconfined
-        # Fan / NV-Blindfold / Ryzen TDP: needs /sys, /dev (hwmon/PCI/SMU), /run/hwcontrol.sock, /proc/cpuinfo
-        hardware-control-daemon.serviceConfig = mkDefaults (
-          base
-          // {
-            ProtectSystem = "strict";
-            ProtectHome = true;
-            ProtectProc = "invisible";
-            PrivateNetwork = true;
-            IPAddressDeny = "any";
-            PrivateIPC = true;
-            MemoryDenyWriteExecute = true;
-            ReadWritePaths = [
-              "/sys"
-              "/dev"
-              "/run"
-            ];
-            CapabilityBoundingSet = [
-              "CAP_SYS_RAWIO"
-              "CAP_SYS_ADMIN"
-              "CAP_DAC_OVERRIDE"
-              "CAP_FOWNER"
-            ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-            SystemCallFilter = hwSyscalls;
-            UMask = "0077";
-          }
-        );
-        # Writes kprobes to /sys/kernel/tracing
-        log-module-autoloads.serviceConfig = mkDefaults (
-          base
-          // {
-            ProtectSystem = "strict";
-            ProtectHome = true;
-            PrivateDevices = true;
-            DevicePolicy = "closed";
-            PrivateNetwork = true;
-            IPAddressDeny = "any";
-            PrivateIPC = true;
-            MemoryDenyWriteExecute = true;
-            ReadWritePaths = [ "-/sys/kernel/tracing" ];
-            CapabilityBoundingSet = [
-              "CAP_SYS_ADMIN"
-              "CAP_PERFMON"
-              "CAP_DAC_OVERRIDE"
-            ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-            SystemCallFilter = safeSyscalls;
-            UMask = "0077";
-          }
-        );
 
         # Vconsole reload helper & password agents
         reload-systemd-vconsole-setup.serviceConfig = mkDefaults (
@@ -256,6 +252,7 @@ in
             PrivateNetwork = true;
             IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
+            InaccessiblePaths = noDbusOrSystemd;
           }
         );
         systemd-ask-password-console.serviceConfig = mkDefaults (
@@ -269,6 +266,7 @@ in
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             RestrictAddressFamilies = [ "AF_UNIX" ];
+            InaccessiblePaths = noDbusOrSystemd;
             SystemCallFilter = safeSyscalls;
             UMask = "0077";
           }
@@ -284,6 +282,7 @@ in
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             RestrictAddressFamilies = [ "AF_UNIX" ];
+            InaccessiblePaths = noDbusOrSystemd;
             SystemCallFilter = safeSyscalls;
             UMask = "0077";
           }
@@ -294,53 +293,12 @@ in
             PrivateNetwork = true;
             IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
-
-        # User-bridged hardware shims (sunshine@, opentabletdriver@)
-        "sunshine@".serviceConfig = mkDefaults (
-          base
-          // {
-            ProtectSystem = "strict";
-            ProtectHome = "read-only";
-            ProtectKernelTunables = true;
-            ProtectProc = "invisible";
-            RestrictRealtime = false;
-            ReadWritePaths = [
-              "-/home/%i/.config/sunshine"
-              "-/home/%i/.cache"
-              "/run/user/%U"
-            ];
-            RestrictAddressFamilies = netAF;
-            SystemCallFilter = safeSyscalls;
-            UMask = "0077";
-          }
-        );
-        "opentabletdriver@".serviceConfig = mkDefaults (
-          base
-          // {
-            ProtectSystem = "strict";
-            ProtectHome = "read-only";
-            ProtectKernelTunables = true;
-            ProtectProc = "invisible";
-            PrivateNetwork = true;
-            IPAddressDeny = "any";
-            ReadWritePaths = [
-              "-/home/%i/.config/OpenTabletDriver"
-              "-/home/%i/.local/share/OpenTabletDriver"
-              "/run/user/%U"
-            ];
-            RestrictAddressFamilies = [
-              "AF_UNIX"
-              "AF_NETLINK"
-            ];
-            SystemCallFilter = safeSyscalls;
-            UMask = "0077";
+            InaccessiblePaths = noDbusOrSystemd;
           }
         );
       }
 
-      # Networking, DNS & VPN
+      # Networking & DNS (Upstream)
       (lib.mkIf config.networking.networkmanager.enable {
         NetworkManager.serviceConfig = mkDefaults {
           LockPersonality = true;
@@ -348,6 +306,7 @@ in
           ProtectKernelModules = true;
           KeyringMode = "private";
           RestrictAddressFamilies = netAF ++ [ "AF_PACKET" ];
+          InaccessiblePaths = noSystemdPriv;
           SystemCallArchitectures = "native";
           SystemCallErrorNumber = "EPERM";
           # Strict allowlist matching systemd-networkd + NM's libbpf/setns/chroot usage
@@ -377,6 +336,7 @@ in
             DevicePolicy = "closed";
             PrivateIPC = true;
             RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noSystemdPriv;
             SystemCallFilter = safeSyscalls;
           }
         );
@@ -395,12 +355,48 @@ in
               "AF_PACKET"
               "AF_ALG"
             ];
+            InaccessiblePaths = noSystemdPriv;
             SystemCallFilter = [
               "@system-service"
               "~@privileged"
               "~@resources"
             ];
             UMask = "0077";
+          }
+        );
+      })
+
+      (lib.mkIf config.services.dnsmasq.enable {
+        dnsmasq.serviceConfig = mkDefaults (
+          tight
+          // {
+            # CAP_CHOWN needed by NixOS dnsmasq-pre-start (`chown -R dnsmasq /var/lib/dnsmasq`)
+            CapabilityBoundingSet = [
+              "CAP_CHOWN"
+              "CAP_NET_BIND_SERVICE"
+              "CAP_NET_ADMIN"
+              "CAP_NET_RAW"
+              "CAP_SETUID"
+              "CAP_SETGID"
+              "CAP_DAC_OVERRIDE"
+            ];
+            RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noSystemdPriv;
+            SystemCallFilter = safeSyscalls;
+          }
+        );
+      })
+
+      (lib.mkIf config.services.stubby.enable {
+        stubby.serviceConfig = mkDefaults (
+          tight
+          // {
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_INET"
+              "AF_INET6"
+            ];
+            InaccessiblePaths = noDbusOrSystemd;
           }
         );
       })
@@ -412,6 +408,7 @@ in
           RestrictNamespaces = true;
           RestrictRealtime = true;
           RestrictSUIDSGID = true;
+          InaccessiblePaths = noSystemdPriv;
           SystemCallArchitectures = "native";
           UMask = "0077";
         };
@@ -424,12 +421,13 @@ in
           ProtectHostname = true;
           RestrictNamespaces = true;
           RestrictSUIDSGID = true;
+          InaccessiblePaths = noDbusOrSystemd;
           SystemCallArchitectures = "native";
           UMask = "0077";
         };
       })
 
-      # SSH, Printing, Desktop & Security Daemons
+      # SSH, Printing, Desktop & Security Daemons (Upstream)
       (lib.mkIf config.services.openssh.enable {
         sshd.serviceConfig = mkDefaults {
           ProtectClock = true;
@@ -451,6 +449,7 @@ in
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noSystemdPriv;
             SystemCallFilter = safeSyscalls;
           }
         );
@@ -461,14 +460,15 @@ in
             CacheDirectory = "cups";
             ReadWritePaths = [ "-/run/cups" ];
             RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noSystemdPriv;
             UMask = "0022";
           }
         );
       })
 
       (lib.mkIf config.services.accounts-daemon.enable {
-        accounts-daemon.serviceConfig =
-          (mkDefaults {
+        accounts-daemon.serviceConfig = (
+          mkDefaults {
             NoNewPrivileges = true;
             ProtectClock = true;
             ProtectHostname = true;
@@ -479,19 +479,20 @@ in
             IPAddressDeny = "any";
             RestrictSUIDSGID = true;
             KeyringMode = "private";
+            InaccessiblePaths = noSystemdPriv;
             SystemCallErrorNumber = "EPERM";
             UMask = "0077";
-          })
-          // {
-            # Replace upstream ~@mount denylist with strict allowlist
-            SystemCallFilter = lib.mkForce [
-              ""
-              "@system-service"
-              "~@mount"
-              "~@privileged"
-              "~@resources"
-            ];
-          };
+          }
+        ) // {
+          # Replace upstream ~@mount denylist with strict allowlist
+          SystemCallFilter = lib.mkForce [
+            ""
+            "@system-service"
+            "~@mount"
+            "~@privileged"
+            "~@resources"
+          ];
+        };
       })
 
       (lib.mkIf config.services.usbguard.enable {
@@ -505,6 +506,7 @@ in
           ProtectProc = "invisible";
           ProcSubset = "pid";
           RestrictSUIDSGID = true;
+          InaccessiblePaths = noDbusOrSystemd;
         };
         usbguard-dbus.serviceConfig = mkDefaults (
           tight
@@ -531,6 +533,7 @@ in
               "AF_UNIX"
               "AF_NETLINK"
             ];
+            InaccessiblePaths = noDbusOrSystemd;
           }
         );
       })
@@ -544,9 +547,10 @@ in
           ProtectKernelLogs = true;
           ProtectKernelModules = true;
           ProtectProc = "invisible";
-          ProcSubset = "pid";
+          # Note: ProcSubset="pid" intentionally omitted (bluetoothd reads /proc/sys/kernel/hostname)
           RestrictNamespaces = true;
           RestrictSUIDSGID = true;
+          InaccessiblePaths = noSystemdPriv;
           SystemCallArchitectures = "native";
           UMask = "0077";
         };
@@ -570,6 +574,7 @@ in
         fwupd.serviceConfig = mkDefaults {
           PrivateIPC = true;
           ProcSubset = "pid";
+          InaccessiblePaths = noSystemdPriv;
           UMask = "0077";
         };
       })
@@ -592,7 +597,7 @@ in
         );
       })
 
-      # Hardware, GPU & Storage Daemons
+      # Hardware, GPU & Storage Daemons (Upstream)
       (lib.mkIf config.services.lact.enable {
         lactd.serviceConfig = mkDefaults (
           base
@@ -608,6 +613,7 @@ in
               "/run"
               "/sys"
             ];
+            InaccessiblePaths = noSystemdPriv;
             CapabilityBoundingSet = [
               "CAP_SYS_ADMIN"
               "CAP_DAC_OVERRIDE"
@@ -662,6 +668,7 @@ in
               "AF_UNIX"
               "AF_NETLINK"
             ];
+            InaccessiblePaths = noSystemdPriv;
             SystemCallFilter = mountSyscalls;
           }
         );
@@ -676,6 +683,7 @@ in
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             RestrictAddressFamilies = netAF;
+            InaccessiblePaths = noSystemdPriv;
             SystemCallFilter = mountSyscalls;
           }
         );
@@ -690,6 +698,7 @@ in
             MemoryDenyWriteExecute = true;
             CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
             RestrictAddressFamilies = [ "AF_UNIX" ];
+            InaccessiblePaths = noDbusOrSystemd;
             SystemCallFilter = safeSyscalls;
           }
         );
@@ -721,21 +730,6 @@ in
             ReadWritePaths = [
               "-/etc/libvirt/secrets"
               "-/run/libvirt"
-            ];
-          }
-        );
-      })
-
-      # Custom Web / DDNS
-      (lib.mkIf (config.my-services.nginx.enable && config.my-services.cloudflare-ddns.enable) {
-        cloudflare-ddns.serviceConfig = mkDefaults (
-          tight
-          // {
-            DynamicUser = true;
-            CapabilityBoundingSet = "";
-            RestrictAddressFamilies = [
-              "AF_INET"
-              "AF_INET6"
             ];
           }
         );

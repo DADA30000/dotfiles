@@ -9,8 +9,8 @@ let
 
   # ---------------------------------------------------------------------------
   # MAXIMUM LOCKDOWN REFERENCE EXAMPLE (Home Manager / systemd --user)
-  # systemd 262 --user supports BOTH seccomp/process restrictions AND
-  # mount-namespace sandboxing (via unprivileged user namespaces).
+  # This module hardens UPSTREAM / NixOS-provided user services only; custom
+  # dotfiles user services carry their hardening directly in their own modules.
   #
   # IMPORTANT systemd --user caveats:
   # - Any mount/UTS/net namespace directive (ProtectSystem, ProtectHome,
@@ -19,49 +19,16 @@ let
   #   PrivateNetwork) implicitly creates an unprivileged CLONE_NEWUSER with
   #   uid_map `UID UID 1`. Do NOT use those on xdg-desktop-portal*, portal
   #   clients (which need /proc/<pid>/root in the host userns), or units
-  #   calling setfacl for other UIDs (e.g. replays.service).
+  #   calling setfacl for other UIDs.
   # - PrivateIPC=true fails mounting /dev/mqueue in unprivileged userns.
   # - IPAddressDeny= requires root BPF cgroup privileges (ignored in --user).
+  # - Close UID-1000 sandbox escape via %t/bus & %t/systemd/private using the
+  #   `dbus` helper on `systemd.user.serviceDropins.<name>` (or
+  #   `systemd.user.dbusProxy.services.<name>` for HM-owned services).
   #
   # Use `systemd.user.services.<name>.Service` for HM-defined units, and
-  # `systemd.user.serviceDropins.<name>.Service` for NixOS/package-provided
-  # user units (so you don't shadow their upstream ExecStart=).
-  #
-  # Service = {
-  #   # --- Privilege & Capability Hygiene (host-userns safe) ---
-  #   NoNewPrivileges = true;        # blocks setuid/setgid & file caps
-  #   UMask = "0077";                # owner-only permissions on newly created files/sockets
-  #   KeyringMode = "private";       # isolates kernel keyring
-  #   LockPersonality = true;        # locks personality(2) to native domain
-  #   RestrictNamespaces = true;     # blocks creating nested namespaces
-  #   RestrictRealtime = true;       # blocks SCHED_FIFO/SCHED_RR (breaks PipeWire/WirePlumber/EasyEffects)
-  #   RestrictSUIDSGID = true;       # blocks creating SUID/SGID files
-  #   MemoryDenyWriteExecute = true; # enforces W^X (breaks Qt/QML, GTK/GJS, Mesa/Vulkan/GL, audio plugins)
-  #   RestrictAddressFamilies = [ "AF_UNIX" ];
-  #   SystemCallArchitectures = "native";
-  #   SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
-  #   SystemCallErrorNumber = "EPERM";
-  #
-  #   # --- Filesystem & Namespace Isolation (triggers CLONE_NEWUSER in --user) ---
-  #   # Specifiers: %h=$HOME, %t=$XDG_RUNTIME_DIR, %E=$XDG_CONFIG_HOME,
-  #   # %D=$XDG_DATA_HOME, %C=$XDG_CACHE_HOME, %S=$XDG_STATE_HOME.
-  #   # Prefix a path with "-" to ignore it if it does not exist yet.
-  #   ProtectSystem = "strict";      # entire FS read-only except ReadWritePaths
-  #   ReadWritePaths = [ "-%t/my-service" ];
-  #   ProtectHome = true;            # hides $HOME completely (use "read-only" when granting ReadWritePaths under %h)
-  #   PrivateTmp = true;             # private /tmp and /var/tmp (breaks X11 /tmp/.X11-unix IPC)
-  #   PrivateDevices = true;         # minimal /dev (breaks GPU /dev/dri, /dev/nvidia*, audio /dev/snd)
-  #   ProtectKernelTunables = true;  # /proc/sys and /sys read-only
-  #   ProtectKernelModules = true;   # blocks module load syscalls
-  #   ProtectKernelLogs = true;      # blocks dmesg / /dev/kmsg
-  #   ProtectControlGroups = true;   # /sys/fs/cgroup read-only (breaks cgroup managers)
-  #   ProtectClock = true;           # blocks clock changes
-  #   ProtectHostname = true;        # private UTS namespace
-  #   ProtectProc = "invisible";     # hides other users' /proc/<pid>
-  #   ProcSubset = "pid";            # hides /proc/meminfo, /proc/stat, etc.
-  #   PrivateNetwork = true;         # loopback-only netns (breaks LAN/internet)
-  #   PrivateUsers = true;           # isolates user namespace
-  # };
+  # `systemd.user.serviceDropins.<name>` for NixOS/package-provided user units
+  # (so you don't shadow their upstream ExecStart=).
   # ---------------------------------------------------------------------------
 
   safeSyscalls = [
@@ -85,7 +52,7 @@ let
 
   # Pure process/seccomp/socket hardening without mount/UTS/net namespaces,
   # keeping the unit in the host user namespace (required for portals,
-  # portal-using apps, dbus-broker reloads, and cross-UID setfacl).
+  # portal-using apps, and dbus-broker reloads).
   hostUserns = {
     NoNewPrivileges = true;
     LockPersonality = true;
@@ -157,56 +124,22 @@ let
   };
 in
 {
-  options.systemd-hardening.enable = lib.mkEnableOption "per-service Home Manager systemd user hardening";
+  options.systemd-hardening.enable = lib.mkEnableOption "per-service Home Manager upstream systemd user hardening";
 
   config = lib.mkIf cfg.enable {
-    # HM-Owned User Services (merged directly into systemd.user.services)
-    # Note: noctalia.service is intentionally left unsandboxed — it is the
-    # desktop shell (app launcher via app2unit scopes, screenshots to
-    # ~/Pictures/Screenshots, Polkit/NM secret agent, notifications, plugins).
+    # Upstream HM-Module-Provided User Services
     systemd.user.services = lib.mkMerge [
-      {
-        # cgroup-executioner monitors user cgroups (/sys/fs/cgroup) & kills scopes
-        cgroup-executioner.Service = mkDefaults (
-          tight
-          // {
-            ProtectHome = true;
-            ProtectControlGroups = false;
-            ProtectProc = "default";
-            ProcSubset = "all";
-            PrivateNetwork = true;
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-            SystemCallFilter = safeSyscalls;
-          }
-        );
-
-        # libqb IPC needs host netns for @usbguard abstract socket + /dev/shm/qb-*
-        usbguard-notifier.Service = mkDefaults (
+      (lib.mkIf config.services.ssh-agent.enable {
+        ssh-agent.Service = mkDefaults (
           bridge
           // {
-            PrivateNetwork = false;
-            PrivateUsers = false;
-            ReadWritePaths = [
-              "%t"
-              "/dev/shm"
+            InaccessiblePaths = [
+              "-%t/bus"
+              "-%t/systemd/private"
+              "-/run/dbus/system_bus_socket"
             ];
           }
         );
-        sunshine.Service = mkDefaults bridge;
-        opentabletdriver.Service = mkDefaults bridge;
-
-        # Uses xdg-desktop-portal -> must stay in host userns
-        valent.Service = mkDefaults (
-          hostUserns
-          // {
-            RestrictAddressFamilies = netAF ++ [ "AF_BLUETOOTH" ];
-            SystemCallFilter = safeSyscalls;
-          }
-        );
-      }
-
-      (lib.mkIf config.services.ssh-agent.enable {
-        ssh-agent.Service = mkDefaults bridge;
       })
 
       (lib.mkIf config.services.easyeffects.enable {
@@ -223,52 +156,6 @@ in
           }
         );
       })
-
-      (lib.mkIf config.replays.enable {
-        # Runs setfacl -m u:replays:r on /run/user/%U/replays.env -> must stay
-        # in host userns so the `replays` system UID is mapped in uid_map.
-        replays.Service = mkDefaults (
-          hostUserns
-          // {
-            MemoryDenyWriteExecute = true;
-            UMask = "0077";
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-            SystemCallFilter = [
-              "@system-service"
-              "~@privileged"
-              "~@resources"
-            ];
-          }
-        );
-      })
-
-      (lib.mkIf config.hyprland.enable {
-        oo7-daemon.Service = mkDefaults (
-          tight
-          // {
-            ProtectHome = "read-only";
-            PrivateNetwork = true;
-            ReadWritePaths = [
-              "-%D/keyrings"
-              "%t"
-            ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
-
-        oo7-portal.Service = mkDefaults (
-          tight
-          // {
-            ProtectHome = "read-only";
-            PrivateNetwork = true;
-            ReadWritePaths = [
-              "-%D/keyrings"
-              "%t"
-            ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
-      })
     ];
 
     # Mask unused PulseAudio daemon (PipeWire's pipewire-pulse handles audio)
@@ -277,19 +164,25 @@ in
 
     # System / Package-Provided User Units (via highest-priority drop-ins)
     systemd.user.serviceDropins = {
-      dconf.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [
-            "-%E/dconf"
-            "-%C/dconf"
-            "%t"
-          ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      dconf = {
+        dbus = {
+          own = [ "ca.desrt.dconf" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateNetwork = true;
+            ReadWritePaths = [
+              "-%E/dconf"
+              "-%C/dconf"
+              "%t"
+            ];
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+          }
+        );
+      };
 
       # Session D-Bus stays in host userns for clean reloads & peer credentials
       dbus-broker.Service = mkDefaults (
@@ -306,34 +199,57 @@ in
         }
       );
 
-      at-spi-dbus-bus.Service = mkDefaults bridge;
+      at-spi-dbus-bus = {
+        dbus.blockSystemBus = true;
+        Service = mkDefaults (
+          bridge
+          // {
+            InaccessiblePaths = [ "-%t/systemd/private" ];
+          }
+        );
+      };
 
-      systembus-notify.Service = mkDefaults bridge;
+      systembus-notify = {
+        dbus.talk = [ "org.freedesktop.Notifications" ];
+        Service = mkDefaults bridge;
+      };
 
-      xdg-permission-store.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [
-            "-%D/flatpak"
-            "%t"
-          ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      xdg-permission-store = {
+        dbus = {
+          own = [ "org.freedesktop.impl.portal.PermissionStore" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateNetwork = true;
+            ReadWritePaths = [
+              "-%D/flatpak"
+              "%t"
+            ];
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+          }
+        );
+      };
 
       # uwsm session bindpid watcher (just runs waitpid -e %i)
-      "wayland-session-bindpid@".Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = true;
-          PrivateNetwork = true;
-          ProtectProc = "default";
-          ProcSubset = "all";
-          RestrictAddressFamilies = [ "none" ];
-        }
-      );
+      "wayland-session-bindpid@" = {
+        dbus = {
+          block = true;
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = true;
+            PrivateNetwork = true;
+            ProtectProc = "default";
+            ProcSubset = "all";
+            RestrictAddressFamilies = [ "none" ];
+          }
+        );
+      };
 
       # Portals must stay in host userns so /proc/<pid>/root opens succeed
       xdg-desktop-portal.Service = mkDefaults (
@@ -361,18 +277,24 @@ in
       );
 
       # GVFS stack
-      gvfs-metadata.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [
-            "-%D/gvfs-metadata"
-            "%t"
-          ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      gvfs-metadata = {
+        dbus = {
+          own = [ "org.gtk.vfs.Metadata" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateNetwork = true;
+            ReadWritePaths = [
+              "-%D/gvfs-metadata"
+              "%t"
+            ];
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+          }
+        );
+      };
 
       gvfs-daemon.Service = mkDefaults (
         base
@@ -380,6 +302,7 @@ in
           ProtectSystem = "full";
           MemoryDenyWriteExecute = true;
           RestrictAddressFamilies = netAF;
+          InaccessiblePaths = [ "-%t/systemd/private" ];
           SystemCallFilter = [
             "@system-service"
             "~@module"
@@ -394,122 +317,175 @@ in
         }
       );
 
-      gvfs-udisks2-volume-monitor.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-          ];
-        }
-      );
+      gvfs-udisks2-volume-monitor = {
+        dbus = {
+          own = [ "org.gtk.vfs.UDisks2VolumeMonitor" ];
+          talk = [ "org.gtk.vfs.Daemon" ];
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateNetwork = true;
+            ReadWritePaths = [ "%t" ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+          }
+        );
+      };
 
-      gvfs-afc-volume-monitor.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateDevices = false;
-          DevicePolicy = "auto";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-          ];
-        }
-      );
+      gvfs-afc-volume-monitor = {
+        dbus = {
+          own = [ "org.gtk.vfs.AfcVolumeMonitor" ];
+          talk = [ "org.gtk.vfs.Daemon" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateDevices = false;
+            DevicePolicy = "auto";
+            PrivateNetwork = true;
+            ReadWritePaths = [ "%t" ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+          }
+        );
+      };
 
-      gvfs-goa-volume-monitor.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_INET"
-            "AF_INET6"
+      gvfs-goa-volume-monitor = {
+        dbus = {
+          own = [ "org.gtk.vfs.GoaVolumeMonitor" ];
+          talk = [
+            "org.gtk.vfs.Daemon"
+            "org.gnome.OnlineAccounts"
           ];
-        }
-      );
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            ReadWritePaths = [ "%t" ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_INET"
+              "AF_INET6"
+            ];
+          }
+        );
+      };
 
-      gvfs-gphoto2-volume-monitor.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateDevices = false;
-          DevicePolicy = "auto";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-          ];
-        }
-      );
+      gvfs-gphoto2-volume-monitor = {
+        dbus = {
+          own = [ "org.gtk.vfs.GPhoto2VolumeMonitor" ];
+          talk = [ "org.gtk.vfs.Daemon" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateDevices = false;
+            DevicePolicy = "auto";
+            PrivateNetwork = true;
+            ReadWritePaths = [ "%t" ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+          }
+        );
+      };
 
-      gvfs-mtp-volume-monitor.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateDevices = false;
-          DevicePolicy = "auto";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-          ];
-        }
-      );
+      gvfs-mtp-volume-monitor = {
+        dbus = {
+          own = [ "org.gtk.vfs.MTPVolumeMonitor" ];
+          talk = [ "org.gtk.vfs.Daemon" ];
+          blockSystemBus = true;
+        };
+        Service = mkDefaults (
+          tight
+          // {
+            ProtectHome = "read-only";
+            PrivateDevices = false;
+            DevicePolicy = "auto";
+            PrivateNetwork = true;
+            ReadWritePaths = [ "%t" ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+          }
+        );
+      };
 
-      # PipeWire / WirePlumber (keeps realtime audio + /dev/snd + Bluetooth)
-      pipewire.Service = mkDefaults (
-        audio
-        // {
-          ReadWritePaths = [
-            "-%S/pipewire"
-            "-%E/pipewire"
-            "%t"
-          ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-            "AF_BLUETOOTH"
-          ];
-        }
-      );
+      # PipeWire / WirePlumber (keeps realtime audio + /dev/snd + Bluetooth + RTKit on system bus)
+      pipewire = {
+        dbus.block = true;
+        Service = mkDefaults (
+          audio
+          // {
+            ReadWritePaths = [
+              "-%S/pipewire"
+              "-%E/pipewire"
+              "%t"
+            ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+              "AF_BLUETOOTH"
+            ];
+          }
+        );
+      };
 
-      pipewire-pulse.Service = mkDefaults (
-        audio
-        // {
-          ReadWritePaths = [
-            "-%E/pulse"
-            "%t"
-          ];
-        }
-      );
+      pipewire-pulse = {
+        dbus.own = [ "org.pulseaudio.Server" ];
+        Service = mkDefaults (
+          audio
+          // {
+            ReadWritePaths = [
+              "-%E/pulse"
+              "%t"
+            ];
+          }
+        );
+      };
 
-      wireplumber.Service = mkDefaults (
-        audio
-        // {
-          ReadWritePaths = [
-            "-%S/wireplumber"
-            "-%E/wireplumber"
-            "%t"
+      wireplumber = {
+        dbus = {
+          own = [
+            "org.freedesktop.ReserveDevice1.*"
+            "org.pipewire.Telephony"
           ];
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_NETLINK"
-            "AF_BLUETOOTH"
+          talk = [
+            "org.freedesktop.impl.portal.PermissionStore"
+            "org.mpris.MediaPlayer2.*"
+            "org.freedesktop.Notifications"
           ];
-        }
-      );
-
-      # WiVRn user service is a lightweight bridge to hardened wivrn@%u.service
-      wivrn.Service = mkDefaults bridge;
+        };
+        Service = mkDefaults (
+          audio
+          // {
+            ReadWritePaths = [
+              "-%S/wireplumber"
+              "-%E/wireplumber"
+              "%t"
+            ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+              "AF_BLUETOOTH"
+            ];
+          }
+        );
+      };
     };
   };
 }

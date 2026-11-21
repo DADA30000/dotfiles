@@ -585,6 +585,41 @@ in
           RestartSec = "3s";
           ExecStart = "/run/current-system/sw/bin/sing-box-watcher";
           ExecStopPost = "${pkgs.systemd}/bin/systemctl stop sing-box-init.service";
+
+          NoNewPrivileges = true;
+          CapabilityBoundingSet = "";
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateDevices = true;
+          DevicePolicy = "closed";
+          PrivateTmp = true;
+          PrivateIPC = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          ProtectProc = "invisible";
+          ProcSubset = "pid";
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          RestrictAddressFamilies = [
+            "AF_UNIX"
+            "AF_NETLINK"
+          ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+          UMask = "0077";
         };
       };
 

@@ -476,6 +476,55 @@ in
           ExecStart = "/run/current-system/sw/bin/hardware-control-daemon";
           Restart = "always";
           RestartSec = "2s";
+
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          ProtectProc = "invisible";
+          PrivateNetwork = true;
+          IPAddressDeny = "any";
+          PrivateIPC = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          ReadWritePaths = [
+            "/sys"
+            "/dev"
+            "/run"
+          ];
+          InaccessiblePaths = [
+            "-/run/dbus/system_bus_socket"
+            "-/run/systemd/private"
+          ];
+          CapabilityBoundingSet = [
+            "CAP_SYS_RAWIO"
+            "CAP_SYS_ADMIN"
+            "CAP_DAC_OVERRIDE"
+            "CAP_FOWNER"
+          ];
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@mount"
+            "~@module"
+            "~@reboot"
+            "~@swap"
+            "~@clock"
+            "~@obsolete"
+            "~@cpu-emulation"
+          ];
+          UMask = "0077";
         };
       };
 
@@ -501,6 +550,52 @@ in
             ExecStart = "${sunshine-system-runner} %i";
             Restart = "on-failure";
             RestartSec = "3s";
+
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ProtectHome = "read-only";
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            ProtectProc = "invisible";
+            LockPersonality = true;
+            RestrictNamespaces = true;
+            RestrictSUIDSGID = true;
+            KeyringMode = "private";
+            ReadWritePaths = [
+              "-/home/%i/.config/sunshine"
+              "-/home/%i/.cache"
+              "/run/user/%U"
+            ];
+            InaccessiblePaths = [
+              "-/run/systemd/private"
+              "-/run/user/%U/systemd/private"
+            ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_INET"
+              "AF_INET6"
+              "AF_NETLINK"
+            ];
+            SystemCallArchitectures = "native";
+            SystemCallErrorNumber = "EPERM";
+            SystemCallFilter = [
+              "@system-service"
+              "~@mount"
+              "~@module"
+              "~@raw-io"
+              "~@reboot"
+              "~@swap"
+              "~@clock"
+              "~@debug"
+              "~@obsolete"
+              "~@cpu-emulation"
+            ];
+            UMask = "0077";
           };
         };
 
@@ -525,6 +620,55 @@ in
             ExecStart = "${otd-system-runner} %i";
             Restart = "on-failure";
             RestartSec = "3s";
+
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ProtectHome = "read-only";
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            ProtectProc = "invisible";
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            LockPersonality = true;
+            RestrictNamespaces = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
+            KeyringMode = "private";
+            ReadWritePaths = [
+              "-/home/%i/.config/OpenTabletDriver"
+              "-/home/%i/.local/share/OpenTabletDriver"
+              "/run/user/%U"
+            ];
+            InaccessiblePaths = [
+              "-/run/dbus/system_bus_socket"
+              "-/run/systemd/private"
+              "-/run/user/%U/bus"
+              "-/run/user/%U/systemd/private"
+            ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+            SystemCallArchitectures = "native";
+            SystemCallErrorNumber = "EPERM";
+            SystemCallFilter = [
+              "@system-service"
+              "~@mount"
+              "~@module"
+              "~@raw-io"
+              "~@reboot"
+              "~@swap"
+              "~@clock"
+              "~@debug"
+              "~@obsolete"
+              "~@cpu-emulation"
+            ];
+            UMask = "0077";
           };
         };
 
@@ -561,6 +705,53 @@ in
               echo "-:$ev" >> "$T/kprobe_events" 2>/dev/null || true
             done
           '';
+
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateDevices = true;
+          DevicePolicy = "closed";
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          PrivateNetwork = true;
+          IPAddressDeny = "any";
+          PrivateIPC = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          ReadWritePaths = [ "-/sys/kernel/tracing" ];
+          InaccessiblePaths = [
+            "-/run/dbus/system_bus_socket"
+            "-/run/systemd/private"
+          ];
+          CapabilityBoundingSet = [
+            "CAP_SYS_ADMIN"
+            "CAP_PERFMON"
+            "CAP_DAC_OVERRIDE"
+          ];
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@mount"
+            "~@module"
+            "~@raw-io"
+            "~@reboot"
+            "~@swap"
+            "~@clock"
+            "~@debug"
+            "~@obsolete"
+            "~@cpu-emulation"
+          ];
+          UMask = "0077";
         };
       };
 

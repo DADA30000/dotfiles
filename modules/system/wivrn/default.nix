@@ -99,6 +99,43 @@ with lib;
         ExecStop = mkForce "${pkgs.systemd}/bin/systemctl stop wivrn@%u.service";
         Restart = mkForce "on-failure";
         RestartSec = mkForce "3s";
+
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        PrivateTmp = true;
+        PrivateDevices = true;
+        DevicePolicy = "closed";
+        PrivateNetwork = true;
+        PrivateUsers = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        ReadWritePaths = [ "%t" ];
+        InaccessiblePaths = [
+          "-%t/bus"
+          "-%t/systemd/private"
+        ];
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
     };
 
@@ -137,6 +174,10 @@ with lib;
           "-/home/%i/.cache/wivrn"
           "-/home/%i/.cache/nvidia"
           "/run/user/%U"
+        ];
+        InaccessiblePaths = [
+          "-/run/systemd/private"
+          "-/run/user/%U/systemd/private"
         ];
         PrivateTmp = true;
         ProtectClock = true;
