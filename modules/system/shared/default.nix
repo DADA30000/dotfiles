@@ -258,15 +258,6 @@ in
         )
       );
 
-    kernelModules = [
-      "vhost_net"
-      "vfat"
-      "exfat"
-      "ntfs3"
-      "bridge"
-      "ntfs"
-    ];
-
     kernelParams = [
       "audit=0"
       "workqueue.power_efficient=Y"
@@ -906,8 +897,6 @@ in
   security = {
 
     protectKernelImage = true;
-
-    lockKernelModules = true;
 
     sudo.enable = false;
 

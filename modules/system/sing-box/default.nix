@@ -541,28 +541,6 @@ in
   config = mkIf cfg.enable {
     sing-box.processes_to_proxy = processes;
 
-    boot.kernelModules = [
-      "veth"
-      "nf_tables"
-      "inet_diag"
-      "tcp_diag"
-      "udp_diag"
-      "nfnetlink_queue"
-      "nf_conntrack"
-      "nf_nat"
-      "nft_ct"
-      "nft_nat"
-      "nft_chain_nat"
-      "nft_queue"
-      "nft_redir"
-      "nft_masq"
-      "nft_reject"
-      "nft_reject_inet"
-      "nft_fib_inet"
-      "nft_socket"
-      "nft_tproxy"
-    ];
-
     systemd.services = {
       stubby.wantedBy = lib.mkForce [ ];
 
