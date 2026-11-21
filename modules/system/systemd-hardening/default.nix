@@ -201,7 +201,7 @@ in
             IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
-            ReadWritePaths = [ "/sys/kernel/tracing" ];
+            ReadWritePaths = [ "-/sys/kernel/tracing" ];
             CapabilityBoundingSet = [
               "CAP_SYS_ADMIN"
               "CAP_PERFMON"
@@ -502,7 +502,8 @@ in
           tight
           // {
             CapabilityBoundingSet = "";
-            ReadWritePaths = [ "/var/cache/cups" ];
+            CacheDirectory = "cups";
+            ReadWritePaths = [ "-/run/cups" ];
             RestrictAddressFamilies = netAF;
             UMask = "0022";
           }
@@ -645,7 +646,7 @@ in
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             ReadWritePaths = [
-              "/etc/lact"
+              "-/etc/lact"
               "/run"
               "/sys"
             ];
@@ -742,8 +743,8 @@ in
           libvirtAux
           // {
             ReadWritePaths = [
-              "/var/log/libvirt"
-              "/run/libvirt"
+              "-/var/log/libvirt"
+              "-/run/libvirt"
             ];
           }
         );
@@ -751,8 +752,8 @@ in
           libvirtAux
           // {
             ReadWritePaths = [
-              "/run/libvirt"
-              "/var/lib/libvirt"
+              "-/run/libvirt"
+              "-/var/lib/libvirt"
             ];
           }
         );
@@ -760,8 +761,8 @@ in
           libvirtAux
           // {
             ReadWritePaths = [
-              "/etc/libvirt/secrets"
-              "/run/libvirt"
+              "-/etc/libvirt/secrets"
+              "-/run/libvirt"
             ];
           }
         );
