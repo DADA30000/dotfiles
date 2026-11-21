@@ -56,10 +56,45 @@ let
   # };
   # ---------------------------------------------------------------------------
 
-  safeSyscalls = [ "@system-service" "~@mount" "~@module" "~@raw-io" "~@reboot" "~@swap" "~@clock" "~@debug" "~@obsolete" "~@cpu-emulation" ];
-  hwSyscalls = [ "@system-service" "~@mount" "~@module" "~@reboot" "~@swap" "~@clock" "~@obsolete" "~@cpu-emulation" ];
-  mountSyscalls = [ "@system-service" "@mount" "~@module" "~@reboot" "~@swap" "~@clock" "~@debug" "~@obsolete" "~@cpu-emulation" ];
-  netAF = [ "AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK" ];
+  safeSyscalls = [
+    "@system-service"
+    "~@mount"
+    "~@module"
+    "~@raw-io"
+    "~@reboot"
+    "~@swap"
+    "~@clock"
+    "~@debug"
+    "~@obsolete"
+    "~@cpu-emulation"
+  ];
+  hwSyscalls = [
+    "@system-service"
+    "~@mount"
+    "~@module"
+    "~@reboot"
+    "~@swap"
+    "~@clock"
+    "~@obsolete"
+    "~@cpu-emulation"
+  ];
+  mountSyscalls = [
+    "@system-service"
+    "@mount"
+    "~@module"
+    "~@reboot"
+    "~@swap"
+    "~@clock"
+    "~@debug"
+    "~@obsolete"
+    "~@cpu-emulation"
+  ];
+  netAF = [
+    "AF_UNIX"
+    "AF_INET"
+    "AF_INET6"
+    "AF_NETLINK"
+  ];
 
   base = {
     NoNewPrivileges = true;
@@ -370,85 +405,6 @@ in
         );
       })
 
-      (lib.mkIf config.services.dnsmasq.enable {
-        dnsmasq.serviceConfig = mkDefaults (
-          tight
-          // {
-            CapabilityBoundingSet = [
-              "CAP_NET_BIND_SERVICE"
-              "CAP_NET_ADMIN"
-              "CAP_NET_RAW"
-              "CAP_SETUID"
-              "CAP_SETGID"
-              "CAP_DAC_OVERRIDE"
-            ];
-            RestrictAddressFamilies = netAF;
-            SystemCallFilter = safeSyscalls;
-          }
-        );
-      })
-
-      (lib.mkIf config.services.stubby.enable {
-        stubby.serviceConfig = mkDefaults (
-          tight
-          // {
-            RestrictAddressFamilies = [
-              "AF_UNIX"
-              "AF_INET"
-              "AF_INET6"
-            ];
-          }
-        );
-      })
-
-      (lib.mkIf config.sing-box.enable {
-        sing-box.serviceConfig = mkDefaults (
-          tight
-          // {
-            CapabilityBoundingSet = "";
-            RestrictAddressFamilies = netAF;
-          }
-        );
-        sing-box-core.serviceConfig = mkDefaults {
-          KeyringMode = "private";
-          PrivateIPC = true;
-          ProtectHostname = true;
-          RestrictNamespaces = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
-          SystemCallArchitectures = "native";
-          SystemCallFilter = safeSyscalls;
-          UMask = "0077";
-        };
-        zapret.serviceConfig = mkDefaults {
-          KeyringMode = "private";
-          PrivateIPC = true;
-          ProtectHostname = true;
-          RestrictNamespaces = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
-          SystemCallArchitectures = "native";
-          SystemCallFilter = [
-            "@system-service"
-            "~@privileged"
-            "~@resources"
-          ];
-          UMask = "0077";
-        };
-      })
-
-      (lib.mkIf (config.sing-box.enable && config.sing-box.fptn.enable) {
-        fptn.serviceConfig = mkDefaults {
-          KeyringMode = "private";
-          PrivateIPC = true;
-          ProtectHostname = true;
-          RestrictRealtime = true;
-          RestrictSUIDSGID = true;
-          SystemCallArchitectures = "native";
-          UMask = "0077";
-        };
-      })
-
       (lib.mkIf config.services.avahi.enable {
         avahi-daemon.serviceConfig = mkDefaults {
           KeyringMode = "private";
@@ -511,29 +467,31 @@ in
       })
 
       (lib.mkIf config.services.accounts-daemon.enable {
-        accounts-daemon.serviceConfig = (mkDefaults {
-          NoNewPrivileges = true;
-          ProtectClock = true;
-          ProtectHostname = true;
-          ProtectKernelLogs = true;
-          ProtectProc = "invisible";
-          ProcSubset = "pid";
-          PrivateIPC = true;
-          IPAddressDeny = "any";
-          RestrictSUIDSGID = true;
-          KeyringMode = "private";
-          SystemCallErrorNumber = "EPERM";
-          UMask = "0077";
-        }) // {
-          # Replace upstream ~@mount denylist with strict allowlist
-          SystemCallFilter = lib.mkForce [
-            ""
-            "@system-service"
-            "~@mount"
-            "~@privileged"
-            "~@resources"
-          ];
-        };
+        accounts-daemon.serviceConfig =
+          (mkDefaults {
+            NoNewPrivileges = true;
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectProc = "invisible";
+            ProcSubset = "pid";
+            PrivateIPC = true;
+            IPAddressDeny = "any";
+            RestrictSUIDSGID = true;
+            KeyringMode = "private";
+            SystemCallErrorNumber = "EPERM";
+            UMask = "0077";
+          })
+          // {
+            # Replace upstream ~@mount denylist with strict allowlist
+            SystemCallFilter = lib.mkForce [
+              ""
+              "@system-service"
+              "~@mount"
+              "~@privileged"
+              "~@resources"
+            ];
+          };
       })
 
       (lib.mkIf config.services.usbguard.enable {
