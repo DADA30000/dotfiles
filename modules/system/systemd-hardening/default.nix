@@ -96,17 +96,6 @@ let
     ];
   };
 
-  light = {
-    ProtectClock = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    LockPersonality = true;
-    RestrictSUIDSGID = true;
-    KeyringMode = "private";
-    SystemCallArchitectures = "native";
-  };
-
   libvirtAux = base // {
     ProtectSystem = "strict";
     ProtectHome = true;
@@ -172,8 +161,7 @@ in
             SystemCallFilter = safeSyscalls;
           }
         );
-        # nix-daemon spawns sandboxed builds (needs namespaces/chown/mounts)
-        nix-daemon.serviceConfig = mkDefaults (light // { RestrictRealtime = true; });
+        # nix-daemon spawns sandboxed builds (CLONE_NEWUTS/sethostname, 32-bit i686 builds); leave unconfined
         # Fan / NV-Blindfold / Ryzen TDP: needs /sys, /dev (hwmon/PCI/SMU), /run/hwcontrol.sock, /proc/cpuinfo
         hardware-control-daemon.serviceConfig = mkDefaults (
           base
@@ -487,16 +475,14 @@ in
 
       # SSH, Printing, Desktop & Security Daemons
       (lib.mkIf config.services.openssh.enable {
-        sshd.serviceConfig = mkDefaults (
-          light
-          // {
-            ProtectKernelTunables = true;
-            ProtectControlGroups = true;
-            PrivateTmp = true;
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-          }
-        );
+        sshd.serviceConfig = mkDefaults {
+          ProtectClock = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          KeyringMode = "private";
+        };
       })
 
       (lib.mkIf config.services.printing.enable {
@@ -750,14 +736,8 @@ in
         );
       })
 
-      # Virtualization & Containers
-      (lib.mkIf config.virtualisation.podman.enable {
-        podman.serviceConfig = mkDefaults light;
-      })
-
+      # Virtualization auxiliary daemons (hypervisor/container spawners left unconfined)
       (lib.mkIf config.virtualisation.libvirtd.enable {
-        libvirtd.serviceConfig = mkDefaults light;
-        libvirt-guests.serviceConfig = mkDefaults (light // { ProtectHome = true; });
         virtlogd.serviceConfig = mkDefaults (
           libvirtAux
           // {
@@ -785,10 +765,6 @@ in
             ];
           }
         );
-        virtqemud.serviceConfig = mkDefaults light;
-        virtlxcd.serviceConfig = mkDefaults light;
-        virtvboxd.serviceConfig = mkDefaults light;
-        virtxend.serviceConfig = mkDefaults light;
       })
 
       # Custom Web / DDNS

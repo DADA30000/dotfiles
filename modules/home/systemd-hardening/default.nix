@@ -12,26 +12,45 @@ let
   # systemd 262 --user supports BOTH seccomp/process restrictions AND
   # mount-namespace sandboxing (via unprivileged user namespaces).
   #
+  # IMPORTANT systemd --user caveats:
+  # - Any mount/UTS/net namespace directive (ProtectSystem, ProtectHome,
+  #   PrivateTmp, PrivateDevices, ProtectKernel*, ProtectControlGroups,
+  #   ProtectClock, ProtectHostname, ProtectProc, ProcSubset, PrivateUsers,
+  #   PrivateNetwork) implicitly creates an unprivileged CLONE_NEWUSER with
+  #   uid_map `UID UID 1`. Do NOT use those on xdg-desktop-portal*, portal
+  #   clients (which need /proc/<pid>/root in the host userns), or units
+  #   calling setfacl for other UIDs (e.g. replays.service).
+  # - PrivateIPC=true fails mounting /dev/mqueue in unprivileged userns.
+  # - IPAddressDeny= requires root BPF cgroup privileges (ignored in --user).
+  #
   # Use `systemd.user.services.<name>.Service` for HM-defined units, and
   # `systemd.user.serviceDropins.<name>.Service` for NixOS/package-provided
   # user units (so you don't shadow their upstream ExecStart=).
   #
   # Service = {
-  #   # --- Privilege & Capability Hygiene ---
-  #   NoNewPrivileges = true;        # blocks setuid/setgid & file caps (breaks /run/wrappers/bin/* like wivrn-server)
+  #   # --- Privilege & Capability Hygiene (host-userns safe) ---
+  #   NoNewPrivileges = true;        # blocks setuid/setgid & file caps
   #   UMask = "0077";                # owner-only permissions on newly created files/sockets
+  #   KeyringMode = "private";       # isolates kernel keyring
+  #   LockPersonality = true;        # locks personality(2) to native domain
+  #   RestrictNamespaces = true;     # blocks creating nested namespaces
+  #   RestrictRealtime = true;       # blocks SCHED_FIFO/SCHED_RR (breaks PipeWire/WirePlumber/EasyEffects)
+  #   RestrictSUIDSGID = true;       # blocks creating SUID/SGID files
+  #   MemoryDenyWriteExecute = true; # enforces W^X (breaks Qt/QML, GTK/GJS, Mesa/Vulkan/GL, audio plugins)
+  #   RestrictAddressFamilies = [ "AF_UNIX" ];
+  #   SystemCallArchitectures = "native";
+  #   SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+  #   SystemCallErrorNumber = "EPERM";
   #
-  #   # --- Filesystem Isolation (userns mount namespaces) ---
+  #   # --- Filesystem & Namespace Isolation (triggers CLONE_NEWUSER in --user) ---
   #   # Specifiers: %h=$HOME, %t=$XDG_RUNTIME_DIR, %E=$XDG_CONFIG_HOME,
   #   # %D=$XDG_DATA_HOME, %C=$XDG_CACHE_HOME, %S=$XDG_STATE_HOME.
   #   # Prefix a path with "-" to ignore it if it does not exist yet.
   #   ProtectSystem = "strict";      # entire FS read-only except ReadWritePaths
   #   ReadWritePaths = [ "-%t/my-service" ];
-  #   ProtectHome = true;            # hides $HOME completely (use "read-only" or false when granting ReadWritePaths under %h)
+  #   ProtectHome = true;            # hides $HOME completely (use "read-only" when granting ReadWritePaths under %h)
   #   PrivateTmp = true;             # private /tmp and /var/tmp (breaks X11 /tmp/.X11-unix IPC)
   #   PrivateDevices = true;         # minimal /dev (breaks GPU /dev/dri, /dev/nvidia*, audio /dev/snd)
-  #
-  #   # --- Kernel, Hardware & Procfs Protection ---
   #   ProtectKernelTunables = true;  # /proc/sys and /sys read-only
   #   ProtectKernelModules = true;   # blocks module load syscalls
   #   ProtectKernelLogs = true;      # blocks dmesg / /dev/kmsg
@@ -40,22 +59,8 @@ let
   #   ProtectHostname = true;        # private UTS namespace
   #   ProtectProc = "invisible";     # hides other users' /proc/<pid>
   #   ProcSubset = "pid";            # hides /proc/meminfo, /proc/stat, etc.
-  #
-  #   # --- Namespace & IPC Isolation ---
   #   PrivateNetwork = true;         # loopback-only netns (breaks LAN/internet)
-  #   PrivateIPC = true;             # isolates SysV IPC & POSIX mqueues
-  #   KeyringMode = "private";       # isolates kernel keyring
-  #   RestrictNamespaces = true;     # blocks creating nested namespaces
-  #
-  #   # --- Memory, Execution & Seccomp ---
-  #   MemoryDenyWriteExecute = true; # enforces W^X (breaks Qt/QML, GTK/GJS, Mesa/Vulkan/GL, audio plugins)
-  #   LockPersonality = true;        # locks personality(2) to native domain
-  #   RestrictRealtime = true;       # blocks SCHED_FIFO/SCHED_RR (breaks PipeWire, WirePlumber, EasyEffects, WiVRn)
-  #   RestrictSUIDSGID = true;       # blocks creating SUID/SGID files
-  #   RestrictAddressFamilies = [ "AF_UNIX" ];
-  #   SystemCallArchitectures = "native";
-  #   SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
-  #   SystemCallErrorNumber = "EPERM";
+  #   PrivateUsers = true;           # isolates user namespace
   # };
   # ---------------------------------------------------------------------------
 
@@ -78,14 +83,11 @@ let
     "AF_NETLINK"
   ];
 
-  base = {
+  # Pure process/seccomp/socket hardening without mount/UTS/net namespaces,
+  # keeping the unit in the host user namespace (required for portals,
+  # portal-using apps, dbus-broker reloads, and cross-UID setfacl).
+  hostUserns = {
     NoNewPrivileges = true;
-    ProtectClock = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    ProtectKernelTunables = true;
-    ProtectControlGroups = true;
     LockPersonality = true;
     RestrictNamespaces = true;
     RestrictRealtime = true;
@@ -95,12 +97,21 @@ let
     SystemCallErrorNumber = "EPERM";
   };
 
+  # Base for leaf daemons that can safely run in an unprivileged userns.
+  base = hostUserns // {
+    ProtectClock = true;
+    ProtectHostname = true;
+    ProtectKernelLogs = true;
+    ProtectKernelModules = true;
+    ProtectKernelTunables = true;
+    ProtectControlGroups = true;
+  };
+
   tight = base // {
     ProtectSystem = "strict";
     PrivateTmp = true;
     PrivateDevices = true;
     DevicePolicy = "closed";
-    PrivateIPC = true;
     PrivateUsers = true;
     ProtectProc = "invisible";
     ProcSubset = "pid";
@@ -116,16 +127,8 @@ let
   bridge = tight // {
     ProtectHome = "read-only";
     PrivateNetwork = true;
-    IPAddressDeny = "any";
     ReadWritePaths = [ "%t" ];
     RestrictAddressFamilies = [ "AF_UNIX" ];
-  };
-
-  gui = base // {
-    ProtectSystem = "strict";
-    ProtectHome = "read-only";
-    ProtectProc = "invisible";
-    SystemCallFilter = safeSyscalls;
   };
 
   audio = {
@@ -141,7 +144,6 @@ let
     ProtectProc = "invisible";
     PrivateTmp = true;
     PrivateNetwork = true;
-    IPAddressDeny = "any";
     LockPersonality = true;
     RestrictNamespaces = true;
     RestrictSUIDSGID = true;
@@ -153,23 +155,15 @@ let
     SystemCallArchitectures = "native";
     SystemCallErrorNumber = "EPERM";
   };
-
-  light = {
-    ProtectClock = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    LockPersonality = true;
-    RestrictSUIDSGID = true;
-    KeyringMode = "private";
-    SystemCallArchitectures = "native";
-  };
 in
 {
   options.systemd-hardening.enable = lib.mkEnableOption "per-service Home Manager systemd user hardening";
 
   config = lib.mkIf cfg.enable {
     # HM-Owned User Services (merged directly into systemd.user.services)
+    # Note: noctalia.service is intentionally left unsandboxed — it is the
+    # desktop shell (app launcher via app2unit scopes, screenshots to
+    # ~/Pictures/Screenshots, Polkit/NM secret agent, notifications, plugins).
     systemd.user.services = lib.mkMerge [
       {
         # cgroup-executioner monitors user cgroups (/sys/fs/cgroup) & kills scopes
@@ -181,7 +175,6 @@ in
             ProtectProc = "default";
             ProcSubset = "all";
             PrivateNetwork = true;
-            IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
             SystemCallFilter = safeSyscalls;
           }
@@ -192,7 +185,6 @@ in
           bridge
           // {
             PrivateNetwork = false;
-            PrivateIPC = false;
             PrivateUsers = false;
             ReadWritePaths = [
               "%t"
@@ -203,15 +195,12 @@ in
         sunshine.Service = mkDefaults bridge;
         opentabletdriver.Service = mkDefaults bridge;
 
+        # Uses xdg-desktop-portal -> must stay in host userns
         valent.Service = mkDefaults (
-          gui
+          hostUserns
           // {
-            ProtectHome = false;
-            ReadWritePaths = [
-              "%h"
-              "%t"
-            ];
             RestrictAddressFamilies = netAF ++ [ "AF_BLUETOOTH" ];
+            SystemCallFilter = safeSyscalls;
           }
         );
       }
@@ -221,14 +210,14 @@ in
       })
 
       (lib.mkIf config.services.easyeffects.enable {
+        # Uses xdg-desktop-portal + realtime audio -> host userns, allow RT
         easyeffects.Service = mkDefaults (
-          audio
+          hostUserns
           // {
-            ReadWritePaths = [
-              "-%E/easyeffects"
-              "-%D/easyeffects"
-              "-%C/easyeffects"
-              "%t"
+            RestrictRealtime = false;
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
             ];
             SystemCallFilter = safeSyscalls;
           }
@@ -236,38 +225,29 @@ in
       })
 
       (lib.mkIf config.replays.enable {
-        # User bridge forwarding env + setfacl (needs host UID map so replays UID resolves)
+        # Runs setfacl -m u:replays:r on /run/user/%U/replays.env -> must stay
+        # in host userns so the `replays` system UID is mapped in uid_map.
         replays.Service = mkDefaults (
-          bridge
+          hostUserns
           // {
-            PrivateUsers = false;
+            MemoryDenyWriteExecute = true;
+            UMask = "0077";
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+            SystemCallFilter = [
+              "@system-service"
+              "~@privileged"
+              "~@resources"
+            ];
           }
         );
       })
 
       (lib.mkIf config.hyprland.enable {
-        noctalia.Service = mkDefaults (
-          gui
-          // {
-            ReadWritePaths = [
-              "-%E/noctalia"
-              "-%C/noctalia"
-              "-%D/noctalia"
-              "-%S/noctalia"
-              "-%C/quickshell"
-              "-%C/nvidia"
-              "%t"
-            ];
-            RestrictAddressFamilies = netAF;
-          }
-        );
-
         oo7-daemon.Service = mkDefaults (
           tight
           // {
             ProtectHome = "read-only";
             PrivateNetwork = true;
-            IPAddressDeny = "any";
             ReadWritePaths = [
               "-%D/keyrings"
               "%t"
@@ -281,7 +261,6 @@ in
           // {
             ProtectHome = "read-only";
             PrivateNetwork = true;
-            IPAddressDeny = "any";
             ReadWritePaths = [
               "-%D/keyrings"
               "%t"
@@ -303,16 +282,29 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%E/dconf"
+            "-%C/dconf"
             "%t"
           ];
           RestrictAddressFamilies = [ "AF_UNIX" ];
         }
       );
 
-      dbus-broker.Service = mkDefaults bridge;
+      # Session D-Bus stays in host userns for clean reloads & peer credentials
+      dbus-broker.Service = mkDefaults (
+        hostUserns
+        // {
+          MemoryDenyWriteExecute = true;
+          UMask = "0077";
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+        }
+      );
 
       at-spi-dbus-bus.Service = mkDefaults bridge;
 
@@ -323,7 +315,6 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%D/flatpak"
             "%t"
@@ -338,52 +329,34 @@ in
         // {
           ProtectHome = true;
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ProtectProc = "default";
           ProcSubset = "all";
           RestrictAddressFamilies = [ "none" ];
         }
       );
 
-      podman.Service = mkDefaults light;
-
-      # Portals
+      # Portals must stay in host userns so /proc/<pid>/root opens succeed
       xdg-desktop-portal.Service = mkDefaults (
-        gui
+        hostUserns
         // {
-          ProtectHome = false;
-          ReadWritePaths = [
-            "%h"
-            "%t"
-          ];
           RestrictAddressFamilies = netAF;
+          SystemCallFilter = safeSyscalls;
         }
       );
 
       xdg-desktop-portal-gtk.Service = mkDefaults (
-        gui
+        hostUserns
         // {
-          ProtectHome = false;
-          PrivateNetwork = true;
-          IPAddressDeny = "any";
-          ReadWritePaths = [
-            "%h"
-            "%t"
-          ];
           RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallFilter = safeSyscalls;
         }
       );
 
       xdg-desktop-portal-hyprland.Service = mkDefaults (
-        gui
+        hostUserns
         // {
-          PrivateNetwork = true;
-          IPAddressDeny = "any";
-          ReadWritePaths = [
-            "-%C"
-            "%t"
-          ];
           RestrictAddressFamilies = [ "AF_UNIX" ];
+          SystemCallFilter = safeSyscalls;
         }
       );
 
@@ -393,7 +366,6 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%D/gvfs-metadata"
             "%t"
@@ -427,7 +399,6 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
@@ -443,7 +414,6 @@ in
           PrivateDevices = false;
           DevicePolicy = "auto";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
@@ -472,7 +442,6 @@ in
           PrivateDevices = false;
           DevicePolicy = "auto";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
@@ -488,7 +457,6 @@ in
           PrivateDevices = false;
           DevicePolicy = "auto";
           PrivateNetwork = true;
-          IPAddressDeny = "any";
           ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
@@ -540,7 +508,7 @@ in
         }
       );
 
-      # WiVRn user service is now a lightweight bridge to hardened wivrn@%u.service
+      # WiVRn user service is a lightweight bridge to hardened wivrn@%u.service
       wivrn.Service = mkDefaults bridge;
     };
   };

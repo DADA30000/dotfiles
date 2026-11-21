@@ -626,6 +626,7 @@ let
       geminiWeb2ApiBin = pkgs.buildGoModule {
         pname = "gemini-web2api";
         inherit version src;
+        patches = [ ../../../stuff/patches/gemini-web2api-chunk-long-prompt.patch ];
 
         vendorHash = "sha256-9qH33RD7DnIBoh5Cg9/c2jvl1X8nhSE+8n2H9RCbdwQ=";
         overrideModAttrs = _: {
