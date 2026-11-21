@@ -340,6 +340,7 @@ in
             "CAP_KILL"
             "CAP_DAC_OVERRIDE"
             "CAP_CHOWN"
+            "CAP_FOWNER"
             "CAP_SETUID"
             "CAP_SETGID"
           ];
@@ -349,6 +350,10 @@ in
           ReadWritePaths = [
             "/var/lib/replays"
             "/home"
+          ];
+          InaccessiblePaths = [
+            "-/run/dbus/system_bus_socket"
+            "-/run/systemd/private"
           ];
           PrivateDevices = true;
           DevicePolicy = "closed";

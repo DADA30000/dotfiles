@@ -536,11 +536,7 @@ in
         in
         {
           description = "Sunshine Game Streaming Host for %i";
-          after = [
-            "graphical.target"
-            "user@%U.service"
-          ];
-          bindsTo = [ "user@%U.service" ];
+          after = [ "graphical.target" ];
 
           serviceConfig = {
             User = "%i";
@@ -554,7 +550,7 @@ in
             NoNewPrivileges = true;
             PrivateTmp = true;
             ProtectSystem = "strict";
-            ProtectHome = "read-only";
+            ProtectHome = false;
             ProtectClock = true;
             ProtectHostname = true;
             ProtectKernelLogs = true;
@@ -566,14 +562,15 @@ in
             RestrictNamespaces = true;
             RestrictSUIDSGID = true;
             KeyringMode = "private";
+            ReadOnlyPaths = [ "/home" ];
             ReadWritePaths = [
               "-/home/%i/.config/sunshine"
               "-/home/%i/.cache"
-              "/run/user/%U"
+              "/run/user"
             ];
             InaccessiblePaths = [
+              "-/root"
               "-/run/systemd/private"
-              "-/run/user/%U/systemd/private"
             ];
             RestrictAddressFamilies = [
               "AF_UNIX"
@@ -624,7 +621,7 @@ in
             NoNewPrivileges = true;
             PrivateTmp = true;
             ProtectSystem = "strict";
-            ProtectHome = "read-only";
+            ProtectHome = false;
             ProtectClock = true;
             ProtectHostname = true;
             ProtectKernelLogs = true;
@@ -639,16 +636,16 @@ in
             RestrictRealtime = true;
             RestrictSUIDSGID = true;
             KeyringMode = "private";
+            ReadOnlyPaths = [ "/home" ];
             ReadWritePaths = [
               "-/home/%i/.config/OpenTabletDriver"
               "-/home/%i/.local/share/OpenTabletDriver"
-              "/run/user/%U"
+              "/run/user"
             ];
             InaccessiblePaths = [
+              "-/root"
               "-/run/dbus/system_bus_socket"
               "-/run/systemd/private"
-              "-/run/user/%U/bus"
-              "-/run/user/%U/systemd/private"
             ];
             RestrictAddressFamilies = [
               "AF_UNIX"

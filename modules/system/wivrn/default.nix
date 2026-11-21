@@ -100,6 +100,11 @@ with lib;
         Restart = mkForce "on-failure";
         RestartSec = mkForce "3s";
 
+        # Clear upstream user-unit directives that fail in systemd --user namespaces
+        AmbientCapabilities = mkForce "";
+        CapabilityBoundingSet = mkForce "";
+        RemoveIPC = mkForce false;
+
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = "read-only";
@@ -144,9 +149,7 @@ with lib;
       after = [
         "graphical.target"
         "network.target"
-        "user@%U.service"
       ];
-      bindsTo = [ "user@%U.service" ];
       environment.PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1";
       serviceConfig = {
         Type = "simple";
@@ -166,18 +169,19 @@ with lib;
         NoNewPrivileges = true;
 
         ProtectSystem = "strict";
-        ProtectHome = "read-only";
+        ProtectHome = false;
+        ReadOnlyPaths = [ "/home" ];
         ReadWritePaths = [
           "-/home/%i/.config/wivrn"
           "-/home/%i/.config/openxr"
           "-/home/%i/.local/share/wivrn"
           "-/home/%i/.cache/wivrn"
           "-/home/%i/.cache/nvidia"
-          "/run/user/%U"
+          "/run/user"
         ];
         InaccessiblePaths = [
+          "-/root"
           "-/run/systemd/private"
-          "-/run/user/%U/systemd/private"
         ];
         PrivateTmp = true;
         ProtectClock = true;

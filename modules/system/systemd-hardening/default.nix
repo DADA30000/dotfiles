@@ -159,7 +159,10 @@ let
       "CAP_DAC_READ_SEARCH"
       "CAP_CHOWN"
     ];
-    RestrictAddressFamilies = [ "AF_UNIX" ];
+    RestrictAddressFamilies = [
+      "AF_UNIX"
+      "AF_NETLINK"
+    ];
     InaccessiblePaths = noDbusOrSystemd;
     # Based on upstream libvirt virtlogd lockdown (allows @resources for libnuma constructor)
     SystemCallFilter = [
@@ -292,7 +295,6 @@ in
             PrivateNetwork = true;
             IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
-            InaccessiblePaths = noDbusOrSystemd;
           }
         );
       }

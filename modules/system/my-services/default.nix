@@ -115,11 +115,16 @@ in
         nginx.serviceConfig.ReadWritePaths = [ "/website/stream" ];
         cloudflare-ddns = lib.mkIf cfg.cloudflare-ddns.enable {
           description = "Update Cloudflare DDNS Records";
+          path = with pkgs; [
+            coreutils
+            findutils
+            gnused
+          ];
           serviceConfig = {
             Type = "oneshot";
             DynamicUser = true;
-            LoadCredential = "cloudflare-ddns:/etc/credstore/cloudflare-ddns";
-            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns %d/cloudflare-ddns";
+            BindReadOnlyPaths = [ "/etc/credstore/cloudflare-ddns:/run/cloudflare-ddns" ];
+            ExecStart = "/run/current-system/sw/bin/update-cloudflare-dns /run/cloudflare-ddns";
 
             NoNewPrivileges = true;
             CapabilityBoundingSet = "";
