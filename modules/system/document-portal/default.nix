@@ -53,9 +53,9 @@ in
           "CAP_DAC_OVERRIDE"
           "CAP_CHOWN"
         ];
-        PrivateNetwork = true;
+        # Avoid PrivateNetwork/PrivateIPC/mount-ns directives so the FUSE mount
+        # stays in PID 1's mount namespace and propagates to the host.
         IPAddressDeny = "any";
-        PrivateIPC = true;
         LockPersonality = true;
         RestrictNamespaces = true;
         RestrictRealtime = true;
