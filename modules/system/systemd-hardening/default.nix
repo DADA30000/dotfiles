@@ -252,7 +252,6 @@ in
             PrivateNetwork = true;
             IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
-            InaccessiblePaths = noDbusOrSystemd;
           }
         );
         systemd-ask-password-console.serviceConfig = mkDefaults (
