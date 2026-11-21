@@ -33,6 +33,8 @@ in
 
   systemd-hardening.enable = true;
 
+  replays.enable = true;
+
   environment.memoryAllocator.provider = options.environment.memoryAllocator.provider.default;
 
   nixpkgs.config.allowUnfree = true;
@@ -780,8 +782,6 @@ in
   };
 
   programs = {
-
-    gpu-screen-recorder.enable = true;
 
     zsh.enable = true;
 

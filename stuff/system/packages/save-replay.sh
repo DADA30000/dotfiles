@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+set -euo pipefail
 MON_NAME=$(hyprctl activeworkspace -j | jq -r '.monitor')
-pkill -SIGUSR1 -f "gpu-screen-recorder.*-w $MON_NAME.*" &&
-  notify-send 'GPU-Screen-Recorder' "Повтор с $MON_NAME успешно сохранён"
+if [[ -z "$MON_NAME" || "$MON_NAME" == "null" ]]; then
+  exit 1
+fi
+printf '%s\n' "$MON_NAME" > "${XDG_RUNTIME_DIR}/replays-save.mon"
+exec systemctl start "replays-save@$(id -u).service"

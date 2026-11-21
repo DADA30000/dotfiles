@@ -1,0 +1,27 @@
+--- a/kms/client/kms_client.c
++++ b/kms/client/kms_client.c
+@@ -276,6 +276,16 @@
+         has_perm = true;
+     } else {
+ #ifdef __linux__
++        cap_t proc_cap = cap_get_proc();
++        if(proc_cap) {
++            cap_flag_value_t res = CAP_CLEAR;
++            cap_get_flag(proc_cap, CAP_SYS_ADMIN, CAP_EFFECTIVE, &res);
++            if(res == CAP_SET) {
++                has_perm = true;
++            }
++            cap_free(proc_cap);
++        }
++        if(!has_perm) {
+         cap_t kms_server_cap = cap_get_file(server_filepath);
+         if(kms_server_cap) {
+             cap_flag_value_t res = CAP_CLEAR;
+@@ -293,6 +303,7 @@
+             else
+                 gsr_log(GSR_LOG_LEVEL_INFO, "gsr_kms_client_init: failed to get cap");
+         }
++        }
+ #else
+         gsr_log(GSR_LOG_LEVEL_INFO, "gsr_kms_client_init: platform doesn't support cap");
+ #endif

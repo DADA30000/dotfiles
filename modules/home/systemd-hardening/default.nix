@@ -92,13 +92,16 @@ let
     RestrictSUIDSGID = true;
     KeyringMode = "private";
     SystemCallArchitectures = "native";
+    SystemCallErrorNumber = "EPERM";
   };
 
   tight = base // {
     ProtectSystem = "strict";
     PrivateTmp = true;
     PrivateDevices = true;
+    DevicePolicy = "closed";
     PrivateIPC = true;
+    PrivateUsers = true;
     ProtectProc = "invisible";
     ProcSubset = "pid";
     MemoryDenyWriteExecute = true;
@@ -108,6 +111,14 @@ let
       "~@privileged"
       "~@resources"
     ];
+  };
+
+  bridge = tight // {
+    ProtectHome = "read-only";
+    PrivateNetwork = true;
+    IPAddressDeny = "any";
+    ReadWritePaths = [ "%t" ];
+    RestrictAddressFamilies = [ "AF_UNIX" ];
   };
 
   gui = base // {
@@ -130,6 +141,7 @@ let
     ProtectProc = "invisible";
     PrivateTmp = true;
     PrivateNetwork = true;
+    IPAddressDeny = "any";
     LockPersonality = true;
     RestrictNamespaces = true;
     RestrictSUIDSGID = true;
@@ -138,6 +150,18 @@ let
       "AF_UNIX"
       "AF_NETLINK"
     ];
+    SystemCallArchitectures = "native";
+    SystemCallErrorNumber = "EPERM";
+  };
+
+  light = {
+    ProtectClock = true;
+    ProtectHostname = true;
+    ProtectKernelLogs = true;
+    ProtectKernelModules = true;
+    LockPersonality = true;
+    RestrictSUIDSGID = true;
+    KeyringMode = "private";
     SystemCallArchitectures = "native";
   };
 in
@@ -157,19 +181,15 @@ in
             ProtectProc = "default";
             ProcSubset = "all";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
             SystemCallFilter = safeSyscalls;
           }
         );
 
-        usbguard-notifier.Service = mkDefaults (
-          tight
-          // {
-            ProtectHome = true;
-            PrivateNetwork = true;
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
+        usbguard-notifier.Service = mkDefaults bridge;
+        sunshine.Service = mkDefaults bridge;
+        opentabletdriver.Service = mkDefaults bridge;
 
         valent.Service = mkDefaults (
           gui
@@ -185,15 +205,7 @@ in
       }
 
       (lib.mkIf config.services.ssh-agent.enable {
-        ssh-agent.Service = mkDefaults (
-          tight
-          // {
-            ProtectHome = true;
-            PrivateNetwork = true;
-            ReadWritePaths = [ "%t" ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
+        ssh-agent.Service = mkDefaults bridge;
       })
 
       (lib.mkIf config.services.easyeffects.enable {
@@ -212,19 +224,8 @@ in
       })
 
       (lib.mkIf config.replays.enable {
-        replays.Service = mkDefaults (
-          gui
-          // {
-            PrivateNetwork = true;
-            RestrictRealtime = false;
-            ReadWritePaths = [
-              "-%h/Videos"
-              "-%C"
-              "%t"
-            ];
-            RestrictAddressFamilies = [ "AF_UNIX" ];
-          }
-        );
+        # User bridge forwarding env & starting replays@%U.service
+        replays.Service = mkDefaults bridge;
       })
 
       (lib.mkIf config.hyprland.enable {
@@ -249,6 +250,7 @@ in
           // {
             ProtectHome = "read-only";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             ReadWritePaths = [
               "-%D/keyrings"
               "%t"
@@ -262,6 +264,7 @@ in
           // {
             ProtectHome = "read-only";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             ReadWritePaths = [
               "-%D/keyrings"
               "%t"
@@ -272,6 +275,10 @@ in
       })
     ];
 
+    # Mask unused PulseAudio daemon (PipeWire's pipewire-pulse handles audio)
+    xdg.configFile."systemd/user/pulseaudio.service".source =
+      config.lib.file.mkOutOfStoreSymlink "/dev/null";
+
     # System / Package-Provided User Units (via highest-priority drop-ins)
     systemd.user.serviceDropins = {
       dconf.Service = mkDefaults (
@@ -279,6 +286,7 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%E/dconf"
             "%t"
@@ -287,40 +295,18 @@ in
         }
       );
 
-      dbus-broker.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      dbus-broker.Service = mkDefaults bridge;
 
-      at-spi-dbus-bus.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = "read-only";
-          PrivateNetwork = true;
-          ReadWritePaths = [ "%t" ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      at-spi-dbus-bus.Service = mkDefaults bridge;
 
-      systembus-notify.Service = mkDefaults (
-        tight
-        // {
-          ProtectHome = true;
-          PrivateNetwork = true;
-          RestrictAddressFamilies = [ "AF_UNIX" ];
-        }
-      );
+      systembus-notify.Service = mkDefaults bridge;
 
       xdg-permission-store.Service = mkDefaults (
         tight
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%D/flatpak"
             "%t"
@@ -328,6 +314,21 @@ in
           RestrictAddressFamilies = [ "AF_UNIX" ];
         }
       );
+
+      # uwsm session bindpid watcher (just runs waitpid -e %i)
+      "wayland-session-bindpid@".Service = mkDefaults (
+        tight
+        // {
+          ProtectHome = true;
+          PrivateNetwork = true;
+          IPAddressDeny = "any";
+          ProtectProc = "default";
+          ProcSubset = "all";
+          RestrictAddressFamilies = [ "none" ];
+        }
+      );
+
+      podman.Service = mkDefaults light;
 
       # Portals
       xdg-desktop-portal.Service = mkDefaults (
@@ -346,6 +347,8 @@ in
         gui
         // {
           ProtectHome = false;
+          PrivateNetwork = true;
+          IPAddressDeny = "any";
           ReadWritePaths = [
             "%h"
             "%t"
@@ -358,6 +361,7 @@ in
         gui
         // {
           PrivateNetwork = true;
+          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%C"
             "%t"
@@ -372,6 +376,7 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
           ReadWritePaths = [
             "-%D/gvfs-metadata"
             "%t"
@@ -405,6 +410,8 @@ in
         // {
           ProtectHome = "read-only";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
+          ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
             "AF_NETLINK"
@@ -417,7 +424,10 @@ in
         // {
           ProtectHome = "read-only";
           PrivateDevices = false;
+          DevicePolicy = "auto";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
+          ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
             "AF_NETLINK"
@@ -429,6 +439,7 @@ in
         tight
         // {
           ProtectHome = "read-only";
+          ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
             "AF_INET"
@@ -442,7 +453,10 @@ in
         // {
           ProtectHome = "read-only";
           PrivateDevices = false;
+          DevicePolicy = "auto";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
+          ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
             "AF_NETLINK"
@@ -455,7 +469,10 @@ in
         // {
           ProtectHome = "read-only";
           PrivateDevices = false;
+          DevicePolicy = "auto";
           PrivateNetwork = true;
+          IPAddressDeny = "any";
+          ReadWritePaths = [ "%t" ];
           RestrictAddressFamilies = [
             "AF_UNIX"
             "AF_NETLINK"
@@ -506,30 +523,8 @@ in
         }
       );
 
-      # WiVRn runs /run/wrappers/bin/wivrn-server: skip NoNewPrivileges so wrapper caps work
-      wivrn.Service = mkDefaults {
-        ProtectSystem = "strict";
-        ProtectHome = "read-only";
-        ProtectClock = true;
-        ProtectHostname = true;
-        ProtectKernelLogs = true;
-        ProtectKernelModules = true;
-        ProtectKernelTunables = true;
-        ProtectControlGroups = true;
-        ProtectProc = "invisible";
-        LockPersonality = true;
-        RestrictNamespaces = true;
-        RestrictSUIDSGID = true;
-        KeyringMode = "private";
-        ReadWritePaths = [
-          "-%E/wivrn"
-          "-%C/wivrn"
-          "-%C/nvidia"
-          "%t"
-        ];
-        RestrictAddressFamilies = netAF;
-        SystemCallArchitectures = "native";
-      };
+      # WiVRn user service is now a lightweight bridge to hardened wivrn@%u.service
+      wivrn.Service = mkDefaults bridge;
     };
   };
 }

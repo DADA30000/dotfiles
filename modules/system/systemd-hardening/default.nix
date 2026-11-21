@@ -75,6 +75,7 @@ let
     RestrictSUIDSGID = true;
     KeyringMode = "private";
     SystemCallArchitectures = "native";
+    SystemCallErrorNumber = "EPERM";
   };
 
   tight = base // {
@@ -88,7 +89,11 @@ let
     PrivateIPC = true;
     MemoryDenyWriteExecute = true;
     UMask = "0077";
-    SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+    SystemCallFilter = [
+      "@system-service"
+      "~@privileged"
+      "~@resources"
+    ];
   };
 
   light = {
@@ -107,10 +112,32 @@ let
     ProtectHome = true;
     PrivateDevices = true;
     DevicePolicy = "closed";
+    ProtectKernelTunables = true;
+    ProtectProc = "invisible";
     PrivateNetwork = true;
+    IPAddressDeny = "any";
     PrivateIPC = true;
     MemoryDenyWriteExecute = true;
+    CapabilityBoundingSet = [
+      "CAP_DAC_OVERRIDE"
+      "CAP_DAC_READ_SEARCH"
+      "CAP_CHOWN"
+    ];
     RestrictAddressFamilies = [ "AF_UNIX" ];
+    # Based on upstream libvirt virtlogd lockdown (allows @resources for libnuma constructor)
+    SystemCallFilter = [
+      "@system-service"
+      "~@clock"
+      "~@cpu-emulation"
+      "~@debug"
+      "~@module"
+      "~@mount"
+      "~@obsolete"
+      "~@privileged"
+      "~@raw-io"
+      "~@reboot"
+      "~@swap"
+    ];
     UMask = "0077";
   };
 
@@ -147,15 +174,30 @@ in
         );
         # nix-daemon spawns sandboxed builds (needs namespaces/chown/mounts)
         nix-daemon.serviceConfig = mkDefaults (light // { RestrictRealtime = true; });
-        # Fan / NV-Blindfold / Ryzen TDP: needs /sys, /dev (hwmon/PCI/SMU), CAP_SYS_RAWIO/CAP_SYS_ADMIN
+        # Fan / NV-Blindfold / Ryzen TDP: needs /sys, /dev (hwmon/PCI/SMU), /run/hwcontrol.sock, /proc/cpuinfo
         hardware-control-daemon.serviceConfig = mkDefaults (
           base
           // {
+            ProtectSystem = "strict";
             ProtectHome = true;
+            ProtectProc = "invisible";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
+            ReadWritePaths = [
+              "/sys"
+              "/dev"
+              "/run"
+            ];
+            CapabilityBoundingSet = [
+              "CAP_SYS_RAWIO"
+              "CAP_SYS_ADMIN"
+              "CAP_DAC_OVERRIDE"
+              "CAP_FOWNER"
+            ];
             RestrictAddressFamilies = [ "AF_UNIX" ];
+            SystemCallFilter = hwSyscalls;
             UMask = "0077";
           }
         );
@@ -168,6 +210,7 @@ in
             PrivateDevices = true;
             DevicePolicy = "closed";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             ReadWritePaths = [ "/sys/kernel/tracing" ];
@@ -181,28 +224,126 @@ in
             UMask = "0077";
           }
         );
+
+        # Vconsole reload helper & password agents
+        reload-systemd-vconsole-setup.serviceConfig = mkDefaults (
+          tight
+          // {
+            CapabilityBoundingSet = "";
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+          }
+        );
+        systemd-ask-password-console.serviceConfig = mkDefaults (
+          base
+          // {
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectKernelTunables = true;
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            PrivateIPC = true;
+            MemoryDenyWriteExecute = true;
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+            SystemCallFilter = safeSyscalls;
+            UMask = "0077";
+          }
+        );
+        systemd-ask-password-plymouth.serviceConfig = mkDefaults (
+          base
+          // {
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectKernelTunables = true;
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            PrivateIPC = true;
+            MemoryDenyWriteExecute = true;
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+            SystemCallFilter = safeSyscalls;
+            UMask = "0077";
+          }
+        );
+        systemd-ask-password-wall.serviceConfig = mkDefaults (
+          tight
+          // {
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            RestrictAddressFamilies = [ "AF_UNIX" ];
+          }
+        );
+
+        # User-bridged hardware shims (sunshine@, opentabletdriver@)
+        "sunshine@".serviceConfig = mkDefaults (
+          base
+          // {
+            ProtectSystem = "strict";
+            ProtectHome = "read-only";
+            ProtectKernelTunables = true;
+            ProtectProc = "invisible";
+            RestrictRealtime = false;
+            ReadWritePaths = [
+              "-/home/%i/.config/sunshine"
+              "-/home/%i/.cache"
+              "/run/user"
+            ];
+            RestrictAddressFamilies = netAF;
+            SystemCallFilter = safeSyscalls;
+            UMask = "0077";
+          }
+        );
+        "opentabletdriver@".serviceConfig = mkDefaults (
+          base
+          // {
+            ProtectSystem = "strict";
+            ProtectHome = "read-only";
+            ProtectKernelTunables = true;
+            ProtectProc = "invisible";
+            PrivateNetwork = true;
+            IPAddressDeny = "any";
+            ReadWritePaths = [
+              "-/home/%i/.config/OpenTabletDriver"
+              "-/home/%i/.local/share/OpenTabletDriver"
+              "/run/user"
+            ];
+            RestrictAddressFamilies = [
+              "AF_UNIX"
+              "AF_NETLINK"
+            ];
+            SystemCallFilter = safeSyscalls;
+            UMask = "0077";
+          }
+        );
       }
 
       # Networking, DNS & VPN
       (lib.mkIf config.networking.networkmanager.enable {
         NetworkManager.serviceConfig = mkDefaults {
           LockPersonality = true;
-          MemoryDenyWriteExecute = true;
           ProtectHostname = true;
           ProtectKernelModules = true;
           KeyringMode = "private";
+          RestrictAddressFamilies = netAF ++ [ "AF_PACKET" ];
           SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          # Strict allowlist matching systemd-networkd + NM's libbpf/setns/chroot usage
           SystemCallFilter = [
             "@system-service"
+            "bpf"
+            "setns"
+            "chroot"
+            "~@clock"
+            "~@cpu-emulation"
+            "~@debug"
+            "~@module"
             "~@mount"
+            "~@obsolete"
             "~@raw-io"
             "~@reboot"
             "~@swap"
-            "~@clock"
-            "~@debug"
-            "~@obsolete"
-            "~@cpu-emulation"
           ];
+          UMask = "0022";
         };
         NetworkManager-dispatcher.serviceConfig = mkDefaults (
           base
@@ -383,7 +524,7 @@ in
       })
 
       (lib.mkIf config.services.accounts-daemon.enable {
-        accounts-daemon.serviceConfig = mkDefaults {
+        accounts-daemon.serviceConfig = (mkDefaults {
           NoNewPrivileges = true;
           ProtectClock = true;
           ProtectHostname = true;
@@ -391,9 +532,20 @@ in
           ProtectProc = "invisible";
           ProcSubset = "pid";
           PrivateIPC = true;
+          IPAddressDeny = "any";
           RestrictSUIDSGID = true;
           KeyringMode = "private";
+          SystemCallErrorNumber = "EPERM";
           UMask = "0077";
+        }) // {
+          # Replace upstream ~@mount denylist with strict allowlist
+          SystemCallFilter = lib.mkForce [
+            ""
+            "@system-service"
+            "~@mount"
+            "~@privileged"
+            "~@resources"
+          ];
         };
       })
 
@@ -414,6 +566,7 @@ in
           // {
             CapabilityBoundingSet = "";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             RestrictAddressFamilies = [ "AF_UNIX" ];
           }
         );
@@ -483,6 +636,7 @@ in
             ProcSubset = "pid";
             PrivateIPC = true;
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateDevices = true;
             DevicePolicy = "closed";
             RestrictAddressFamilies = [ "AF_UNIX" ];
@@ -500,6 +654,7 @@ in
             ProtectSystem = "strict";
             ProtectHome = true;
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             ReadWritePaths = [
@@ -526,6 +681,7 @@ in
             ProtectSystem = "strict";
             ProtectHome = true;
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             ReadWritePaths = [
@@ -553,6 +709,7 @@ in
           // {
             ProtectHome = "read-only";
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             RestrictAddressFamilies = [
@@ -582,6 +739,7 @@ in
             ProtectSystem = "strict";
             ProtectHome = true;
             PrivateNetwork = true;
+            IPAddressDeny = "any";
             PrivateIPC = true;
             MemoryDenyWriteExecute = true;
             CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
