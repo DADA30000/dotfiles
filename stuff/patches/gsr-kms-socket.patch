@@ -1,0 +1,324 @@
+diff -ruN a/kms/client/kms_client.c b/kms/client/kms_client.c
+--- a/kms/client/kms_client.c	2026-11-21 20:40:24.668059186 +0300
++++ b/kms/client/kms_client.c	2026-11-21 20:40:24.688359478 +0300
+@@ -87,19 +87,26 @@
+ 
+     int res = 0;
+     for(;;) {
+-        res = recvmsg(server_fd, &response_message, MSG_DONTWAIT);
+-        if(res <= 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+-            // If we are replacing the connection and closing the application at the same time
+-            // then recvmsg can get stuck (because the server died), so we prevent that by doing
+-            // non-blocking recvmsg and checking if the server died
+-            int status = 0;
+-            int wait_result = waitpid(server_pid, &status, WNOHANG);
+-            if(wait_result != 0) {
+-                res = -1;
++        if(server_pid > 0) {
++            res = recvmsg(server_fd, &response_message, MSG_DONTWAIT);
++            if(res <= 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
++                // If we are replacing the connection and closing the application at the same time
++                // then recvmsg can get stuck (because the server died), so we prevent that by doing
++                // non-blocking recvmsg and checking if the server died
++                int status = 0;
++                int wait_result = waitpid(server_pid, &status, WNOHANG);
++                if(wait_result != 0) {
++                    res = -1;
++                    break;
++                }
++                usleep(1000);
++            } else {
+                 break;
+             }
+-            usleep(1000);
+         } else {
++            res = recvmsg(server_fd, &response_message, MSG_WAITALL | MSG_CMSG_CLOEXEC);
++            if(res == -1 && errno == EINTR)
++                continue;
+             break;
+         }
+     }
+@@ -225,6 +232,45 @@
+     struct sockaddr_un local_addr = {0};
+     struct sockaddr_un remote_addr = {0};
+ 
++    const char *daemon_socket = getenv("GSR_KMS_SOCKET");
++    if(daemon_socket && daemon_socket[0] != '\0') {
++        int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
++        if(fd == -1) {
++            gsr_log(GSR_LOG_LEVEL_ERROR, "gsr_kms_client_init: socket failed for GSR_KMS_SOCKET, error: %s", strerror(errno));
++            return -1;
++        }
++        remote_addr.sun_family = AF_UNIX;
++        if(strlen(daemon_socket) >= sizeof(remote_addr.sun_path)) {
++            gsr_log(GSR_LOG_LEVEL_ERROR, "gsr_kms_client_init: GSR_KMS_SOCKET path too long");
++            close(fd);
++            return -1;
++        }
++        snprintf(remote_addr.sun_path, sizeof(remote_addr.sun_path), "%s", daemon_socket);
++        if(connect(fd, (struct sockaddr*)&remote_addr, sizeof(remote_addr.sun_family) + strlen(remote_addr.sun_path)) == -1) {
++            gsr_log(GSR_LOG_LEVEL_ERROR, "gsr_kms_client_init: failed to connect to GSR_KMS_SOCKET %s, error: %s", daemon_socket, strerror(errno));
++            close(fd);
++            return -1;
++        }
++        char card_buf[256];
++        memset(card_buf, 0, sizeof(card_buf));
++        snprintf(card_buf, sizeof(card_buf), "%s", card_path ? card_path : "");
++        size_t sent = 0;
++        while(sent < sizeof(card_buf)) {
++            ssize_t n = send(fd, card_buf + sent, sizeof(card_buf) - sent, MSG_NOSIGNAL);
++            if(n <= 0) {
++                if(n == -1 && errno == EINTR)
++                    continue;
++                gsr_log(GSR_LOG_LEVEL_ERROR, "gsr_kms_client_init: failed to send card_path to GSR_KMS_SOCKET");
++                close(fd);
++                return -1;
++            }
++            sent += (size_t)n;
++        }
++        self->socket_pair[GSR_SOCKET_PAIR_LOCAL] = fd;
++        gsr_log(GSR_LOG_LEVEL_INFO, "gsr_kms_client_init: connected to daemon socket %s for %s", daemon_socket, card_buf);
++        return 0;
++    }
++
+     if(!create_socket_path(self->initial_socket_path, sizeof(self->initial_socket_path))) {
+         gsr_log(GSR_LOG_LEVEL_ERROR, "gsr_kms_client_init: failed to create path to kms socket");
+         return -1;
+diff -ruN a/kms/server/kms_server.c b/kms/server/kms_server.c
+--- a/kms/server/kms_server.c	2026-11-21 20:40:24.671434237 +0300
++++ b/kms/server/kms_server.c	2026-11-21 20:40:24.688446421 +0300
+@@ -12,9 +12,15 @@
+ #include <unistd.h>
+ #include <limits.h>
+ #include <fcntl.h>
++#include <grp.h>
++#include <pthread.h>
++#include <signal.h>
++#include <stdlib.h>
+ #include <sys/socket.h>
++#include <sys/stat.h>
+ #include <sys/un.h>
+ #include <time.h>
++#include <ctype.h>
+ 
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
+@@ -508,6 +514,206 @@
+     return (double)ts.tv_sec + (double)ts.tv_nsec * 0.000000001;
+ }
+ 
++static bool is_valid_dri_card_path(const char *path) {
++    const char *prefix = "/dev/dri/card";
++    const size_t prefix_len = strlen(prefix);
++    if(strncmp(path, prefix, prefix_len) != 0)
++        return false;
++    const char *digits = path + prefix_len;
++    if(digits[0] == '\0')
++        return false;
++    for(size_t i = 0; digits[i] != '\0'; ++i) {
++        if(!isdigit((unsigned char)digits[i]))
++            return false;
++    }
++    return true;
++}
++
++static bool pid_has_gid(pid_t pid, gid_t primary_gid, gid_t required_gid) {
++    if(primary_gid == required_gid)
++        return true;
++    char path[64];
++    snprintf(path, sizeof(path), "/proc/%d/status", (int)pid);
++    FILE *f = fopen(path, "r");
++    if(!f)
++        return false;
++    char line[512];
++    bool ok = false;
++    while(fgets(line, sizeof(line), f)) {
++        if(strncmp(line, "Groups:", 7) == 0) {
++            char *p = line + 7;
++            while(*p) {
++                while(*p == ' ' || *p == '\t') ++p;
++                if(*p == '\0' || *p == '\n') break;
++                char *end = NULL;
++                unsigned long g = strtoul(p, &end, 10);
++                if(end == p) break;
++                if((gid_t)g == required_gid) {
++                    ok = true;
++                    break;
++                }
++                p = end;
++            }
++            break;
++        }
++    }
++    fclose(f);
++    return ok;
++}
++
++typedef struct {
++    int client_fd;
++} daemon_client_args;
++
++static void* daemon_client_thread(void *arg) {
++    daemon_client_args *cargs = (daemon_client_args*)arg;
++    int client_fd = cargs->client_fd;
++    free(cargs);
++
++    char card_path[256];
++    size_t got = 0;
++    while(got < sizeof(card_path)) {
++        ssize_t n = recv(client_fd, card_path + got, sizeof(card_path) - got, 0);
++        if(n <= 0) {
++            if(n == -1 && errno == EINTR)
++                continue;
++            close(client_fd);
++            return NULL;
++        }
++        got += (size_t)n;
++    }
++    card_path[sizeof(card_path) - 1] = '\0';
++
++    if(!is_valid_dri_card_path(card_path)) {
++        fprintf(stderr, "kms daemon error: rejected invalid card path '%s'\n", card_path);
++        close(client_fd);
++        return NULL;
++    }
++
++    gsr_drm drm;
++    drm.drmfd = open(card_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++    if(drm.drmfd < 0) {
++        fprintf(stderr, "kms daemon error: failed to open %s: %s\n", card_path, strerror(errno));
++        close(client_fd);
++        return NULL;
++    }
++
++    if(drmGetNodeTypeFromFd(drm.drmfd) != DRM_NODE_PRIMARY) {
++        fprintf(stderr, "kms daemon error: %s is not a drm primary node\n", card_path);
++        close_fd(&drm.drmfd);
++        close(client_fd);
++        return NULL;
++    }
++
++    if(drmSetClientCap(drm.drmfd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1) != 0) {
++        fprintf(stderr, "kms daemon error: DRM_CLIENT_CAP_UNIVERSAL_PLANES failed: %s\n", strerror(errno));
++        close_fd(&drm.drmfd);
++        close(client_fd);
++        return NULL;
++    }
++
++    if(drmSetClientCap(drm.drmfd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
++        fprintf(stderr, "kms daemon warning: DRM_CLIENT_CAP_ATOMIC failed: %s\n", strerror(errno));
++    }
++
++    for(;;) {
++        gsr_kms_request request;
++        request.version = 0;
++        request.type = -1;
++        request.new_connection_fd = -1;
++
++        const int recv_res = recv_msg_from_client(client_fd, &request);
++        if(recv_res <= 0)
++            break;
++
++        close_fd(&request.new_connection_fd);
++
++        if(request.version != GSR_KMS_PROTOCOL_VERSION)
++            continue;
++
++        gsr_kms_response response;
++        memset(&response, 0, sizeof(response));
++        response.version = GSR_KMS_PROTOCOL_VERSION;
++        response.result = KMS_RESULT_INVALID_REQUEST;
++        response.num_items = 0;
++
++        if(request.type == KMS_REQUEST_TYPE_GET_KMS) {
++            kms_get_fb(&drm, &response);
++        } else {
++            snprintf(response.err_msg, sizeof(response.err_msg), "unsupported request type %d in daemon mode", request.type);
++        }
++
++        if(send_msg_to_client(client_fd, &response) == -1) {
++            kms_response_close_fds(&response);
++            break;
++        }
++        kms_response_close_fds(&response);
++    }
++
++    close_fd(&drm.drmfd);
++    close(client_fd);
++    return NULL;
++}
++
++static int run_daemon(const char *allowed_group) {
++    signal(SIGPIPE, SIG_IGN);
++
++    bool check_group = false;
++    gid_t required_gid = 0;
++    if(allowed_group && allowed_group[0] != '\0') {
++        struct group *gr = getgrnam(allowed_group);
++        if(!gr) {
++            fprintf(stderr, "kms daemon error: unknown group '%s'\n", allowed_group);
++            return 2;
++        }
++        required_gid = gr->gr_gid;
++        check_group = true;
++    }
++
++    const char *listen_fds_env = getenv("LISTEN_FDS");
++    if(!listen_fds_env || atoi(listen_fds_env) < 1) {
++        fprintf(stderr, "kms daemon error: expected systemd socket activation (LISTEN_FDS>=1)\n");
++        return 2;
++    }
++    int listen_fd = 3;
++
++    for(;;) {
++        int client_fd = accept4(listen_fd, NULL, NULL, SOCK_CLOEXEC);
++        if(client_fd == -1) {
++            if(errno == EINTR)
++                continue;
++            fprintf(stderr, "kms daemon error: accept4 failed: %s\n", strerror(errno));
++            return 2;
++        }
++
++        if(check_group) {
++            struct ucred cred;
++            socklen_t cred_len = sizeof(cred);
++            if(getsockopt(client_fd, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len) != 0 ||
++               (cred.uid != 0 && !pid_has_gid(cred.pid, cred.gid, required_gid))) {
++                fprintf(stderr, "kms daemon error: unauthorized peer pid=%d uid=%u gid=%u\n",
++                        (int)cred.pid, (unsigned)cred.uid, (unsigned)cred.gid);
++                close(client_fd);
++                continue;
++            }
++        }
++
++        daemon_client_args *cargs = malloc(sizeof(*cargs));
++        if(!cargs) {
++            close(client_fd);
++            continue;
++        }
++        cargs->client_fd = client_fd;
++        pthread_t tid;
++        if(pthread_create(&tid, NULL, daemon_client_thread, cargs) == 0) {
++            pthread_detach(tid);
++        } else {
++            free(cargs);
++            close(client_fd);
++        }
++    }
++}
++
+ int main(int argc, char **argv) {
+     setlocale(LC_ALL, "C"); // Sigh... stupid C
+ 
+@@ -516,6 +722,11 @@
+     gsr_drm drm;
+     drm.drmfd = -1;
+ 
++    if(argc >= 2 && strcmp(argv[1], "--daemon") == 0) {
++        const char *allowed_group = (argc >= 3) ? argv[2] : NULL;
++        return run_daemon(allowed_group);
++    }
++
+     if(argc != 3) {
+         fprintf(stderr, "usage: gsr-kms-server <domain_socket_path> <card_path>\n");
+         return 1;

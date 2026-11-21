@@ -427,10 +427,7 @@ in
 
       # PipeWire / WirePlumber (keeps realtime audio + /dev/snd + Bluetooth + RTKit on system bus)
       pipewire = {
-        dbus = {
-          talk = [ "org.freedesktop.portal.Desktop" ];
-          see = [ "org.jackaudio.service" ];
-        };
+        dbus.talk = [ "org.freedesktop.portal.Desktop" ];
         Service = mkDefaults (
           audio
           // {

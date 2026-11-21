@@ -36,6 +36,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    boot.kernelModules = [
+      "erofs"
+      "overlay"
+      "loop"
+    ];
+
     systemd.services."umu-mount@" = {
       description = "Isolated ephemeral UMU runtime overlay for UID %i";
       serviceConfig = {

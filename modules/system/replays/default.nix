@@ -8,7 +8,7 @@ let
   cfg = config.replays;
 
   gsrPatched = pkgs.gpu-screen-recorder.overrideAttrs (prev: {
-    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/gsr-ambient-cap.patch ];
+    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/gsr-kms-socket.patch ];
   });
 
   replaysRunner = pkgs.writeShellApplication {
@@ -23,25 +23,28 @@ let
     ];
     text = ''
       set -euo pipefail
-      export XDG_RUNTIME_DIR="/run/replays"
-      export HOME="/var/cache/replays"
-      export PULSE_SERVER="unix:/run/replays/pulse/native"
-      if [ -f /run/replays/replays.env ]; then
+      uid="$1"
+      export XDG_RUNTIME_DIR="/run/replays-$uid"
+      export HOME="/var/cache/replays/$uid"
+      export PULSE_SERVER="unix:/run/replays-$uid/pulse/native"
+      export GSR_KMS_SOCKET="/run/gsr-kms/kms.sock"
+      if [ -f "/run/replays-$uid/replays.env" ]; then
         set -a
-        # shellcheck disable=SC1091
-        . /run/replays/replays.env
+        # shellcheck disable=SC1090
+        . "/run/replays-$uid/replays.env"
         set +a
       fi
       export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-1}"
 
-      mkdir -p /var/lib/replays
+      state_dir="/var/lib/replays/$uid"
+      mkdir -p "$state_dir"
       pids=()
       for status_file in /sys/class/drm/*/status; do
         [ -r "$status_file" ] || continue
         if grep -q '^connected' "$status_file"; then
           mon=$(basename "$(dirname "$status_file")" | sed -E 's/^card[0-9]+-//')
           if [ -n "$mon" ]; then
-            mkdir -p "/var/lib/replays/$mon"
+            mkdir -p "$state_dir/$mon"
             gpu-screen-recorder \
               -w "$mon" \
               -s 1920x1080 \
@@ -52,7 +55,7 @@ let
               -f 60 \
               -r 300 \
               -c mkv \
-              -o "/var/lib/replays/$mon" &
+              -o "$state_dir/$mon" &
             pids+=("$!")
           fi
         fi
@@ -111,19 +114,23 @@ let
         )
 
 
-    def find_gsr_pids(replays_uid: int, mon: str) -> list[int]:
+    def find_gsr_pids_in_cgroup(uid: int, mon: str) -> list[int]:
+        procs_file = (
+            f"/sys/fs/cgroup/system.slice/system-replays.slice/"
+            f"replays@{uid}.service/cgroup.procs"
+        )
+        if not os.path.isfile(procs_file):
+            return []
         pids = []
-        for entry in os.listdir("/proc"):
-            if not entry.isdigit():
-                continue
+        with open(procs_file, "r", encoding="utf-8") as f:
+            candidates = [line.strip() for line in f if line.strip().isdigit()]
+        for entry in candidates:
             pid = int(entry)
             try:
-                if os.stat(f"/proc/{pid}").st_uid != replays_uid:
-                    continue
-                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                with open(f"/proc/{pid}/cmdline", "rb") as cf:
                     argv = [
                         p.decode("utf-8", "replace")
-                        for p in f.read().split(b"\0") if p
+                        for p in cf.read().split(b"\0") if p
                     ]
             except OSError:
                 continue
@@ -146,7 +153,6 @@ let
 
         uid = int(sys.argv[1])
         pw = pwd.getpwuid(uid)
-        replays_pw = pwd.getpwnam("replays")
 
         mon_file = f"/run/user/{uid}/replays-save.mon"
         if not os.path.isfile(mon_file):
@@ -164,12 +170,12 @@ let
                         "critical")
             return 1
 
-        src_dir = f"/var/lib/replays/{mon}"
+        src_dir = f"/var/lib/replays/{uid}/{mon}"
         dst_dir = os.path.join(pw.pw_dir, "Documents", "Replays", mon)
         os.makedirs(dst_dir, exist_ok=True)
         os.chown(dst_dir, uid, pw.pw_gid)
 
-        pids = find_gsr_pids(replays_pw.pw_uid, mon)
+        pids = find_gsr_pids_in_cgroup(uid, mon)
         if not pids:
             notify_user(uid, pw.pw_gid, "GPU-Screen-Recorder",
                         f"Не найден активный рекордер для {mon}",
@@ -236,63 +242,133 @@ let
   '';
 in
 {
-  options.replays.enable = lib.mkEnableOption "isolated GPU Screen Recorder replay shim + mandatory-notification saver";
+  options.replays.enable = lib.mkEnableOption "isolated multi-user GPU Screen Recorder replay shim + split KMS daemon + mandatory-notification saver";
 
   config = lib.mkIf cfg.enable {
-    users.users.replays = {
-      isSystemUser = true;
-      group = "replays";
-      extraGroups = [
-        "video"
-        "render"
-      ];
-    };
+    # Shared group gating access to /run/gsr-kms/kms.sock and user Wayland/env ACLs.
+    # Each replays@%i instance gets its own transient DynamicUser UID so concurrent
+    # users are isolated from one another.
     users.groups.replays = { };
 
     environment.systemPackages = [ gsrPatched ];
 
+    systemd.sockets.gsr-kms = {
+      description = "Isolated GSR KMS Framebuffer Socket (replays group only)";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "/run/gsr-kms/kms.sock";
+        SocketUser = "root";
+        SocketGroup = "replays";
+        SocketMode = "0660";
+        DirectoryMode = "0750";
+      };
+    };
+
     systemd.services = {
+      # Ultra-restricted KMS daemon: the ONLY process holding CAP_SYS_ADMIN.
+      # Verifies SO_PEERCRED group == replays and serves read-only DRM DMA-BUFs.
+      gsr-kms = {
+        description = "Isolated GSR KMS Framebuffer Server";
+        requires = [ "gsr-kms.socket" ];
+        after = [ "gsr-kms.socket" ];
+        serviceConfig = {
+          Type = "simple";
+          DynamicUser = true;
+          SupplementaryGroups = [ "video" ];
+          ExecStart = "${gsrPatched}/bin/gsr-kms-server --daemon replays";
+          Restart = "on-failure";
+          RestartSec = "1s";
+
+          AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
+          CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
+          NoNewPrivileges = true;
+
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          PrivateNetwork = true;
+          IPAddressDeny = "any";
+          PrivateIPC = true;
+          ProtectClock = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          # Needs /proc/<peer_pid>/status for supplementary-group SO_PEERCRED check
+          ProtectProc = "default";
+          ProcSubset = "pid";
+          DevicePolicy = "closed";
+          DeviceAllow = [ "char-drm r" ];
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          KeyringMode = "private";
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          InaccessiblePaths = [
+            "-/run/dbus/system_bus_socket"
+            "-/run/systemd/private"
+          ];
+          SystemCallArchitectures = "native";
+          SystemCallErrorNumber = "EPERM";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+            "~@resources"
+          ];
+          UMask = "0077";
+        };
+      };
+
+      # Per-user replay daemon: ZERO capabilities, isolated transient DynamicUser UID,
+      # per-UID State/Cache/Runtime directories, and access only to gsr-kms.sock +
+      # that specific user's Wayland/audio sockets.
       "replays@" = {
         description = "Isolated GPU Screen Recorder replay daemon for UID %i";
+        requires = [ "gsr-kms.socket" ];
         after = [
           "graphical.target"
           "user@%i.service"
+          "gsr-kms.socket"
         ];
         bindsTo = [ "user@%i.service" ];
         serviceConfig = {
           Type = "simple";
-          User = "replays";
-          Group = "replays";
+          DynamicUser = true;
           SupplementaryGroups = [
+            "replays"
             "video"
             "render"
           ];
-          ExecStart = "${replaysRunner}/bin/replays-system-runner";
+          ExecStart = "${replaysRunner}/bin/replays-system-runner %i";
           Restart = "on-failure";
           RestartSec = "5s";
           KillMode = "control-group";
 
-          StateDirectory = "replays";
+          StateDirectory = "replays/%i";
           StateDirectoryMode = "0700";
-          CacheDirectory = "replays";
+          CacheDirectory = "replays/%i";
           CacheDirectoryMode = "0700";
-          RuntimeDirectory = "replays";
+          RuntimeDirectory = "replays-%i";
           RuntimeDirectoryMode = "0700";
 
-          # Expose ONLY the audio + Wayland sockets needed by GSR (no /run/user/%i/bus or $HOME)
+          # Expose ONLY the KMS socket + this UID's audio & Wayland sockets
           BindPaths = [
-            "-/run/user/%i/pipewire-0:/run/replays/pipewire-0"
-            "-/run/user/%i/pulse/native:/run/replays/pulse/native"
-            "-/run/user/%i/wayland-0:/run/replays/wayland-0"
-            "-/run/user/%i/wayland-1:/run/replays/wayland-1"
+            "/run/gsr-kms/kms.sock"
+            "-/run/user/%i/pipewire-0:/run/replays-%i/pipewire-0"
+            "-/run/user/%i/pulse/native:/run/replays-%i/pulse/native"
+            "-/run/user/%i/wayland-0:/run/replays-%i/wayland-0"
+            "-/run/user/%i/wayland-1:/run/replays-%i/wayland-1"
           ];
           BindReadOnlyPaths = [
-            "-/run/user/%i/replays.env:/run/replays/replays.env"
+            "-/run/user/%i/replays.env:/run/replays-%i/replays.env"
           ];
 
-          # Systemd-scoped CAP_SYS_ADMIN replaces /run/wrappers/bin/gsr-kms-server
-          AmbientCapabilities = [ "CAP_SYS_ADMIN" ];
-          CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ];
+          # Zero capabilities: DRM KMS is delegated to gsr-kms.service
+          CapabilityBoundingSet = "";
+          AmbientCapabilities = "";
           NoNewPrivileges = true;
 
           ProtectSystem = "strict";
@@ -312,6 +388,10 @@ in
           RestrictSUIDSGID = true;
           KeyringMode = "private";
           RestrictAddressFamilies = [ "AF_UNIX" ];
+          InaccessiblePaths = [
+            "-/run/dbus/system_bus_socket"
+            "-/run/systemd/private"
+          ];
           SystemCallArchitectures = "native";
           SystemCallErrorNumber = "EPERM";
           SystemCallFilter = [
@@ -348,7 +428,8 @@ in
 
           ProtectSystem = "strict";
           ReadWritePaths = [
-            "/var/lib/replays"
+            "-/var/lib/replays/%i"
+            "-/var/lib/private/replays/%i"
             "/home"
           ];
           InaccessiblePaths = [

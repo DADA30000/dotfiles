@@ -35,15 +35,20 @@ done < <(
     /mod_autoload:/ {
       ts = $1
       sub(/T/, " ", ts); sub(/\+.*$/, "", ts)
-      caller = "unknown"; fmt = ""; s1 = ""; a1 = 0; a2 = 0; a3 = 0
+      caller = "unknown"; fmt = ""; s1 = ""; s2 = ""; a1 = 0; a2 = 0; a3 = 0
       if (match($0, /caller="[^"]+"/)) caller = substr($0, RSTART + 8, RLENGTH - 9)
       if (match($0, /fmt="[^"]+"/))    fmt    = substr($0, RSTART + 5, RLENGTH - 6)
       if (match($0, /s1="[^"]+"/))     s1     = substr($0, RSTART + 4, RLENGTH - 5)
+      if (match($0, /s2="[^"]+"/))     s2     = substr($0, RSTART + 4, RLENGTH - 5)
       if (match($0, /a1=[0-9]+/))      a1     = substr($0, RSTART + 3, RLENGTH - 3) + 0
       if (match($0, /a2=[0-9]+/))      a2     = substr($0, RSTART + 3, RLENGTH - 3) + 0
       if (match($0, /a3=[0-9]+/))      a3     = substr($0, RSTART + 3, RLENGTH - 3) + 0
 
-      if (fmt ~ /%s/ && s1 != "") sub(/%s/, s1, fmt)
+      if (fmt ~ /%\.\*s/ && s2 != "" && s2 != "(fault)") {
+        val = (a1 > 0) ? substr(s2, 1, a1) : s2
+        sub(/%\.\*s/, val, fmt)
+      }
+      if (fmt ~ /%s/ && s1 != "" && s1 != "(fault)") sub(/%s/, s1, fmt)
       if (fmt ~ /%[di]/) {
         sub(/%[di]/, a1, fmt)
         sub(/%[di]/, a2, fmt)

@@ -11,10 +11,12 @@ let
     set -euo pipefail
     wl="''${WAYLAND_DISPLAY:-wayland-1}"
     printf 'WAYLAND_DISPLAY=%s\n' "$wl" > "$XDG_RUNTIME_DIR/replays.env"
-    ${pkgs.acl}/bin/setfacl -m u:replays:r "$XDG_RUNTIME_DIR/replays.env"
-    if [ -S "$XDG_RUNTIME_DIR/$wl" ]; then
-      ${pkgs.acl}/bin/setfacl -m u:replays:rw "$XDG_RUNTIME_DIR/$wl"
-    fi
+    ${pkgs.acl}/bin/setfacl -m g:replays:r "$XDG_RUNTIME_DIR/replays.env"
+    for sock in "$wl" "pipewire-0" "pulse/native"; do
+      if [ -S "$XDG_RUNTIME_DIR/$sock" ]; then
+        ${pkgs.acl}/bin/setfacl -m g:replays:rw "$XDG_RUNTIME_DIR/$sock"
+      fi
+    done
   '';
 in
 {

@@ -35,6 +35,8 @@ in
 
   replays.enable = true;
 
+  document-portal.enable = true;
+
   environment.memoryAllocator.provider = options.environment.memoryAllocator.provider.default;
 
   nixpkgs.config.allowUnfree = true;
@@ -680,7 +682,7 @@ in
             T="/sys/kernel/tracing"
             [ -d "$T" ] || T="/sys/kernel/debug/tracing"
 
-            echo 'p:mod_autoload __request_module caller=$comm fmt=+0(%si):string a1=%dx:u32 a2=%cx:u32 a3=%r8:u32 s1=+0(%dx):string' >> "$T/kprobe_events"
+            echo 'p:mod_autoload __request_module caller=$comm fmt=+0(%si):string a1=%dx:u32 a2=%cx:u32 a3=%r8:u32 s1=+0(%dx):string s2=+0(%cx):string' >> "$T/kprobe_events"
 
             echo 'p:mod_exec __x64_sys_execve caller=$comm bin=+0(+112(%di)):ustring arg1=+0(+8(+104(%di))):ustring arg2=+0(+16(+104(%di))):ustring' >> "$T/kprobe_events"
             echo 'bin ~ "*modprobe*"' > "$T/events/kprobes/mod_exec/filter"
@@ -902,6 +904,8 @@ in
   };
 
   security = {
+
+    protectKernelImage = true;
 
     lockKernelModules = true;
 
