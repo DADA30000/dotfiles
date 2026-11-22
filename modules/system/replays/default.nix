@@ -15,6 +15,7 @@ let
     name = "replays-system-runner";
     runtimeInputs = [
       gsrPatched
+      pkgs.bash
       pkgs.coreutils
       pkgs.findutils
       pkgs.gawk
@@ -65,7 +66,11 @@ let
         echo "replays: no connected monitors found" >&2
         exit 1
       fi
-      wait
+      status=0
+      for p in "''${pids[@]}"; do
+        wait "$p" || status=$?
+      done
+      exit "$status"
     '';
   };
 
@@ -252,9 +257,14 @@ in
 
     environment.systemPackages = [ gsrPatched ];
 
+    systemd.tmpfiles.rules = [
+      "d /run/gsr-kms 0750 root replays -"
+    ];
+
     systemd.sockets.gsr-kms = {
       description = "Isolated GSR KMS Framebuffer Socket (replays group only)";
       wantedBy = [ "sockets.target" ];
+      after = [ "systemd-tmpfiles-setup.service" ];
       socketConfig = {
         ListenStream = "/run/gsr-kms/kms.sock";
         SocketUser = "root";
