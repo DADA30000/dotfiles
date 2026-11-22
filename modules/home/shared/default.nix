@@ -279,9 +279,9 @@
     enable = true;
     defaultFonts = {
       emoji = [
+        "Noto Color Emoji"
         "JetBrainsMono Nerd Font"
         "Noto Emoji"
-        "Noto Color Emoji"
       ];
       serif = [
         "Noto Serif"
