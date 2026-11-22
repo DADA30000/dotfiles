@@ -665,8 +665,6 @@ in
 
     upower.enable = true;
 
-    logind.settings.Login.HandlePowerKey = "suspend";
-
     accounts-daemon.enable = true;
 
     gvfs.enable = true;
@@ -674,6 +672,11 @@ in
     systembus-notify.enable = true;
 
     speechd.enable = false;
+
+    logind.settings.Login = {
+      HandlePowerKey = "suspend";
+      HoldoffTimeoutSec = "0.25s";
+    };
 
     journald.settings.Journal = {
       SystemMaxUse = "1G";

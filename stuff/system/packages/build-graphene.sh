@@ -3,7 +3,7 @@
 
 DEVICE="${DEVICE:-tokay}"
 KERNEL_CODENAME="${KERNEL_CODENAME:-caimito}"
-TAG="${TAG:-2026110700}"
+TAG="${TAG:-2026111800}"
 UPDATE_URL="${UPDATE_URL:-https://update.sanic.space/}"
 OS_DIR="${OS_DIR:-$HOME/Documents/grapheneos}"
 KERNEL_DIR="${KERNEL_DIR:-$HOME/Downloads/kernel_pixel_6.1}"

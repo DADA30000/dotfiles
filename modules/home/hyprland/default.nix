@@ -1021,11 +1021,14 @@ in
 
         settings = {
 
-          idle.behavior.screen-off = {
-            enabled = true;
-            action = "screen_off";
-            timeout = 300;
-            locked_timeout = 10;
+          idle = {
+            pre_action_fade_seconds = 0;
+            behavior.screen-off = {
+              enabled = true;
+              action = "screen_off";
+              timeout = 300;
+              locked_timeout = 10;
+            };
           };
 
           storage = {
