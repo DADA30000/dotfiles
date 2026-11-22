@@ -1,3 +1,24 @@
+diff --git a/internal/adapter/prompt.go b/internal/adapter/prompt.go
+index 2f3084a..4aa0a4e 100644
+--- a/internal/adapter/prompt.go
++++ b/internal/adapter/prompt.go
+@@ -394,14 +394,9 @@ func renderTranscript(turns []transcriptTurn, suffix string) string {
+ 	return builder.String()
+ }
+ 
+-// transcriptPrompt 把转录与协议说明写成提示词；超过官网输入上限时转录写入 message.txt 附件，工具与输出格式的协议说明留在提示词正文
++// transcriptPrompt 把转录与协议说明写成提示词；超过官网输入上限时由底层客户端分片上传并保留尾部在内联提示词中
+ func transcriptPrompt(turns []transcriptTurn, suffix string, files []gemini.FileData) (string, []gemini.FileData) {
+-	prompt := renderTranscript(turns, suffix)
+-	if strings.TrimSpace(suffix) == "" || utf8.RuneCountInString(prompt) <= gemini.MaxPromptLength {
+-		return prompt, files
+-	}
+-	body := renderTranscript(turns, "")
+-	return gemini.LongPromptInstruction + suffix, append(files, gemini.FileData{Data: []byte(body), FileName: "message.txt", MimeType: "text/plain"})
++	return renderTranscript(turns, suffix), files
+ }
+ 
+ // transcriptBlock 返回一轮对话在转录中的角色块
 diff --git a/internal/gemini/client.go b/internal/gemini/client.go
 index 93f5a11..f318fc2 100644
 --- a/internal/gemini/client.go
