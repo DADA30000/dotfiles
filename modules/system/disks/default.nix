@@ -1,4 +1,5 @@
 {
+  inputs,
   config,
   pkgs,
   lib,
@@ -7,6 +8,55 @@
 let
   cfg = config.disks;
   normalUsers = builtins.attrNames (lib.filterAttrs (_: user: user.isNormalUser) config.users.users);
+  zfsPackage = pkgs.zfs_unstable;
+  zfsAttr = zfsPackage.kernelModuleAttribute;
+  zfsMeta = builtins.readFile "${inputs.zfs}/META";
+  metaVersion = builtins.head (builtins.match ".*Version:[[:space:]]*([0-9.]+).*" zfsMeta);
+  metaMinKernel = builtins.head (builtins.match ".*Linux-Minimum:[[:space:]]*([0-9.]+).*" zfsMeta);
+  metaMaxKernel = builtins.head (builtins.match ".*Linux-Maximum:[[:space:]]*([0-9.]+).*" zfsMeta);
+
+  zfsKernelPackages =
+    let
+      # Filter candidates: matches versioned kernels and testing/rc variants
+      zfsCompatibleKernelPackages = lib.filterAttrs (
+        name: kernelPackages:
+        (builtins.match "linux_([0-9]+_[0-9]+.*|testing.*)" name) != null
+        && (builtins.tryEval kernelPackages).success
+        && kernelPackages ? ${config.boot.zfs.package.kernelModuleAttribute}
+        && (
+          let
+            kv = lib.versions.majorMinor kernelPackages.kernel.version;
+          in
+          lib.versionAtLeast kv metaMinKernel && !(lib.versionOlder metaMaxKernel kv)
+        )
+      ) pkgs.linuxKernel.packages;
+    in
+    lib.last (
+      lib.sort (a: b: (lib.versionOlder a.kernel.version b.kernel.version)) (
+        builtins.attrValues zfsCompatibleKernelPackages
+      )
+    );
+  zfsMajorMinor = "2.4";
+  packageZfsMajorMinor = lib.versions.majorMinor config.boot.zfs.package.version;
+  zfsOverride = prev: {
+    version = "${metaVersion}-${inputs.zfs.shortRev or "unstable"}";
+    src = inputs.zfs;
+    postPatch =
+      builtins.replaceStrings
+        [
+          "./lib/libshare/os/linux/nfs.c"
+          "./lib/libshare/smb.h"
+          "substituteInPlace ./module/os/linux/zfs/zfs_ctldir.c"
+          "^Linux-Maximum: *${lib.escapeRegex "7.2"}$"
+        ]
+        [
+          "./lib/libzfs/os/linux/libzfs_share_nfs.c"
+          "./lib/libzfs/libzfs_share.h"
+          "echo Skipping obsolete patch on ./module/os/linux/zfs/zfs_ctldir.c"
+          "^Linux-Maximum: *${lib.escapeRegex metaMaxKernel}$"
+        ]
+        (prev.postPatch or "");
+  };
   commonUserPersistence = {
     files = [ ];
     directories = [
@@ -63,6 +113,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+
+    nixpkgs.config.problems.handlers.zfs.broken = "warn";
+
+    warnings = lib.optional (zfsMajorMinor != packageZfsMajorMinor) ''
+      OpenZFS minor version changed from ${zfsMajorMinor} to ${packageZfsMajorMinor} (${config.boot.zfs.package.version}).
+      Consider reviewing compatibility flags (e.g. `zpool set compatibility=openzfs-${packageZfsMajorMinor}-linux`) once it has soaked.
+    '';
 
     fileSystems = {
       "/boot".device = lib.mkForce "/dev/disk/by-label/BOOT";
@@ -165,16 +222,26 @@ in
       };
     };
 
-    boot.initrd.systemd.services.zfs-rollback = {
-      wantedBy = [ "initrd.target" ];
-      after = [ "zfs-import-nixos.service" ];
-      before = [ "sysroot.mount" ];
-      path = [ config.boot.zfs.package ];
-      unitConfig.DefaultDependencies = false;
-      description = "Rollback ZFS root and home to blank snapshots";
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = "${config.boot.zfs.package}/bin/zfs rollback -r nixos/root@blank";
+    boot = {
+      zfs.package = zfsPackage.overrideAttrs zfsOverride;
+
+      kernelPackages = zfsKernelPackages.extend (
+        final: prev: {
+          ${zfsAttr} = prev.${zfsAttr}.overrideAttrs zfsOverride;
+        }
+      );
+
+      initrd.systemd.services.zfs-rollback = {
+        wantedBy = [ "initrd.target" ];
+        after = [ "zfs-import-nixos.service" ];
+        before = [ "sysroot.mount" ];
+        path = [ config.boot.zfs.package ];
+        unitConfig.DefaultDependencies = false;
+        description = "Rollback ZFS root and home to blank snapshots";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.boot.zfs.package}/bin/zfs rollback -r nixos/root@blank";
+        };
       };
     };
 
@@ -242,6 +309,7 @@ in
         options = {
           ashift = "12";
           autotrim = if cfg.ssdOptimizations then "on" else "off";
+          compatibility = "openzfs-${zfsMajorMinor}-linux";
         };
         rootFsOptions = {
           compression = "zstd";

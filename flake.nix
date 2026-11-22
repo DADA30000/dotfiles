@@ -1,6 +1,10 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    zfs = {
+      url = "github:openzfs/zfs";
+      flake = false;
+    };
     aistudio2api = {
       url = "github:Mag1cFall/AIStudio2API";
       flake = false;
