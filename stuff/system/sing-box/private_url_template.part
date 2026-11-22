@@ -1,0 +1,7 @@
+# Copy this template to /etc/credstore/private_url.part and restrict permissions:
+#   run0 cp stuff/system/sing-box/private_url_template.part /etc/credstore/private_url.part
+#   run0 chmod 600 /etc/credstore/private_url.part
+#
+# Replace the line below with a random secret URL path (e.g. `openssl rand -hex 24`).
+# Resulting subscription URL: https://sub.sanic.space/<value>
+CHANGE_ME_RANDOM_SECRET_PATH

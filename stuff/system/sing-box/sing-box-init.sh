@@ -31,4 +31,21 @@ python3 %{{{build-config-py}}} \
   "${EXTRA_CONFIGS[@]}"
 
 chmod 600 /run/sing-box/config.json
+
+SUB_OUT="%{{{sub-output-path}}}"
+if [[ -n "$SUB_OUT" ]]; then
+  echo "Assembling SFA subscription config at $SUB_OUT..."
+  SUB_DIR="$(dirname "$SUB_OUT")"
+  mkdir -p "$SUB_DIR"
+  python3 %{{{build-config-py}}} \
+    --sfa \
+    "%{{{sing-box-shared-config-file}}}" \
+    "${SUB_OUT}.tmp" \
+    "[]" \
+    "${EXTRA_CONFIGS[@]}"
+  chown root:nginx "${SUB_OUT}.tmp" 2>/dev/null || true
+  chmod 640 "${SUB_OUT}.tmp"
+  mv -f "${SUB_OUT}.tmp" "$SUB_OUT"
+fi
+
 echo "sing-box initialization complete."

@@ -29,6 +29,7 @@
     nginx = {
       enable = true;
       website.enable = true;
+      sub.enable = true;
     };
   };
 

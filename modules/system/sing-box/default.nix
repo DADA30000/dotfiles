@@ -38,9 +38,124 @@ let
     patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/sing-box.patch ];
   });
 
-  sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" {
-    experimental.clash_api.external_controller = "127.0.0.1:9090";
+  # Shared sing-box config (upstream/SFA-compatible; no routing logic, domains, process rules, or host bridges)
+  sing-box-shared-config = {
     log.level = "info";
+
+    inbounds = [
+      {
+        type = "tun";
+        interface_name = "tun0";
+        mtu = MTU;
+        strict_route = true;
+        auto_route = true;
+        auto_redirect = true;
+        address = [
+          "172.19.0.1/30"
+          "fd00::1/126"
+        ];
+      }
+    ];
+
+    route = {
+      auto_detect_interface = true;
+      final = "proxy";
+      default_domain_resolver = "dns-v6-dot";
+      rules = [
+        { action = "sniff"; }
+        {
+          protocol = "dns";
+          action = "hijack-dns";
+        }
+      ];
+    };
+
+    dns = {
+      cache_capacity = 10000;
+      final = "dns-v6-dot";
+      servers = [
+        {
+          tag = "dns-v6-dot";
+          type = "tls";
+          server = dns-ipv6;
+          server_port = 853;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
+        }
+        {
+          tag = "dns-v4-dot";
+          type = "tls";
+          server = dns;
+          server_port = 853;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
+        }
+        {
+          tag = "dns-doh";
+          type = "https";
+          server = dns;
+          server_port = 443;
+          tls = {
+            enabled = true;
+            server_name = dns-tls-name;
+          };
+        }
+      ];
+      rules = [
+        # Happy Eyeballs: параллельная гонка (DoT IPv6, DoT IPv4 и DoH 443)
+        {
+          action = "evaluate";
+          server = "dns-v6-dot";
+          tag = "v6-dot";
+        }
+        {
+          action = "evaluate";
+          server = "dns-v4-dot";
+          tag = "v4-dot";
+        }
+        {
+          action = "evaluate";
+          server = "dns-doh";
+          tag = "doh";
+        }
+        {
+          action = "respond";
+          match_response = "v6-dot";
+          race = true;
+        }
+        {
+          action = "respond";
+          match_response = "v4-dot";
+          race = true;
+        }
+        {
+          action = "respond";
+          match_response = "doh";
+          race = true;
+        }
+      ];
+    };
+
+    outbounds = [
+      {
+        tag = "proxy";
+        type = "selector";
+        outbounds = [ "direct" ];
+      }
+      {
+        tag = "direct";
+        type = "direct";
+      }
+    ];
+  };
+
+  # Host-only overlay merged with sing-box-shared-config in Nix
+  sing-box-host-config = {
+    experimental.clash_api.external_controller = "127.0.0.1:9090";
 
     inbounds = [
       {
@@ -79,25 +194,10 @@ let
           }
         ];
       }
-      {
-        type = "tun";
-        interface_name = "tun0";
-        mtu = MTU;
-        strict_route = true;
-        auto_route = true;
-        auto_redirect = true;
-        address = [
-          "172.19.0.1/30"
-          "fd00::1/126"
-        ];
-      }
-    ];
+    ] ++ sing-box-shared-config.inbounds;
 
-    route = {
-      auto_detect_interface = true;
+    route = sing-box-shared-config.route // {
       final = "final-toggle";
-      default_domain_resolver = "dns-v6-dot";
-
       rule_set = [
         {
           tag = "zen-rules";
@@ -197,15 +297,7 @@ let
                 "klipy.com"
               ];
             }
-            {
-              process_name = processes;
-            }
-            {
-              source_ip_cidr = [
-                "10.200.0.0/24"
-                "fd00:200::/126"
-              ];
-            }
+            { process_name = processes; }
             {
               inbound = [
                 "vless-in"
@@ -226,7 +318,6 @@ let
           port = 53;
           action = "hijack-dns";
         }
-
         {
           ip_cidr = [
             "192.168.0.0/16"
@@ -237,7 +328,6 @@ let
           ];
           outbound = "direct";
         }
-
         {
           source_ip_cidr = [
             "10.200.0.0/24"
@@ -246,7 +336,6 @@ let
           network = "icmp";
           outbound = "direct";
         }
-
         {
           type = "logical";
           mode = "or";
@@ -291,42 +380,8 @@ let
       ];
     };
 
-    dns = {
-      cache_capacity = 10000;
+    dns = sing-box-shared-config.dns // {
       neg_ttl = 1;
-      final = "dns-v6-dot";
-      servers = [
-        {
-          tag = "dns-v6-dot";
-          type = "tls";
-          server = dns-ipv6;
-          server_port = 853;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
-        }
-        {
-          tag = "dns-v4-dot";
-          type = "tls";
-          server = dns;
-          server_port = 853;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
-        }
-        {
-          tag = "dns-doh";
-          type = "https";
-          server = dns;
-          server_port = 443;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
-        }
-      ];
       rules = [
         {
           type = "logical";
@@ -348,39 +403,7 @@ let
           query_type = [ "AAAA" ];
           action = "reject";
         }
-
-        # Happy Eyeballs: параллельная гонка (DoT IPv6, DoT IPv4 и DoH 443)
-        {
-          action = "evaluate";
-          server = "dns-v6-dot";
-          tag = "v6-dot";
-        }
-        {
-          action = "evaluate";
-          server = "dns-v4-dot";
-          tag = "v4-dot";
-        }
-        {
-          action = "evaluate";
-          server = "dns-doh";
-          tag = "doh";
-        }
-        {
-          action = "respond";
-          match_response = "v6-dot";
-          race = true;
-        }
-        {
-          action = "respond";
-          match_response = "v4-dot";
-          race = true;
-        }
-        {
-          action = "respond";
-          match_response = "doh";
-          race = true;
-        }
-      ];
+      ] ++ sing-box-shared-config.dns.rules;
     };
 
     outbounds = [
@@ -427,9 +450,11 @@ let
         uuid = "a1c0d4be-6c12-485c-8515-4451ee91ddc3";
         packet_encoding = "xudp";
       }
-
     ];
   };
+
+  sing-box-shared-config-file = (pkgs.formats.json { }).generate "sing-box-config-shared" sing-box-shared-config;
+  sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" (sing-box-shared-config // sing-box-host-config);
 
   vpnifyBin = pkgs.stdenv.mkDerivation {
     pname = "vpnify";
@@ -464,6 +489,8 @@ let
     };
   });
 
+  sub-output-path = if cfg.subscription.enable then cfg.subscription.outputPath else "";
+
   init_script = pkgs.writeShellScript "sing-box-init" (evalAndSubstitute {
     string = builtins.readFile ../../../stuff/system/sing-box/sing-box-init.sh;
     scope = {
@@ -473,6 +500,8 @@ let
         CREDENTIAL_DIR
         build-config-py
         sing-box-config-file
+        sing-box-shared-config-file
+        sub-output-path
         ;
     };
   });
@@ -508,6 +537,14 @@ in
 {
   options.sing-box = {
     enable = mkEnableOption "sing-box";
+    subscription = {
+      enable = mkEnableOption "generate SFA subscription config from shared sing-box config during sing-box-init";
+      outputPath = mkOption {
+        type = types.str;
+        default = "/run/sing-box-sub/config.json";
+        description = "Path where the generated SFA subscription JSON is written";
+      };
+    };
     processes_to_proxy = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       internal = true;
