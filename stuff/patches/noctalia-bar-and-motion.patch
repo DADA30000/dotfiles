@@ -1,0 +1,747 @@
+diff --git a/lib/render/animation/animation.h b/lib/render/animation/animation.h
+index 5512c5a..394795f 100644
+--- a/lib/render/animation/animation.h
++++ b/lib/render/animation/animation.h
+@@ -14,6 +14,16 @@ enum class Easing : std::uint8_t {
+   EaseOutBack,
+ };
+ 
++enum class AnimationKind : std::uint8_t {
++  Default,
++  Scroll,
++  TabSwitch,
++  Panel,
++  Workspace,
++  WindowSwitcher,
++  Toast,
++};
++
+ float applyEasing(Easing easing, float t);
+ 
+ struct Animation {
+diff --git a/lib/render/animation/animation_manager.cpp b/lib/render/animation/animation_manager.cpp
+index 5c6cc3d..bc6003f 100644
+--- a/lib/render/animation/animation_manager.cpp
++++ b/lib/render/animation/animation_manager.cpp
+@@ -14,9 +14,9 @@ AnimationManager::~AnimationManager() { MotionService::instance().unregisterMana
+ 
+ AnimationManager::Id AnimationManager::animate(
+     float from, float to, float durationMs, Easing easing, std::function<void(float)> setter,
+-    std::function<void()> onComplete, const void* owner
++    std::function<void()> onComplete, const void* owner, AnimationKind kind
+ ) {
+-  return animateInternal(from, to, durationMs, easing, std::move(setter), std::move(onComplete), owner, true, true);
++  return animateInternal(from, to, durationMs, easing, std::move(setter), std::move(onComplete), owner, true, true, kind);
+ }
+ 
+ AnimationManager::Id AnimationManager::animateTimer(
+@@ -28,7 +28,8 @@ AnimationManager::Id AnimationManager::animateTimer(
+ 
+ AnimationManager::Id AnimationManager::animateInternal(
+     float from, float to, float durationMs, Easing easing, std::function<void(float)> setter,
+-    std::function<void()> onComplete, const void* owner, bool scaleDuration, bool respectMotionEnabled
++    std::function<void()> onComplete, const void* owner, bool scaleDuration, bool respectMotionEnabled,
++    AnimationKind kind
+ ) {
+   const auto& motion = MotionService::instance();
+   const bool reduceMotion = respectMotionEnabled && !motion.enabled();
+@@ -41,7 +42,7 @@ AnimationManager::Id AnimationManager::animateInternal(
+     }
+   }
+ 
+-  float effectiveDurationMs = scaleDuration ? durationMs / motion.speed() : durationMs;
++  float effectiveDurationMs = scaleDuration ? durationMs / motion.speed(kind) : durationMs;
+   if (reduceMotion) {
+     effectiveDurationMs = kReducedMotionDurationMs;
+   }
+diff --git a/lib/render/animation/animation_manager.h b/lib/render/animation/animation_manager.h
+index 0fb0e35..770f510 100644
+--- a/lib/render/animation/animation_manager.h
++++ b/lib/render/animation/animation_manager.h
+@@ -20,7 +20,8 @@ public:
+ 
+   Id animate(
+       float from, float to, float durationMs, Easing easing, std::function<void(float)> setter,
+-      std::function<void()> onComplete = {}, const void* owner = nullptr
++      std::function<void()> onComplete = {}, const void* owner = nullptr,
++      AnimationKind kind = AnimationKind::Default
+   );
+   // Real elapsed-time driver: ignores global motion enable/speed. Use for timeouts,
+   // and for visual effects with a deliberate fixed duration that must stay independent
+@@ -51,6 +52,7 @@ private:
+ 
+   Id animateInternal(
+       float from, float to, float durationMs, Easing easing, std::function<void(float)> setter,
+-      std::function<void()> onComplete, const void* owner, bool scaleDuration, bool respectMotionEnabled
++      std::function<void()> onComplete, const void* owner, bool scaleDuration, bool respectMotionEnabled,
++      AnimationKind kind = AnimationKind::Default
+   );
+ };
+diff --git a/lib/render/animation/motion_service.cpp b/lib/render/animation/motion_service.cpp
+index 489249d..768ec1b 100644
+--- a/lib/render/animation/motion_service.cpp
++++ b/lib/render/animation/motion_service.cpp
+@@ -39,4 +39,22 @@ void MotionService::setEnabled(bool enabled) {
+   }
+ }
+ 
+-void MotionService::setSpeed(float speed) { m_speed = std::clamp(speed, 0.05F, 4.0F); }
++void MotionService::setSpeed(float speed) { m_speed = std::clamp(speed, 0.01F, 10.0F); }
++
++void MotionService::setSpeed(AnimationKind kind, float speed) {
++  if (kind == AnimationKind::Default) {
++    setSpeed(speed);
++  } else {
++    m_speeds[kind] = std::clamp(speed, 0.01F, 10.0F);
++  }
++}
++
++float MotionService::speed(AnimationKind kind) const noexcept {
++  if (kind != AnimationKind::Default) {
++    const auto it = m_speeds.find(kind);
++    if (it != m_speeds.end()) {
++      return it->second;
++    }
++  }
++  return m_speed;
++}
+diff --git a/lib/render/animation/motion_service.h b/lib/render/animation/motion_service.h
+index 1d44804..fa9dce8 100644
+--- a/lib/render/animation/motion_service.h
++++ b/lib/render/animation/motion_service.h
+@@ -1,6 +1,9 @@
+ #pragma once
+ 
++#include "render/animation/animation.h"
++
+ #include <cstdint>
++#include <unordered_map>
+ #include <unordered_set>
+ 
+ class AnimationManager;
+@@ -17,14 +20,16 @@ public:
+ 
+   void setEnabled(bool enabled);
+   void setSpeed(float speed);
++  void setSpeed(AnimationKind kind, float speed);
+ 
+   bool enabled() const noexcept { return m_enabled; }
+-  float speed() const noexcept { return m_speed; }
++  float speed(AnimationKind kind = AnimationKind::Default) const noexcept;
+ 
+ private:
+   MotionService() = default;
+ 
+   bool m_enabled = true;
+   float m_speed = 1.0F;
++  std::unordered_map<AnimationKind, float> m_speeds;
+   std::unordered_set<AnimationManager*> m_managers;
+ };
+diff --git a/lib/ui/controls/scroll_view.cpp b/lib/ui/controls/scroll_view.cpp
+index 9a88ac3..b791687 100644
+--- a/lib/ui/controls/scroll_view.cpp
++++ b/lib/ui/controls/scroll_view.cpp
+@@ -118,7 +118,7 @@ ScrollView::ScrollView() {
+     // small views and tall grid rows usable.
+     const float extent =
+         m_orientation == ScrollOrientation::Horizontal ? contentViewportWidth() : contentViewportHeight();
+-    const float delta = data.scrollDelta(std::max(m_minScrollWheelStep, std::pow(extent, 2.0F / 3.0F)));
++    const float delta = data.scrollDelta(std::max({m_minScrollWheelStep, Style::effectiveScrollWheelStep(), std::pow(extent, 2.0F / 3.0F)}));
+     if (data.axisSource == WL_POINTER_AXIS_SOURCE_FINGER) {
+       setScrollOffset(m_scrollOffset + delta);
+     } else {
+@@ -210,7 +210,8 @@ void ScrollView::animateScrollTo(float target, float durationMs) {
+ 
+   m_scrollAnimId = animationManager()->animate(
+       m_scrollOffset, clampedTarget, resolvedDuration, Easing::EaseOutCubic,
+-      [this](float value) { applyScrollOffsetValue(value); }, [this] { m_scrollAnimId = 0; }, this
++      [this](float value) { applyScrollOffsetValue(value); }, [this] { m_scrollAnimId = 0; }, this,
++      AnimationKind::Scroll
+   );
+   markPaintDirty();
+ }
+diff --git a/lib/ui/controls/scrollbar.cpp b/lib/ui/controls/scrollbar.cpp
+index d9c5bba..817dc70 100644
+--- a/lib/ui/controls/scrollbar.cpp
++++ b/lib/ui/controls/scrollbar.cpp
+@@ -52,7 +52,7 @@ Scrollbar::Scrollbar() {
+     if (!acceptsScrollAxis(data, m_orientation) || !m_onScrollChanged) {
+       return false;
+     }
+-    m_onScrollChanged(std::clamp(currentOffset() + data.scrollDelta(Style::scrollWheelStep), 0.0F, m_maxScroll));
++    m_onScrollChanged(std::clamp(currentOffset() + data.scrollDelta(Style::effectiveScrollWheelStep()), 0.0F, m_maxScroll));
+     return true;
+   });
+   trackArea->setOnEnter([this](const InputArea::PointerData&) { updateExpanded(); });
+@@ -87,7 +87,7 @@ Scrollbar::Scrollbar() {
+     if (!acceptsScrollAxis(data, m_orientation) || !m_onScrollChanged) {
+       return false;
+     }
+-    m_onScrollChanged(std::clamp(currentOffset() + data.scrollDelta(Style::scrollWheelStep), 0.0F, m_maxScroll));
++    m_onScrollChanged(std::clamp(currentOffset() + data.scrollDelta(Style::effectiveScrollWheelStep()), 0.0F, m_maxScroll));
+     return true;
+   });
+   thumbArea->setOnEnter([this](const InputArea::PointerData&) { updateExpanded(); });
+diff --git a/lib/ui/style.cpp b/lib/ui/style.cpp
+index 5ab0e15..84f6247 100644
+--- a/lib/ui/style.cpp
++++ b/lib/ui/style.cpp
+@@ -7,6 +7,7 @@
+ namespace {
+ 
+   float g_cornerRadiusScale = 1.0F;
++  float g_scrollWheelStep = 56.0F;
+   bool g_buttonBordersEnabled = true;
+   bool g_inputBordersEnabled = true;
+   bool g_popupBordersEnabled = true;
+@@ -35,6 +36,10 @@ namespace Style {
+     return signal;
+   }
+ 
++  float effectiveScrollWheelStep() noexcept { return g_scrollWheelStep; }
++
++  void setScrollWheelStep(float step) noexcept { g_scrollWheelStep = std::clamp(step, 10.0F, 500.0F); }
++
+   bool buttonBordersEnabled() noexcept { return g_buttonBordersEnabled; }
+ 
+   void setButtonBordersEnabled(bool enabled) {
+diff --git a/lib/ui/style.h b/lib/ui/style.h
+index 4ab5db8..16533a8 100644
+--- a/lib/ui/style.h
++++ b/lib/ui/style.h
+@@ -109,6 +109,9 @@ namespace Style {
+   void setCornerRadiusScale(float scale);
+   Signal<>& cornerRadiusChanged();
+ 
++  float effectiveScrollWheelStep() noexcept;
++  void setScrollWheelStep(float step) noexcept;
++
+   bool buttonBordersEnabled() noexcept;
+   void setButtonBordersEnabled(bool enabled);
+   Signal<>& buttonBordersChanged();
+diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
+index 3e52408..6b2ef24 100644
+--- a/src/app/application_services.cpp
++++ b/src/app/application_services.cpp
+@@ -557,8 +557,16 @@ void Application::initStyleThemeAndWayland() {
+ 
+   auto applyMotionConfig = [this] {
+     auto& motion = MotionService::instance();
+-    motion.setSpeed(m_configService.config().shell.animation.speed);
+-    motion.setEnabled(m_configService.config().shell.animation.enabled);
++    const auto& anim = m_configService.config().shell.animation;
++    motion.setSpeed(anim.speed);
++    motion.setEnabled(anim.enabled);
++    if (anim.scrollSpeed) motion.setSpeed(AnimationKind::Scroll, *anim.scrollSpeed);
++    if (anim.scrollStep) Style::setScrollWheelStep(*anim.scrollStep);
++    if (anim.tabSwitchSpeed) motion.setSpeed(AnimationKind::TabSwitch, *anim.tabSwitchSpeed);
++    if (anim.panelSpeed) motion.setSpeed(AnimationKind::Panel, *anim.panelSpeed);
++    if (anim.workspaceSpeed) motion.setSpeed(AnimationKind::Workspace, *anim.workspaceSpeed);
++    if (anim.windowSwitcherSpeed) motion.setSpeed(AnimationKind::WindowSwitcher, *anim.windowSwitcherSpeed);
++    if (anim.toastSpeed) motion.setSpeed(AnimationKind::Toast, *anim.toastSpeed);
+   };
+   auto applyStyleConfig = [this] {
+     Style::setCornerRadiusScale(m_configService.config().shell.cornerRadiusScale);
+diff --git a/src/app/application_ui.cpp b/src/app/application_ui.cpp
+index d37a5ae..16e75ba 100644
+--- a/src/app/application_ui.cpp
++++ b/src/app/application_ui.cpp
+@@ -623,7 +623,7 @@ void Application::initPanelManagerAndPanels() {
+     // the panel surface (and its keyboard focus) alive for the duration of the reveal animation, so
+     // the keys would land on the closing panel instead of the target window. Close without animation
+     // so focus returns to the toplevel before we paste, mirroring the launcher's app-launch close.
+-    m_panelManager.closePanel(false);
++    m_panelManager.closePanel(true);
+     const bool isImage = entry.isImage();
+     m_clipboardAutoPasteTimer.stop();
+     m_clipboardAutoPasteTimer.start(std::chrono::milliseconds(Style::animFast + 30), [this, isImage] {
+diff --git a/src/config/config_overrides.cpp b/src/config/config_overrides.cpp
+index 0c9435b..91dafd0 100644
+--- a/src/config/config_overrides.cpp
++++ b/src/config/config_overrides.cpp
+@@ -575,6 +575,18 @@ namespace {
+               if (item.radius.has_value()) {
+                 row.insert_or_assign("radius", static_cast<double>(*item.radius));
+               }
++              if (item.radiusTopLeft.has_value()) {
++                row.insert_or_assign("radius_top_left", static_cast<double>(*item.radiusTopLeft));
++              }
++              if (item.radiusTopRight.has_value()) {
++                row.insert_or_assign("radius_top_right", static_cast<double>(*item.radiusTopRight));
++              }
++              if (item.radiusBottomRight.has_value()) {
++                row.insert_or_assign("radius_bottom_right", static_cast<double>(*item.radiusBottomRight));
++              }
++              if (item.radiusBottomLeft.has_value()) {
++                row.insert_or_assign("radius_bottom_left", static_cast<double>(*item.radiusBottomLeft));
++              }
+               row.insert_or_assign("opacity", static_cast<double>(item.opacity));
+               row.insert_or_assign("accordion", item.accordion);
+               row.insert_or_assign(
+diff --git a/src/config/config_types.cpp b/src/config/config_types.cpp
+index 556a1e9..8c7832f 100644
+--- a/src/config/config_types.cpp
++++ b/src/config/config_types.cpp
+@@ -509,6 +509,10 @@ WidgetBarCapsuleSpec capsuleSpecFromGroup(const BarConfig& bar, const BarCapsule
+   } else {
+     spec.radius = std::nullopt;
+   }
++  spec.radiusTopLeft = group.radiusTopLeft;
++  spec.radiusTopRight = group.radiusTopRight;
++  spec.radiusBottomRight = group.radiusBottomRight;
++  spec.radiusBottomLeft = group.radiusBottomLeft;
+   spec.opacity = group.opacity;
+   spec.accordion = group.accordion;
+   spec.accordionDirection = group.accordionDirection;
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index 6c6c9f5..b0316e8 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -46,6 +46,10 @@ struct BarCapsuleGroupStyle {
+   std::optional<ColorSpec> foreground;
+   float padding = Style::barCapsulePadding;
+   std::optional<float> radius;
++  std::optional<float> radiusTopLeft;
++  std::optional<float> radiusTopRight;
++  std::optional<float> radiusBottomRight;
++  std::optional<float> radiusBottomLeft;
+   float opacity = 1.0F;
+   // Collapse the group to its first member; hovering the capsule reveals the rest inline.
+   bool accordion = false;
+@@ -427,6 +431,10 @@ struct WidgetBarCapsuleSpec {
+   float padding = Style::barCapsulePadding;
+   // Corner radius in logical pixels before content-scale; unset means automatic pill radius.
+   std::optional<float> radius;
++  std::optional<float> radiusTopLeft;
++  std::optional<float> radiusTopRight;
++  std::optional<float> radiusBottomRight;
++  std::optional<float> radiusBottomLeft;
+   // Capsule background opacity multiplier (0.0–1.0).
+   float opacity = 1.0F;
+   bool hoverHighlight = true;
+@@ -1130,6 +1138,13 @@ struct ShellConfig {
+   struct AnimationConfig {
+     bool enabled = true;
+     float speed = 1.0F;
++    std::optional<float> scrollSpeed;
++    std::optional<float> scrollStep;
++    std::optional<float> tabSwitchSpeed;
++    std::optional<float> panelSpeed;
++    std::optional<float> workspaceSpeed;
++    std::optional<float> windowSwitcherSpeed;
++    std::optional<float> toastSpeed;
+ 
+     bool operator==(const AnimationConfig&) const = default;
+   };
+diff --git a/src/config/schema/config_schema_bar.cpp b/src/config/schema/config_schema_bar.cpp
+index 96ad950..f1cdc7b 100644
+--- a/src/config/schema/config_schema_bar.cpp
++++ b/src/config/schema/config_schema_bar.cpp
+@@ -89,6 +89,10 @@ namespace noctalia::config::schema {
+           optionalColorField(&BarCapsuleGroupStyle::foreground, "foreground"),
+           field(&BarCapsuleGroupStyle::padding, "padding", kBarCapsulePaddingRange),
+           optionalFloatField(&BarCapsuleGroupStyle::radius, "radius", kBarCapsuleRadiusRangeF),
++          optionalFloatField(&BarCapsuleGroupStyle::radiusTopLeft, "radius_top_left", kBarCapsuleRadiusRangeF),
++          optionalFloatField(&BarCapsuleGroupStyle::radiusTopRight, "radius_top_right", kBarCapsuleRadiusRangeF),
++          optionalFloatField(&BarCapsuleGroupStyle::radiusBottomRight, "radius_bottom_right", kBarCapsuleRadiusRangeF),
++          optionalFloatField(&BarCapsuleGroupStyle::radiusBottomLeft, "radius_bottom_left", kBarCapsuleRadiusRangeF),
+           field(&BarCapsuleGroupStyle::opacity, "opacity", kBarOpacityRange),
+           field(&BarCapsuleGroupStyle::accordion, "accordion"),
+           enumField(&BarCapsuleGroupStyle::accordionDirection, "accordion_direction", kBarAccordionDirections),
+diff --git a/src/config/schema/config_schema_shell.cpp b/src/config/schema/config_schema_shell.cpp
+index 38a82b2..a185f5b 100644
+--- a/src/config/schema/config_schema_shell.cpp
++++ b/src/config/schema/config_schema_shell.cpp
+@@ -36,6 +36,15 @@ namespace noctalia::config::schema {
+       static const Schema<ShellConfig::AnimationConfig> s = {
+           field(&ShellConfig::AnimationConfig::enabled, "enabled"),
+           field(&ShellConfig::AnimationConfig::speed, "speed", kAnimationSpeedRange),
++          optionalFloatField(&ShellConfig::AnimationConfig::scrollSpeed, "scroll_speed", kAnimationSpeedRange),
++          optionalFloatField(&ShellConfig::AnimationConfig::scrollStep, "scroll_step"),
++          optionalFloatField(&ShellConfig::AnimationConfig::tabSwitchSpeed, "tab_switch_speed", kAnimationSpeedRange),
++          optionalFloatField(&ShellConfig::AnimationConfig::panelSpeed, "panel_speed", kAnimationSpeedRange),
++          optionalFloatField(&ShellConfig::AnimationConfig::workspaceSpeed, "workspace_speed", kAnimationSpeedRange),
++          optionalFloatField(
++              &ShellConfig::AnimationConfig::windowSwitcherSpeed, "window_switcher_speed", kAnimationSpeedRange
++          ),
++          optionalFloatField(&ShellConfig::AnimationConfig::toastSpeed, "toast_speed", kAnimationSpeedRange),
+       };
+       return s;
+     }
+diff --git a/src/config/schema/ranges.h b/src/config/schema/ranges.h
+index 56358e8..28653f5 100644
+--- a/src/config/schema/ranges.h
++++ b/src/config/schema/ranges.h
+@@ -18,7 +18,7 @@ namespace noctalia::config::schema {
+   inline constexpr Range<std::int64_t> kPastEventsThresholdMinutesRange{0, 1440, 5};
+ 
+   // Shell.
+-  inline constexpr Range<float> kAnimationSpeedRange{0.1F, 4.0F, 0.05F};
++  inline constexpr Range<float> kAnimationSpeedRange{0.01F, 10.0F, 0.01F};
+   inline constexpr Range<float> kCornerRadiusScaleRange{0.0F, 2.0F, 0.05F};
+   inline constexpr Range<std::int64_t> kControlCenterWidthRange{600, 1200, 10};
+   inline constexpr Range<std::int64_t> kLauncherWidthRange{560, 1100, 10};
+diff --git a/src/launcher/dmenu_ipc.cpp b/src/launcher/dmenu_ipc.cpp
+index 6072e29..a0ce765 100644
+--- a/src/launcher/dmenu_ipc.cpp
++++ b/src/launcher/dmenu_ipc.cpp
+@@ -205,7 +205,7 @@ void DmenuIpcService::finalizeSession(Session& session) {
+     return;
+   }
+   // Only one dmenu session can drive the launcher at a time; don't disrupt an open one.
+-  if (m_panelManager->isOpenPanel("launcher")) {
++  if (m_panelManager->isOpenPanel("launcher") && !m_panelManager->isClosing()) {
+     kLog.debug("rejecting session {}: launcher already open", session.token);
+     discardSession(session.connFd);
+     return;
+@@ -249,8 +249,9 @@ void DmenuIpcService::finalizeSession(Session& session) {
+       [this, connFd](std::optional<std::string> selection) { completeSession(connFd, std::move(selection)); }
+   );
+   m_launcherPanel->addProvider(std::move(provider));
+-  m_launcherPanel->setScopedProvider(providerId, prompt);
+   m_panelManager->openPanel("launcher", PanelOpenRequest{});
++  m_launcherPanel->setScopedProvider(providerId, prompt);
++  m_launcherPanel->onOpen({});
+ }
+ 
+ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> selection) {
+@@ -260,6 +261,8 @@ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> sel
+     return;
+   }
+ 
++  const std::string sessionProviderId = (*it)->providerId;
++
+   if (selection.has_value()) {
+     (*it)->response = *selection;
+     (*it)->response += '\n';
+@@ -272,8 +275,8 @@ void DmenuIpcService::completeSession(int connFd, std::optional<std::string> sel
+ 
+   // The provider is being iterated by LauncherPanel during activate()/reset(); mutate
+   // the panel after this event completes.
+-  DeferredCall::callLater([this] {
+-    if (m_launcherPanel != nullptr) {
++  DeferredCall::callLater([this, sessionProviderId] {
++    if (m_launcherPanel != nullptr && m_launcherPanel->scopedProviderId() == sessionProviderId) {
+       m_launcherPanel->clearProvidersWithIdPrefix("dmenu.stdin.");
+       m_launcherPanel->setScopedProvider({});
+     }
+diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
+index 931446a..ce7667d 100644
+--- a/src/shell/bar/bar.cpp
++++ b/src/shell/bar/bar.cpp
+@@ -887,6 +887,11 @@ namespace {
+       return;
+     }
+ 
++    if (instance.barConfig.backgroundOpacity <= 0.001F) {
++      instance.shadow->setVisible(false);
++      return;
++    }
++
+     const auto concave = barConcaveShape(instance.barConfig);
+     const float innerSurfaceExtension =
+         barInnerSurfaceExtension(instance.barConfig, shadowConfig, surfaceWidth, surfaceHeight);
+@@ -1099,7 +1104,17 @@ namespace {
+         const Widget* radiusSource = !run.widgets.empty() ? run.widgets.front() : nullptr;
+         const float capsuleRadius = radiusSource != nullptr ? radiusSource->resolvedBarCapsuleRadius(shellW, shellH)
+                                                             : std::max(0.0F, std::min(shellW, shellH) * 0.5F);
+-        bg->setRadius(capsuleRadius);
++        if (run.spec.radiusTopLeft.has_value() || run.spec.radiusTopRight.has_value()
++            || run.spec.radiusBottomRight.has_value() || run.spec.radiusBottomLeft.has_value()) {
++          bg->setRadii(Radii{
++              run.spec.radiusTopLeft.value_or(capsuleRadius),
++              run.spec.radiusTopRight.value_or(capsuleRadius),
++              run.spec.radiusBottomRight.value_or(capsuleRadius),
++              run.spec.radiusBottomLeft.value_or(capsuleRadius),
++          });
++        } else {
++          bg->setRadius(capsuleRadius);
++        }
+         if (run.container == nullptr) {
+           placeCapsuleHoverBoxes(
+               run, isVertical, shellW, shellH, contentX, contentY, capsuleRadius, widgetHoverPadding
+@@ -3314,6 +3329,11 @@ void Bar::applyBackgroundPalette(BarInstance& instance) {
+   if (instance.bg == nullptr) {
+     return;
+   }
++  const bool hasBg = instance.barConfig.backgroundOpacity > 0.001F;
++  instance.bg->setVisible(hasBg);
++  if (!hasBg) {
++    return;
++  }
+   auto style = instance.bg->style();
+   style.fill = colorForRole(ColorRole::Surface, instance.barConfig.backgroundOpacity);
+   style.border = resolveColorSpec(instance.barConfig.border);
+diff --git a/src/shell/bar/widgets/active_window_widget.cpp b/src/shell/bar/widgets/active_window_widget.cpp
+index fcd7196..cd97630 100644
+--- a/src/shell/bar/widgets/active_window_widget.cpp
++++ b/src/shell/bar/widgets/active_window_widget.cpp
+@@ -97,7 +97,8 @@ void ActiveWindowWidget::doLayout(Renderer& renderer, float containerWidth, floa
+     m_icon->setPosition(0.0F, 0.0F);
+     rootNode->setSize(m_icon->width(), m_icon->height());
+   } else {
+-    const bool showIcon = !showingEmptyPlaceholder && m_displayMode != ActiveWindowDisplayMode::TextOnly;
++    const bool showIcon =
++        !showingEmptyPlaceholder && m_displayMode != ActiveWindowDisplayMode::TextOnly && !m_lastIconPath.empty();
+     const bool showTitle =
+         showingEmptyPlaceholder || (m_displayMode != ActiveWindowDisplayMode::IconOnly && !m_lastTitle.empty());
+     m_icon->setVisible(showIcon);
+@@ -264,6 +265,24 @@ int ActiveWindowWidget::iconTargetSize() const noexcept {
+ 
+ std::string ActiveWindowWidget::resolveIconPath(const std::string& appId, float renderScale) {
+   if (appId.empty()) {
++    if (!m_lastTitle.empty()) {
++      if (m_lastTitle.starts_with("AyuGram") || m_lastTitle.starts_with("Telegram")) {
++        const int iconTargetSize = static_cast<int>(std::round(48.0F * m_contentScale));
++        const std::string resolved = m_iconResolver.resolve("com.ayugram.desktop", iconTargetSize);
++        if (!resolved.empty()) {
++          return resolved;
++        }
++      }
++      for (const auto& entry : desktopEntries()) {
++        if (!entry.name.empty() && m_lastTitle.starts_with(entry.name) && !entry.icon.empty()) {
++          const int iconTargetSize = static_cast<int>(std::round(48.0F * m_contentScale));
++          const std::string resolved = m_iconResolver.resolve(entry.icon, iconTargetSize);
++          if (!resolved.empty()) {
++            return resolved;
++          }
++        }
++      }
++    }
+     return {};
+   }
+ 
+diff --git a/src/shell/bar/widgets/workspaces_widget.cpp b/src/shell/bar/widgets/workspaces_widget.cpp
+index 448e03a..9323c75 100644
+--- a/src/shell/bar/widgets/workspaces_widget.cpp
++++ b/src/shell/bar/widgets/workspaces_widget.cpp
+@@ -77,7 +77,8 @@ WorkspacesWidget::WorkspacesWidget(
+       m_colorizeIcons(options.colorizeIcons), m_hideWhenEmpty(options.hideWhenEmpty),
+       m_monitors(std::move(options.monitors)), m_separator(std::move(options.separator)),
+       m_pillScale(options.pillScale), m_activePillSize(std::clamp(options.activePillSize, 0.25F, 8.0F)),
+-      m_inactivePillSize(std::clamp(options.inactivePillSize, 0.25F, 8.0F)), m_style(options.style),
++      m_inactivePillSize(std::clamp(options.inactivePillSize, 0.25F, 8.0F)),
++      m_persistentCount(options.persistentCount), m_style(options.style),
+       m_focusedOutputOnly(options.focusedOutputOnly), m_changeColorOnHover(options.changeColorOnHover),
+       m_focusedColor(options.focusedColor), m_occupiedColor(options.occupiedColor), m_emptyColor(options.emptyColor),
+       m_urgentColor(options.urgentColor), m_separatorColor(options.separatorColor) {
+@@ -231,6 +232,39 @@ void WorkspacesWidget::doUpdate(Renderer& renderer) {
+     }
+   }
+ 
++  if (m_persistentCount > 0) {
++    for (std::int32_t i = 1; i <= m_persistentCount; ++i) {
++      std::string idStr = std::to_string(i);
++      bool exists = false;
++      for (const auto& ws : current) {
++        if (ws.workspace.id == idStr || ws.workspace.name == idStr) {
++          exists = true;
++          break;
++        }
++      }
++      if (!exists) {
++        Workspace dummy{};
++        dummy.id = idStr;
++        dummy.name = idStr;
++        dummy.index = i;
++        dummy.active = false;
++        dummy.urgent = false;
++        dummy.occupied = false;
++        dummy.coordinates = {static_cast<unsigned int>(i)};
++        current.push_back({.workspace = std::move(dummy), .output = m_output});
++      }
++    }
++    std::ranges::sort(current, [](const WorkspaceState& a, const WorkspaceState& b) {
++      int idA = 0, idB = 0;
++      std::from_chars(a.workspace.id.data(), a.workspace.id.data() + a.workspace.id.size(), idA);
++      std::from_chars(b.workspace.id.data(), b.workspace.id.data() + b.workspace.id.size(), idB);
++      if (idA != idB) {
++        return idA < idB;
++      }
++      return a.workspace.id < b.workspace.id;
++    });
++  }
++
+   if (!m_cachedState.empty() && !current.empty() && !std::ranges::any_of(current, [](const WorkspaceState& state) {
+         return state.workspace.active;
+       })) {
+@@ -293,9 +327,7 @@ void WorkspacesWidget::doUpdate(Renderer& renderer) {
+       const auto& b = m_cachedState[i];
+       if (a.output != b.output
+           || a.workspace.id != b.workspace.id
+-          || a.workspace.name != b.workspace.name
+-          || a.workspace.index != b.workspace.index
+-          || a.workspace.coordinates != b.workspace.coordinates) {
++          || a.workspace.name != b.workspace.name) {
+         structuralChange = true;
+         break;
+       }
+@@ -1052,7 +1084,7 @@ void WorkspacesWidget::startAnimation() {
+           root()->markPaintDirty();
+         }
+       },
+-      [this] { finishAnimation(); }, this
++      [this]() { finishAnimation(); }, this, AnimationKind::Workspace
+   );
+ 
+   // Reserve final bounds before the first animated frame to avoid one-frame overflow.
+@@ -1179,6 +1211,17 @@ void WorkspacesWidget::applyItemLayout(Item& it) {
+       it.indicator->setPosition(dotX, dotY);
+       it.indicator->setFrameSize(dotSize, dotSize);
+       it.indicator->setRadius(dotSize * 0.5F);
++    } else if (!m_showLabels) {
++      const float basePillSize = std::round(kWorkspacePillDefaultHeight * m_contentScale * m_pillScale);
++      const float pillH = std::min(itemH, std::round(basePillSize * m_inactivePillSize));
++      const float pillW = std::max(pillH, it.currentWidth);
++      const float dotX = m_isVertical ? 0.0F : std::round((itemW - pillW) * 0.5F);
++      const float dotY = m_isVertical ? std::round((itemH - pillW) * 0.5F) : std::round((itemH - pillH) * 0.5F);
++      const float drawW = m_isVertical ? pillH : pillW;
++      const float drawH = m_isVertical ? pillW : pillH;
++      it.indicator->setPosition(dotX, dotY);
++      it.indicator->setFrameSize(drawW, drawH);
++      it.indicator->setRadius(pillH * 0.5F);
+     } else {
+       it.indicator->setPosition(0.0F, 0.0F);
+       it.indicator->setFrameSize(itemW, itemH);
+diff --git a/src/shell/bar/widgets/workspaces_widget.h b/src/shell/bar/widgets/workspaces_widget.h
+index 7dd7170..e01c648 100644
+--- a/src/shell/bar/widgets/workspaces_widget.h
++++ b/src/shell/bar/widgets/workspaces_widget.h
+@@ -55,6 +55,7 @@ public:
+     float activePillSize = 2.2F;
+     float inactivePillSize = 1.0F;
+     bool focusedOutputOnly = false;
++    std::int32_t persistentCount = 0;
+   };
+ 
+   WorkspacesWidget(CompositorPlatform& platform, ConfigService& config, wl_output* output, Options options);
+@@ -182,6 +183,7 @@ private:
+   float m_pillScale = 1.0F;
+   float m_activePillSize = 2.2F;
+   float m_inactivePillSize = 1.0F;
++  std::int32_t m_persistentCount = 0;
+   WorkspacesStyle m_style = WorkspacesStyle::Regular;
+   bool m_focusedOutputOnly = false;
+   bool m_changeColorOnHover = true;
+diff --git a/src/shell/bar/widgets/workspaces_widget_definition.cpp b/src/shell/bar/widgets/workspaces_widget_definition.cpp
+index e6bc452..434e94b 100644
+--- a/src/shell/bar/widgets/workspaces_widget_definition.cpp
++++ b/src/shell/bar/widgets/workspaces_widget_definition.cpp
+@@ -188,6 +188,12 @@ const noctalia::bar::WidgetDefinition<WorkspacesWidget::Options>& workspacesWidg
+                           .visibleWhen = regularStyleOnly(),
+                       },
+               }),
++              field<&Options::persistentCount>({
++                  .key = "persistent_count",
++                  .minValue = 0.0,
++                  .maxValue = 20.0,
++                  .step = 1.0,
++              }),
+               field<&Options::focusedOutputOnly>({
+                   .key = "focused_output_only",
+                   .presentation =
+diff --git a/src/shell/control_center/control_center_panel.cpp b/src/shell/control_center/control_center_panel.cpp
+index 7b1a2a7..c17db59 100644
+--- a/src/shell/control_center/control_center_panel.cpp
++++ b/src/shell/control_center/control_center_panel.cpp
+@@ -751,7 +751,8 @@ void ControlCenterPanel::startTabTransition(TabId from, TabId to) {
+         PanelManager::instance().requestLayout();
+         PanelManager::instance().requestRedraw();
+       },
+-      m_tabBodies
++      m_tabBodies,
++      AnimationKind::TabSwitch
+   );
+ }
+ 
+diff --git a/src/shell/dock/dock_instance.cpp b/src/shell/dock/dock_instance.cpp
+index bea3a63..13d770c 100644
+--- a/src/shell/dock/dock_instance.cpp
++++ b/src/shell/dock/dock_instance.cpp
+@@ -224,7 +224,7 @@ namespace shell::dock {
+           return false;
+         }
+ 
+-        inst->scrollOffset += data.scrollDelta(Style::scrollWheelStep);
++        inst->scrollOffset += data.scrollDelta(Style::effectiveScrollWheelStep());
+         applyDockScrollOffset(*inst, dockConfig);
+         inst->inputDispatcher.syncPointerHover();
+ 
+diff --git a/src/shell/launcher/launcher_panel.cpp b/src/shell/launcher/launcher_panel.cpp
+index c107d75..20054e4 100644
+--- a/src/shell/launcher/launcher_panel.cpp
++++ b/src/shell/launcher/launcher_panel.cpp
+@@ -1500,7 +1500,8 @@ void LauncherPanel::finishActivation(
+   if (trackUsage && provider.trackUsage()) {
+     m_usageTracker.record(provider.id(), resultId);
+   }
+-  PanelManager::instance().closePanel(false);
++  const bool isDmenuStdin = provider.id().starts_with("dmenu.stdin.");
++  PanelManager::instance().closePanel(!isDmenuStdin);
+   if (copied && provider.supportsAutoPaste() && m_onCopiedActivation) {
+     m_onCopiedActivation();
+   }
+diff --git a/src/shell/launcher/launcher_panel.h b/src/shell/launcher/launcher_panel.h
+index 5cada77..6191fcd 100644
+--- a/src/shell/launcher/launcher_panel.h
++++ b/src/shell/launcher/launcher_panel.h
+@@ -47,6 +47,7 @@ public:
+   // onInputChanged queries only that provider and skips prefix routing/overview.
+   // Cleared on close.
+   void setScopedProvider(std::string_view providerId, std::string_view placeholder = {});
++  [[nodiscard]] std::string_view scopedProviderId() const noexcept { return m_scopedProviderId; }
+ 
+   void create() override;
+   void onOpen(std::string_view context) override;
+diff --git a/src/shell/panel/panel_manager.cpp b/src/shell/panel/panel_manager.cpp
+index fea6746..bbd088e 100644
+--- a/src/shell/panel/panel_manager.cpp
++++ b/src/shell/panel/panel_manager.cpp
+@@ -1579,7 +1579,7 @@ void PanelManager::closePanel(bool animateClose) {
+               }
+             });
+           },
+-          m_attachedRevealClipNode
++          m_attachedRevealClipNode, AnimationKind::Panel
+       );
+     } else {
+       m_animations.cancelForOwner(m_sceneRoot.get());
+@@ -1593,7 +1593,7 @@ void PanelManager::closePanel(bool animateClose) {
+               }
+             });
+           },
+-          m_sceneRoot.get()
++          m_sceneRoot.get(), AnimationKind::Panel
+       );
+     }
+     m_surface->requestRedraw();
+@@ -2409,7 +2409,7 @@ void PanelManager::startAttachedOpenAnimation() {
+   m_attachedOpenAnimationPending = false;
+   m_animations.animate(
+       m_attachedRevealProgress, 1.0F, Style::animNormal, Easing::EaseOutCubic,
+-      [this](float v) { applyAttachedReveal(v); }, {}, m_attachedRevealClipNode
++      [this](float v) { applyAttachedReveal(v); }, {}, m_attachedRevealClipNode, AnimationKind::Panel
+   );
+ }
+ 
+@@ -2839,7 +2839,7 @@ void PanelManager::buildScene(std::uint32_t width, std::uint32_t height) {
+       applyDetachedReveal(0.0F);
+       m_animations.animate(
+           0.0F, 1.0F, Style::animNormal, Easing::EaseOutCubic, [this](float v) { applyDetachedReveal(v); }, {},
+-          m_sceneRoot.get()
++          m_sceneRoot.get(), AnimationKind::Panel
+       );
+     }
+ 
+diff --git a/src/shell/panel/panel_manager.h b/src/shell/panel/panel_manager.h
+index fa95525..60dedb2 100644
+--- a/src/shell/panel/panel_manager.h
++++ b/src/shell/panel/panel_manager.h
+@@ -121,6 +121,7 @@ public:
+ 
+   bool isOpen() const noexcept;
+   bool isOpenPanel(std::string_view panelId) const noexcept;
++  bool isClosing() const noexcept { return m_closing; }
+   bool isPanelTransitionActive() const noexcept;
+   bool isAttachedOpen() const noexcept;
+   // Output the active panel is on; null when none is open.

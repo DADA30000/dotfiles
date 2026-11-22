@@ -914,7 +914,11 @@ in
         #package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (prev: {
         package = pkgs.noctalia.overrideAttrs (prev: {
           patches = (prev.patches or [ ]) ++ [
-            ../../../stuff/patches/noctalia.patch
+            ../../../stuff/patches/noctalia-dual-gpu.patch
+            ../../../stuff/patches/noctalia-hardware-controls.patch
+            ../../../stuff/patches/noctalia-lockscreen-transparent.patch
+            ../../../stuff/patches/noctalia-bar-and-motion.patch
+            ../../../stuff/patches/noctalia-ui-style.patch
             ../../../stuff/patches/noctalia-cpu-freq.patch
           ];
         });
@@ -1045,6 +1049,30 @@ in
             border = false;
           };
           system.monitor.gpu_poll_seconds = 1;
+
+          plugins = {
+            enabled = [ "local/vpn" ];
+            source = [
+              {
+                name = "official";
+                kind = "git";
+                location = "https://github.com/noctalia-dev/official-plugins";
+                enabled = true;
+              }
+              {
+                name = "community";
+                kind = "git";
+                location = "https://github.com/noctalia-dev/community-plugins";
+                enabled = true;
+              }
+              {
+                name = "local";
+                kind = "path";
+                location = "${../../../stuff/home/noctalia/plugins}";
+                enabled = true;
+              }
+            ];
+          };
 
           lockscreen = {
             transparent = true;
@@ -1206,6 +1234,7 @@ in
             volume.show_label = true;
             battery.show_label = true;
             network.show_label = true;
+            vpn.type = "local/vpn:vpn";
 
             cpu = {
               type = "sysmon";

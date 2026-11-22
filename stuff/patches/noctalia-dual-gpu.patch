@@ -1,0 +1,853 @@
+diff --git a/src/shell/bar/widgets/sysmon_widget.cpp b/src/shell/bar/widgets/sysmon_widget.cpp
+index 290629f..8668d91 100644
+--- a/src/shell/bar/widgets/sysmon_widget.cpp
++++ b/src/shell/bar/widgets/sysmon_widget.cpp
+@@ -6,6 +6,7 @@
+ #include "render/scene/node.h"
+ #include "shell/visuals/graph.h"
+ #include "system/format_units.h"
++#include "system/nvidia_status.h"
+ #include "system/system_monitor_service.h"
+ #include "ui/builders.h"
+ #include "ui/controls/flex.h"
+@@ -13,6 +14,8 @@
+ #include "ui/palette.h"
+ #include "ui/style.h"
+ #include "util/file_utils.h"
++#include "util/string_utils.h"
++#include "util/string_utils.h"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -115,11 +118,11 @@ namespace {
+         || stat == SysmonStat::DiskFree;
+   }
+ 
+-  constexpr std::array<SysmonStat, 16> kTooltipStats{
+-      SysmonStat::CpuUsage,    SysmonStat::CpuTemp,  SysmonStat::CpuFreq,     SysmonStat::GpuTemp,
+-      SysmonStat::GpuUsage,    SysmonStat::GpuVram,  SysmonStat::GpuVramUsed, SysmonStat::RamUsed,
+-      SysmonStat::RamPct,      SysmonStat::SwapPct,  SysmonStat::DiskUsedPct, SysmonStat::DiskUsed,
+-      SysmonStat::DiskFreePct, SysmonStat::DiskFree, SysmonStat::NetRx,       SysmonStat::NetTx,
++  constexpr std::array<SysmonStat, 11> kTooltipStats{
++      SysmonStat::CpuUsage, SysmonStat::CpuTemp,     SysmonStat::CpuFreq,
++      SysmonStat::RamUsed,  SysmonStat::SwapPct,
++      SysmonStat::DiskUsedPct, SysmonStat::DiskUsed, SysmonStat::DiskFreePct, SysmonStat::DiskFree,
++      SysmonStat::NetRx,    SysmonStat::NetTx,
+   };
+ 
+   double netRxFromStats(const SystemStats& stats, std::string_view interfaceName) {
+@@ -201,15 +204,9 @@ SysmonWidget::SysmonWidget(SystemMonitorService* monitor, ConfigService& configS
+     if (needsCpuTemp(m_stat)) {
+       m_monitor->retainCpuTemp();
+     }
+-    if (needsGpuTemp(m_stat)) {
+-      m_monitor->retainGpuTemp();
+-    }
+-    if (needsGpuUsage(m_stat)) {
+-      m_monitor->retainGpuUsage();
+-    }
+-    if (needsGpuVram(m_stat)) {
+-      m_monitor->retainGpuVram();
+-    }
++    m_monitor->retainGpuTemp();
++    m_monitor->retainGpuUsage();
++    m_monitor->retainGpuVram();
+     if (isDiskStat(m_stat) && !m_diskPath.empty()) {
+       m_monitor->retainDiskPath(m_diskPath);
+     }
+@@ -224,15 +221,9 @@ SysmonWidget::~SysmonWidget() {
+     if (needsCpuTemp(m_stat)) {
+       m_monitor->releaseCpuTemp();
+     }
+-    if (needsGpuTemp(m_stat)) {
+-      m_monitor->releaseGpuTemp();
+-    }
+-    if (needsGpuUsage(m_stat)) {
+-      m_monitor->releaseGpuUsage();
+-    }
+-    if (needsGpuVram(m_stat)) {
+-      m_monitor->releaseGpuVram();
+-    }
++    m_monitor->releaseGpuTemp();
++    m_monitor->releaseGpuUsage();
++    m_monitor->releaseGpuVram();
+     if (isDiskStat(m_stat) && !m_diskPath.empty()) {
+       m_monitor->releaseDiskPath(m_diskPath);
+     }
+@@ -346,6 +337,13 @@ void SysmonWidget::create() {
+     }
+   }
+ 
++  static_cast<InputArea*>(container.get())->setTooltipProvider(
++      [this]() -> TooltipContent {
++        return TooltipContent{buildTooltipRows(formatValue())};
++      },
++      std::chrono::milliseconds(1000)
++  );
++
+   setRoot(std::move(container));
+ 
+   syncVisualPalette();
+@@ -1168,10 +1166,8 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+ 
+   case SysmonStat::GpuVram:
+     if (stats.gpuVramUsedBytes.has_value() && stats.gpuVramTotalBytes.has_value() && *stats.gpuVramTotalBytes > 0) {
+-      return std::format(
+-          "{:.0F}%",
+-          100.0 * static_cast<double>(*stats.gpuVramUsedBytes) / static_cast<double>(*stats.gpuVramTotalBytes)
+-      );
++      const double pct = 100.0 * static_cast<double>(*stats.gpuVramUsedBytes) / static_cast<double>(*stats.gpuVramTotalBytes);
++      return std::format("{:.0F}% · {}", pct, FormatUnits::formatBinaryBytesAsGib(*stats.gpuVramUsedBytes));
+     }
+     return std::nullopt;
+ 
+@@ -1182,7 +1178,7 @@ std::optional<std::string> SysmonWidget::formatValueFor(SysmonStat stat, const S
+     return std::nullopt;
+ 
+   case SysmonStat::RamUsed:
+-    return FormatUnits::formatBinaryMib(stats.ramUsedMb);
++    return std::format("{} ({:.0F}%)", FormatUnits::formatBinaryMib(stats.ramUsedMb), stats.ramUsagePercent);
+ 
+   case SysmonStat::RamPct:
+     return std::format("{:.0F}%", stats.ramUsagePercent);
+@@ -1261,6 +1257,10 @@ bool SysmonWidget::statAvailableForTooltip(SysmonStat stat, const SystemStats& s
+   return false;
+ }
+ 
++  static bool hasSecondaryGpuDevice() {
++    return noctalia::system::NvidiaGpuService::instance().status().present;
++  }
++
+ std::vector<TooltipRow> SysmonWidget::buildTooltipRows(const std::string& currentValue) const {
+   std::vector<TooltipRow> rows;
+   rows.push_back({statDisplayName(m_stat), currentValue});
+@@ -1282,6 +1282,31 @@ std::vector<TooltipRow> SysmonWidget::buildTooltipRows(const std::string& curren
+     }
+   }
+ 
++  const bool hasSec = hasSecondaryGpuDevice();
++  if (!hasSec) {
++    if (stats.gpuUsagePercent.has_value()) {
++      std::string vramStr;
++      if (stats.gpuVramUsedBytes.has_value() && stats.gpuVramTotalBytes.has_value() && *stats.gpuVramTotalBytes > 0) {
++        const double usedGib = static_cast<double>(*stats.gpuVramUsedBytes) / (1024.0 * 1024.0 * 1024.0);
++        const double totalGib = static_cast<double>(*stats.gpuVramTotalBytes) / (1024.0 * 1024.0 * 1024.0);
++        vramStr = std::format(" · {:.1F}/{:.1F} GiB", usedGib, totalGib);
++      }
++      rows.push_back({"GPU", std::format("{:.0F}%{}", *stats.gpuUsagePercent, vramStr)});
++    }
++  } else {
++    if (stats.gpuUsagePercent.has_value()) {
++      std::string vramStr;
++      if (stats.gpuVramUsedBytes.has_value() && stats.gpuVramTotalBytes.has_value() && *stats.gpuVramTotalBytes > 0) {
++        const double usedGib = static_cast<double>(*stats.gpuVramUsedBytes) / (1024.0 * 1024.0 * 1024.0);
++        const double totalGib = static_cast<double>(*stats.gpuVramTotalBytes) / (1024.0 * 1024.0 * 1024.0);
++        vramStr = std::format(" · {:.1F}/{:.1F} GiB", usedGib, totalGib);
++      }
++      rows.push_back({"GPU 0", std::format("{:.0F}%{}", *stats.gpuUsagePercent, vramStr)});
++    }
++    const auto nv = noctalia::system::NvidiaGpuService::instance().status();
++    rows.push_back({"GPU 1", nv.formatSummary()});
++  }
++
+   return rows;
+ }
+ 
+diff --git a/src/shell/control_center/tabs/system_tab.cpp b/src/shell/control_center/tabs/system_tab.cpp
+index ff003f8..6e309be 100644
+--- a/src/shell/control_center/tabs/system_tab.cpp
++++ b/src/shell/control_center/tabs/system_tab.cpp
+@@ -6,9 +6,12 @@
+ #include "system/distro_info.h"
+ #include "system/format_units.h"
+ #include "system/hardware_info.h"
++#include "system/nvidia_status.h"
+ #include "system/system_monitor_service.h"
+ #include "time/time_format.h"
+ #include "ui/builders.h"
++#include "ui/controls/button.h"
++#include "util/string_utils.h"
+ 
+ #include <algorithm>
+ #include <format>
+@@ -23,6 +26,10 @@ namespace {
+   constexpr double kNetMinScaleBps = 10000.0;
+   constexpr std::size_t kMaxDiskRows = 4;
+ 
++  bool hasSecondaryGpu() {
++    return noctalia::system::NvidiaGpuService::instance().status().present;
++  }
++
+   // Graph cards run tighter than the default section card so the plot fills more of the card,
+   // but the title gets a touch more breathing room above it.
+   constexpr float kGraphCardPadTop = Style::spaceSm;
+@@ -280,11 +287,37 @@ std::unique_ptr<Flex> SystemTab::create() {
+       auto card = ui::column({
+           .out = &m_gpuCard,
+           .flexGrow = 1.0F,
+-          .visible = false,
++          .visible = true,
+           .configure = [sc, opacity = panelCardOpacity()](Flex& section) { applyGraphCardStyle(section, sc, opacity); },
+       });
+ 
+-      makeHeaderRow(*card, i18n::tr("control-center.system.titles.gpu"), sc);
++      if (hasSecondaryGpu()) {
++        auto selectGpu = [this](int idx) {
++          if (m_selectedGpu == idx) return;
++          m_selectedGpu = idx;
++          if (m_gpu0TabButton) m_gpu0TabButton->setVariant(m_selectedGpu == 0 ? ButtonVariant::Primary : ButtonVariant::Ghost);
++          if (m_gpu1TabButton) m_gpu1TabButton->setVariant(m_selectedGpu == 1 ? ButtonVariant::Primary : ButtonVariant::Ghost);
++          applyGpuGraphSeries();
++          syncLabels();
++          PanelManager::instance().requestRedraw();
++        };
++
++        auto makeTab = [&](Button** out, const char* text, int idx) {
++          return ui::button({
++              .out = out, .text = text, .fontSize = Style::fontSizeCaption * sc,
++              .variant = (m_selectedGpu == idx) ? ButtonVariant::Primary : ButtonVariant::Ghost,
++              .minHeight = 22.0F * sc, .paddingV = 2.0F * sc, .paddingH = Style::spaceSm * sc,
++              .radius = 15.0F * sc, .onClick = [selectGpu, idx]() { selectGpu(idx); },
++          });
++        };
++        auto switcher = ui::row({.align = FlexAlign::Center, .gap = Style::spaceXs * sc, .flexGrow = 0.0F});
++        switcher->addChild(makeTab(&m_gpu0TabButton, "GPU 0", 0));
++        switcher->addChild(makeTab(&m_gpu1TabButton, "GPU 1", 1));
++        card->addChild(std::move(switcher));
++      } else {
++        makeHeaderRow(*card, "GPU", sc);
++      }
++
+       m_gpuGraph = addGraph(*card);
+       auto* legend = makeLegendRow(*card, sc);
+       m_gpuLegend = legend;
+@@ -298,6 +331,15 @@ std::unique_ptr<Flex> SystemTab::create() {
+       m_gpuTempLabel = makeValueLabel(*m_gpuTempGroup, sc);
+       m_gpuTempGroup->setVisible(false);
+ 
++      auto statusLabel = ui::label({
++          .out = &m_gpuStatusLabel,
++          .text = "D3cold",
++          .fontSize = Style::fontSizeCaption * sc,
++          .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
++          .visible = false,
++      });
++      legend->addChild(std::move(statusLabel));
++
+       row->addChild(std::move(card));
+     }
+ 
+@@ -350,6 +392,8 @@ std::unique_ptr<Flex> SystemTab::create() {
+     m_swapLabel = addResourceRow(
+         *resourcesCard, "arrows-exchange", i18n::tr("control-center.system.labels.swap"), sc, &m_swapRow
+     );
++    m_gpu0Label = addResourceRow(*resourcesCard, "device-desktop", "GPU 0", sc, &m_gpu0Row);
++    m_gpu1Label = addResourceRow(*resourcesCard, "device-desktop", "GPU 1", sc, &m_gpu1Row);
+ 
+     // Up to four physical disks, discovered automatically (root first). Usage refreshes in doUpdate.
+     m_diskMountPoints = physicalDiskMountPoints();
+@@ -469,6 +513,13 @@ void SystemTab::onClose() {
+   }
+   m_swapRow = nullptr;
+   m_swapLabel = nullptr;
++  m_gpu0Row = nullptr;
++  m_gpu0Label = nullptr;
++  m_gpu1Row = nullptr;
++  m_gpu1Label = nullptr;
++  m_gpu0TabButton = nullptr;
++  m_gpu1TabButton = nullptr;
++  m_gpuStatusLabel = nullptr;
+   m_diskLabels.clear();
+   m_diskMountPoints.clear();
+   m_graphInitialized = false;
+@@ -490,15 +541,16 @@ void SystemTab::onFrameTick(float deltaMs, Renderer& /*renderer*/) {
+     return;
+   }
+ 
+-  if (!m_redrawLimiter.shouldStep([] { PanelManager::instance().requestRedraw(); })) {
+-    return;
+-  }
+ 
+   const auto latestSampleAt = m_monitor->latest().sampledAt;
+   if (latestSampleAt != std::chrono::steady_clock::time_point{} && latestSampleAt != m_lastSampleAt) {
+     PanelManager::instance().requestUpdateOnly();
+   }
+ 
++  if (!m_redrawLimiter.shouldStep([]() { PanelManager::instance().requestRedraw(); })) {
++    return;
++  }
++
+   m_scrollProgress = scrollProgressForSample(m_lastSampleAt);
+ 
+   if (m_cpuGraph != nullptr) {
+@@ -653,6 +705,88 @@ void SystemTab::doUpdate(Renderer& renderer) {
+   syncLabels();
+ }
+ 
++void SystemTab::applyGpuGraphSeries() {
++  if (m_gpuGraph == nullptr || m_monitor == nullptr || !m_monitor->isRunning()) {
++    return;
++  }
++  const auto hist = m_monitor->history();
++  if (hist.size() < 4) {
++    return;
++  }
++  const std::size_t n = hist.size();
++
++  if (m_selectedGpu == 0) {
++    bool hasGpuUsage = false;
++    bool hasGpuTemp = false;
++    bool hasGpuVram = false;
++    std::vector<float> gpuUsage(n);
++    std::vector<float> gpuVram(n);
++    std::vector<float> gpuTemp(n);
++    for (std::size_t i = 0; i < n; ++i) {
++      const auto& s = hist[i];
++      if (s.gpuUsagePercent.has_value()) {
++        hasGpuUsage = true;
++        gpuUsage[i] = static_cast<float>(std::clamp(*s.gpuUsagePercent / 100.0, 0.0, 1.0));
++      }
++      if (s.gpuVramUsedBytes.has_value() && s.gpuVramTotalBytes.has_value() && *s.gpuVramTotalBytes > 0) {
++        hasGpuVram = true;
++        gpuVram[i] = static_cast<float>(
++            std::clamp(static_cast<double>(*s.gpuVramUsedBytes) / static_cast<double>(*s.gpuVramTotalBytes), 0.0, 1.0)
++        );
++      }
++      if (s.gpuTempC.has_value()) {
++        hasGpuTemp = true;
++        const double t = *s.gpuTempC;
++        m_gpuTempMin = std::min(m_gpuTempMin, t);
++        m_gpuTempMax = std::max(m_gpuTempMax, t);
++        const double range = m_gpuTempMax - m_gpuTempMin;
++        gpuTemp[i] = range > 0.0 ? static_cast<float>(std::clamp((t - m_gpuTempMin) / range, 0.0, 1.0)) : 0.5F;
++      }
++    }
++    m_gpuGraph->setValues(hasGpuUsage ? std::move(gpuUsage) : std::vector<float>{});
++    m_gpuGraph->setValues2(hasGpuVram ? std::move(gpuVram) : std::vector<float>{});
++    m_gpuGraph->setValues3(hasGpuTemp ? std::move(gpuTemp) : std::vector<float>{});
++    const bool hasGpuData = hasGpuUsage || hasGpuVram || hasGpuTemp;
++    if (hasGpuData != m_gpuVisible) {
++      m_gpuVisible = hasGpuData;
++      updateGpuVisibility();
++    }
++  } else {
++    auto& nvSvc = noctalia::system::NvidiaGpuService::instance();
++    const auto nv = nvSvc.status();
++    if (nv.suspended || nv.blocked) {
++      m_gpuGraph->setValues(std::vector<float>(n, 0.0F));
++      m_gpuGraph->setValues2({});
++      m_gpuGraph->setValues3({});
++    } else {
++      const auto nvHist = nvSvc.history();
++      const float fallbackUsage = static_cast<float>(std::clamp(nv.usagePct / 100.0, 0.0, 1.0));
++      const float fallbackVram = nv.vramTotalMib > 0.0 ? static_cast<float>(std::clamp(nv.vramUsedMib / nv.vramTotalMib, 0.0, 1.0)) : 0.0F;
++      const float fallbackTemp = static_cast<float>(std::clamp((nv.tempC - 30.0) / 60.0, 0.0, 1.0));
++      std::vector<float> uVec(n, nvHist.empty() ? fallbackUsage : nvHist.front().usage);
++      std::vector<float> vVec(n, nvHist.empty() ? fallbackVram : nvHist.front().vram);
++      std::vector<float> tVec(n, nvHist.empty() ? fallbackTemp : nvHist.front().temp);
++      if (!nvHist.empty()) {
++        const std::size_t take = std::min(n, nvHist.size());
++        const std::size_t srcStart = nvHist.size() - take;
++        const std::size_t dstStart = n - take;
++        for (std::size_t i = 0; i < take; ++i) {
++          uVec[dstStart + i] = nvHist[srcStart + i].usage;
++          vVec[dstStart + i] = nvHist[srcStart + i].vram;
++          tVec[dstStart + i] = nvHist[srcStart + i].temp;
++        }
++      }
++      m_gpuGraph->setValues(std::move(uVec));
++      m_gpuGraph->setValues2(std::move(vVec));
++      m_gpuGraph->setValues3(std::move(tVec));
++    }
++    if (!m_gpuVisible) {
++      m_gpuVisible = true;
++      updateGpuVisibility();
++    }
++  }
++}
++
+ void SystemTab::updateGraphs(Renderer& renderer) {
+   if (m_monitor == nullptr || !m_monitor->isRunning()) {
+     return;
+@@ -704,42 +838,8 @@ void SystemTab::updateGraphs(Renderer& renderer) {
+ 
+   // GPU: usage (primary) + VRAM (secondary) + temperature (tertiary)
+   if (m_gpuGraph != nullptr) {
+-    bool hasGpuUsage = false;
+-    bool hasGpuTemp = false;
+-    bool hasGpuVram = false;
+-    std::vector<float> gpuUsage(n);
+-    std::vector<float> gpuVram(n);
+-    std::vector<float> gpuTemp(n);
+-    for (std::size_t i = 0; i < n; ++i) {
+-      const auto& s = hist[i];
+-      if (s.gpuUsagePercent.has_value()) {
+-        hasGpuUsage = true;
+-        gpuUsage[i] = static_cast<float>(std::clamp(*s.gpuUsagePercent / 100.0, 0.0, 1.0));
+-      }
+-      if (s.gpuVramUsedBytes.has_value() && s.gpuVramTotalBytes.has_value() && *s.gpuVramTotalBytes > 0) {
+-        hasGpuVram = true;
+-        gpuVram[i] = static_cast<float>(
+-            std::clamp(static_cast<double>(*s.gpuVramUsedBytes) / static_cast<double>(*s.gpuVramTotalBytes), 0.0, 1.0)
+-        );
+-      }
+-      if (s.gpuTempC.has_value()) {
+-        hasGpuTemp = true;
+-        const double t = *s.gpuTempC;
+-        m_gpuTempMin = std::min(m_gpuTempMin, t);
+-        m_gpuTempMax = std::max(m_gpuTempMax, t);
+-        const double range = m_gpuTempMax - m_gpuTempMin;
+-        gpuTemp[i] = range > 0.0 ? static_cast<float>(std::clamp((t - m_gpuTempMin) / range, 0.0, 1.0)) : 0.5F;
+-      }
+-    }
+-    m_gpuGraph->setValues(hasGpuUsage ? std::move(gpuUsage) : std::vector<float>{});
+-    m_gpuGraph->setValues2(hasGpuVram ? std::move(gpuVram) : std::vector<float>{});
+-    m_gpuGraph->setValues3(hasGpuTemp ? std::move(gpuTemp) : std::vector<float>{});
++    applyGpuGraphSeries();
+     m_gpuGraph->sync(renderer);
+-    const bool hasGpuData = hasGpuUsage || hasGpuVram || hasGpuTemp;
+-    if (hasGpuData != m_gpuVisible) {
+-      m_gpuVisible = hasGpuData;
+-      updateGpuVisibility();
+-    }
+   }
+ 
+   // Network
+@@ -834,25 +934,50 @@ void SystemTab::syncLabels() {
+       m_cpuTempLabel->setText("--");
+     }
+   }
+-  if (m_gpuTempGroup != nullptr) {
+-    const bool hasTempData = stats.gpuTempC.has_value();
+-    m_gpuTempGroup->setVisible(hasTempData);
+-    if (hasTempData && m_gpuTempLabel != nullptr) {
+-      m_gpuTempLabel->setText(std::format("{:.0F}°C", *stats.gpuTempC));
++  const auto nv = noctalia::system::NvidiaGpuService::instance().status();
++  if (m_selectedGpu == 0) {
++    if (m_gpuStatusLabel != nullptr) {
++      m_gpuStatusLabel->setVisible(false);
+     }
+-  }
+-  if (m_gpuUsageGroup != nullptr) {
+-    const bool hasUsageData = stats.gpuUsagePercent.has_value();
+-    m_gpuUsageGroup->setVisible(hasUsageData);
+-    if (hasUsageData && m_gpuUsageLabel != nullptr) {
+-      m_gpuUsageLabel->setText(std::format("{:.0F}%", *stats.gpuUsagePercent));
++    if (m_gpuTempGroup != nullptr) {
++      const bool hasTempData = stats.gpuTempC.has_value();
++      m_gpuTempGroup->setVisible(hasTempData);
++      if (hasTempData && m_gpuTempLabel != nullptr) {
++        m_gpuTempLabel->setText(std::format("{:.0F}°C", *stats.gpuTempC));
++      }
+     }
+-  }
+-  if (m_gpuVramGroup != nullptr) {
+-    const bool hasVramData = stats.gpuVramUsedBytes.has_value();
+-    m_gpuVramGroup->setVisible(hasVramData);
+-    if (hasVramData && m_gpuVramLabel != nullptr) {
+-      m_gpuVramLabel->setText(formatGpuVramUsed(stats));
++    if (m_gpuUsageGroup != nullptr) {
++      const bool hasUsageData = stats.gpuUsagePercent.has_value();
++      m_gpuUsageGroup->setVisible(hasUsageData);
++      if (hasUsageData && m_gpuUsageLabel != nullptr) {
++        m_gpuUsageLabel->setText(std::format("{:.0F}%", *stats.gpuUsagePercent));
++      }
++    }
++    if (m_gpuVramGroup != nullptr) {
++      const bool hasVramData = stats.gpuVramUsedBytes.has_value();
++      m_gpuVramGroup->setVisible(hasVramData);
++      if (hasVramData && m_gpuVramLabel != nullptr) {
++        m_gpuVramLabel->setText(formatGpuVramUsed(stats));
++      }
++    }
++  } else {
++    // GPU 1 (NVIDIA)
++    const bool sleeping = nv.suspended || nv.blocked;
++    if (m_gpuStatusLabel) {
++      m_gpuStatusLabel->setText(nv.suspended ? "D3cold" : std::format("blocked (usage: {})", nv.runtimeUsage));
++      m_gpuStatusLabel->setVisible(sleeping);
++    }
++    if (m_gpuUsageGroup) {
++      m_gpuUsageGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuUsageLabel) m_gpuUsageLabel->setText(std::format("{:.0F}%", nv.usagePct));
++    }
++    if (m_gpuVramGroup) {
++      m_gpuVramGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuVramLabel) m_gpuVramLabel->setText(std::format("{:.1F} GiB", nv.vramUsedMib / 1024.0));
++    }
++    if (m_gpuTempGroup) {
++      m_gpuTempGroup->setVisible(!sleeping);
++      if (!sleeping && m_gpuTempLabel) m_gpuTempLabel->setText(std::format("{:.0F}°C", nv.tempC));
+     }
+   }
+   if (m_ramLabel != nullptr) {
+@@ -909,6 +1034,33 @@ void SystemTab::syncLabels() {
+       m_swapLabel->setText(FormatUnits::formatBinaryMibUsageAsGib(stats.swapUsedMb, stats.swapTotalMb));
+     }
+   }
++  if (m_gpu0Row != nullptr) {
++    const bool hasGpu = stats.gpuUsagePercent.has_value();
++    m_gpu0Row->setVisible(hasGpu);
++    if (hasGpu && m_gpu0Label != nullptr) {
++      std::string vramStr;
++      if (stats.gpuVramUsedBytes.has_value() && stats.gpuVramTotalBytes.has_value() && *stats.gpuVramTotalBytes > 0) {
++        const double usedGib = static_cast<double>(*stats.gpuVramUsedBytes) / (1024.0 * 1024.0 * 1024.0);
++        const double totalGib = static_cast<double>(*stats.gpuVramTotalBytes) / (1024.0 * 1024.0 * 1024.0);
++        vramStr = std::format("  {:.1F}/{:.1F} GiB", usedGib, totalGib);
++      }
++      m_gpu0Label->setText(std::format("{:.0F}%{}", *stats.gpuUsagePercent, vramStr));
++    }
++  }
++  if (m_gpu1Row != nullptr) {
++    m_gpu1Row->setVisible(hasSecondaryGpu());
++    if (hasSecondaryGpu() && m_gpu1Label != nullptr) {
++      if (nv.suspended) {
++        m_gpu1Label->setText("D3cold");
++      } else if (nv.blocked) {
++        m_gpu1Label->setText(std::format("blocked (usage: {})", nv.runtimeUsage));
++      } else {
++        const double usedGib = nv.vramUsedMib / 1024.0;
++        const double totalGib = nv.vramTotalMib / 1024.0;
++        m_gpu1Label->setText(std::format("{:.0F}%  {:.1F}/{:.1F} GiB", nv.usagePct, usedGib, totalGib));
++      }
++    }
++  }
+   for (std::size_t i = 0; i < m_diskLabels.size(); ++i) {
+     if (m_diskLabels[i] != nullptr) {
+       m_diskLabels[i]->setText(diskUsageLabel(m_diskMountPoints[i]));
+diff --git a/src/shell/control_center/tabs/system_tab.h b/src/shell/control_center/tabs/system_tab.h
+index 876253e..dff581b 100644
+--- a/src/shell/control_center/tabs/system_tab.h
++++ b/src/shell/control_center/tabs/system_tab.h
+@@ -7,6 +7,7 @@
+ #include <string>
+ #include <vector>
+ 
++class Button;
+ class Flex;
+ class Glyph;
+ class Graph;
+@@ -29,6 +30,7 @@ private:
+ 
+   void retainStats(bool retain);
+   void updateGraphs(Renderer& renderer);
++  void applyGpuGraphSeries();
+   void syncLabels();
+   void updateGpuVisibility();
+   float scrollProgressForSample(std::chrono::steady_clock::time_point sampledAt) const;
+@@ -67,6 +69,10 @@ private:
+ 
+   Glyph* m_cpuPctIcon = nullptr;
+   Label* m_cpuPctLabel = nullptr;
++  int m_selectedGpu = 0;
++  Button* m_gpu0TabButton = nullptr;
++  Button* m_gpu1TabButton = nullptr;
++  Label* m_gpuStatusLabel = nullptr;
+   Glyph* m_cpuTempIcon = nullptr;
+   Label* m_cpuTempLabel = nullptr;
+   Flex* m_gpuTempGroup = nullptr;
+@@ -94,6 +100,10 @@ private:
+   Label* m_resourcesLines[kResourcesLines] = {};
+   Flex* m_swapRow = nullptr;
+   Label* m_swapLabel = nullptr;
++  Flex* m_gpu0Row = nullptr;
++  Label* m_gpu0Label = nullptr;
++  Flex* m_gpu1Row = nullptr;
++  Label* m_gpu1Label = nullptr;
+   std::vector<std::string> m_diskMountPoints;
+   std::vector<Label*> m_diskLabels;
+ };
+diff --git a/src/system/nvidia_status.h b/src/system/nvidia_status.h
+new file mode 100644
+index 0000000..2fa5bc4
+--- /dev/null
++++ b/src/system/nvidia_status.h
+@@ -0,0 +1,200 @@
++#pragma once
++
++#include "util/file_utils.h"
++#include "util/string_utils.h"
++
++#include <algorithm>
++#include <atomic>
++#include <chrono>
++#include <deque>
++#include <dlfcn.h>
++#include <filesystem>
++#include <format>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <vector>
++
++namespace noctalia::system {
++
++struct NvidiaHistorySample {
++  float usage = 0.0F;
++  float vram = 0.0F;
++  float temp = 0.0F;
++};
++
++struct NvidiaGpuStatus {
++  bool present = false, suspended = false, blocked = false;
++  std::string runtimeUsage = "0";
++  double usagePct = 0.0, vramUsedMib = 0.0, vramTotalMib = 0.0, tempC = 0.0;
++
++  [[nodiscard]] std::string formatSummary() const {
++    if (!present) return {};
++    if (suspended) return "D3cold";
++    if (blocked) return std::format("blocked (usage: {})", runtimeUsage);
++    return std::format("{:.0F}% · {:.1F}/{:.1F} GiB", usagePct, vramUsedMib / 1024.0, vramTotalMib / 1024.0);
++  }
++};
++
++class NvidiaGpuService {
++public:
++  static NvidiaGpuService& instance() {
++    static NvidiaGpuService s;
++    return s;
++  }
++
++  [[nodiscard]] static bool isNvBlocked() {
++    std::error_code ec;
++    for (const auto& e : std::filesystem::directory_iterator("/dev", ec)) {
++      if (e.path().filename().string().starts_with("nvidia") &&
++          (e.status(ec).permissions() & std::filesystem::perms::all) == std::filesystem::perms::none) {
++        return true;
++      }
++    }
++    return false;
++  }
++
++  NvidiaGpuStatus status() {
++    refreshAsync();
++    std::lock_guard<std::mutex> lk(m_mutex);
++    return m_cached;
++  }
++
++  std::vector<NvidiaHistorySample> history() {
++    refreshAsync();
++    std::lock_guard<std::mutex> lk(m_mutex);
++    return {m_history.begin(), m_history.end()};
++  }
++
++  void refreshAsync() {
++    const auto now = std::chrono::steady_clock::now();
++    {
++      std::lock_guard<std::mutex> lk(m_mutex);
++      if (now - m_lastQuery < std::chrono::milliseconds(900)) return;
++      m_lastQuery = now;
++    }
++    if (m_running.exchange(true)) return;
++    std::thread([this]() {
++      queryBackground();
++      m_running = false;
++    }).detach();
++  }
++
++private:
++  NvidiaGpuService() = default;
++  ~NvidiaGpuService() {
++    while (m_running.load()) std::this_thread::sleep_for(std::chrono::milliseconds(10));
++    closeNvml();
++  }
++
++  std::string findPciDev() {
++    if (!m_pciDev.empty()) return m_pciDev;
++    std::error_code ec;
++    for (const auto& d : std::filesystem::directory_iterator("/sys/bus/pci/devices", ec)) {
++      auto v = FileUtils::readSmallTextFile(d.path() / "vendor");
++      if (v && StringUtils::trim(*v) == "0x10de") return m_pciDev = d.path().string();
++    }
++    return {};
++  }
++
++  void queryBackground() {
++    const std::string dev = findPciDev();
++    if (dev.empty()) {
++      std::lock_guard<std::mutex> lk(m_mutex);
++      m_cached.present = false;
++      return;
++    }
++    NvidiaGpuStatus st{.present = true};
++    auto rStat = FileUtils::readSmallTextFile(dev + "/power/runtime_status");
++    if (rStat && StringUtils::trim(*rStat) == "suspended") {
++      st.suspended = true;
++    } else if (isNvBlocked()) {
++      st.blocked = true;
++      auto u = FileUtils::readSmallTextFile(dev + "/power/runtime_usage");
++      st.runtimeUsage = u ? StringUtils::trim(*u) : "0";
++    } else {
++      queryNvml(st);
++    }
++    std::lock_guard<std::mutex> lk(m_mutex);
++    m_cached = st;
++    if (st.suspended || st.blocked) {
++      m_history.clear();
++    } else {
++      m_history.push_back(NvidiaHistorySample{
++          .usage = static_cast<float>(std::clamp(st.usagePct / 100.0, 0.0, 1.0)),
++          .vram = st.vramTotalMib > 0.0 ? static_cast<float>(std::clamp(st.vramUsedMib / st.vramTotalMib, 0.0, 1.0)) : 0.0F,
++          .temp = static_cast<float>(std::clamp((st.tempC - 30.0) / 60.0, 0.0, 1.0)),
++      });
++      if (m_history.size() > 120) {
++        m_history.pop_front();
++      }
++    }
++  }
++
++  using NvDev = void*;
++  struct NvUtil { unsigned int gpu, memory; };
++  struct NvMem { unsigned long long total, free, used; };
++  void* m_lib = nullptr;
++  NvDev m_dev = nullptr;
++  int (*m_init)() = nullptr;
++  int (*m_shutdown)() = nullptr;
++  int (*m_getHandle)(unsigned int, NvDev*) = nullptr;
++  int (*m_getUtil)(NvDev, NvUtil*) = nullptr;
++  int (*m_getTemp)(NvDev, int, unsigned int*) = nullptr;
++  int (*m_getMem)(NvDev, NvMem*) = nullptr;
++
++  bool ensureNvml() {
++    if (m_dev) return true;
++    if (!m_lib) {
++      m_lib = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
++      if (!m_lib) m_lib = dlopen("/run/opengl-driver/lib/libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
++      if (!m_lib) return false;
++    }
++    m_init = (int(*)())dlsym(m_lib, "nvmlInit_v2");
++    if (!m_init) m_init = (int(*)())dlsym(m_lib, "nvmlInit");
++    m_shutdown = (int(*)())dlsym(m_lib, "nvmlShutdown");
++    m_getHandle = (int(*)(unsigned int, NvDev*))dlsym(m_lib, "nvmlDeviceGetHandleByIndex_v2");
++    if (!m_getHandle) m_getHandle = (int(*)(unsigned int, NvDev*))dlsym(m_lib, "nvmlDeviceGetHandleByIndex");
++    m_getUtil = (int(*)(NvDev, NvUtil*))dlsym(m_lib, "nvmlDeviceGetUtilizationRates");
++    m_getTemp = (int(*)(NvDev, int, unsigned int*))dlsym(m_lib, "nvmlDeviceGetTemperature");
++    m_getMem = (int(*)(NvDev, NvMem*))dlsym(m_lib, "nvmlDeviceGetMemoryInfo");
++    if (!m_init || !m_getHandle || !m_getMem || m_init() != 0 || m_getHandle(0, &m_dev) != 0 || !m_dev) {
++      return false;
++    }
++    return true;
++  }
++
++  void closeNvml() {
++    if (m_shutdown) m_shutdown();
++    if (m_lib) { dlclose(m_lib); m_lib = nullptr; }
++    m_dev = nullptr;
++  }
++
++  void queryNvml(NvidiaGpuStatus& st) {
++    if (!ensureNvml()) return;
++    if (m_getUtil) {
++      NvUtil u{};
++      if (m_getUtil(m_dev, &u) == 0 && u.gpu <= 100) st.usagePct = static_cast<double>(u.gpu);
++    }
++    if (m_getTemp) {
++      unsigned int t = 0;
++      if (m_getTemp(m_dev, 0, &t) == 0) st.tempC = static_cast<double>(t);
++    }
++    if (m_getMem) {
++      NvMem m{};
++      if (m_getMem(m_dev, &m) == 0 && m.total > 0) {
++        st.vramUsedMib = static_cast<double>(m.used) / (1024.0 * 1024.0);
++        st.vramTotalMib = static_cast<double>(m.total) / (1024.0 * 1024.0);
++      }
++    }
++  }
++
++  std::string m_pciDev;
++  NvidiaGpuStatus m_cached{};
++  std::deque<NvidiaHistorySample> m_history;
++  std::mutex m_mutex;
++  std::atomic<bool> m_running{false};
++  std::chrono::steady_clock::time_point m_lastQuery{};
++};
++
++} // namespace noctalia::system
+diff --git a/src/system/system_monitor_service.cpp b/src/system/system_monitor_service.cpp
+index 3f95e4b..cf0f2d4 100644
+--- a/src/system/system_monitor_service.cpp
++++ b/src/system/system_monitor_service.cpp
+@@ -392,12 +392,24 @@ namespace {
+         continue;
+       }
+ 
++      std::uint64_t vramUsed = *used;
++      std::uint64_t vramTotal = *available;
++
++      const std::filesystem::path gttUsedPath = device.devicePath / "mem_info_gtt_used";
++      const std::filesystem::path gttTotalPath = device.devicePath / "mem_info_gtt_total";
++      const auto gttUsed = readUint64File(gttUsedPath);
++      const auto gttTotal = readUint64File(gttTotalPath);
++      if (gttUsed.has_value() && gttTotal.has_value() && *gttTotal > 0) {
++        vramUsed += *gttUsed;
++        vramTotal += *gttTotal;
++      }
++
+       ++deviceCount;
+       if (firstSource.empty()) {
+         firstSource = usedPath.string();
+       }
+       mergeGpuVram(
+-          total, GpuVramReading{.usedBytes = *used, .totalBytes = *available, .source = {}, .isNvidia = false}
++          total, GpuVramReading{.usedBytes = vramUsed, .totalBytes = vramTotal, .source = {}, .isNvidia = false}
+       );
+     }
+ 
+@@ -1298,10 +1310,10 @@ void SystemMonitorService::samplingLoop() {
+     }
+     cpuCoresWasEnabled = cpuCoresEnabled;
+ 
+-    const bool pollGpuTemp = m_gpuTempRefs.load(std::memory_order_relaxed) > 0;
+-    const bool pollGpuUsage = m_gpuUsageRefs.load(std::memory_order_relaxed) > 0;
+-    const bool pollGpuVram = m_gpuVramRefs.load(std::memory_order_relaxed) > 0;
+-    const bool gpuRetained = pollGpuTemp || pollGpuUsage || pollGpuVram;
++    const bool pollGpuTemp = gpuEnabled;
++    const bool pollGpuUsage = gpuEnabled;
++    const bool pollGpuVram = gpuEnabled;
++    const bool gpuRetained = gpuEnabled;
+ 
+     if (!gpuEnabled) {
+       releaseGpuReaders();
+@@ -1342,7 +1354,7 @@ void SystemMonitorService::samplingLoop() {
+         m_latest.loadAvg15 = (*la)[2];
+       }
+ 
+-      if (m_cpuTempRefs.load(std::memory_order_relaxed) > 0) {
++      if (pollCfg.cpuPollSeconds > 0.0F) {
+         std::optional<double> cpuTemp = readCpuTempCelsius(pollCfg);
+         std::scoped_lock lock{m_statsMutex};
+         if (cpuTemp.has_value()) {
+@@ -1713,6 +1725,11 @@ SystemMonitorService::IntelGpuReader& SystemMonitorService::ensureIntelGpuReader
+ }
+ 
+ SystemMonitorService::GpuTempData SystemMonitorService::readGpuTempData(NvidiaDisplayDeviceState nvidiaDisplayState) {
++  if (const auto amdSysfs = readAmdGpuSysfsTempSensor(); amdSysfs.has_value()) {
++    return GpuTempData{
++        .tempC = amdSysfs->tempC, .source = amdSysfs->source, .detail = "using amdgpu sysfs temp1_input"
++    };
++  }
+   switch (nvidiaDisplayState) {
+   case NvidiaDisplayDeviceState::Active: {
+     const auto nvml = ensureNvmlReader().readGpuTempSensor();
+@@ -1790,6 +1807,9 @@ SystemMonitorService::GpuTempData SystemMonitorService::readGpuTempData(NvidiaDi
+ }
+ 
+ SystemMonitorService::GpuUsageData SystemMonitorService::readGpuUsageData(NvidiaDisplayDeviceState nvidiaDisplayState) {
++  if (const auto sysfs = readAmdGpuSysfsUsage(); sysfs.has_value()) {
++    return GpuUsageData{.percent = sysfs->percent, .source = sysfs->source};
++  }
+   switch (nvidiaDisplayState) {
+   case NvidiaDisplayDeviceState::Active:
+     if (const auto gpuUsage = ensureNvmlReader().readGpuUsagePercent(); gpuUsage.has_value()) {
+@@ -1860,6 +1880,11 @@ std::optional<SystemMonitorService::GpuVramData> SystemMonitorService::readIntel
+ 
+ std::optional<SystemMonitorService::GpuVramData>
+ SystemMonitorService::readGpuVramData(NvidiaDisplayDeviceState nvidiaDisplayState) {
++  if (const auto amdVram = readAmdGpuVram(); amdVram.has_value() && hasUsableVram(*amdVram)) {
++    return GpuVramData{
++        .usedBytes = amdVram->usedBytes, .totalBytes = amdVram->totalBytes, .source = amdVram->source
++    };
++  }
+   switch (nvidiaDisplayState) {
+   case NvidiaDisplayDeviceState::Active: {
+     const auto nvml = ensureNvmlReader().readGpuVram();

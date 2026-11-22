@@ -211,11 +211,7 @@ let
       ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
     '';
     package = pkgs.discord-canary.override {
-      withOpenASAR = true;
       withVencord = true;
-      openasar = pkgs.openasar.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/openasar.patch ];
-      });
     };
   };
 
@@ -478,7 +474,7 @@ let
         pname = "aistudio2api";
         inherit version src;
 
-        vendorHash = "sha256-bUb08+XzhX00/temVernQ4RuNvNTum6RpopPLthkHfY=";
+        vendorHash = "sha256-+s01NxdjtDDY7adYIe86XwXqNaHlugXeo6128swjuaw=";
         overrideModAttrs = _: {
           name = "aistudio2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
@@ -608,7 +604,7 @@ let
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
           fetcherVersion = 5;
-          hash = "sha256-1hrLOH292DeI0G2gelodR33AiKH2vJd4vww4oTUkChs=";
+          hash = "sha256-rVhlRT1OAlJy+exu8NR/meb5S81p10R1D0dy0ldL6ro=";
         };
 
         buildPhase = ''
@@ -626,7 +622,6 @@ let
       geminiWeb2ApiBin = pkgs.buildGoModule {
         pname = "gemini-web2api";
         inherit version src;
-        patches = [ ../../../stuff/patches/gemini-web2api-chunk-long-prompt.patch ];
 
         vendorHash = "sha256-9qH33RD7DnIBoh5Cg9/c2jvl1X8nhSE+8n2H9RCbdwQ=";
         overrideModAttrs = _: {
@@ -665,9 +660,9 @@ let
         '';
 
         postInstall = ''
-                    install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
-                    mkdir -p $out/share/applications
-                    cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
+          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
+          mkdir -p $out/share/applications
+          cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
           [Desktop Entry]
           Version=1.0
           Name=Gemini-Web2API
@@ -762,7 +757,7 @@ let
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
           fetcherVersion = 5;
-          hash = "sha256-PHx2Hs48i83rkHINEng0xRNZ7LfbMjmGFopuY3s99Gc=";
+          hash = "sha256-9AwX6scQJLubFOfPXfYdsbuKMtyK2YAqeWd8ZAwWwi8=";
         };
 
         buildPhase = ''
@@ -782,7 +777,9 @@ let
         pname = "antigravity2api";
         inherit version src;
 
-        vendorHash = "sha256-VWIvuz1QrZmZceTcgdqchkslC8sn16EkC4Ke6bUYoF0=";
+        proxyVendor = true;
+        vendorHash = "sha256-buOyNNsLaCSYC4Jy4/PPlTT0mf9RGAggsc7jrWkcPG8=";
+
         overrideModAttrs = _: {
           name = "antigravity2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
@@ -1023,9 +1020,7 @@ let
 
   romSandbox = pkgs.runCommand "rom-sandboxed" { } ''
     mkdir -p "$out/bin" "$out/libexec"
-    cp -L "${
-      inputs.rom.packages.${pkgs.stdenv.hostPlatform.system}.default
-    }/bin/rom" "$out/libexec/rom"
+    cp -L "${inputs.rom.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/rom" "$out/libexec/rom"
 
     substitute "${pkgs.writeShellScript "rom-bwrap-runner" ''
       STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/rom"

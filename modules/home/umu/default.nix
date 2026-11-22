@@ -160,7 +160,7 @@ let
   };
 
   openal =
-    (pkgs.pkgsCross.mingw32.openal.override {
+    (pkgs.pkgsCross.mingw-msvcrt-i686.openal.override {
       alsaSupport = false;
       pulseSupport = false;
       dbusSupport = false;

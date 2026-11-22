@@ -1,0 +1,765 @@
+diff --git a/src/shell/control_center/tabs/monitor_tab.cpp b/src/shell/control_center/tabs/monitor_tab.cpp
+index a634dbb..7634f78 100644
+--- a/src/shell/control_center/tabs/monitor_tab.cpp
++++ b/src/shell/control_center/tabs/monitor_tab.cpp
+@@ -1,18 +1,26 @@
+ #include "shell/control_center/tabs/monitor_tab.h"
+ 
+ #include "config/config_service.h"
++#include "system/process.h"
+ #include "i18n/i18n.h"
+ #include "render/core/renderer.h"
+ #include "shell/panel/panel_button_style.h"
+ #include "system/brightness_service.h"
+ #include "ui/builders.h"
++#include "ui/controls/button.h"
++#include "ui/controls/input.h"
+ #include "ui/controls/scroll_view.h"
+ #include "ui/palette.h"
+ 
+ #include <algorithm>
+ #include <cmath>
++#include <format>
+ #include <memory>
++#include <mutex>
++#include <nlohmann/json.hpp>
+ #include <string>
++#include <thread>
++#include <unordered_map>
+ 
+ using namespace control_center;
+ 
+@@ -22,6 +30,68 @@ namespace {
+   constexpr auto kBrightnessCommitInterval = std::chrono::milliseconds(16);
+   constexpr auto kBrightnessStateHoldoff = std::chrono::milliseconds(180);
+ 
++  std::string runHyprctl(const std::vector<std::string>& args) {
++    auto r = process::runSync(args);
++    if (r.exitCode != 0 || r.out.empty()) {
++      auto fullArgs = args;
++      fullArgs[0] = "/run/current-system/sw/bin/" + fullArgs[0];
++      r = process::runSync(fullArgs);
++    }
++    return r.exitCode == 0 ? r.out : std::string{};
++  }
++
++  std::string generateCvtModeline(int h, int v, float hz) {
++    int vsync = 10;
++    if (v % 3 == 0 && v * 4 / 3 == h) vsync = 4;
++    else if (v % 9 == 0 && (v * 16 / 9 == h || v * 15 / 9 == h)) vsync = (v * 16 / 9 == h ? 5 : 7);
++    else if (v % 10 == 0 && v * 16 / 10 == h) vsync = 6;
++    else if (v % 4 == 0 && v * 5 / 4 == h) vsync = 7;
++
++    double hperiod = (1000000.0 / hz - 550.0) / (v + 3);
++    int vsync_bp = std::max(static_cast<int>(550.0 / hperiod) + 1, vsync + 6);
++    double hblank_pct = std::max(20.0, 30.0 - 300.0 * hperiod / 1000.0);
++    int hblank = (static_cast<int>(h * hblank_pct / (100.0 - hblank_pct)) / 16) * 16;
++    int htotal = h + hblank;
++    int hsync_end = h + hblank / 2;
++    int hsync_w = ((htotal * 8) / 100 / 8) * 8;
++    int pclk_khz = (static_cast<int>(htotal * 1000.0 / hperiod) / 250) * 250;
++
++    return std::format(
++        "modeline {:.2F} {} {} {} {} {} {} {} {} -hsync +vsync",
++        pclk_khz / 1000.0, h, hsync_end - hsync_w, hsync_end, htotal,
++        v, v + 3, v + 3 + vsync, v + vsync_bp + 3
++    );
++  }
++
++  void applyMonitorMode(const std::string& id, const std::string& w, const std::string& h, const std::string& hz) {
++    std::thread([id, w, h, hz]() {
++      auto out = runHyprctl({"hyprctl", "monitors", "-j"});
++      if (out.empty()) return;
++      try {
++        for (const auto& m : nlohmann::json::parse(out)) {
++          const std::string name = m.value("name", "");
++          if (name != id && !id.contains(name) && !name.contains(id)) continue;
++          int wVal = std::stoi(w), hVal = std::stoi(h);
++          double hzVal = std::stod(hz);
++          std::string mode = generateCvtModeline(wVal, hVal, static_cast<float>(hzVal));
++          if (m.contains("availableModes") && m["availableModes"].is_array() && !m["availableModes"].empty()) {
++            std::string pref = m["availableModes"][0].get<std::string>();
++            if (pref.starts_with(std::format("{}x{}@{:.2F}", wVal, hVal, hzVal)) ||
++                pref.starts_with(std::format("{}x{}@{:.0F}", wVal, hVal, hzVal))) {
++              mode = "preferred";
++            }
++          }
++          std::string lua = std::format(
++              "return hl.monitor({{ output = '{}', mode = '{}', position = '{}x{}', scale = {}, bitdepth = 10 }})",
++              name, mode, m.value("x", 0), m.value("y", 0), m.value("scale", 1.6)
++          );
++          runHyprctl({"hyprctl", "eval", lua});
++          break;
++        }
++      } catch (...) {}
++    }).detach();
++  }
++
+   std::string buildDisplayListKey(const std::vector<BrightnessDisplay>& displays) {
+     std::string key;
+     for (const auto& d : displays) {
+@@ -32,6 +102,39 @@ namespace {
+     return key;
+   }
+ 
++  static std::unordered_map<std::string, double> s_cachedHz;
++  static std::mutex s_hzMutex;
++  static std::chrono::steady_clock::time_point s_lastHzQuery{};
++
++  double getCachedMonitorHz(const std::string& displayId) {
++    const auto now = std::chrono::steady_clock::now();
++    bool shouldQuery = false;
++    {
++      std::lock_guard<std::mutex> lk(s_hzMutex);
++      if (now - s_lastHzQuery >= std::chrono::seconds(5)) {
++        s_lastHzQuery = now;
++        shouldQuery = true;
++      }
++    }
++    if (shouldQuery) {
++      std::thread([]() {
++        auto out = runHyprctl({"hyprctl", "monitors", "-j"});
++        if (out.empty()) return;
++        try {
++          std::lock_guard<std::mutex> lk(s_hzMutex);
++          for (const auto& m : nlohmann::json::parse(out)) {
++            s_cachedHz[m.value("name", "")] = m.value("refreshRate", 0.0);
++          }
++        } catch (...) {}
++      }).detach();
++    }
++    std::lock_guard<std::mutex> lk(s_hzMutex);
++    for (const auto& [k, v] : s_cachedHz) {
++      if (k == displayId || displayId.contains(k) || k.contains(displayId)) return v;
++    }
++    return 0.0;
++  }
++
+   std::string formatDisplayInfo(const BrightnessDisplay& display) {
+     // Show the native hardware resolution; the fractionally-scaled logical size confuses
+     // users who expect the panel's real pixel count. The scale is surfaced separately below.
+@@ -44,17 +147,23 @@ namespace {
+       resolutionText = std::to_string(width) + "x" + std::to_string(height);
+     }
+ 
++    const double hz = getCachedMonitorHz(display.id);
++    std::string hzText;
++    if (hz > 0.0) {
++      hzText = std::format("@ {:.0F} Гц ", hz);
++    }
++
+     const int logicalWidth = display.logicalWidth;
+     const int logicalHeight = display.logicalHeight;
+     if (physicalWidth <= 0 || physicalHeight <= 0 || logicalWidth <= 0 || logicalHeight <= 0) {
+-      return resolutionText;
++      return resolutionText + " " + hzText;
+     }
+ 
+     const double scaleX = static_cast<double>(physicalWidth) / static_cast<double>(logicalWidth);
+     const double scaleY = static_cast<double>(physicalHeight) / static_cast<double>(logicalHeight);
+     const double scale = std::max(0.01, (scaleX + scaleY) * 0.5);
+     const int scalePercent = static_cast<int>(std::lround(scale * 100.0));
+-    return resolutionText + " @ " + std::to_string(scalePercent) + "%";
++    return resolutionText + " " + hzText + "(" + std::to_string(scalePercent) + "%)";
+   }
+ 
+   std::string formatBrightnessValue(const BrightnessDisplay& display, float brightness) {
+@@ -410,6 +519,43 @@ void MonitorTab::rebuildCards(Renderer& /*renderer*/) {
+ 
+     card->addChild(std::move(sliderRow));
+ 
++    const int curW = display.physicalWidth > 0 ? display.physicalWidth : (display.logicalWidth > 0 ? display.logicalWidth : 1920);
++    const int curH = display.physicalHeight > 0 ? display.physicalHeight : (display.logicalHeight > 0 ? display.logicalHeight : 1080);
++    const double curHz = getCachedMonitorHz(display.id);
++    const std::string defW = std::to_string(curW), defH = std::to_string(curH);
++    const std::string defHz = curHz > 0.0 ? std::format("{:.0F}", std::round(curHz)) : "60";
++
++    struct ModeState { std::string w, h, hz; };
++    auto st = std::make_shared<ModeState>(ModeState{defW, defH, defHz});
++    auto makeInp = [&](const std::string& val, float w, auto setter) {
++      return ui::input({
++          .value = val, .placeholder = val, .fontSize = Style::fontSizeCaption * 0.9F * scale,
++          .horizontalPadding = Style::spaceXs * 0.5F * scale, .minLayoutWidth = (w - 4.0F) * scale,
++          .surfaceOpacity = panelCardOpacity(), .width = w * scale, .onChange = setter,
++      });
++    };
++
++    auto modeRow = ui::row(
++        {.align = FlexAlign::Center, .gap = Style::spaceXs * scale, .fillWidth = true},
++        ui::row(
++            {.align = FlexAlign::Center, .gap = Style::spaceXs * scale, .flexGrow = 1.0F},
++            ui::label({.text = "Режим:", .fontSize = Style::fontSizeCaption * scale, .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface)}),
++            makeInp(defW, 52.0F, [st](const std::string& v) { st->w = v; }),
++            ui::label({.text = "x", .fontSize = Style::fontSizeCaption * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)}),
++            makeInp(defH, 52.0F, [st](const std::string& v) { st->h = v; }),
++            ui::label({.text = "@", .fontSize = Style::fontSizeCaption * scale, .color = colorSpecFromRole(ColorRole::OnSurfaceVariant)}),
++            makeInp(defHz, 40.0F, [st](const std::string& v) { st->hz = v; })
++        ),
++        ui::button({
++            .text = "Применить", .variant = ButtonVariant::Primary,
++            .paddingV = Style::spaceXs * 0.8F * scale, .paddingH = Style::spaceMd * scale, .radius = 999.0F,
++            .onClick = [id = display.id, st]() {
++              if (st && !st->w.empty() && !st->h.empty() && !st->hz.empty()) applyMonitorMode(id, st->w, st->h, st->hz);
++            },
++        })
++    );
++    card->addChild(std::move(modeRow));
++
+     auto* cardPtr = card.get();
+     m_cardsLayout->addChild(std::move(card));
+ 
+diff --git a/src/shell/control_center/tabs/power_tab.cpp b/src/shell/control_center/tabs/power_tab.cpp
+index 56781d1..8426e36 100644
+--- a/src/shell/control_center/tabs/power_tab.cpp
++++ b/src/shell/control_center/tabs/power_tab.cpp
+@@ -1,21 +1,38 @@
+ #include "shell/control_center/tabs/power_tab.h"
+ 
++#include "core/deferred_call.h"
++#include "system/process.h"
+ #include "dbus/power/power_profiles_service.h"
+ #include "dbus/upower/upower_service.h"
+ #include "i18n/i18n.h"
+ #include "render/core/renderer.h"
++#include "shell/panel/panel_manager.h"
++#include "system/nvidia_status.h"
+ #include "time/time_format.h"
+ #include "ui/builders.h"
++#include "ui/controls/button.h"
++#include "ui/controls/input.h"
++#include "ui/controls/segmented.h"
+ #include "ui/controls/toggle.h"
+ #include "ui/palette.h"
++#include "util/file_utils.h"
++#include "util/string_utils.h"
+ 
+ #include <algorithm>
+ #include <chrono>
+ #include <cstdint>
++#include <cstring>
++#include <filesystem>
+ #include <format>
++#include <fstream>
+ #include <memory>
++#include <mutex>
+ #include <optional>
+ #include <string>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <thread>
++#include <unistd.h>
+ 
+ using namespace control_center;
+ 
+@@ -60,6 +77,219 @@ namespace {
+     return state.configuredStart == state.effectiveStart && state.configuredEnd == state.effectiveEnd;
+   }
+ 
++  std::string sendDaemonCommand(std::string_view cmd) {
++    int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) return {};
++    struct sockaddr_un addr{};
++    addr.sun_family = AF_UNIX;
++    std::strncpy(addr.sun_path, "/run/hwcontrol.sock", sizeof(addr.sun_path) - 1);
++
++    struct timeval tv{.tv_sec = 0, .tv_usec = 200000};
++    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++    ::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
++
++    if (::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
++      ::close(fd);
++      return {};
++    }
++    std::string msg = std::string(cmd) + "\n";
++    if (::write(fd, msg.data(), msg.size()) < 0) {
++      ::close(fd);
++      return {};
++    }
++    char buf[256];
++    ssize_t n = ::read(fd, buf, sizeof(buf) - 1);
++    ::close(fd);
++    if (n <= 0) return {};
++    buf[n] = '\0';
++    return StringUtils::trim(buf);
++  }
++
++  bool isAmdRyzenCpu() {
++    static bool checked = false;
++    static bool isAmd = false;
++    if (!checked) {
++      checked = true;
++      std::ifstream file{"/proc/cpuinfo"};
++      std::string line;
++      while (std::getline(file, line)) {
++        if (line.find("AuthenticAMD") != std::string::npos || line.find("AMD") != std::string::npos) {
++          isAmd = true;
++          break;
++        }
++      }
++    }
++    return isAmd;
++  }
++
++  bool isSmuLoaded() {
++    std::error_code ec;
++    return std::filesystem::exists("/sys/kernel/ryzen_smu_drv", ec)
++        || std::filesystem::exists("/sys/kernel/ryzen_smu", ec);
++  }
++
++  bool hasRyzenAdj() {
++    static const bool supported = isAmdRyzenCpu() && isSmuLoaded();
++    return supported;
++  }
++
++  bool hasAorusFan() {
++    std::error_code ec;
++    return std::filesystem::exists("/sys/devices/platform/aorus_laptop/fan_mode", ec);
++  }
++
++  bool hasBatteryCap() {
++    std::error_code ec;
++    return std::filesystem::exists("/sys/devices/platform/aorus_laptop/charge_limit", ec)
++        || std::filesystem::exists("/sys/class/power_supply/BAT1/charge_control_end_threshold", ec)
++        || std::filesystem::exists("/sys/class/power_supply/BAT0/charge_control_end_threshold", ec);
++  }
++
++  std::string getFanMode() {
++    auto res = sendDaemonCommand("fan get");
++    if (!res.empty() && res != "unknown" && res != "error") {
++      return res;
++    }
++    auto s = FileUtils::readSmallTextFile("/sys/devices/platform/aorus_laptop/fan_mode");
++    if (s.has_value()) {
++      std::string val = StringUtils::trim(*s);
++      if (val == "5") return "max";
++      if (val == "3") return "quiet";
++    }
++    return "auto";
++  }
++
++  bool isNvBlocked() {
++    auto res = sendDaemonCommand("nv status");
++    if (!res.empty()) {
++      return res == "blocked";
++    }
++    return noctalia::system::NvidiaGpuService::isNvBlocked();
++  }
++
++  struct RyzenLimits {
++    double stapm = 0.0;
++    double fast = 0.0;
++    double slow = 0.0;
++
++    [[nodiscard]] bool valid() const noexcept {
++      return stapm > 0.0 && fast > 0.0 && slow > 0.0;
++    }
++
++    [[nodiscard]] bool isAtOrAbove(const RyzenLimits& maxLim, double tolerance = 1.0) const noexcept {
++      if (!maxLim.valid()) return false;
++      return stapm >= (maxLim.stapm - tolerance)
++          && fast >= (maxLim.fast - tolerance)
++          && slow >= (maxLim.slow - tolerance);
++    }
++  };
++
++  static RyzenLimits s_recordedMaxLimits{};
++  static bool s_maxLimitsLoaded = false;
++  static std::mutex s_ryzenMutex;
++
++  std::string ryzenMaxLimitFilePath() {
++    std::string dir = FileUtils::stateDir();
++    if (dir.empty()) dir = "/tmp";
++    return dir + "/ryzen_max_limits";
++  }
++
++  RyzenLimits getRecordedMaxLimits() {
++    std::lock_guard<std::mutex> lk(s_ryzenMutex);
++    if (!s_maxLimitsLoaded) {
++      s_maxLimitsLoaded = true;
++      if (auto s = FileUtils::readSmallTextFile(ryzenMaxLimitFilePath())) {
++        std::istringstream iss(*s);
++        iss >> s_recordedMaxLimits.stapm >> s_recordedMaxLimits.fast >> s_recordedMaxLimits.slow;
++      }
++    }
++    return s_recordedMaxLimits;
++  }
++
++  void recordMaxLimits(const RyzenLimits& lim) {
++    if (!lim.valid()) return;
++    auto cur = getRecordedMaxLimits();
++    bool chg = false;
++    if (lim.stapm > cur.stapm) { cur.stapm = lim.stapm; chg = true; }
++    if (lim.fast > cur.fast) { cur.fast = lim.fast; chg = true; }
++    if (lim.slow > cur.slow) { cur.slow = lim.slow; chg = true; }
++    if (chg) {
++      std::lock_guard<std::mutex> lk(s_ryzenMutex);
++      s_recordedMaxLimits = cur;
++      std::error_code ec;
++      std::filesystem::create_directories(std::filesystem::path(ryzenMaxLimitFilePath()).parent_path(), ec);
++      if (std::ofstream f(ryzenMaxLimitFilePath()); f.is_open()) {
++        f << cur.stapm << " " << cur.fast << " " << cur.slow << "\n";
++      }
++    }
++  }
++
++  std::optional<RyzenLimits> queryCurrentRyzenLimits() {
++    RyzenLimits lim{};
++    auto res = sendDaemonCommand("ryzen get");
++    if (!res.empty() && res != "unknown" && res != "error") {
++      std::istringstream iss(res);
++      if (iss >> lim.stapm >> lim.fast >> lim.slow && lim.valid()) return lim;
++    }
++    auto out = process::runSync("ryzenadj -i");
++    if (out.exitCode == 0 && !out.out.empty()) {
++      std::istringstream stream(out.out);
++      std::string line;
++      while (std::getline(stream, line)) {
++        auto parseVal = [&](std::string_view key, double& dst) {
++          if (line.find(key) == std::string::npos) return;
++          auto b1 = line.find('|'), b2 = line.find('|', b1 + 1), b3 = line.find('|', b2 + 1);
++          if (b2 != std::string::npos && b3 != std::string::npos) {
++            try { dst = std::stod(StringUtils::trim(line.substr(b2 + 1, b3 - b2 - 1))); } catch (...) {}
++          }
++        };
++        parseVal("STAPM LIMIT", lim.stapm);
++        parseVal("PPT LIMIT FAST", lim.fast);
++        parseVal("PPT LIMIT SLOW", lim.slow);
++      }
++      if (lim.valid()) return lim;
++    }
++    return std::nullopt;
++  }
++
++  bool checkRyzenUnlocked() {
++    auto current = queryCurrentRyzenLimits();
++    if (!current.has_value()) {
++      return false;
++    }
++    auto maxRec = getRecordedMaxLimits();
++    if (!maxRec.valid()) {
++      if (current->stapm >= 70.0 && current->fast >= 70.0 && current->slow >= 45.0) {
++        recordMaxLimits(*current);
++        return true;
++      }
++      return false;
++    }
++    if (current->stapm > maxRec.stapm || current->fast > maxRec.fast || current->slow > maxRec.slow) {
++      recordMaxLimits(*current);
++      maxRec = getRecordedMaxLimits();
++    }
++    return current->isAtOrAbove(maxRec, 1.0);
++  }
++
++  bool getHyprForceRgbx() {
++    auto res = process::runSync("hyprctl repl 'return hl_force_rgbx'");
++    if (res.exitCode == 0 && !res.out.empty()) {
++      return StringUtils::trim(res.out) == "true";
++    }
++    return false;
++  }
++
++  bool getHyprAnimations() {
++    auto res = process::runSync("hyprctl getoption animations:enabled -j");
++    return (res.out.find("\"int\": 1") != std::string::npos || res.out.find("\"bool\": true") != std::string::npos);
++  }
++
++  bool getHyprDecorations() {
++    auto res = process::runSync("hyprctl getoption decoration:blur:enabled -j");
++    return (res.out.find("\"int\": 1") != std::string::npos || res.out.find("\"bool\": true") != std::string::npos);
++  }
++
+ } // namespace
+ 
+ PowerTab::ChargeLimitMode PowerTab::classifyChargeLimit(const UPowerChargeLimitState& state) noexcept {
+@@ -139,6 +369,8 @@ std::unique_ptr<Flex> PowerTab::create() {
+   content->setAlign(FlexAlign::Stretch);
+   content->setGap(Style::spaceMd * scale);
+ 
++  buildHardwarePowerCard(*content, scale);
++  buildPowersaveCard(*content, scale);
+   buildStatusCard(*content, scale);
+   buildProfilesCard(*content, scale);
+   buildChargingCard(*content, scale);
+@@ -216,7 +448,7 @@ void PowerTab::buildStatusCard(Flex& root, float scale) {
+       ui::progressBar({
+           .out = &m_levelBar,
+           .fill = colorSpecFromRole(ColorRole::Primary),
+-          .track = colorSpecFromRole(ColorRole::Surface),
++          .track = colorSpecFromRole(ColorRole::SurfaceContainer, std::clamp(Style::cardOpacity() + 0.10F, 0.0F, 1.0F)),
+           .radius = Style::sliderTrackHeight * scale * 0.5F,
+           .progress = 0.0F,
+           .height = Style::sliderTrackHeight * scale,
+@@ -327,6 +559,157 @@ void PowerTab::buildProfilesCard(Flex& root, float scale) {
+   root.addChild(std::move(card));
+ }
+ 
++void PowerTab::buildHardwarePowerCard(Flex& root, float scale) {
++  const bool hasNv = noctalia::system::NvidiaGpuService::instance().status().present;
++  const bool hasFan = hasAorusFan();
++  const bool hasRyzen = hasRyzenAdj();
++  const bool hasBattery = hasBatteryCap();
++  if (!hasNv && !hasFan && !hasRyzen && !hasBattery) return;
++
++  auto card = ui::column({
++      .configure = [scale, opacity = panelCardOpacity()](Flex& section) { applySectionCardStyle(section, scale, opacity); },
++  });
++  m_hardwareCard = card.get();
++  card->addChild(makeCardHeaderRow("Аппаратное питание", scale));
++
++  auto makeRow = [&](std::string_view label, std::unique_ptr<Node> ctrl) {
++    auto r = ui::row({.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale});
++    r->addChild(ui::label({
++        .text = std::string(label), .fontSize = Style::fontSizeBody * scale,
++        .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface), .flexGrow = 1.0F
++    }));
++    r->addChild(std::move(ctrl));
++    return r;
++  };
++
++  if (hasNv) {
++    card->addChild(makeRow("Блокировка NVIDIA GPU", ui::toggle({
++        .out = &m_nvBlindfoldToggle, .checkedImmediate = isNvBlocked(),
++        .toggleSize = ToggleSize::Medium, .scale = scale,
++        .onChange = [](bool checked) { sendDaemonCommand(checked ? "nv block" : "nv unblock"); },
++    })));
++  }
++
++  if (hasFan) {
++    const std::string curFan = getFanMode();
++    std::vector<ui::SegmentedOption> fanOpts = {{.label = "Quiet", .glyph = "wind"}, {.label = "Auto", .glyph = "wind"}, {.label = "Max", .glyph = "wind"}};
++    auto fanSeg = ui::segmented({
++        .out = &m_fanModeSegmented,
++        .options = std::move(fanOpts),
++        .fontSize = Style::fontSizeCaption, .scale = scale, .surfaceOpacity = panelCardOpacity(),
++        .surfaceRole = ColorRole::Surface, .equalSegmentWidths = true,
++        .onChange = [](std::size_t idx) {
++          sendDaemonCommand(std::format("fan {}", idx == 2 ? "max" : (idx == 0 ? "quiet" : "auto")));
++        },
++    });
++    if (m_fanModeSegmented) m_fanModeSegmented->setSelectedIndex(curFan == "max" ? 2 : (curFan == "quiet" ? 0 : 1));
++    card->addChild(makeRow("Режим вентиляторов", std::move(fanSeg)));
++  }
++
++  if (hasRyzen) {
++    m_ryzenUnlocked = checkRyzenUnlocked();
++    card->addChild(makeRow("Лимиты мощности AMD CPU", ui::button({
++        .out = &m_ryzenadjButton,
++        .text = m_ryzenUnlocked ? "Лимиты сняты" : "Снять лимиты",
++        .variant = m_ryzenUnlocked ? ButtonVariant::Ghost : ButtonVariant::Primary,
++        .padding = Style::spaceSm * scale, .radius = Style::scaledRadiusSm(scale),
++        .onClick = [this]() {
++          static std::atomic<bool> s_unlocking{false};
++          if (s_unlocking.exchange(true)) return;
++          if (m_ryzenadjButton) m_ryzenadjButton->setText("Снятие лимитов...");
++          std::thread([this]() {
++            sendDaemonCommand("ryzen max");
++            std::this_thread::sleep_for(std::chrono::milliseconds(300));
++            if (auto newLim = queryCurrentRyzenLimits()) recordMaxLimits(*newLim);
++            bool unlocked = checkRyzenUnlocked();
++            DeferredCall::callLater([this, unlocked]() {
++              s_unlocking = false;
++              if (m_ryzenadjButton) {
++                m_ryzenUnlocked = unlocked;
++                m_ryzenadjButton->setText(unlocked ? "Лимиты сняты" : "Снять лимиты");
++                m_ryzenadjButton->setVariant(unlocked ? ButtonVariant::Ghost : ButtonVariant::Primary);
++                PanelManager::instance().requestRedraw();
++              }
++            });
++          }).detach();
++        },
++    })));
++  }
++
++  if (hasBattery) {
++    auto batInputState = std::make_shared<std::string>("80");
++    auto batRow = ui::row(
++        {.align = FlexAlign::Center, .gap = Style::spaceXs * scale},
++        ui::input({
++            .value = "80",
++            .placeholder = "60-100",
++            .fontSize = Style::fontSizeCaption * scale,
++            .horizontalPadding = Style::spaceXs * scale,
++            .minLayoutWidth = 44.0F * scale,
++            .surfaceOpacity = panelCardOpacity(),
++            .width = 52.0F * scale,
++            .onChange = [batInputState](const std::string& val) { *batInputState = val; },
++        }),
++        ui::button({
++            .text = "Задать",
++            .variant = ButtonVariant::Primary,
++            .paddingV = Style::spaceXs * 0.8F * scale,
++            .paddingH = Style::spaceSm * scale,
++            .radius = Style::scaledRadiusSm(scale),
++            .onClick = [batInputState]() {
++              if (batInputState && !batInputState->empty()) {
++                sendDaemonCommand(std::format("battery set {}", *batInputState));
++              }
++            },
++        })
++    );
++    card->addChild(makeRow("Лимит заряда батареи (%)", std::move(batRow)));
++  }
++  root.addChild(std::move(card));
++}
++
++void PowerTab::buildPowersaveCard(Flex& root, float scale) {
++  auto card = ui::column({
++      .configure = [scale, opacity = panelCardOpacity()](Flex& section) { applySectionCardStyle(section, scale, opacity); },
++  });
++  m_powersaveCard = card.get();
++  card->addChild(makeCardHeaderRow("Интерфейс", scale));
++
++  auto makeRow = [&](std::string_view label, std::unique_ptr<Node> ctrl) {
++    auto r = ui::row({.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .minHeight = Style::controlHeightSm * scale});
++    r->addChild(ui::label({
++        .text = std::string(label), .fontSize = Style::fontSizeBody * scale,
++        .fontWeight = FontWeight::Bold, .color = colorSpecFromRole(ColorRole::OnSurface), .flexGrow = 1.0F
++    }));
++    r->addChild(std::move(ctrl));
++    return r;
++  };
++
++  card->addChild(makeRow("Анимации Hyprland", ui::toggle({
++      .out = &m_hyprAnimToggle, .checkedImmediate = getHyprAnimations(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) { (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ animations = {{ enabled = {} }} }}'", chk ? 1 : 0)); },
++  })));
++
++  card->addChild(makeRow("Декорации Hyprland", ui::toggle({
++      .out = &m_hyprDecorToggle, .checkedImmediate = getHyprDecorations(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) { (void)process::runAsync(std::format("hyprctl eval 'hl.config {{ decoration = {{ blur = {{ enabled = {} }}, rounding = {} }} }}'", chk ? "true" : "false", chk ? 10 : 0)); },
++  })));
++
++  card->addChild(makeRow("Принудительная непрозрачность", ui::toggle({
++      .out = &m_forceOpaqueToggle, .checkedImmediate = getHyprForceRgbx(),
++      .toggleSize = ToggleSize::Medium, .scale = scale,
++      .onChange = [](bool chk) {
++        (void)process::runAsync(std::format(
++            "hyprctl eval 'hl.window_rule({{ name = \"force-rgbx-toggle\", match = {{ class = \".*\" }}, force_rgbx = {} }}); hl_force_rgbx = {}'",
++            chk ? "true" : "false", chk ? "true" : "false"
++        ));
++      },
++  })));
++  root.addChild(std::move(card));
++}
++
+ void PowerTab::buildHealthCard(Flex& root, float scale) {
+   if (m_upower == nullptr) {
+     return;
+@@ -364,7 +747,7 @@ void PowerTab::buildHealthCard(Flex& root, float scale) {
+       ui::progressBar({
+           .out = &m_healthBar,
+           .fill = colorSpecFromRole(ColorRole::Primary),
+-          .track = colorSpecFromRole(ColorRole::Surface),
++          .track = colorSpecFromRole(ColorRole::SurfaceContainer, std::clamp(Style::cardOpacity() + 0.10F, 0.0F, 1.0F)),
+           .radius = Style::sliderTrackHeight * scale * 0.5F,
+           .progress = 0.0F,
+           .height = Style::sliderTrackHeight * scale,
+@@ -395,6 +778,24 @@ void PowerTab::buildPeripheralsCard(Flex& root, float scale) {
+   root.addChild(std::move(card));
+ }
+ 
++void PowerTab::pollRyzenStatusAsync() {
++  if (m_ryzenPollRunning.exchange(true)) return;
++  std::thread([this]() {
++    const bool unlocked = checkRyzenUnlocked();
++    DeferredCall::callLater([this, unlocked]() {
++      m_ryzenPollRunning = false;
++      if (m_ryzenadjButton != nullptr) {
++        if (m_ryzenUnlocked != unlocked) {
++          m_ryzenUnlocked = unlocked;
++          m_ryzenadjButton->setText(unlocked ? "Лимиты сняты" : "Снять лимиты");
++          m_ryzenadjButton->setVariant(unlocked ? ButtonVariant::Ghost : ButtonVariant::Primary);
++          PanelManager::instance().requestRedraw();
++        }
++      }
++    });
++  }).detach();
++}
++
+ void PowerTab::onClose() {
+   m_root = nullptr;
+   m_statusCard = nullptr;
+@@ -415,6 +816,14 @@ void PowerTab::onClose() {
+   m_inhibitedRow = nullptr;
+   m_inhibitedLabel = nullptr;
+   m_healthCard = nullptr;
++  m_hardwareCard = nullptr;
++  m_nvBlindfoldToggle = nullptr;
++  m_fanModeSegmented = nullptr;
++  m_ryzenadjButton = nullptr;
++  m_powersaveCard = nullptr;
++  m_hyprAnimToggle = nullptr;
++  m_hyprDecorToggle = nullptr;
++  m_forceOpaqueToggle = nullptr;
+   m_healthLabel = nullptr;
+   m_healthBar = nullptr;
+   m_peripheralsCard = nullptr;
+@@ -439,6 +848,14 @@ void PowerTab::doUpdate(Renderer& /*renderer*/) {
+   syncPowerProfiles();
+   syncBatteryHealth();
+   rebuildPeripherals();
++
++  if (m_ryzenadjButton != nullptr && hasRyzenAdj()) {
++    const auto now = std::chrono::steady_clock::now();
++    if (now - m_lastRyzenPoll >= std::chrono::milliseconds(500)) {
++      m_lastRyzenPoll = now;
++      pollRyzenStatusAsync();
++    }
++  }
+ }
+ 
+ void PowerTab::rebuildChargeLimits() {
+diff --git a/src/shell/control_center/tabs/power_tab.h b/src/shell/control_center/tabs/power_tab.h
+index 2db1e08..291a8b2 100644
+--- a/src/shell/control_center/tabs/power_tab.h
++++ b/src/shell/control_center/tabs/power_tab.h
+@@ -2,10 +2,13 @@
+ 
+ #include "shell/control_center/tab.h"
+ 
++#include <atomic>
++#include <chrono>
+ #include <cstdint>
+ #include <string>
+ #include <vector>
+ 
++class Button;
+ class Flex;
+ class Glyph;
+ class Label;
+@@ -53,9 +56,12 @@ private:
+   void doUpdate(Renderer& renderer) override;
+ 
+   void buildStatusCard(Flex& root, float scale);
++  void buildHardwarePowerCard(Flex& root, float scale);
++  void buildPowersaveCard(Flex& root, float scale);
+   void buildChargingCard(Flex& root, float scale);
+   void buildProfilesCard(Flex& root, float scale);
+   void buildHealthCard(Flex& root, float scale);
++  void pollRyzenStatusAsync();
+   void buildPeripheralsCard(Flex& root, float scale);
+ 
+   void syncBatteryStatus();
+@@ -110,6 +116,20 @@ private:
+   Label* m_healthLabel = nullptr;
+   ProgressBar* m_healthBar = nullptr;
+ 
++  // Custom Hardware & Powersave
++  Flex* m_hardwareCard = nullptr;
++  Toggle* m_nvBlindfoldToggle = nullptr;
++  Segmented* m_fanModeSegmented = nullptr;
++  Button* m_ryzenadjButton = nullptr;
++  bool m_ryzenUnlocked = false;
++  std::chrono::steady_clock::time_point m_lastRyzenPoll{};
++  std::atomic<bool> m_ryzenPollRunning{false};
++
++  Flex* m_powersaveCard = nullptr;
++  Toggle* m_hyprAnimToggle = nullptr;
++  Toggle* m_hyprDecorToggle = nullptr;
++  Toggle* m_forceOpaqueToggle = nullptr;
++
+   // Peripheral batteries
+   Flex* m_peripheralsCard = nullptr;
+   Flex* m_peripheralsList = nullptr;

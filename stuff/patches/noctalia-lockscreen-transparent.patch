@@ -1,0 +1,399 @@
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index 0c97f04..6c6c9f5 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -625,6 +625,8 @@ struct LockscreenConfig {
+   bool fingerprint = true;
+   bool allowEmptyPassword = false;
+   bool blurredDesktop = false;
++  bool transparent = false;
++  float backgroundOpacity = 0.05F;
+   std::vector<LockscreenTransition> transitions = {LockscreenTransition::Fade,    LockscreenTransition::Wipe,
+                                                    LockscreenTransition::Disc,    LockscreenTransition::Stripes,
+                                                    LockscreenTransition::Zoom,    LockscreenTransition::Honeycomb,
+diff --git a/src/config/schema/config_schema_desktop.cpp b/src/config/schema/config_schema_desktop.cpp
+index 85bb74b..80acb30 100644
+--- a/src/config/schema/config_schema_desktop.cpp
++++ b/src/config/schema/config_schema_desktop.cpp
+@@ -28,6 +28,8 @@ namespace noctalia::config::schema {
+         field(&LockscreenConfig::fingerprint, "fingerprint"),
+         field(&LockscreenConfig::allowEmptyPassword, "allow_empty_password"),
+         field(&LockscreenConfig::blurredDesktop, "blurred_desktop"),
++        field(&LockscreenConfig::transparent, "transparent"),
++        field(&LockscreenConfig::backgroundOpacity, "background_opacity", kUnitRange),
+         enumArrayField(
+             &LockscreenConfig::transitions, "transition", kLockscreenTransitions, std::optional<LockscreenTransition>{}
+         ),
+diff --git a/src/shell/lockscreen/lock_screen.cpp b/src/shell/lockscreen/lock_screen.cpp
+index 32fb894..500ebde 100644
+--- a/src/shell/lockscreen/lock_screen.cpp
++++ b/src/shell/lockscreen/lock_screen.cpp
+@@ -988,6 +988,9 @@ bool LockScreen::shouldCaptureDesktop() const {
+     return false;
+   }
+   const auto& lockscreen = m_configService->config().lockscreen;
++  if (lockscreen.transparent) {
++    return false;
++  }
+   return lockscreen.blurredDesktop || (!m_transitionSuppressed && !lockscreen.transitions.empty());
+ }
+ 
+@@ -1144,13 +1147,14 @@ void LockScreen::chooseTransition() {
+   if (m_transitionSuppressed) {
+     return;
+   }
+-  if (m_configService == nullptr
+-      || m_wayland == nullptr
+-      || m_wayland->extension<ScreencopyGlobals>().manager() == nullptr) {
++  if (m_configService == nullptr || m_wayland == nullptr) {
+     return;
+   }
+ 
+   const auto& config = m_configService->config().lockscreen;
++  if (!config.transparent && m_wayland->extension<ScreencopyGlobals>().manager() == nullptr) {
++    return;
++  }
+   m_transitionDurationMs = config.transitionDurationMs;
+   if (config.transitions.empty()) {
+     return;
+@@ -1214,6 +1218,7 @@ void LockScreen::applyLockscreenStyle(LockSurface& surface) const {
+     return;
+   }
+   const auto& lockscreen = m_configService->config().lockscreen;
++  surface.setTransparency(lockscreen.transparent, lockscreen.backgroundOpacity);
+   surface.setBackgroundStyle(lockscreen.blurIntensity, lockscreen.tintIntensity, lockscreen.tintColor);
+ }
+ 
+diff --git a/src/shell/lockscreen/lock_surface.cpp b/src/shell/lockscreen/lock_surface.cpp
+index 76ead0b..af01096 100644
+--- a/src/shell/lockscreen/lock_surface.cpp
++++ b/src/shell/lockscreen/lock_surface.cpp
+@@ -114,20 +114,18 @@ namespace {
+     return ButtonVariant::Default;
+   }
+ 
+-  // Default/Ghost use SurfaceContainer or clear fills that disappear on the
+-  // SurfaceContainer login panel; Outline gives a readable Surface chip.
+   ButtonVariant lockscreenSessionVariant(SessionActionButtonVariant variant) {
+     switch (variant) {
+     case SessionActionButtonVariant::Default:
+     case SessionActionButtonVariant::Ghost:
+-      return ButtonVariant::Outline;
++      return ButtonVariant::Ghost;
+     case SessionActionButtonVariant::Primary:
+     case SessionActionButtonVariant::Secondary:
+     case SessionActionButtonVariant::Destructive:
+     case SessionActionButtonVariant::Outline:
+       return buttonVariantFor(variant);
+     }
+-    return ButtonVariant::Outline;
++    return ButtonVariant::Ghost;
+   }
+ 
+   std::string weekdayAbbrev(const std::string& isoDate) {
+@@ -711,7 +709,7 @@ bool LockSurface::initialize(ext_session_lock_v1* lock, wl_output* output, std::
+ 
+   // Upload the immutable cover before the lock request is flushed. The first
+   // configured lock-surface frame can then be the captured desktop immediately.
+-  if (m_transitionPhase == TransitionPhase::Cover && !ensureTransitionCaptureTexture()) {
++  if (!m_isTransparent && m_transitionPhase == TransitionPhase::Cover && !ensureTransitionCaptureTexture()) {
+     m_transitionPhase = TransitionPhase::Disabled;
+     m_transitionProgress = 1.0F;
+     syncTransitionCover();
+@@ -831,6 +829,20 @@ void LockSurface::setWallpaperPath(std::string wallpaperPath) {
+   requestLayout();
+ }
+ 
++void LockSurface::setTransparency(bool transparent, float opacity) {
++  if (m_isTransparent == transparent && std::abs(m_transparentOpacity - opacity) < 0.001F) {
++    return;
++  }
++  m_isTransparent = transparent;
++  m_transparentOpacity = std::clamp(opacity, 0.0F, 1.0F);
++  if (m_isTransparent) {
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setVisible(false);
++    }
++  }
++  requestRedraw();
++}
++
+ void LockSurface::setWallpaperFillMode(WallpaperFillMode fillMode) {
+   if (m_wallpaperFillMode == fillMode) {
+     return;
+@@ -893,7 +905,8 @@ void LockSurface::configureTransition(
+   m_transitionProgress = 1.0F;
+   m_enterTransitionRequested = false;
+ 
+-  if (!transition.has_value() || m_blackout || !m_desktopCapture.has_value() || m_desktopCapture->rgba.empty()) {
++  if (!transition.has_value() || m_blackout
++      || (!m_isTransparent && (!m_desktopCapture.has_value() || m_desktopCapture->rgba.empty()))) {
+     m_transitionPhase = TransitionPhase::Disabled;
+     syncTransitionCover();
+     return;
+@@ -922,10 +935,11 @@ void LockSurface::startExitTransition() {
+     return;
+   }
+ 
+-  if (m_transitionPhase != TransitionPhase::Disabled && m_transitionCaptureTexture.id == 0) {
++  if (m_transitionPhase != TransitionPhase::Disabled && !m_isTransparent && m_transitionCaptureTexture.id == 0) {
+     (void)ensureTransitionCaptureTexture();
+   }
+-  if (m_transitionPhase == TransitionPhase::Disabled || m_transitionCaptureTexture.id == 0) {
++  if (m_transitionPhase == TransitionPhase::Disabled
++      || (!m_isTransparent && m_transitionCaptureTexture.id == 0)) {
+     m_transitionPhase = TransitionPhase::ExitComplete;
+     notifyTransitionStateChanged();
+     return;
+@@ -1220,6 +1234,43 @@ void LockSurface::layoutTransitionCover() {
+ }
+ 
+ void LockSurface::syncTransitionCover() {
++  if (m_isTransparent) {
++    if (m_transitionCover != nullptr) {
++      m_transitionCover->setVisible(false);
++    }
++    if (m_wallpaper != nullptr) {
++      m_wallpaper->setVisible(true);
++      m_wallpaper->setPosition(0.0F, 0.0F);
++      m_wallpaper->setSize(static_cast<float>(width()), static_cast<float>(height()));
++      m_wallpaper->setSources(
++          WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, 0.0F),
++          WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
++          0.0F, 0.0F, 0.0F, 0.0F
++      );
++      TransitionParams tp{};
++      tp.direction = m_transitionParams.direction;
++      tp.centerX = m_transitionParams.centerX;
++      tp.centerY = m_transitionParams.centerY;
++      tp.stripeCount = m_transitionParams.stripeCount;
++      tp.angle = m_transitionParams.angle;
++      tp.cellSize = m_transitionParams.cellSize;
++      tp.smoothness = m_transitionParams.smoothness;
++      m_wallpaper->setTransition(
++          static_cast<WallpaperTransition>(m_transition),
++          m_transitionProgress,
++          tp
++      );
++    }
++    if (m_loginPanel != nullptr) {
++      m_loginPanel->setOpacity(m_transitionProgress);
++    }
++    if (m_widgetLayer != nullptr) {
++      m_widgetLayer->setOpacity(m_transitionProgress);
++    }
++    requestRedraw();
++    return;
++  }
++
+   if (m_transitionCover == nullptr) {
+     return;
+   }
+@@ -1286,6 +1337,11 @@ void LockSurface::prepareFrame(bool needsUpdate, bool needsLayout) {
+   Renderer& renderer = renderTarget().renderer();
+ 
+   if (m_transitionPhase == TransitionPhase::Cover) {
++    if (m_isTransparent) {
++      UiPhaseScope layoutPhase(UiPhase::Layout);
++      layoutScene(width(), height());
++      return;
++    }
+     if (ensureTransitionCaptureTexture()) {
+       UiPhaseScope layoutPhase(UiPhase::Layout);
+       layoutCoverOnly(width(), height());
+@@ -1415,34 +1471,69 @@ void LockSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   m_backgroundLayer->setPosition(0.0F, 0.0F);
+   m_backgroundLayer->setSize(sw, sh);
+ 
+-  m_wallpaper->setPosition(0.0F, 0.0F);
+-  m_wallpaper->setSize(sw, sh);
+-  m_wallpaper->setFillMode(m_wallpaperFillMode);
+-  m_wallpaper->setFillColor(m_wallpaperFillColor);
+-
+-  m_backdrop->setPosition(0.0F, 0.0F);
+-  m_backdrop->setSize(sw, sh);
+-  m_backdrop->setVisible(m_wallpaperFillColor.a > 0.0F);
+-  m_backdrop->setStyle(
+-      RoundedRectStyle{
+-          .fill = m_wallpaperFillColor,
+-          .fillMode = FillMode::Solid,
+-      }
+-  );
++  if (m_isTransparent) {
++    m_wallpaper->setVisible(true);
++    m_wallpaper->setPosition(0.0F, 0.0F);
++    m_wallpaper->setSize(sw, sh);
++    m_wallpaper->setSources(
++        WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, 0.0F),
++        WallpaperSourceKind::Color, {}, rgba(0.0F, 0.0F, 0.0F, m_transparentOpacity),
++        0.0F, 0.0F, 0.0F, 0.0F
++    );
++    TransitionParams tp{};
++    tp.direction = m_transitionParams.direction;
++    tp.centerX = m_transitionParams.centerX;
++    tp.centerY = m_transitionParams.centerY;
++    tp.stripeCount = m_transitionParams.stripeCount;
++    tp.angle = m_transitionParams.angle;
++    tp.cellSize = m_transitionParams.cellSize;
++    tp.smoothness = m_transitionParams.smoothness;
++    m_wallpaper->setTransition(
++        static_cast<WallpaperTransition>(m_transition),
++        m_transitionProgress,
++        tp
++    );
++    m_backdrop->setVisible(false);
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setVisible(false);
++    }
++    if (m_loginPanel != nullptr) {
++      m_loginPanel->setOpacity(m_transitionProgress);
++    }
++    if (m_widgetLayer != nullptr) {
++      m_widgetLayer->setOpacity(m_transitionProgress);
++    }
++  } else {
++    m_wallpaper->setVisible(true);
++    m_wallpaper->setPosition(0.0F, 0.0F);
++    m_wallpaper->setSize(sw, sh);
++    m_wallpaper->setFillMode(m_wallpaperFillMode);
++    m_wallpaper->setFillColor(m_wallpaperFillColor);
+ 
+-  if (m_tintOverlay != nullptr) {
+-    m_tintOverlay->setPosition(0.0F, 0.0F);
+-    m_tintOverlay->setSize(sw, sh);
+-    const float tintIntensity = m_tintIntensity;
+-    const bool showTint = tintIntensity > 0.0F;
+-    m_tintOverlay->setVisible(showTint);
+-    if (showTint) {
+-      m_tintOverlay->setStyle(
+-          RoundedRectStyle{
+-              .fill = resolveColorSpec(scaleAlpha(m_tintColor, tintIntensity)),
+-              .fillMode = FillMode::Solid,
+-          }
+-      );
++    m_backdrop->setPosition(0.0F, 0.0F);
++    m_backdrop->setSize(sw, sh);
++    m_backdrop->setVisible(m_wallpaperFillColor.a > 0.0F);
++    m_backdrop->setStyle(
++        RoundedRectStyle{
++            .fill = m_wallpaperFillColor,
++            .fillMode = FillMode::Solid,
++        }
++    );
++
++    if (m_tintOverlay != nullptr) {
++      m_tintOverlay->setPosition(0.0F, 0.0F);
++      m_tintOverlay->setSize(sw, sh);
++      const float tintIntensity = m_tintIntensity;
++      const bool showTint = tintIntensity > 0.0F;
++      m_tintOverlay->setVisible(showTint);
++      if (showTint) {
++        m_tintOverlay->setStyle(
++            RoundedRectStyle{
++                .fill = resolveColorSpec(scaleAlpha(m_tintColor, tintIntensity)),
++                .fillMode = FillMode::Solid,
++            }
++        );
++      }
+     }
+   }
+ 
+@@ -2100,6 +2191,9 @@ std::string LockSurface::resolveStatusText(const lockscreen_login_box::LoginBoxS
+ }
+ 
+ void LockSurface::applyWallpaperTexture() {
++  if (m_isTransparent) {
++    return;
++  }
+   if (usesDesktopCaptureBackground()) {
+     applyBlurredDesktopTexture();
+     if (m_blurredDesktopTexture.id != 0) {
+@@ -2237,7 +2331,7 @@ void LockSurface::releaseCaptureTextures() {
+ }
+ 
+ void LockSurface::applyBlurredDesktopTexture() {
+-  if (!m_captureDirty || !usesDesktopCaptureBackground()) {
++  if (m_isTransparent || !m_captureDirty || !usesDesktopCaptureBackground()) {
+     return;
+   }
+ 
+diff --git a/src/shell/lockscreen/lock_surface.h b/src/shell/lockscreen/lock_surface.h
+index e23ceca..e586c44 100644
+--- a/src/shell/lockscreen/lock_surface.h
++++ b/src/shell/lockscreen/lock_surface.h
+@@ -60,6 +60,7 @@ public:
+   void setKeyboardIndicators(bool capsLock, bool hasMultipleLayouts, bool layoutSwitchable, std::string layoutLabel);
+   void setTextureCache(SharedTextureCache* cache) noexcept { m_textureCache = cache; }
+   void setWallpaperPath(std::string wallpaperPath);
++  void setTransparency(bool transparent, float opacity);
+   void setWallpaperFillMode(WallpaperFillMode fillMode);
+   void setWallpaperCoverage(TextureCoverage coverage);
+   void setWallpaperFillColor(Color fillColor);
+@@ -228,6 +229,8 @@ private:
+   TextureCoverage m_wallpaperCoverage;
+   Color m_wallpaperFillColor = rgba(0.0F, 0.0F, 0.0F, 0.0F);
+   bool m_wallpaperDirty = false;
++  bool m_isTransparent = false;
++  float m_transparentOpacity = 0.05F;
+   InputDispatcher m_inputDispatcher;
+   std::function<void()> m_onLogin;
+   std::function<void()> m_onCycleLayout;
+diff --git a/src/shell/lockscreen/lockscreen_login_box.cpp b/src/shell/lockscreen/lockscreen_login_box.cpp
+index 74d9a3d..f665657 100644
+--- a/src/shell/lockscreen/lockscreen_login_box.cpp
++++ b/src/shell/lockscreen/lockscreen_login_box.cpp
+@@ -302,13 +302,13 @@ namespace lockscreen_login_box {
+   LoginBoxStyle resolveStyle(const std::unordered_map<std::string, WidgetSettingValue>& settings) {
+     LoginBoxStyle style;
+     style.layout = resolveLayout(settings);
+-    style.panelOpacity = std::clamp(readFloat(settings, "background_opacity", style.panelOpacity), 0.0F, 1.0F);
++    style.panelOpacity = std::clamp(readFloat(settings, "background_opacity", 0.25F), 0.0F, 1.0F);
+     ColorSpec panelFill =
+-        colorSpecFromConfigString(readString(settings, "background_color", "surface_container"), "background_color");
++        colorSpecFromConfigString(readString(settings, "background_color", "surface"), "background_color");
+     panelFill.alpha *= style.panelOpacity;
+     style.panelFill = panelFill;
+     style.panelRadius = std::clamp(readFloat(settings, "background_radius", style.panelRadius), 0.0F, 32.0F);
+-    style.inputOpacity = std::clamp(readFloat(settings, kInputOpacityKey, style.inputOpacity), 0.0F, 1.0F);
++    style.inputOpacity = std::clamp(readFloat(settings, kInputOpacityKey, 0.25F), 0.0F, 1.0F);
+     style.inputRadius = std::clamp(readFloat(settings, kInputRadiusKey, style.inputRadius), 0.0F, 32.0F);
+     style.centerPasswordText = readBool(settings, kCenterPasswordTextKey, style.centerPasswordText);
+     style.showLoginButton = readBool(settings, kShowLoginButtonKey, style.showLoginButton);
+@@ -337,13 +337,13 @@ namespace lockscreen_login_box {
+       settings.insert_or_assign(std::string(kShowKeyboardLayoutKey), true);
+       settings.insert_or_assign(std::string(kShowPasswordRevealKey), true);
+       settings.insert_or_assign(std::string(kShowUnlockHintKey), true);
+-      settings.insert_or_assign(std::string(kInputOpacityKey), 1.0);
++      settings.insert_or_assign(std::string(kInputOpacityKey), 0.25);
+       settings.insert_or_assign(std::string(kInputRadiusKey), 6.0);
+       settings.insert_or_assign(std::string(kCenterPasswordTextKey), false);
+     }
+     if (scope == desktop_settings::DesktopWidgetSettingsScope::Background) {
+-      settings.insert_or_assign("background_color", std::string("surface_container"));
+-      settings.insert_or_assign("background_opacity", 0.88);
++      settings.insert_or_assign("background_color", std::string("surface"));
++      settings.insert_or_assign("background_opacity", 0.25);
+       settings.insert_or_assign("background_radius", 12.0);
+     }
+   }
+diff --git a/src/shell/lockscreen/lockscreen_login_box.h b/src/shell/lockscreen/lockscreen_login_box.h
+index 827c91d..123a30c 100644
+--- a/src/shell/lockscreen/lockscreen_login_box.h
++++ b/src/shell/lockscreen/lockscreen_login_box.h
+@@ -44,11 +44,11 @@ namespace lockscreen_login_box {
+ 
+   struct LoginBoxStyle {
+     LayoutMode layout = LayoutMode::Regular;
+-    ColorSpec panelFill = colorSpecFromRole(ColorRole::SurfaceContainer, 0.88F);
+-    float panelOpacity = 0.88F;
+-    float panelRadius = 12.0F;
+-    float inputOpacity = 1.0F;
+-    float inputRadius = 6.0F;
++    ColorSpec panelFill = colorSpecFromRole(ColorRole::Surface, 0.25F);
++    float panelOpacity = 0.25F;
++    float panelRadius = 15.0F;
++    float inputOpacity = 0.25F;
++    float inputRadius = 15.0F;
+     bool centerPasswordText = false;
+     bool showLoginButton = true;
+     bool showCapsLock = true;

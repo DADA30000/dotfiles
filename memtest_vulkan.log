@@ -1,0 +1,17 @@
+Tester console logging started at 2026-11-21T23:49:09.078292Z
+
+1: Bus=0x64:00 DevId=0x2D19   8GB NVIDIA GeForce RTX 5060 Laptop GPU
+2: Bus=0x66:00 DevId=0x1114   16GB AMD Radeon 860M Graphics (RADV KRACKAN1)
+3: Bus=0x66:00 DevId=0x1114   16GB AMD Radeon 860M Graphics (RADV KRACKAN1)
+4: Bus=0x00:00 DevId=0x0000   31GB llvmpipe (LLVM 21.1.8, 256 bits)
+5: Bus=0x00:00 DevId=0x0000   31GB llvmpipe (LLVM 21.1.8, 256 bits)
+Tester worker logging started at 2026-11-21T23:49:12.586477Z
+Standard 5-minute test of 1: Bus=0x64:00 DevId=0x2D19   8GB NVIDIA GeForce RTX 5060 Laptop GPU
+      1 iteration. Passed  0.0298 seconds  written:    3.0GB 293.9GB/sec        checked:    6.0GB 305.8GB/sec
+     31 iteration. Passed  1.0210 seconds  written:   90.0GB 274.7GB/sec        checked:  180.0GB 259.6GB/sec
+    177 iteration. Passed  5.0211 seconds  written:  438.0GB 244.5GB/sec        checked:  876.0GB 271.3GB/sec
+Tester worker logging started at 2026-11-21T23:49:47.700796Z
+Standard 5-minute test of 1: Bus=0x64:00 DevId=0x2D19   8GB NVIDIA GeForce RTX 5060 Laptop GPU
+      1 iteration. Passed  0.0056 seconds  written:    0.4GB 210.2GB/sec        checked:    0.8GB 197.5GB/sec
+    228 iteration. Passed  1.0018 seconds  written:   85.1GB 266.7GB/sec        checked:  170.2GB 249.4GB/sec
+   1395 iteration. Passed  5.0026 seconds  written:  437.6GB 256.7GB/sec        checked:  875.2GB 265.4GB/sec

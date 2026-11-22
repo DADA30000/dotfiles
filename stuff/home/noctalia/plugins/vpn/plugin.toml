@@ -1,0 +1,21 @@
+id          = "local/vpn"
+name        = "VPN"
+version     = "1.0.0"
+plugin_api  = 42
+author      = "local"
+license     = "MIT"
+icon        = "shield-lock"
+description = "sing-box Clash API proxy switcher and latency tester."
+
+[[widget]]
+id    = "vpn"
+entry = "widget.luau"
+
+[[panel]]
+id              = "panel"
+entry           = "panel.luau"
+width           = 380
+height          = "content"
+max_height      = 640
+placement       = "floating"
+open_near_click = true

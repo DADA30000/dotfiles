@@ -1,0 +1,641 @@
+diff --git a/lib/ui/builders.cpp b/lib/ui/builders.cpp
+index 8dcff16..4d1a8a0 100644
+--- a/lib/ui/builders.cpp
++++ b/lib/ui/builders.cpp
+@@ -392,11 +392,13 @@ namespace ui {
+     if (props.gap.has_value()) {
+       control->setGap(*props.gap);
+     }
+     if (props.styleRadius.has_value()) {
+-      control->setStyleRadius(*props.styleRadius, props.styleRadiusScale.value_or(1.0F));
++      control->setRadius(std::max(15.0F, Style::scaledRadius(*props.styleRadius, props.styleRadiusScale.value_or(1.0F))));
+     } else if (props.radius.has_value()) {
+-      control->setRadius(*props.radius);
++      control->setRadius(std::max(15.0F, *props.radius));
++    } else {
++      control->setRadius(999.0F);
+     }
+     applyNodeProps(*control, props);
+     if (props.configure) {
+       props.configure(*control);
+diff --git a/lib/ui/controls/box.cpp b/lib/ui/controls/box.cpp
+index c2ac7a2..30f3bb7 100644
+--- a/lib/ui/controls/box.cpp
++++ b/lib/ui/controls/box.cpp
+@@ -151,7 +151,7 @@ void Box::setFlatStyle() {
+ }
+ 
+ void Box::setPanelStyle(bool showBorder) {
+-  m_fill = colorSpecFromRole(ColorRole::Surface);
++  m_fill = colorSpecFromRole(ColorRole::Surface, 0.25F);
+   if (showBorder) {
+     m_border = colorSpecFromRole(ColorRole::OutlineVariant);
+     m_borderWidth = Style::borderWidth;
+@@ -171,7 +171,21 @@ void Box::setPanelStyle(bool showBorder) {
+   setStyleRadius(Style::radiusXl);
+ }
+ 
+-void Box::setDialogStyle() { setPanelStyle(true); }
++void Box::setDialogStyle() {
++  setPanelStyle(true);
++  Color solidBg = colorForRole(ColorRole::Surface);
++  solidBg.a = 1.0F;
++  if (solidBg.r < 0.05F && solidBg.g < 0.05F && solidBg.b < 0.05F) {
++    solidBg = Color{0.07F, 0.09F, 0.13F, 1.0F};
++  }
++  m_fill = fixedColorSpec(solidBg);
++  m_border = colorSpecFromRole(ColorRole::OutlineVariant, 0.50F);
++  m_borderWidth = Style::borderWidth;
++  m_style.fill = resolveColorSpec(m_fill);
++  m_style.border = resolveColorSpec(m_border);
++  m_style.borderWidth = m_borderWidth;
++  syncStyle();
++}
+ 
+ void Box::setCardStyle(float scale, float fillOpacity, bool showBorder) {
+   setFill(colorSpecFromRole(ColorRole::SurfaceContainer, fillOpacity));
+diff --git a/lib/ui/controls/button.cpp b/lib/ui/controls/button.cpp
+index ab9e0fb..5533248 100644
+--- a/lib/ui/controls/button.cpp
++++ b/lib/ui/controls/button.cpp
+@@ -36,18 +36,18 @@ namespace {
+       return Button::ButtonPalette{
+           .borderWidth = Style::borderWidth,
+           .normal = makeState(
+-              colorSpecFromRole(ColorRole::SurfaceContainer), colorSpecFromRole(ColorRole::OutlineVariant),
++              colorSpecFromRole(ColorRole::SurfaceContainer), colorSpecFromRole(ColorRole::OutlineVariant, 0.20F),
+               colorSpecFromRole(ColorRole::OnSurface)
+           ),
+           .hover =
+-              makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
++              makeState(colorSpecFromRole(ColorRole::Hover, 0.50F), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
+           .pressed = makeState(
+-              colorSpecFromRole(ColorRole::Primary), colorSpecFromRole(ColorRole::Primary),
+-              colorSpecFromRole(ColorRole::OnPrimary)
++              colorSpecFromRole(ColorRole::Hover, 0.85F), colorSpecFromRole(ColorRole::Primary, 0.50F),
++              colorSpecFromRole(ColorRole::OnHover)
+           ),
+           .disabled = makeState(
+-              colorSpecFromRole(ColorRole::SurfaceContainer, Style::disabledAlpha),
+-              colorSpecFromRole(ColorRole::OutlineVariant, Style::disabledOutlineAlpha),
++              colorSpecFromRole(ColorRole::SurfaceContainer, 0.15F),
++              colorSpecFromRole(ColorRole::OutlineVariant, 0.10F),
+               colorSpecFromRole(ColorRole::OnSurface, Style::disabledAlpha)
+           ),
+           .selected = selectedState(),
+@@ -113,7 +113,7 @@ namespace {
+       return Button::ButtonPalette{
+           .borderWidth = Style::borderWidth,
+           .normal = makeState(
+-              colorSpecFromRole(ColorRole::Surface), colorSpecFromRole(ColorRole::OutlineVariant),
++              clearColorSpec(), colorSpecFromRole(ColorRole::OutlineVariant),
+               colorSpecFromRole(ColorRole::OnSurface)
+           ),
+           .hover =
+@@ -123,7 +123,7 @@ namespace {
+               colorSpecFromRole(ColorRole::OnPrimary)
+           ),
+           .disabled = makeState(
+-              colorSpecFromRole(ColorRole::Surface, Style::disabledAlpha),
++              clearColorSpec(),
+               colorSpecFromRole(ColorRole::OutlineVariant, Style::disabledOutlineAlpha),
+               colorSpecFromRole(ColorRole::OnSurface, Style::disabledAlpha)
+           ),
+@@ -136,7 +136,7 @@ namespace {
+           .hover =
+               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
+           .pressed = makeState(
+-              colorSpecFromRole(ColorRole::SurfaceContainer), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
++              colorSpecFromRole(ColorRole::Hover, 0.80F), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)
+           ),
+           .disabled = makeState(
+               clearColorSpec(), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface, Style::disabledAlpha)
+@@ -150,7 +150,7 @@ namespace {
+           .hover =
+               makeState(colorSpecFromRole(ColorRole::Hover), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)),
+           .pressed = makeState(
+-              colorSpecFromRole(ColorRole::SurfaceContainer), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)
++              colorSpecFromRole(ColorRole::Hover, 0.80F), clearColorSpec(), colorSpecFromRole(ColorRole::OnHover)
+           ),
+           .disabled = makeState(clearColorSpec(), clearColorSpec(), colorSpecFromRole(ColorRole::OnSurface)),
+           .selected = std::nullopt,
+@@ -186,7 +186,7 @@ Button::Button() {
+   setAlign(FlexAlign::Center);
+   setMinHeight(Style::controlHeightSm);
+   setPadding(Style::spaceSm);
+-  setStyleRadius(Style::radiusMd);
++  setRadius(999.0F);
+ 
+   auto area = std::make_unique<InputArea>();
+   area->setOnEnter([this](const InputArea::PointerData& /*data*/) {
+@@ -507,7 +507,11 @@ void Button::setSurfaceOpacity(float opacity) {
+ 
+ void Button::applyVariant() {
+   m_palette = m_customPalette.value_or(paletteForVariant(m_variant));
+-  if (m_surfaceOpacity < 1.0F) {
++  if (m_variant == ButtonVariant::Default) {
++    const float effectiveOpacity = m_surfaceOpacity < 1.0F ? m_surfaceOpacity : Style::cardOpacity();
++    m_palette.normal.bg.alpha = effectiveOpacity;
++    m_palette.disabled.bg.alpha = effectiveOpacity * Style::disabledAlpha;
++  } else if (m_surfaceOpacity < 1.0F) {
+     m_palette.normal.bg.alpha *= m_surfaceOpacity;
+     m_palette.disabled.bg.alpha *= m_surfaceOpacity;
+   }
+diff --git a/lib/ui/controls/input.h b/lib/ui/controls/input.h
+index f94be23..56a5e9f 100644
+--- a/lib/ui/controls/input.h
++++ b/lib/ui/controls/input.h
+@@ -273,7 +273,7 @@ private:
+   bool m_frameVisible = true;
+   bool m_embeddedOnSolidPrimary = false;
+   ColorRole m_surfaceRole = ColorRole::SurfaceContainer;
+-  float m_surfaceOpacity = 1.0F;
++  float m_surfaceOpacity = 0.30F;
+   float m_frameRadius = Style::radiusMd;
+   bool m_enabled = true;
+   TextInputService* m_textInputService = nullptr;
+diff --git a/lib/ui/controls/progress_bar.cpp b/lib/ui/controls/progress_bar.cpp
+index df37b2e..3eba34c 100644
+--- a/lib/ui/controls/progress_bar.cpp
++++ b/lib/ui/controls/progress_bar.cpp
+@@ -27,7 +27,7 @@ ProgressBar::ProgressBar() {
+   marker->setVisible(false);
+   m_marker = static_cast<RectNode*>(addChild(std::move(marker)));
+ 
+-  setTrack(colorSpecFromRole(ColorRole::SurfaceContainer));
++  setTrack(colorSpecFromRole(ColorRole::SurfaceContainer, std::clamp(Style::cardOpacity() + 0.10F, 0.0F, 1.0F)));
+   setFill(colorSpecFromRole(ColorRole::Primary));
+   setStyleRadius(Style::radiusSm);
+   m_paletteConn = paletteChanged().connect([this] { applyPalette(); });
+diff --git a/lib/ui/controls/range_slider.cpp b/lib/ui/controls/range_slider.cpp
+index a0918c0..e59af49 100644
+--- a/lib/ui/controls/range_slider.cpp
++++ b/lib/ui/controls/range_slider.cpp
+@@ -362,7 +362,8 @@ void RangeSlider::applyVisualState() {
+   const bool hovering = m_inputArea != nullptr && m_inputArea->hovered();
+   const bool focused = m_inputArea != nullptr && m_inputArea->focused();
+ 
+-  Color trackColor = resolved(ColorRole::OutlineVariant);
++  const float trackAlpha = std::clamp(Style::cardOpacity() + 0.10F, 0.0F, 1.0F);
++  Color trackColor = resolved(ColorRole::SurfaceContainer, trackAlpha);
+   Color fillColor = resolved(ColorRole::Primary);
+   Color thumbColor = resolved(ColorRole::OnPrimary);
+   Color thumbBorder = resolved(ColorRole::OutlineVariant);
+@@ -371,7 +372,7 @@ void RangeSlider::applyVisualState() {
+   m_highThumb->setVisible(m_enabled);
+ 
+   if (!m_enabled) {
+-    trackColor = resolved(ColorRole::OutlineVariant, Style::disabledOutlineAlpha);
++    trackColor = resolved(ColorRole::SurfaceContainer, trackAlpha * Style::disabledOutlineAlpha);
+     fillColor = resolved(ColorRole::Primary, 0.5F);
+   } else if (focused) {
+     thumbBorder = resolveColorSpec(focusRingColorSpec());
+diff --git a/lib/ui/controls/segmented.h b/lib/ui/controls/segmented.h
+index 7fd8e76..32caf51 100644
+--- a/lib/ui/controls/segmented.h
++++ b/lib/ui/controls/segmented.h
+@@ -70,7 +70,7 @@ private:
+   bool m_equalSegmentWidths = false;
+   bool m_compact = false;
+   float m_outerPadding = 0.0F;
+-  float m_surfaceOpacity = 1.0F;
++  float m_surfaceOpacity = 0.30F;
+   ColorRole m_surfaceRole = ColorRole::SurfaceContainer;
+   bool m_enabled = true;
+ };
+diff --git a/lib/ui/controls/select.h b/lib/ui/controls/select.h
+index 0223857..9089e3a 100644
+--- a/lib/ui/controls/select.h
++++ b/lib/ui/controls/select.h
+@@ -70,7 +70,7 @@ private:
+   std::vector<std::string> m_options;
+   std::size_t m_selectedIndex = npos;
+   std::string m_placeholder;
+-  float m_surfaceOpacity = 1.0F;
++  float m_surfaceOpacity = 0.30F;
+   bool m_enabled = true;
+   bool m_open = false;
+   float m_caretProgress = 0.0F;
+diff --git a/lib/ui/controls/slider.cpp b/lib/ui/controls/slider.cpp
+index 0cd42b0..d069892 100644
+--- a/lib/ui/controls/slider.cpp
++++ b/lib/ui/controls/slider.cpp
+@@ -297,7 +297,8 @@ void Slider::applyVisualState() {
+   const bool pressing = m_inputArea != nullptr && m_inputArea->pressed();
+   const bool focused = m_inputArea != nullptr && m_inputArea->focused();
+ 
+-  Color trackColor = resolved(ColorRole::OutlineVariant);
++  const float trackAlpha = std::clamp(Style::cardOpacity() + 0.10F, 0.0F, 1.0F);
++  Color trackColor = resolved(ColorRole::SurfaceContainer, trackAlpha);
+   Color fillColor = resolved(ColorRole::Primary);
+   Color thumbColor = resolved(ColorRole::OnPrimary);
+   Color thumbBorder = resolved(ColorRole::OutlineVariant);
+@@ -305,7 +306,7 @@ void Slider::applyVisualState() {
+   m_thumb->setVisible(m_enabled);
+ 
+   if (!m_enabled) {
+-    trackColor = resolved(ColorRole::OutlineVariant, Style::disabledOutlineAlpha);
++    trackColor = resolved(ColorRole::SurfaceContainer, trackAlpha * Style::disabledOutlineAlpha);
+     fillColor = resolved(ColorRole::Primary, 0.5F);
+   } else if (pressing) {
+     fillColor = resolved(ColorRole::Primary);
+diff --git a/lib/ui/controls/stepper.h b/lib/ui/controls/stepper.h
+index b192015..9d14d62 100644
+--- a/lib/ui/controls/stepper.h
++++ b/lib/ui/controls/stepper.h
+@@ -67,7 +67,7 @@ private:
+   int m_max = 100;
+   int m_step = 1;
+   int m_value = 0;
+-  float m_surfaceOpacity = 1.0F;
++  float m_surfaceOpacity = 0.30F;
+   bool m_enabled = true;
+   float m_scale = 1.0F;
+   int m_repeatDirection = 0;
+diff --git a/lib/ui/controls/toggle.cpp b/lib/ui/controls/toggle.cpp
+index 182610e..64e2846 100644
+--- a/lib/ui/controls/toggle.cpp
++++ b/lib/ui/controls/toggle.cpp
+@@ -175,7 +175,8 @@ void Toggle::applyState() { applyAnimatedState(m_checked ? 1.0F : 0.0F); }
+ 
+ void Toggle::applyAnimatedState(float t) {
+   m_animationProgress = t;
+-  const Color trackColor = lerpColor(colorForRole(ColorRole::OutlineVariant), colorForRole(ColorRole::Primary), t);
++  const float inactiveAlpha = std::clamp(Style::cardOpacity() + 0.05F, 0.0F, 1.0F);
++  const Color trackColor = lerpColor(colorForRole(ColorRole::SurfaceContainer, inactiveAlpha), colorForRole(ColorRole::Primary), t);
+   const Color thumbColor = lerpColor(colorForRole(ColorRole::OnPrimary), colorForRole(ColorRole::OnPrimary), t);
+   const float thumbX = m_inset + m_travel * (Style::rtl() ? 1.0F - t : t);
+   ColorSpec borderColor = colorSpecFromRole(ColorRole::OutlineVariant);
+diff --git a/lib/ui/popup_chrome.cpp b/lib/ui/popup_chrome.cpp
+index 17c076e..2fd0d9d 100644
+--- a/lib/ui/popup_chrome.cpp
++++ b/lib/ui/popup_chrome.cpp
+@@ -118,7 +118,7 @@ namespace popup_chrome {
+ 
+   Box* addCardBackground(Node& parent, const Geometry& geometry, float contentScale) {
+     auto box = ui::box({});
+-    box->setCardStyle(contentScale, 1.0F, Style::popupBordersEnabled());
++    box->setCardStyle(contentScale, 0.20F, Style::popupBordersEnabled());
+     box->setStyleRadius(Style::radiusLg, contentScale);
+     box->setPosition(geometry.contentX(), geometry.contentY());
+     box->setFrameSize(geometry.contentWidth, geometry.contentHeight);
+diff --git a/lib/ui/style.cpp b/lib/ui/style.cpp
+index 84f6247..028089a 100644
+--- a/lib/ui/style.cpp
++++ b/lib/ui/style.cpp
+@@ -8,6 +8,8 @@ namespace {
+ 
+   float g_cornerRadiusScale = 1.0F;
+   float g_scrollWheelStep = 56.0F;
++  float g_backgroundOpacity = 0.80F;
++  float g_cardOpacity = 0.88F;
+   bool g_buttonBordersEnabled = true;
+   bool g_inputBordersEnabled = true;
+   bool g_popupBordersEnabled = true;
+@@ -40,6 +42,15 @@ namespace Style {
+ 
+   void setScrollWheelStep(float step) noexcept { g_scrollWheelStep = std::clamp(step, 10.0F, 500.0F); }
+ 
++  float cardOpacity() noexcept { return g_cardOpacity; }
++
++  float backgroundOpacity() noexcept { return g_backgroundOpacity; }
++
++  void setPanelOpacity(float background, float card) noexcept {
++    g_backgroundOpacity = std::clamp(background, 0.0F, 1.0F);
++    g_cardOpacity = std::clamp(card, 0.0F, 1.0F);
++  }
++
+   bool buttonBordersEnabled() noexcept { return g_buttonBordersEnabled; }
+ 
+   void setButtonBordersEnabled(bool enabled) {
+diff --git a/lib/ui/style.h b/lib/ui/style.h
+index 16533a8..122dc18 100644
+--- a/lib/ui/style.h
++++ b/lib/ui/style.h
+@@ -112,6 +112,10 @@ namespace Style {
+   float effectiveScrollWheelStep() noexcept;
+   void setScrollWheelStep(float step) noexcept;
+ 
++  float cardOpacity() noexcept;
++  float backgroundOpacity() noexcept;
++  void setPanelOpacity(float background, float card) noexcept;
++
+   bool buttonBordersEnabled() noexcept;
+   void setButtonBordersEnabled(bool enabled);
+   Signal<>& buttonBordersChanged();
+diff --git a/src/app/application_services.cpp b/src/app/application_services.cpp
+index 6b2ef24..1730126 100644
+--- a/src/app/application_services.cpp
++++ b/src/app/application_services.cpp
+@@ -576,6 +576,14 @@ void Application::initStyleThemeAndWayland() {
+     Style::setPopupShadowsEnabled(m_configService.config().shell.popupShadows);
+     Style::setCardBordersEnabled(m_configService.config().shell.cardBorders);
+     Style::setCloseButtonsEnabled(m_configService.config().shell.showCloseButtons);
++    const auto& panelCfg = m_configService.config().shell.panel;
++    const float bgOpacity = panelCfg.backgroundOpacity.value_or(
++        detachedPanelBackgroundOpacityForTransparencyMode(panelCfg.transparencyMode)
++    );
++    const float cardOpacity = panelCfg.cardOpacity.value_or(
++        panelCardOpacityForTransparencyMode(panelCfg.transparencyMode, bgOpacity)
++    );
++    Style::setPanelOpacity(bgOpacity, cardOpacity);
+   };
+   auto applyPasswordMaskStyle = [this] {
+     const auto style = m_configService.config().shell.passwordMaskStyle == PasswordMaskStyle::RandomIcons
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index b0316e8..2e914a2 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -1151,6 +1151,8 @@ struct ShellConfig {
+ 
+   struct PanelConfig {
+     PanelTransparencyMode transparencyMode = PanelTransparencyMode::Solid;
++    std::optional<float> backgroundOpacity;
++    std::optional<float> cardOpacity;
+     bool borders = true; // outline on floating panel surfaces
+     ColorSpec borderColor = colorSpecFromRole(ColorRole::OutlineVariant);
+     float borderWidth = Style::borderWidth;
+diff --git a/src/config/schema/config_schema_shell.cpp b/src/config/schema/config_schema_shell.cpp
+index a185f5b..94d1b62 100644
+--- a/src/config/schema/config_schema_shell.cpp
++++ b/src/config/schema/config_schema_shell.cpp
+@@ -103,6 +103,8 @@ namespace noctalia::config::schema {
+     const Schema<ShellConfig::PanelConfig>& shellPanelSchema() {
+       static const Schema<ShellConfig::PanelConfig> s = {
+           enumField(&ShellConfig::PanelConfig::transparencyMode, "transparency_mode", kPanelTransparencyModes),
++          optionalFloatField(&ShellConfig::PanelConfig::backgroundOpacity, "background_opacity", kUnitRange),
++          optionalFloatField(&ShellConfig::PanelConfig::cardOpacity, "card_opacity", kUnitRange),
+           field(&ShellConfig::PanelConfig::borders, "borders"),
+           colorField(&ShellConfig::PanelConfig::borderColor, "border_color"),
+           field(&ShellConfig::PanelConfig::borderWidth, "border_width", kPanelBorderWidthRange),
+diff --git a/src/shell/control_center/tabs/audio_tab.cpp b/src/shell/control_center/tabs/audio_tab.cpp
+index f93864d..ec7f8a1 100644
+--- a/src/shell/control_center/tabs/audio_tab.cpp
++++ b/src/shell/control_center/tabs/audio_tab.cpp
+@@ -866,7 +866,7 @@ namespace {
+       setPadding(Style::spaceSm * scale, Style::spaceMd * scale);
+       setMinHeight(Style::controlHeightLg * scale);
+       setStyleRadius(Style::radiusMd, scale);
+-      setFill(colorSpecFromRole(ColorRole::Surface));
++      setFill(clearColorSpec());
+       clearBorder();
+ 
+       addChild(
+@@ -953,7 +953,7 @@ namespace {
+         return;
+       }
+ 
+-      setFill(colorSpecFromRole(ColorRole::Surface));
++      setFill(hovered() ? colorSpecFromRole(ColorRole::Hover, 0.20F) : clearColorSpec());
+       if (hovered()) {
+         setBorder(colorSpecFromRole(ColorRole::Primary), Style::borderWidth);
+       } else {
+@@ -992,7 +992,7 @@ namespace {
+       setPadding(Style::spaceSm * scale, Style::spaceMd * scale);
+       setMinHeight((Style::controlHeightLg + Style::spaceSm) * scale);
+       setStyleRadius(Style::radiusMd, scale);
+-      setFill(colorSpecFromRole(ColorRole::Surface));
++      setFill(clearColorSpec());
+       clearBorder();
+ 
+       constexpr float kIconSizeSm = 28.0F;
+@@ -1275,12 +1275,12 @@ namespace {
+       if (m_muteButton != nullptr) {
+         m_muteButton->setEnabled(nodeEnabled);
+         m_muteButton->setGlyph(m_muted ? "volume-mute" : "volume-high");
+-        m_muteButton->setVariant(m_muted ? ButtonVariant::Destructive : ButtonVariant::Default);
++        m_muteButton->setVariant(m_muted ? ButtonVariant::Destructive : ButtonVariant::Ghost);
+       }
+ 
+       if (m_routingButton != nullptr) {
+         m_routingButton->setEnabled(nodeEnabled);
+-        m_routingButton->setVariant(node.routePinned ? ButtonVariant::Outline : ButtonVariant::Ghost);
++        m_routingButton->setVariant(node.routePinned ? ButtonVariant::Primary : ButtonVariant::Ghost);
+       }
+ 
+       if (shouldSetSlider) {
+@@ -1428,7 +1428,7 @@ namespace {
+                 .configure =
+                     [scale](Flex& card) {
+                       card.setStyleRadius(Style::radiusMd, scale);
+-                      card.setFill(colorSpecFromRole(ColorRole::Surface));
++                      card.setFill(clearColorSpec());
+                       card.clearBorder();
+                     },
+             },
+@@ -1797,7 +1797,7 @@ std::unique_ptr<Flex> AudioTab::createDeviceVolumeCard(DeviceVolumeCardSpec card
+                   .out = &card.state.muteButton,
+                   .glyph = std::string(card.muteGlyph),
+                   .glyphSize = Style::fontSizeBody * scale,
+-                  .variant = ButtonVariant::Default,
++                  .variant = ButtonVariant::Ghost,
+                   .minWidth = Style::controlHeightSm * scale,
+                   .minHeight = Style::controlHeightSm * scale,
+                   .padding = Style::spaceXs * scale,
+@@ -2057,7 +2057,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
+     const bool outputMuted = sink != nullptr && sink->muted;
+     m_outputDeviceVolume.muteButton->setEnabled(sink != nullptr);
+     m_outputDeviceVolume.muteButton->setGlyph(outputMuted ? "volume-mute" : "volume-high");
+-    m_outputDeviceVolume.muteButton->setVariant(outputMuted ? ButtonVariant::Destructive : ButtonVariant::Default);
++    m_outputDeviceVolume.muteButton->setVariant(outputMuted ? ButtonVariant::Destructive : ButtonVariant::Ghost);
+   }
+ 
+   if (m_inputDeviceVolume.slider != nullptr) {
+@@ -2079,7 +2079,7 @@ void AudioTab::doUpdate(Renderer& renderer) {
+     const bool inputMuted = source != nullptr && source->muted;
+     m_inputDeviceVolume.muteButton->setEnabled(source != nullptr);
+     m_inputDeviceVolume.muteButton->setGlyph(inputMuted ? "microphone-mute" : "microphone");
+-    m_inputDeviceVolume.muteButton->setVariant(inputMuted ? ButtonVariant::Destructive : ButtonVariant::Default);
++    m_inputDeviceVolume.muteButton->setVariant(inputMuted ? ButtonVariant::Destructive : ButtonVariant::Ghost);
+   }
+ }
+ 
+diff --git a/src/shell/control_center/tabs/bluetooth_tab.cpp b/src/shell/control_center/tabs/bluetooth_tab.cpp
+index d982b77..da1540f 100644
+--- a/src/shell/control_center/tabs/bluetooth_tab.cpp
++++ b/src/shell/control_center/tabs/bluetooth_tab.cpp
+@@ -152,7 +152,7 @@ public:
+       : m_device(std::move(device)), m_service(service) {
+     setScale(scale);
+     setStyleRadius(Style::radiusMd, scale);
+-    setFill(colorSpecFromRole(ColorRole::Surface));
++    setFill(clearColorSpec());
+     clearBorder();
+ 
+     auto header = ui::row(
+diff --git a/src/shell/control_center/tabs/network_tab.cpp b/src/shell/control_center/tabs/network_tab.cpp
+index ab9c873..5b77d3f 100644
+--- a/src/shell/control_center/tabs/network_tab.cpp
++++ b/src/shell/control_center/tabs/network_tab.cpp
+@@ -200,7 +200,7 @@ namespace {
+         .align = FlexAlign::Center,
+         .paddingV = Style::spaceXs * 0.5F * scale,
+         .paddingH = Style::spaceSm * scale,
+-        .fill = colorSpecFromRole(ColorRole::SurfaceContainer),
++        .fill = clearColorSpec(),
+         .styleRadius = Style::radiusSm,
+         .styleRadiusScale = scale,
+     });
+@@ -249,7 +249,7 @@ public:
+     setPadding(Style::spaceSm * scale, Style::spaceMd * scale);
+     setMinHeight(kRowMinHeight * scale);
+     setStyleRadius(Style::radiusMd, scale);
+-    setFill(colorSpecFromRole(ColorRole::Surface));
++    setFill(clearColorSpec());
+     clearBorder();
+ 
+     addChild(
+@@ -379,7 +379,7 @@ private:
+         m_title->setColor(colorSpecFromRole(ColorRole::OnPrimary));
+       }
+     } else {
+-      setFill(colorSpecFromRole(ColorRole::Surface));
++      setFill(hov ? colorSpecFromRole(ColorRole::Hover, 0.20F) : clearColorSpec());
+       if (hov) {
+         setBorder(colorSpecFromRole(ColorRole::Hover), Style::borderWidth);
+       } else {
+@@ -515,7 +515,7 @@ namespace {
+         }
+         return;
+       }
+-      setFill(colorSpecFromRole(ColorRole::Surface));
++      setFill(hov ? colorSpecFromRole(ColorRole::Hover, 0.20F) : clearColorSpec());
+       if (hov) {
+         setBorder(colorSpecFromRole(ColorRole::Hover), Style::borderWidth);
+       } else {
+diff --git a/src/shell/dialogs/file_dialog_view.cpp b/src/shell/dialogs/file_dialog_view.cpp
+index 7ded613..03ae9d4 100644
+--- a/src/shell/dialogs/file_dialog_view.cpp
++++ b/src/shell/dialogs/file_dialog_view.cpp
+@@ -266,8 +266,8 @@ void FileDialogView::create() {
+       .gap = Style::spaceXs * scale,
+       .flexGrow = 1.0F,
+       .configure = [scale](Flex& card) {
+-        card.setFill(colorSpecFromRole(ColorRole::SurfaceContainer));
+-        card.setBorder(colorSpecFromRole(ColorRole::OutlineVariant), Style::borderWidth);
++        card.setFill(clearColorSpec());
++        card.clearBorder();
+         card.setStyleRadius(Style::radiusXl, scale);
+         card.setPadding(Style::cardPadding * scale);
+         card.setClipChildren(true);
+@@ -420,7 +420,6 @@ void FileDialogView::create() {
+           .overscanRows = kGridRowOverscan,
+           .itemCursorShape = WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER,
+           .scrollbarVisible = true,
+-          .scrollCardStyleScale = scale,
+           .adapter = m_gridAdapter.get(),
+           .flexGrow = 1.0F,
+           .onSelectionChanged = [this](std::optional<std::size_t>) { syncGridSelection(); },
+diff --git a/src/shell/dialogs/file_entry_tile.cpp b/src/shell/dialogs/file_entry_tile.cpp
+index d58fee0..2cb229f 100644
+--- a/src/shell/dialogs/file_entry_tile.cpp
++++ b/src/shell/dialogs/file_entry_tile.cpp
+@@ -53,6 +53,7 @@ FileEntryTile::FileEntryTile(float scale, ThumbnailService* thumbnails) : m_scal
+       .styleRadius = Style::radiusMd,
+       .styleRadiusScale = scale,
+       .cardStyleScale = scale,
++      .cardStyleFillOpacity = 0.25F,
+   });
+   m_preview = static_cast<Box*>(addChild(std::move(preview)));
+ 
+diff --git a/src/shell/panel/panel_surface_style.h b/src/shell/panel/panel_surface_style.h
+index 69d39b5..fd17e0c 100644
+--- a/src/shell/panel/panel_surface_style.h
++++ b/src/shell/panel/panel_surface_style.h
+@@ -41,6 +41,9 @@ namespace shell::panel_surface {
+   }
+ 
+   inline float backgroundOpacity(const ConfigService* configService) noexcept {
++    if (configService != nullptr && configService->config().shell.panel.backgroundOpacity.has_value()) {
++      return std::clamp(*configService->config().shell.panel.backgroundOpacity, 0.0F, 1.0F);
++    }
+     const auto mode =
+         configService != nullptr ? configService->config().shell.panel.transparencyMode : PanelTransparencyMode::Solid;
+     return detachedPanelBackgroundOpacityForTransparencyMode(mode);
+@@ -60,6 +63,9 @@ namespace shell::panel_surface {
+   }
+ 
+   inline float cardOpacity(const ConfigService* configService, float panelBackgroundOpacity) noexcept {
++    if (configService != nullptr && configService->config().shell.panel.cardOpacity.has_value()) {
++      return std::clamp(*configService->config().shell.panel.cardOpacity, 0.0F, 1.0F);
++    }
+     const auto mode =
+         configService != nullptr ? configService->config().shell.panel.transparencyMode : PanelTransparencyMode::Solid;
+     return panelCardOpacityForTransparencyMode(mode, panelBackgroundOpacity);
+diff --git a/src/shell/settings/settings_modal_host.cpp b/src/shell/settings/settings_modal_host.cpp
+index 6a3e457..85ad363 100644
+--- a/src/shell/settings/settings_modal_host.cpp
++++ b/src/shell/settings/settings_modal_host.cpp
+@@ -32,7 +32,7 @@ namespace settings {
+         auto dim = ui::box({
+             .out = &m_dim,
+             .configure = [](Box& box) {
+-              box.setFill(colorSpecFromRole(ColorRole::Shadow, 0.38F));
++              box.setFill(colorSpecFromRole(ColorRole::Shadow, 0.65F));
+               box.clearBorder();
+               box.setRadius(0.0F);
+             },
+diff --git a/src/shell/settings/settings_window_scene.cpp b/src/shell/settings/settings_window_scene.cpp
+index f191429..26e524d 100644
+--- a/src/shell/settings/settings_window_scene.cpp
++++ b/src/shell/settings/settings_window_scene.cpp
+@@ -2269,7 +2269,7 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
+     m_sceneRoot->setPopupContext(m_selectPopup.get());
+   }
+ 
+-  const float bgOpacity = cfg.shell.settingsWindowTranslucent ? 0.8F : 1.0F;
++  const float bgOpacity = cfg.shell.settingsWindowTranslucent ? 0.20F : 1.0F;
+ 
+   auto bg = ui::box({
+       .width = w,
+diff --git a/src/shell/tooltip/tooltip_manager.cpp b/src/shell/tooltip/tooltip_manager.cpp
+index d927620..304b964 100644
+--- a/src/shell/tooltip/tooltip_manager.cpp
++++ b/src/shell/tooltip/tooltip_manager.cpp
+@@ -693,12 +693,12 @@ void TooltipManager::buildScene(const TooltipContent& content, float w, float h,
+ 
+   m_sceneRoot->addChild(
+       ui::box({
+-          .fill = colorSpecFromRole(ColorRole::Surface),
++          .fill = colorSpecFromRole(ColorRole::Surface, 0.20F),
+           .styleRadius = Style::radiusMd,
+           .styleRadiusScale = 1.0F,
+           .width = w,
+           .height = h,
+-          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::OutlineVariant), kBorder); },
++          .configure = [](Box& box) { box.setBorder(colorSpecFromRole(ColorRole::OutlineVariant, 0.15F), kBorder); },
+       })
+   );
+ 
+diff --git a/src/shell/wallpaper/panel/wallpaper_tile.cpp b/src/shell/wallpaper/panel/wallpaper_tile.cpp
+index 7cb856a..d390691 100644
+--- a/src/shell/wallpaper/panel/wallpaper_tile.cpp
++++ b/src/shell/wallpaper/panel/wallpaper_tile.cpp
+@@ -638,7 +638,7 @@ void WallpaperTile::applyVisualState() {
+                                      : colorSpecFromRole(ColorRole::OutlineVariant);
+   ColorSpec labelColor =
+       m_current ? colorSpecFromRole(ColorRole::Secondary) : colorSpecFromRole(ColorRole::OnSurfaceVariant);
+-  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceContainer);
++  ColorSpec frameBg = colorSpecFromRole(ColorRole::SurfaceContainer, 0.25F);
+   m_label->setColor(labelColor);
+ 
+   m_thumbHost->setFill(frameBg);
+diff --git a/src/theme/theme_service.cpp b/src/theme/theme_service.cpp
+index 007a470..cbff444 100644
+--- a/src/theme/theme_service.cpp
++++ b/src/theme/theme_service.cpp
+@@ -91,9 +91,13 @@ namespace noctalia::theme {
+           .light = parsed.light,
+       };
+       const GeneratedPalette generated = expandBuiltinPalette(bp);
++      Palette pal = mapGeneratedPaletteMode(shellMode == "light" ? generated.light : generated.dark);
++      const auto& modeFixed = shellMode == "light" ? parsed.light : parsed.dark;
++      pal.outlineVariant = modeFixed.palette.outlineVariant;
++      pal.hover = modeFixed.palette.hover;
+       return {
+           .generated = generated,
+-          .palette = mapGeneratedPaletteMode(shellMode == "light" ? generated.light : generated.dark),
++          .palette = pal,
+           .mode = std::string(mode),
+           .shellMode = std::string(shellMode),
+       };
