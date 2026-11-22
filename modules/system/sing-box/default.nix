@@ -38,6 +38,39 @@ let
     patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/sing-box.patch ];
   });
 
+  sharedDnsServers = [
+    {
+      tag = "dns-v6-dot";
+      type = "tls";
+      server = dns-ipv6;
+      server_port = 853;
+      tls = {
+        enabled = true;
+        server_name = dns-tls-name;
+      };
+    }
+    {
+      tag = "dns-v4-dot";
+      type = "tls";
+      server = dns;
+      server_port = 853;
+      tls = {
+        enabled = true;
+        server_name = dns-tls-name;
+      };
+    }
+    {
+      tag = "dns-doh";
+      type = "https";
+      server = dns;
+      server_port = 443;
+      tls = {
+        enabled = true;
+        server_name = dns-tls-name;
+      };
+    }
+  ];
+
   # Shared sing-box config (upstream/SFA-compatible; no routing logic, domains, process rules, or host bridges)
   sing-box-shared-config = {
     log.level = "info";
@@ -60,7 +93,7 @@ let
     route = {
       auto_detect_interface = true;
       final = "proxy";
-      default_domain_resolver = "dns-v6-dot";
+      default_domain_resolver = "dns-local";
       rules = [
         { action = "sniff"; }
         {
@@ -73,36 +106,10 @@ let
     dns = {
       cache_capacity = 10000;
       final = "dns-v6-dot";
-      servers = [
+      servers = (map (s: s // { detour = "proxy"; }) sharedDnsServers) ++ [
         {
-          tag = "dns-v6-dot";
-          type = "tls";
-          server = dns-ipv6;
-          server_port = 853;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
-        }
-        {
-          tag = "dns-v4-dot";
-          type = "tls";
-          server = dns;
-          server_port = 853;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
-        }
-        {
-          tag = "dns-doh";
-          type = "https";
-          server = dns;
-          server_port = 443;
-          tls = {
-            enabled = true;
-            server_name = dns-tls-name;
-          };
+          tag = "dns-local";
+          type = "local";
         }
       ];
       rules = [
@@ -198,6 +205,7 @@ let
 
     route = sing-box-shared-config.route // {
       final = "final-toggle";
+      default_domain_resolver = "dns-v6-dot";
       rule_set = [
         {
           tag = "zen-rules";
@@ -382,6 +390,7 @@ let
 
     dns = sing-box-shared-config.dns // {
       neg_ttl = 1;
+      servers = sharedDnsServers;
       rules = [
         {
           type = "logical";
