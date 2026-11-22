@@ -25,7 +25,6 @@ let
     ".AyuGram-wrapped"
     ".Discord-wrapped"
     ".spotify-wrapped"
-    ".DiscordCanary-wrapped"
     "TeamSpeak"
     "electron"
     "prismlauncher"

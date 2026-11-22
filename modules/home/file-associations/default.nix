@@ -519,7 +519,7 @@ in
         # -------------------------------------------------------------------
         # Messaging (Discord)
         # -------------------------------------------------------------------
-        "x-scheme-handler/discord" = "com.discordapp.DiscordCanary.desktop";
+        "x-scheme-handler/discord" = "com.discordapp.Discord.desktop";
 
         # -------------------------------------------------------------------
         # Email (Thunderbird)

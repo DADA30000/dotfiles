@@ -189,8 +189,8 @@ let
     );
   };
 
-  discordCanarySandbox = mkSandbox rec {
-    appId = "com.discordapp.DiscordCanary";
+  discordSandbox = mkSandbox rec {
+    appId = "com.discordapp.Discord";
     network = "singbox";
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
@@ -207,10 +207,10 @@ let
         };
       };
     additional_outside_commands = ''
-      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/discordcanary" "$XDG_CONFIG_HOME/discordcanary"
+      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/discord" "$XDG_CONFIG_HOME/discord"
       ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
     '';
-    package = pkgs.discord-canary.override {
+    package = pkgs.discord.override {
       withVencord = true;
     };
   };
@@ -1410,7 +1410,7 @@ in
       romSandbox
       sounduxSandbox
       prismLauncherSandbox
-      discordCanarySandbox
+      discordSandbox
       vesktopSandbox
       ayugramDesktopSandbox
       enteAuthSandbox

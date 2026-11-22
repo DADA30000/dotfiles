@@ -35,19 +35,8 @@ let
   processes_to_proxy =
     if (args ? osConfig) && (args.osConfig ? sing-box.processes_to_proxy) then
       args.osConfig.sing-box.processes_to_proxy
-    else if config ? sing-box.processes_to_proxy then
-      config.sing-box.processes_to_proxy
     else
-      [
-        "Battle.net.exe"
-        ".AyuGram-wrapped"
-        ".Discord-wrapped"
-        ".spotify-wrapped"
-        ".DiscordCanary-wrapped"
-        "TeamSpeak"
-        "electron"
-        "prismlauncher"
-      ];
+      config.sing-box.processes_to_proxy;
 
   sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
     log.level = "info";
@@ -166,30 +155,27 @@ let
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
   };
 
-  syscallsJson =
-    pkgs.runCommand "sb-syscalls.json"
-      { nativeBuildInputs = [ pkgs.python3 ]; }
-      ''
-        python3 - "${pkgs.linuxHeaders}/include/asm/unistd_64.h" "${pkgs.linuxHeaders}/include/asm/unistd_32.h" "$out" << 'EOF'
-        import json, re, sys
+  syscallsJson = pkgs.runCommand "sb-syscalls.json" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    python3 - "${pkgs.linuxHeaders}/include/asm/unistd_64.h" "${pkgs.linuxHeaders}/include/asm/unistd_32.h" "$out" << 'EOF'
+    import json, re, sys
 
-        def parse_header(path):
-            res = {}
-            with open(path, "r") as f:
-                for line in f:
-                    m = re.match(r"^\s*#define\s+__NR_([a-zA-Z0-9_]+)\s+(\d+)\s*$", line)
-                    if m:
-                        res[m.group(1)] = int(m.group(2))
-            return res
+    def parse_header(path):
+        res = {}
+        with open(path, "r") as f:
+            for line in f:
+                m = re.match(r"^\s*#define\s+__NR_([a-zA-Z0-9_]+)\s+(\d+)\s*$", line)
+                if m:
+                    res[m.group(1)] = int(m.group(2))
+        return res
 
-        data = {
-            "x86_64": parse_header(sys.argv[1]),
-            "i386": parse_header(sys.argv[2]),
-        }
-        with open(sys.argv[3], "w") as out:
-            json.dump(data, out, sort_keys=True)
-        EOF
-      '';
+    data = {
+        "x86_64": parse_header(sys.argv[1]),
+        "i386": parse_header(sys.argv[2]),
+    }
+    with open(sys.argv[3], "w") as out:
+        json.dump(data, out, sort_keys=True)
+    EOF
+  '';
 
   sbRunConfigData = {
     defaults = {

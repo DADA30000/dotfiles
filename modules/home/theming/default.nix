@@ -102,7 +102,7 @@ let
   };
   # https://github.com/Vencord/Vesktop/blob/main/src/shared/settings.d.ts
   vesktop_settings = (pkgs.formats.json { }).generate "settings.json" {
-    discordBranch = "canary";
+    discordBranch = "stable";
     minimizeToTray = true;
     arRPC = true;
     splashColor = "rgb(255, 255, 255)";
