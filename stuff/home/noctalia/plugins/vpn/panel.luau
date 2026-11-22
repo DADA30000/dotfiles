@@ -1,4 +1,5 @@
 local API_BASE = "http://127.0.0.1:9090"
+local MAX_CONCURRENT_PINGS = 4
 
 local activeProxy = ""
 local finalMode = "direct"
@@ -8,6 +9,12 @@ local hoveredNode = nil
 local testing = false
 local isOpen = false
 local fetchGen = 0
+local pingGen = 0
+
+local function openCredstoreFile(filename)
+  noctalia.runAsync({ "app2unit", "--", "kitty", "run0edit", "/etc/credstore/" .. filename })
+  panel.close()
+end
 
 local function cardFill()
   local op = noctalia.getSetting("shell.panel.card_opacity")
@@ -34,6 +41,44 @@ local function render()
     local delay = delays[name]
     local delayText = (delay and delay > 0) and (tostring(delay) .. " ms") or "--"
     local nodeName = name
+    local rowChildren = {
+      ui.glyph({
+        name = act and "shield-check" or "shield-lock",
+        size = 16,
+        color = fgColor,
+      }),
+      ui.label({
+        text = nodeName,
+        fontSize = 14,
+        fontWeight = act and "bold" or "normal",
+        color = fgColor,
+        flexGrow = 1,
+        maxLines = 1,
+      }),
+    }
+    if nodeName == "fptn" then
+      table.insert(
+        rowChildren,
+        ui.button({
+          text = "fptn.env",
+          fontSize = 12,
+          variant = "default",
+          controlSize = "sm",
+          onClick = function()
+            openCredstoreFile("fptn.env")
+          end,
+        })
+      )
+    end
+    table.insert(
+      rowChildren,
+      ui.label({
+        text = delayText,
+        fontSize = 13,
+        fontWeight = "medium",
+        color = delayColor,
+      })
+    )
 
     table.insert(
       nodeRows,
@@ -61,27 +106,7 @@ local function render()
             render()
           end
         end,
-      }, {
-        ui.glyph({
-          name = act and "shield-check" or "shield-lock",
-          size = 16,
-          color = fgColor,
-        }),
-        ui.label({
-          text = nodeName,
-          fontSize = 14,
-          fontWeight = act and "bold" or "normal",
-          color = fgColor,
-          flexGrow = 1,
-          maxLines = 1,
-        }),
-        ui.label({
-          text = delayText,
-          fontSize = 13,
-          fontWeight = "medium",
-          color = delayColor,
-        }),
-      })
+      }, rowChildren)
     )
   end
 
@@ -135,7 +160,23 @@ local function render()
     radius = 12,
   }, {
     ui.column({ align = "stretch", gap = 8 }, nodeRows),
-    ui.row({ align = "center", justify = "end" }, {
+    ui.row({ align = "center", justify = "end", gap = 8 }, {
+      ui.button({
+        text = "config.sh",
+        variant = "default",
+        controlSize = "sm",
+        onClick = function()
+          openCredstoreFile("config.sh")
+        end,
+      }),
+      ui.button({
+        text = "config.json",
+        variant = "default",
+        controlSize = "sm",
+        onClick = function()
+          openCredstoreFile("config.json")
+        end,
+      }),
       ui.button({
         text = testing and "Тестирование..." or "Пинг",
         variant = "default",
@@ -246,29 +287,60 @@ function testAllLatencies()
     return
   end
   testing = true
+  pingGen = pingGen + 1
+  local gen = pingGen
   render()
 
-  local pending = #nodes
+  local queue = {}
   for _, name in ipairs(nodes) do
-    local nodeName = name
-    local encoded = noctalia.string.urlEncode(nodeName)
-    local url = API_BASE .. "/proxies/" .. encoded .. "/delay?timeout=2500&url=http://www.gstatic.com/generate_204"
-    noctalia.http({ url = url, method = "GET" }, function(res)
-      local d = -1
-      if res and res.ok and res.body then
-        local parsed = noctalia.json.decode(res.body)
-        if type(parsed) == "table" and type(parsed.delay) == "number" then
-          d = math.floor(parsed.delay)
-        end
-      end
-      delays[nodeName] = d
-      pending = pending - 1
-      if pending <= 0 then
-        testing = false
-      end
-      render()
-    end)
+    table.insert(queue, name)
   end
+  local nextIdx = 1
+  local inFlight = 0
+
+  local function finishIfDone()
+    if gen == pingGen and inFlight == 0 and nextIdx > #queue then
+      testing = false
+      render()
+    end
+  end
+
+  local function pump()
+    if gen ~= pingGen then
+      return
+    end
+    while inFlight < MAX_CONCURRENT_PINGS and nextIdx <= #queue do
+      local nodeName = queue[nextIdx]
+      nextIdx = nextIdx + 1
+      inFlight = inFlight + 1
+      local encoded = noctalia.string.urlEncode(nodeName)
+      local url = API_BASE .. "/proxies/" .. encoded .. "/delay?timeout=2500&url=http://www.gstatic.com/generate_204"
+      local ok = noctalia.http({ url = url, method = "GET" }, function(res)
+        if gen ~= pingGen then
+          return
+        end
+        local d = -1
+        if res and res.ok and res.body then
+          local parsed = noctalia.json.decode(res.body)
+          if type(parsed) == "table" and type(parsed.delay) == "number" then
+            d = math.floor(parsed.delay)
+          end
+        end
+        delays[nodeName] = d
+        inFlight = inFlight - 1
+        render()
+        pump()
+        finishIfDone()
+      end)
+      if not ok then
+        delays[nodeName] = -1
+        inFlight = inFlight - 1
+      end
+    end
+    finishIfDone()
+  end
+
+  pump()
 end
 
 function onOpen()
