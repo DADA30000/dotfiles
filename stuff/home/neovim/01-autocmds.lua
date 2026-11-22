@@ -43,9 +43,41 @@ vim.api.nvim_create_autocmd("TermClose", {
 		end
 		if vim.v.event.status == 0 then
 			vim.schedule(function()
-				if vim.api.nvim_buf_is_valid(ev.buf) then
-					pcall(vim.api.nvim_buf_delete, ev.buf, { force = true })
+				if not vim.api.nvim_buf_is_valid(ev.buf) then
+					return
 				end
+
+				local has_other_normal_win = false
+				for _, win in ipairs(vim.api.nvim_list_wins()) do
+					if vim.api.nvim_win_is_valid(win) then
+						local cfg = vim.api.nvim_win_get_config(win)
+						if (not cfg or cfg.relative == "") and vim.api.nvim_win_get_buf(win) ~= ev.buf then
+							has_other_normal_win = true
+							break
+						end
+					end
+				end
+
+				if not has_other_normal_win then
+					local has_modified_buf = false
+					for _, b in ipairs(vim.api.nvim_list_bufs()) do
+						if
+							b ~= ev.buf
+							and vim.api.nvim_buf_is_valid(b)
+							and vim.api.nvim_buf_is_loaded(b)
+							and vim.bo[b].modified
+						then
+							has_modified_buf = true
+							break
+						end
+					end
+					if not has_modified_buf then
+						pcall(vim.cmd, "qa!")
+						return
+					end
+				end
+
+				pcall(vim.api.nvim_buf_delete, ev.buf, { force = true })
 			end)
 		end
 	end,

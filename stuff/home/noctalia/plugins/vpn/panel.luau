@@ -12,7 +12,7 @@ local fetchGen = 0
 local pingGen = 0
 
 local function openCredstoreFile(filename)
-  noctalia.runAsync({ "app2unit", "--", "kitty", "run0edit", "/etc/credstore/" .. filename })
+  noctalia.runAsync({ "app2unit-term", "--", "run0edit", "/etc/credstore/" .. filename })
   panel.close()
 end
 
