@@ -1,5 +1,5 @@
 diff --git a/internal/gemini/client.go b/internal/gemini/client.go
-index 7fb851d..4061a0e 100644
+index 93f5a11..f318fc2 100644
 --- a/internal/gemini/client.go
 +++ b/internal/gemini/client.go
 @@ -214,8 +214,103 @@ const GuestID = "guest"
@@ -17,106 +17,106 @@ index 7fb851d..4061a0e 100644
 +// splitLongPrompt 把超过 MaxPromptLength 的提示词拆分为多个 <= 350 KiB 的 text/plain 附件前缀 + 保留在内联输入框的尾部，
 +// 并为每个分片加上明确的起止与完整结束标记，便于模型检测是否发生截断。
 +func splitLongPrompt(prompt string) (string, []FileData) {
-+    totalBytes := len(prompt)
++	totalBytes := len(prompt)
 +
-+    splitIdx := totalBytes
-+    runes := 0
-+    for splitIdx > 0 && runes < inlinePromptTargetRunes {
-+        _, size := utf8.DecodeLastRuneInString(prompt[:splitIdx])
-+        splitIdx -= size
-+        runes++
-+    }
-+    if splitIdx > 0 && splitIdx < totalBytes {
-+        searchEnd := min(totalBytes, splitIdx+4096)
-+        if nl := strings.IndexByte(prompt[splitIdx:searchEnd], '\n'); nl >= 0 {
-+            splitIdx += nl + 1
-+        }
-+    }
++	splitIdx := totalBytes
++	runes := 0
++	for splitIdx > 0 && runes < inlinePromptTargetRunes {
++		_, size := utf8.DecodeLastRuneInString(prompt[:splitIdx])
++		splitIdx -= size
++		runes++
++	}
++	if splitIdx > 0 && splitIdx < totalBytes {
++		searchEnd := min(totalBytes, splitIdx+4096)
++		if nl := strings.IndexByte(prompt[splitIdx:searchEnd], '\n'); nl >= 0 {
++			splitIdx += nl + 1
++		}
++	}
 +
-+    prefix := prompt[:splitIdx]
-+    tail := prompt[splitIdx:]
++	prefix := prompt[:splitIdx]
++	tail := prompt[splitIdx:]
 +
-+    var rawChunks []string
-+    for start := 0; start < len(prefix); {
-+        end := min(len(prefix), start+maxAttachmentChunkBytes)
-+        if end < len(prefix) {
-+            for end > start && !utf8.RuneStart(prefix[end]) {
-+                end--
-+            }
-+            searchStart := max(start, end-4096)
-+            if nl := strings.LastIndexByte(prefix[searchStart:end], '\n'); nl >= 0 {
-+                end = searchStart + nl + 1
-+            }
-+            if end == start {
-+                _, size := utf8.DecodeRuneInString(prefix[start:])
-+                end = start + size
-+            }
-+        }
-+        rawChunks = append(rawChunks, prefix[start:end])
-+        start = end
-+    }
++	var rawChunks []string
++	for start := 0; start < len(prefix); {
++		end := min(len(prefix), start+maxAttachmentChunkBytes)
++		if end < len(prefix) {
++			for end > start && !utf8.RuneStart(prefix[end]) {
++				end--
++			}
++			searchStart := max(start, end-4096)
++			if nl := strings.LastIndexByte(prefix[searchStart:end], '\n'); nl >= 0 {
++				end = searchStart + nl + 1
++			}
++			if end == start {
++				_, size := utf8.DecodeRuneInString(prefix[start:])
++				end = start + size
++			}
++		}
++		rawChunks = append(rawChunks, prefix[start:end])
++		start = end
++	}
 +
-+    totalParts := len(rawChunks) + 1
-+    files := make([]FileData, 0, len(rawChunks))
-+    offset := 0
-+    for i, chunk := range rawChunks {
-+        partNum := i + 1
-+        startOff := offset
-+        endOff := offset + len(chunk)
-+        offset = endOff
++	totalParts := len(rawChunks) + 1
++	files := make([]FileData, 0, len(rawChunks))
++	offset := 0
++	for i, chunk := range rawChunks {
++		partNum := i + 1
++		startOff := offset
++		endOff := offset + len(chunk)
++		offset = endOff
 +
-+        var b strings.Builder
-+        b.Grow(len(chunk) + 128)
-+        fmt.Fprintf(&b, "=== BEGIN MESSAGE PART %d/%d (bytes %d..%d of %d) ===\n", partNum, totalParts, startOff, endOff, totalBytes)
-+        b.WriteString(chunk)
-+        if !strings.HasSuffix(chunk, "\n") {
-+            b.WriteByte('\n')
-+        }
-+        fmt.Fprintf(&b, "=== END MESSAGE PART %d/%d ===\n", partNum, totalParts)
++		var b strings.Builder
++		b.Grow(len(chunk) + 128)
++		fmt.Fprintf(&b, "=== BEGIN MESSAGE PART %d/%d (bytes %d..%d of %d) ===\n", partNum, totalParts, startOff, endOff, totalBytes)
++		b.WriteString(chunk)
++		if !strings.HasSuffix(chunk, "\n") {
++			b.WriteByte('\n')
++		}
++		fmt.Fprintf(&b, "=== END MESSAGE PART %d/%d ===\n", partNum, totalParts)
 +
-+        files = append(files, FileData{
-+            Data:     []byte(b.String()),
-+            FileName: fmt.Sprintf("message_part_%d_of_%d.txt", partNum, totalParts),
-+            MimeType: "text/plain",
-+        })
-+    }
++		files = append(files, FileData{
++			Data:     []byte(b.String()),
++			FileName: fmt.Sprintf("message_part_%d_of_%d.txt", partNum, totalParts),
++			MimeType: "text/plain",
++		})
++	}
 +
-+    partList := fmt.Sprintf("attached file message_part_1_of_%d.txt", totalParts)
-+    if len(rawChunks) > 1 {
-+        partList = fmt.Sprintf("attached files message_part_1_of_%d.txt through message_part_%d_of_%d.txt", totalParts, len(rawChunks), totalParts)
-+    }
++	partList := fmt.Sprintf("attached file message_part_1_of_%d.txt", totalParts)
++	if len(rawChunks) > 1 {
++		partList = fmt.Sprintf("attached files message_part_1_of_%d.txt through message_part_%d_of_%d.txt", totalParts, len(rawChunks), totalParts)
++	}
 +
-+    var inline strings.Builder
-+    inline.Grow(len(tail) + 1024)
-+    fmt.Fprintf(&inline,
-+        "The complete input for this turn (%d bytes) is split sequentially into %d parts: %s, followed by part %d/%d inline below. "+
-+            "Treat all %d parts concatenated in order as the complete user message and respond to it directly. "+
-+            "Every part is framed by \"=== BEGIN MESSAGE PART i/%d ... ===\" and \"=== END MESSAGE PART i/%d ===\", and the final part ends with \"=== END OF COMPLETE INPUT (%d/%d parts, %d bytes) ===\". "+
-+            "If any part's END marker or the final END OF COMPLETE INPUT marker is missing, the input was truncated—explicitly report which part(s) were truncated instead of guessing.\n\n",
-+        totalBytes, totalParts, partList, totalParts, totalParts,
-+        totalParts, totalParts, totalParts, totalParts, totalParts, totalBytes,
-+    )
-+    fmt.Fprintf(&inline, "=== BEGIN MESSAGE PART %d/%d (INLINE, bytes %d..%d of %d) ===\n", totalParts, totalParts, offset, totalBytes, totalBytes)
-+    inline.WriteString(tail)
-+    if !strings.HasSuffix(tail, "\n") {
-+        inline.WriteByte('\n')
-+    }
-+    fmt.Fprintf(&inline, "=== END MESSAGE PART %d/%d ===\n=== END OF COMPLETE INPUT (%d/%d parts, %d bytes) ===\n", totalParts, totalParts, totalParts, totalParts, totalBytes)
++	var inline strings.Builder
++	inline.Grow(len(tail) + 1024)
++	fmt.Fprintf(&inline,
++		"The complete input for this turn (%d bytes) is split sequentially into %d parts: %s, followed by part %d/%d inline below. "+
++			"Treat all %d parts concatenated in order as the complete user message and respond to it directly. "+
++			"Every part is framed by \"=== BEGIN MESSAGE PART i/%d ... ===\" and \"=== END MESSAGE PART i/%d ===\", and the final part ends with \"=== END OF COMPLETE INPUT (%d/%d parts, %d bytes) ===\". "+
++			"If any part's END marker or the final END OF COMPLETE INPUT marker is missing, the input was truncated—explicitly report which part(s) were truncated instead of guessing.\n\n",
++		totalBytes, totalParts, partList, totalParts, totalParts,
++		totalParts, totalParts, totalParts, totalParts, totalParts, totalBytes,
++	)
++	fmt.Fprintf(&inline, "=== BEGIN MESSAGE PART %d/%d (INLINE, bytes %d..%d of %d) ===\n", totalParts, totalParts, offset, totalBytes, totalBytes)
++	inline.WriteString(tail)
++	if !strings.HasSuffix(tail, "\n") {
++		inline.WriteByte('\n')
++	}
++	fmt.Fprintf(&inline, "=== END MESSAGE PART %d/%d ===\n=== END OF COMPLETE INPUT (%d/%d parts, %d bytes) ===\n", totalParts, totalParts, totalParts, totalParts, totalBytes)
 +
-+    return inline.String(), files
++	return inline.String(), files
 +}
  
  // ErrGuestAttachments 表示带附件的请求落到访客会话，官网访客页面的上传入口全部禁用
  var ErrGuestAttachments = &ProtocolError{HTTPStatus: 503, Message: "访客会话不能上传附件，需要可用的登录账号"}
 @@ -437,8 +532,9 @@ func (c *Client) stream(ctx context.Context, request GenerateRequest, emit func(
-     }
-     request.Files = append([]FileData(nil), request.Files...)
-     if utf8.RuneCountInString(request.Prompt) > MaxPromptLength {
--        request.Files = append(request.Files, FileData{Data: []byte(request.Prompt), FileName: "message.txt", MimeType: "text/plain"})
--        request.Prompt = LongPromptInstruction
-+        inlinePrompt, chunks := splitLongPrompt(request.Prompt)
-+        request.Files = append(request.Files, chunks...)
-+        request.Prompt = inlinePrompt
-     }
-     if c.guest && len(request.Files) > 0 {
-         return ErrGuestAttachments
+ 	}
+ 	request.Files = append([]FileData(nil), request.Files...)
+ 	if utf8.RuneCountInString(request.Prompt) > MaxPromptLength {
+-		request.Files = append(request.Files, FileData{Data: []byte(request.Prompt), FileName: "message.txt", MimeType: "text/plain"})
+-		request.Prompt = LongPromptInstruction
++		inlinePrompt, chunks := splitLongPrompt(request.Prompt)
++		request.Files = append(request.Files, chunks...)
++		request.Prompt = inlinePrompt
+ 	}
+ 	if c.guest && len(request.Files) > 0 {
+ 		return ErrGuestAttachments
