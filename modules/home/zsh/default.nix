@@ -135,10 +135,15 @@ in
             local -a targets=()
             local expr=""
             local is_pkgs=0
+            local is_eval=0
             local quiet=0
 
             while (( $# > 0 )); do
               case "$1" in
+                --eval|-e)
+                  is_eval=1
+                  shift
+                  ;;
                 --pkgs|-p)
                   is_pkgs=1
                   shift
@@ -172,10 +177,29 @@ in
             fi
 
             local flake_content=""
-            local cache_base="$XDG_RUNTIME_DIR/ns-flakes"
+            local cache_base="''${XDG_RUNTIME_DIR:-/tmp}/ns-flakes"
             mkdir -p "$cache_base"
 
-            if (( is_pkgs == 1 )); then
+            if (( is_eval == 1 )); then
+              local items=""
+              if (( is_pkgs == 1 )); then
+                items="''${(F)pkgs_args}"
+              else
+                items="$expr"
+              fi
+              flake_content="{
+  outputs = { self }:
+    let
+      pkgs = $NIX_FLAKE_PREAMBLE;
+      toStr = x: if builtins.isString x then x else if builtins.isAttrs x && x ? outPath then x.outPath else builtins.toJSON x;
+    in
+    with pkgs; {
+      default = builtins.concatStringsSep \"\n\" (map toStr [
+        $items
+      ]);
+    };
+}"
+            elif (( is_pkgs == 1 )); then
               local -a assigns=()
               local i=1
               for p in "''${pkgs_args[@]}"; do
@@ -183,23 +207,23 @@ in
                 (( i++ ))
               done
               flake_content="{
-            outputs = { self }:
-              let
-                pkgs = $NIX_FLAKE_PREAMBLE;
-              in
-              with pkgs; {
-          ''${(F)assigns}
-              };
-          }"
-                      else
-                        flake_content="{
-            outputs = { self }:
-              let
-                pkgs = $NIX_FLAKE_PREAMBLE;
-              in {
-                default = with pkgs; $expr;
-              };
-          }"
+  outputs = { self }:
+    let
+      pkgs = $NIX_FLAKE_PREAMBLE;
+    in
+    with pkgs; {
+''${(F)assigns}
+    };
+}"
+            else
+              flake_content="{
+  outputs = { self }:
+    let
+      pkgs = $NIX_FLAKE_PREAMBLE;
+    in {
+      default = with pkgs; $expr;
+    };
+}"
             fi
 
             local hash
@@ -210,23 +234,31 @@ in
               print -rn -- "$flake_content" > "$flake_dir/flake.nix"
             fi
 
-            if (( is_pkgs == 1 )); then
+            if (( is_eval == 1 || is_pkgs == 0 )); then
+              targets=("path:$flake_dir#default")
+            else
               local i=1
               for p in "''${pkgs_args[@]}"; do
                 targets+=("path:$flake_dir#pkg$i")
                 (( i++ ))
               done
-            else
-              targets+=("path:$flake_dir#default")
             fi
 
             local EVAL_START EVAL_END EVAL_MS EVAL_TIME
             EVAL_START=$(date +%s%N)
 
             local -a res
-            res=(''${(f)"$(nix path-info "''${flags[@]}" --no-use-registries --no-write-lock-file "''${targets[@]}")"})
-            local ret=$?
-            (( ret == 0 )) || return $ret
+            if (( is_eval == 1 )); then
+              local out_val
+              out_val="$(nix eval --raw "''${flags[@]}" --no-use-registries --no-write-lock-file "''${targets[1]}")"
+              local ret=$?
+              (( ret == 0 )) || return $ret
+              res=(''${(f)out_val})
+            else
+              res=(''${(f)"$(nix path-info "''${flags[@]}" --no-use-registries --no-write-lock-file "''${targets[@]}")"})
+              local ret=$?
+              (( ret == 0 )) || return $ret
+            fi
 
             EVAL_END=$(date +%s%N)
             EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
@@ -238,7 +270,9 @@ in
 
             if (( quiet == 0 )); then
               local label="Derivation:"
-              if [[ "''${flags[*]}" != *--derivation* ]]; then
+              if (( is_eval == 1 )); then
+                label="Value:"
+              elif [[ "''${flags[*]}" != *--derivation* ]]; then
                 (( ''${#res[@]} > 1 )) && label="Paths:" || label="Path:"
               else
                 (( ''${#res[@]} > 1 )) && label="Derivations:" || label="Derivation:"
@@ -379,7 +413,7 @@ in
           ns-eval () {
             _ns_parse_args "$@"
             local -a out_paths
-            out_paths=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}")"}) || return $?
+            out_paths=(''${(f)"$(_ns_eval_flake --eval --pkgs "''${pkgs[@]}" -- "''${flags[@]}")"}) || return $?
             (( ''${#out_paths[@]} > 0 )) || return 1
             local OUT_STR="''${(F)out_paths}"
             printf "%s" "$OUT_STR" | wl-copy
