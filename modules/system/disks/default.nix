@@ -114,7 +114,7 @@ in
 
   config = lib.mkIf cfg.enable {
 
-    nixpkgs.config.problems.handlers.zfs.broken = "warn";
+    nixpkgs.config.problems.handlers.zfs.broken = "ignore";
 
     warnings = lib.optional (zfsMajorMinor != packageZfsMajorMinor) ''
       OpenZFS minor version changed from ${zfsMajorMinor} to ${packageZfsMajorMinor} (${config.boot.zfs.package.version}).

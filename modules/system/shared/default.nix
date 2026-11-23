@@ -171,6 +171,9 @@ in
 
   nix = {
 
+    daemonCPUSchedPolicy = "idle";
+    daemonIOSchedClass = "idle";
+
     package = pkgs.nixVersions.latest;
 
     settings = {
@@ -420,6 +423,11 @@ in
     services = {
 
       NetworkManager-wait-online.enable = false;
+
+      nix-daemon.serviceConfig = {
+        IOSchedulingClass = "idle";
+        CPUSchedulingPolicy = "idle";
+      };
 
       greetd = {
         wantedBy = lib.mkForce [ "systemd-user-sessions.service" ];
