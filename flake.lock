@@ -1588,6 +1588,7 @@
         "rust-helpers": "rust-helpers",
         "sine": "sine",
         "sine-bootloader": "sine-bootloader",
+        "sing-box-extended": "sing-box-extended",
         "spicetify-nix": "spicetify-nix",
         "split-monitor-workspaces": "split-monitor-workspaces",
         "steam-app-id-list": "steam-app-id-list",
@@ -1688,6 +1689,23 @@
       "original": {
         "owner": "sineorg",
         "repo": "bootloader",
+        "type": "github"
+      }
+    },
+    "sing-box-extended": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792420459,
+        "narHash": "sha256-1xopWHom+RZLhjhScUpA3UFvS4DjJVaXc2zJcTnfcTQ=",
+        "owner": "shtorm-7",
+        "repo": "sing-box-extended",
+        "rev": "d9442d14b19ddd02605bf3ee893a171947038e19",
+        "type": "github"
+      },
+      "original": {
+        "owner": "shtorm-7",
+        "ref": "extended",
+        "repo": "sing-box-extended",
         "type": "github"
       }
     },

@@ -6,8 +6,7 @@ import sys
 # [--sfa]
 # 1. Base config (e.g. sing-box-config-file)
 # 2. Output config (e.g. /run/sing-box/config.json)
-# 3. JSON string of generated AWG outbounds (e.g. '[]')
-# 4+. Extra config file paths (e.g. sub_config.json, config.json)
+# 3+. Extra config file paths (e.g. sub_config.json, config.json)
 
 argv = sys.argv[1:]
 sfa_mode = False
@@ -21,8 +20,7 @@ if len(argv) < 2:
 
 base_config_path = argv[0]
 output_config_path = argv[1]
-awg_outbounds_str = argv[2] if len(argv) > 2 else "[]"
-extra_config_paths = argv[3:]
+extra_config_paths = argv[2:]
 
 # Load base config
 try:
@@ -34,19 +32,6 @@ except Exception as e:
         file=sys.stderr,
     )
     sys.exit(1)
-
-# Parse dynamic inputs safely
-try:
-    if awg_outbounds_str.strip():
-        awg_outbounds = json.loads(awg_outbounds_str)
-    else:
-        awg_outbounds = []
-except Exception as e:
-    print(
-        f"Warning: Failed to parse AWG outbounds JSON: {e}.",
-        file=sys.stderr,
-    )
-    awg_outbounds = []
 
 
 # Deep merge function
@@ -105,7 +90,7 @@ def adapt_for_sfa(extra_cfg):
                 continue
             ep = dict(ep)
             if ep.get("type") == "wireguard":
-                # SFA uses userspace WireGuard (no kernel wg0)
+                # SFA uses userspace WireGuard/AmneziaWG (no kernel wg0)
                 ep.pop("system", None)
                 ep.pop("name", None)
                 ep.pop("bind_interface", None)
@@ -151,13 +136,8 @@ for path in extra_config_paths:
             file=sys.stderr,
         )
 
-# Append AWG outbounds to outbounds list (skip host-only ones in SFA mode)
 if "outbounds" not in config or not isinstance(config["outbounds"], list):
     config["outbounds"] = []
-for item in awg_outbounds:
-    if sfa_mode and is_host_only_outbound(item):
-        continue
-    config["outbounds"].append(item)
 
 if sfa_mode:
     for inbound in config.get("inbounds", []):

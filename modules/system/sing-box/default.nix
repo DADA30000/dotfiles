@@ -34,9 +34,55 @@ let
     builtins.readFile ../../../stuff/system/sing-box/build-config.py
   );
 
-  patched-sing-box = pkgs.sing-box.overrideAttrs (prev: {
-    patches = (prev.patches or [ ]) ++ [ ../../../stuff/patches/sing-box.patch ];
-  });
+  patched-sing-box =
+    let
+      src = inputs.sing-box-extended;
+      version = "1.14.3-extended-${src.shortRev or "dirty"}";
+    in
+    pkgs.buildGoModule {
+      pname = "sing-box-extended";
+      inherit version src;
+      patches = [ ../../../stuff/patches/sing-box.patch ];
+      vendorHash = "sha256-r51H+rVlK6wR+bdtQSPUNJAOCr1/Oy3wUeYPOyw2bEU=";
+      overrideModAttrs = _: {
+        name = "sing-box-extended-go-modules-${
+          builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
+        }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+      };
+      subPackages = [ "cmd/sing-box" ];
+      env.CGO_ENABLED = 0;
+      tags = [
+        "with_gvisor"
+        "with_quic"
+        "with_dhcp"
+        "with_wireguard"
+        "with_utls"
+        "with_acme"
+        "with_clash_api"
+        "with_tailscale"
+        "with_masque"
+        "with_mtproxy"
+        "with_ccm"
+        "with_ocm"
+        "with_trusttunnel"
+        "with_call"
+        "with_sudoku"
+        "with_cloudflared"
+        "with_usbip"
+        "with_openvpn"
+        "with_openconnect"
+        "badlinkname"
+        "tfogo_checklinkname0"
+      ];
+      ldflags = [
+        "-s"
+        "-w"
+        "-X=github.com/sagernet/sing-box/constant.Version=${version}"
+        "-X=runtime.godebugDefault=multipathtcp=0,tlssha1=1"
+        "-checklinkname=0"
+      ];
+      doCheck = false;
+    };
 
   sharedDnsServers = [
     {

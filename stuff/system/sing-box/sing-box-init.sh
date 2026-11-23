@@ -27,7 +27,6 @@ echo "Assembling unified sing-box config..."
 python3 %{{{build-config-py}}} \
   "%{{{sing-box-config-file}}}" \
   "/run/sing-box/config.json" \
-  "[]" \
   "${EXTRA_CONFIGS[@]}"
 
 chmod 600 /run/sing-box/config.json
@@ -41,7 +40,6 @@ if [[ -n "$SUB_OUT" ]]; then
     --sfa \
     "%{{{sing-box-shared-config-file}}}" \
     "${SUB_OUT}.tmp" \
-    "[]" \
     "${EXTRA_CONFIGS[@]}"
   chown root:nginx "${SUB_OUT}.tmp" 2>/dev/null || true
   chmod 640 "${SUB_OUT}.tmp"

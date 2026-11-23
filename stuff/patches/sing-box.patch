@@ -179,7 +179,7 @@ diff -Naur a/route/rule/rule_headless.go b/route/rule/rule_headless.go
 diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_outbound_selected.go
 --- a/route/rule/rule_item_outbound_selected.go	1970-01-01 03:00:00.000000000 +0300
 +++ b/route/rule/rule_item_outbound_selected.go	2026-11-14 18:53:51.303558442 +0300
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,113 @@
 +package rule
 +
 +import (
@@ -249,28 +249,25 @@ diff -Naur a/route/rule/rule_item_outbound_selected.go b/route/rule/rule_item_ou
 +		if !isGroup {
 +			return false
 +		}
-+		var network string
-+		if metadata != nil {
-+			network = metadata.Network
-+		}
-+		selected := group.Selected(network)
-+		if selected == nil {
++		currentTag := group.Now()
++		if currentTag == "" {
 +			return false
 +		}
-+		currentTag := selected.Tag()
 +		realTag := currentTag
-+		detour := selected
-+		for {
-+			g, ok := detour.(adapter.OutboundGroup)
++		for depth := 0; depth < 16; depth++ {
++			nextOut, ok := r.outboundManager.Outbound(realTag)
 +			if !ok {
 +				break
 +			}
-+			next := g.Selected(network)
-+			if next == nil {
++			g, ok := nextOut.(adapter.OutboundGroup)
++			if !ok {
 +				break
 +			}
-+			realTag = next.Tag()
-+			detour = next
++			nextTag := g.Now()
++			if nextTag == "" || nextTag == realTag {
++				break
++			}
++			realTag = nextTag
 +		}
 +		matched := false
 +		regexList := r.regexes[groupTag]

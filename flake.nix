@@ -45,6 +45,10 @@
       url = "github:Flowseal/zapret-discord-youtube";
       flake = false;
     };
+    sing-box-extended = {
+      url = "github:shtorm-7/sing-box-extended/extended";
+      flake = false;
+    };
     fptn-src = {
       url = "github:fptn-project/fptn";
       flake = false;

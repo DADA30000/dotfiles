@@ -1,15 +1,10 @@
 {
   "outbounds": [
     {
-      "tag": "proxy-awg",
-      "type": "direct",
-      "bind_interface": "awg0"
-    },
-    {
       "tag": "proxy2",
       "type": "vless",
-      "server": "ip.address.here",
-      "server_port": 80115353,
+      "server": "198.51.100.10",
+      "server_port": 443,
       "flow": "xtls-rprx-vision",
       "uuid": "uuidgen",
       "tls": {
@@ -29,16 +24,16 @@
   ],
   "endpoints": [
     {
-      "system": true,
-      "name": "wg0",
-      "address": "ip.address.here like 10.8.0.0/32",
-      "private_key": "smthsmthhere=",
       "type": "wireguard",
-      "tag": "proxy-server",
+      "tag": "proxy-awg",
+      "address": [
+        "10.8.0.2/32"
+      ],
+      "private_key": "smthsmthhere=",
       "peers": [
         {
-          "address": "ip.address.here",
-          "port": 80115353,
+          "address": "198.51.100.20",
+          "port": 51820,
           "public_key": "smthsmthhere=",
           "pre_shared_key": "smthsmthhere=",
           "allowed_ips": [
@@ -46,7 +41,18 @@
             "::/0"
           ]
         }
-      ]
+      ],
+      "amnezia": {
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 0,
+        "s2": 0,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4
+      }
     }
   ]
 }
