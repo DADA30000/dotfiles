@@ -188,17 +188,17 @@ in
                 items="$expr"
               fi
               flake_content="{
-  outputs = { self }:
-    let
-      pkgs = $NIX_FLAKE_PREAMBLE;
-      toStr = x: if builtins.isString x then x else if builtins.isAttrs x && x ? outPath then x.outPath else builtins.toJSON x;
-    in
-    with pkgs; {
-      default = builtins.concatStringsSep \"\n\" (map toStr [
-        $items
-      ]);
-    };
-}"
+                outputs = { self }:
+                  let
+                    pkgs = $NIX_FLAKE_PREAMBLE;
+                    toStr = x: if builtins.isString x then x else if builtins.isAttrs x && x ? outPath then x.outPath else builtins.toJSON x;
+                  in
+                  with pkgs; {
+                    default = builtins.concatStringsSep \"\n\" (map toStr [
+                      $items
+                    ]);
+                  };
+              }"
             elif (( is_pkgs == 1 )); then
               local -a assigns=()
               local i=1
@@ -207,23 +207,23 @@ in
                 (( i++ ))
               done
               flake_content="{
-  outputs = { self }:
-    let
-      pkgs = $NIX_FLAKE_PREAMBLE;
-    in
-    with pkgs; {
-''${(F)assigns}
-    };
-}"
+                outputs = { self }:
+                  let
+                    pkgs = $NIX_FLAKE_PREAMBLE;
+                  in
+                  with pkgs; {
+              ''${(F)assigns}
+                  };
+              }"
             else
               flake_content="{
-  outputs = { self }:
-    let
-      pkgs = $NIX_FLAKE_PREAMBLE;
-    in {
-      default = with pkgs; $expr;
-    };
-}"
+                outputs = { self }:
+                  let
+                    pkgs = $NIX_FLAKE_PREAMBLE;
+                  in {
+                    default = with pkgs; $expr;
+                  };
+              }"
             fi
 
             local hash
