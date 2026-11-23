@@ -127,6 +127,128 @@ in
             fi
           }
 
+          # General helper to evaluate expressions / package lists via a cached flake in RAM
+          _ns_eval_flake() {
+            setopt localoptions localtraps
+            local -a flags=()
+            local -a pkgs_args=()
+            local -a targets=()
+            local expr=""
+            local is_pkgs=0
+            local quiet=0
+
+            while (( $# > 0 )); do
+              case "$1" in
+                --pkgs|-p)
+                  is_pkgs=1
+                  shift
+                  while (( $# > 0 )); do
+                    if [[ "$1" == "--" ]]; then
+                      shift
+                      break
+                    fi
+                    pkgs_args+=("$1")
+                    shift
+                  done
+                  ;;
+                -q|--quiet)
+                  quiet=1
+                  shift
+                  ;;
+                *)
+                  if [[ -z "$expr" && $is_pkgs -eq 0 && "$1" != -* ]]; then
+                    expr="$1"
+                    shift
+                  else
+                    flags+=("$1")
+                    shift
+                  fi
+                  ;;
+              esac
+            done
+
+            if (( is_pkgs == 1 && ''${#pkgs_args[@]} == 0 )); then
+              return 0
+            fi
+
+            local flake_content=""
+            local cache_base="''${XDG_RUNTIME_DIR:-/tmp}/ns-flakes"
+            mkdir -p "$cache_base"
+
+            if (( is_pkgs == 1 )); then
+              local -a assigns=()
+              local i=1
+              for p in "''${pkgs_args[@]}"; do
+                assigns+=("      pkg$i = $p;")
+                (( i++ ))
+              done
+              flake_content="{
+            outputs = { self }:
+              let
+                pkgs = $NIX_FLAKE_PREAMBLE;
+              in
+              with pkgs; {
+          ''${(F)assigns}
+              };
+          }"
+                      else
+                        flake_content="{
+            outputs = { self }:
+              let
+                pkgs = $NIX_FLAKE_PREAMBLE;
+              in {
+                default = with pkgs; $expr;
+              };
+          }"
+            fi
+
+            local hash
+            hash=$(print -rn -- "$flake_content" | sha256sum | cut -d" " -f1)
+            local flake_dir="$cache_base/$hash"
+            if [[ ! -f "$flake_dir/flake.nix" ]]; then
+              mkdir -p "$flake_dir"
+              print -rn -- "$flake_content" > "$flake_dir/flake.nix"
+            fi
+
+            if (( is_pkgs == 1 )); then
+              local i=1
+              for p in "''${pkgs_args[@]}"; do
+                targets+=("path:$flake_dir#pkg$i")
+                (( i++ ))
+              done
+            else
+              targets+=("path:$flake_dir#default")
+            fi
+
+            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
+            EVAL_START=$(date +%s%N)
+
+            local -a res
+            res=(''${(f)"$(nix path-info "''${flags[@]}" --no-use-registries --no-write-lock-file "''${targets[@]}")"})
+            local ret=$?
+            (( ret == 0 )) || return $ret
+
+            EVAL_END=$(date +%s%N)
+            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
+            if (( EVAL_MS < 1000 )); then
+              EVAL_TIME="''${EVAL_MS}ms"
+            else
+              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+            fi
+
+            if (( quiet == 0 )); then
+              local label="Derivation:"
+              if [[ "''${flags[*]}" != *--derivation* ]]; then
+                (( ''${#res[@]} > 1 )) && label="Paths:" || label="Path:"
+              else
+                (( ''${#res[@]} > 1 )) && label="Derivations:" || label="Derivation:"
+              fi
+              echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. $label\e[0m ''${res[*]}" >&2
+            fi
+
+            printf '%s\n' "''${res[@]}"
+          }
+
           # Internal replacement for nix develop (evaluates .drv first, then realizes with rom)
           _nix-develop() {
             local has_help=0
@@ -142,36 +264,50 @@ in
               return 0
             fi
 
+            local expr=""
+            local DRV=""
             local -a eval_args=()
             local -a build_flags=()
             while (( $# > 0 )); do
               case "$1" in
-                --expr|-E|--file|-f)
+                --expr|-E)
+                  expr="$2"
+                  shift 2
+                  ;;
+                --file|-f)
                   eval_args+=("$1" "$2")
                   shift 2
                   ;;
                 *)
-                  eval_args+=("$1")
-                  build_flags+=("$1")
-                  shift 1
+                  if [[ "$1" == *.drv* ]]; then
+                    DRV="$1"
+                    shift 1
+                  else
+                    eval_args+=("$1")
+                    build_flags+=("$1")
+                    shift 1
+                  fi
                   ;;
               esac
             done
 
-            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
-            EVAL_START=$(date +%s%N)
-
-            local DRV
-            DRV="$(nix path-info --derivation "''${eval_args[@]}")" || return $?
-
-            EVAL_END=$(date +%s%N)
-            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
-            if (( EVAL_MS < 1000 )); then
-              EVAL_TIME="''${EVAL_MS}ms"
-            else
-              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+            if [[ -z "$DRV" ]]; then
+              if [[ -n "$expr" ]]; then
+                DRV="$(_ns_eval_flake "$expr" "''${build_flags[@]}" --derivation)" || return $?
+              else
+                local EVAL_START EVAL_END EVAL_MS EVAL_TIME
+                EVAL_START=$(date +%s%N)
+                DRV="$(nix path-info --derivation "''${eval_args[@]}")" || return $?
+                EVAL_END=$(date +%s%N)
+                EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
+                if (( EVAL_MS < 1000 )); then
+                  EVAL_TIME="''${EVAL_MS}ms"
+                else
+                  EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
+                fi
+                echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivation:\e[0m $DRV" >&2
+              fi
             fi
-            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivation:\e[0m $DRV" >&2
 
             local env_file
             env_file=$(mktemp /tmp/nix-shell-env.XXXXXX)
@@ -188,7 +324,7 @@ in
 
           ns-dev () {
             _ns_parse_args "$@"
-            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+            _nix-develop "''${flags[@]}" --expr "mkShell rec { 
               buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
               name = builtins.substring 0 100 \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
               shellHook = '''
@@ -200,7 +336,7 @@ in
 
           ns-build-env () {
             _ns_parse_args "$@"
-            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; ''${pkgs[*]}"
+            _nix-develop "''${flags[@]}" --expr "''${pkgs[*]}"
           }
 
           ns-py () {
@@ -211,7 +347,7 @@ in
 
             pkgs_new+=("(python3.withPackages (ps: [ ''${py_pkgs[*]} ]))")
 
-            _nix-develop "''${flags[@]}" --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; mkShell rec { 
+            _nix-develop "''${flags[@]}" --expr "mkShell rec { 
               buildInputs = let p = [ ''${pkgs_new[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
               name = \"ns_py_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 1) buildInputs))}\";
               shellHook = '''
@@ -223,41 +359,17 @@ in
 
           ns-old () { 
             _ns_parse_args "$@"
-            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
-            EVAL_START=$(date +%s%N)
-
             local -a drvs
-            drvs=(''${(f)"$(nix path-info "''${flags[@]}" --derivation --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]")"}) || return $?
-
-            EVAL_END=$(date +%s%N)
-            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
-            if (( EVAL_MS < 1000 )); then
-              EVAL_TIME="''${EVAL_MS}ms"
-            else
-              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
-            fi
-            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivations:\e[0m ''${drvs[*]}" >&2
-
+            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}" --derivation)"}) || return $?
+            (( ''${#drvs[@]} > 0 )) || return 1
             nix shell "''${flags[@]}" "''${drvs[@]/%/^*}"
           }
 
           ns-build () {
             _ns_parse_args "$@" 
-            local EVAL_START EVAL_END EVAL_MS EVAL_TIME
-            EVAL_START=$(date +%s%N)
-
             local -a drvs
-            drvs=(''${(f)"$(nix path-info "''${flags[@]}" --derivation --no-use-registries --expr "with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ]")"}) || return $?
-
-            EVAL_END=$(date +%s%N)
-            EVAL_MS=$(( (EVAL_END - EVAL_START) / 1000000 ))
-            if (( EVAL_MS < 1000 )); then
-              EVAL_TIME="''${EVAL_MS}ms"
-            else
-              EVAL_TIME="$(printf "%d.%02ds" "$(( EVAL_MS / 1000 ))" "$(( (EVAL_MS % 1000) / 10 ))")"
-            fi
-            echo -e "\e[1;32m==>\e[0m \e[1mEvaluation finished in $EVAL_TIME. Derivations:\e[0m ''${drvs[*]}" >&2
-
+            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}" --derivation)"}) || return $?
+            (( ''${#drvs[@]} > 0 )) || return 1
             local OUT_PATH
             OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths "''${drvs[@]/%/^*}" 2> >(rom))"
             printf "$OUT_PATH" | wl-copy
@@ -266,10 +378,12 @@ in
 
           ns-eval () {
             _ns_parse_args "$@"
-            local OUT_PATH
-            OUT_PATH="$(nix eval --offline "''${flags[@]}" --log-format internal-json -v --raw --no-use-registries --expr "builtins.concatStringsSep \"\n\" (with $NIX_FLAKE_PREAMBLE; [ ''${pkgs[*]} ])" 2> >(rom))"
-            printf "$OUT_PATH" | wl-copy
-            echo "$OUT_PATH"
+            local -a out_paths
+            out_paths=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}")"}) || return $?
+            (( ''${#out_paths[@]} > 0 )) || return 1
+            local OUT_STR="''${(F)out_paths}"
+            printf "%s" "$OUT_STR" | wl-copy
+            echo "$OUT_STR"
           }
 
           prefetch() {
