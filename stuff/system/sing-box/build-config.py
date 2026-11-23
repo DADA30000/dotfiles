@@ -108,11 +108,13 @@ def adapt_for_sfa(extra_cfg):
 def extract_tags(cfg):
     tags = []
     for item in cfg.get("outbounds", []):
-        if isinstance(item, dict) and item.get("tag"):
-            tags.append(item["tag"])
+        tag = item.get("tag") if isinstance(item, dict) else None
+        if tag and not tag.startswith("._"):
+            tags.append(tag)
     for item in cfg.get("endpoints", []):
-        if isinstance(item, dict) and item.get("tag"):
-            tags.append(item["tag"])
+        tag = item.get("tag") if isinstance(item, dict) else None
+        if tag and not tag.startswith("._"):
+            tags.append(tag)
     return tags
 
 

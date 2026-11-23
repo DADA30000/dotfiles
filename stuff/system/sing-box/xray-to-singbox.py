@@ -1,11 +1,13 @@
-#!/usr/bin/env python3
 """Convert Xray JSON subscription (single object or array of profiles)
 into sing-box-extended outbounds JSON: {"outbounds": [...]}.
 
+Each Xray profile becomes one top-level selectable outbound named after its
+`remarks` (a direct `vless` outbound for 1-node profiles, or a `urltest` group
+referencing deduplicated internal `._node_*` outbounds for multi-node profiles).
+
 Usage:
-  curl ... | python3 xray-to-singbox.py
-  python3 xray-to-singbox.py input.json
-  python3 xray-to-singbox.py --no-dedup < input.json
+  curl ... | xray-to-singbox
+  xray-to-singbox input.json
 """
 
 import json
@@ -172,7 +174,11 @@ def convert_transport(stream):
         return None
 
     if net in ("xhttp", "splithttp"):
-        xs = stream.get("xhttpSettings") or stream.get("splithttpSettings") or {}
+        xs = (
+            stream.get("xhttpSettings")
+            or stream.get("splithttpSettings")
+            or {}
+        )
         extra = xs.get("extra") if isinstance(xs.get("extra"), dict) else {}
         tr = {"type": "xhttp"}
         mode = xs.get("mode") or extra.get("mode")
@@ -183,7 +189,11 @@ def convert_transport(stream):
         dl = extra.get("downloadSettings")
         if isinstance(dl, dict):
             dl_xs = dl.get("xhttpSettings") or {}
-            dl_extra = dl_xs.get("extra") if isinstance(dl_xs.get("extra"), dict) else {}
+            dl_extra = (
+                dl_xs.get("extra")
+                if isinstance(dl_xs.get("extra"), dict)
+                else {}
+            )
             dl_out = convert_xhttp_base(dl_xs, dl_extra)
             if dl.get("address"):
                 dl_out["server"] = dl["address"]
@@ -262,7 +272,7 @@ def convert_vless_outbound(ob, tag):
     return sb
 
 
-def dedup_key(sb):
+def node_key(sb):
     clone = {k: v for k, v in sb.items() if k != "tag"}
     return json.dumps(clone, sort_keys=True, separators=(",", ":"))
 
@@ -281,11 +291,6 @@ def make_unique_tag(base_tag, used_tags):
 
 def main():
     args = sys.argv[1:]
-    dedup = True
-    if "--no-dedup" in args:
-        dedup = False
-        args.remove("--no-dedup")
-
     if args and args[0] != "-":
         with open(args[0], "r", encoding="utf-8") as f:
             raw = json.load(f)
@@ -294,8 +299,9 @@ def main():
 
     profiles = raw if isinstance(raw, list) else [raw]
 
-    result = []
-    seen_keys = set()
+    top_outbounds = []
+    internal_nodes = []
+    internal_by_key = {}
     used_tags = set()
 
     for idx, prof in enumerate(profiles):
@@ -307,22 +313,55 @@ def main():
             for ob in (prof.get("outbounds") or [])
             if isinstance(ob, dict) and ob.get("protocol") == "vless"
         ]
-        single = len(vless_obs) == 1
+        converted = []
+        seen_in_profile = set()
         for ob in vless_obs:
-            orig_tag = (ob.get("tag") or "proxy").strip()
-            candidate_tag = remark if single else f"{remark} [{orig_tag}]"
-            sb = convert_vless_outbound(ob, candidate_tag)
+            sb = convert_vless_outbound(ob, "")
             if sb is None:
                 continue
-            if dedup:
-                key = dedup_key(sb)
-                if key in seen_keys:
-                    continue
-                seen_keys.add(key)
-            sb["tag"] = make_unique_tag(candidate_tag, used_tags)
-            result.append(sb)
+            key = node_key(sb)
+            if key in seen_in_profile:
+                continue
+            seen_in_profile.add(key)
+            converted.append((key, sb))
 
-    json.dump({"outbounds": result}, sys.stdout, indent=2, ensure_ascii=False)
+        if not converted:
+            continue
+
+        tag = make_unique_tag(remark, used_tags)
+
+        if len(converted) == 1:
+            sb = dict(converted[0][1])
+            sb["tag"] = tag
+            top_outbounds.append(sb)
+        else:
+            member_tags = []
+            for key, sb in converted:
+                if key not in internal_by_key:
+                    internal_tag = f"._node_{len(internal_nodes)}"
+                    node_ob = dict(sb)
+                    node_ob["tag"] = internal_tag
+                    internal_nodes.append(node_ob)
+                    internal_by_key[key] = internal_tag
+                member_tags.append(internal_by_key[key])
+
+            top_outbounds.append(
+                {
+                    "type": "urltest",
+                    "tag": tag,
+                    "outbounds": member_tags,
+                    "url": "https://www.gstatic.com/generate_204",
+                    "interval": "3m",
+                    "tolerance": 50,
+                }
+            )
+
+    json.dump(
+        {"outbounds": top_outbounds + internal_nodes},
+        sys.stdout,
+        indent=2,
+        ensure_ascii=False,
+    )
     sys.stdout.write("\n")
 
 

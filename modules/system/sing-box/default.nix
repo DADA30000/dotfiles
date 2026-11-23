@@ -34,6 +34,13 @@ let
     builtins.readFile ../../../stuff/system/sing-box/build-config.py
   );
 
+  xray-to-singbox = pkgs.writers.writePython3Bin "xray-to-singbox" {
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../../../stuff/system/sing-box/xray-to-singbox.py);
+
   patched-sing-box =
     let
       src = inputs.sing-box-extended;
@@ -247,7 +254,8 @@ let
           }
         ];
       }
-    ] ++ sing-box-shared-config.inbounds;
+    ]
+    ++ sing-box-shared-config.inbounds;
 
     route = sing-box-shared-config.route // {
       final = "final-toggle";
@@ -458,7 +466,8 @@ let
           query_type = [ "AAAA" ];
           action = "reject";
         }
-      ] ++ sing-box-shared-config.dns.rules;
+      ]
+      ++ sing-box-shared-config.dns.rules;
     };
 
     outbounds = [
@@ -508,8 +517,12 @@ let
     ];
   };
 
-  sing-box-shared-config-file = (pkgs.formats.json { }).generate "sing-box-config-shared" sing-box-shared-config;
-  sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" (sing-box-shared-config // sing-box-host-config);
+  sing-box-shared-config-file =
+    (pkgs.formats.json { }).generate "sing-box-config-shared"
+      sing-box-shared-config;
+  sing-box-config-file = (pkgs.formats.json { }).generate "sing-box-config-base" (
+    sing-box-shared-config // sing-box-host-config
+  );
 
   vpnifyBin = pkgs.stdenv.mkDerivation {
     pname = "vpnify";
@@ -631,6 +644,7 @@ in
 
   config = mkIf cfg.enable {
     sing-box.processes_to_proxy = processes;
+    environment.systemPackages = [ xray-to-singbox ];
 
     systemd.services = {
       stubby.wantedBy = lib.mkForce [ ];
@@ -706,6 +720,7 @@ in
           gawk
           systemd
           python3
+          xray-to-singbox
           curl
           cacert
           coreutils
