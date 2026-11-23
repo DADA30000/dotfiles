@@ -172,7 +172,7 @@ in
             fi
 
             local flake_content=""
-            local cache_base="''${XDG_RUNTIME_DIR:-/tmp}/ns-flakes"
+            local cache_base="$XDG_RUNTIME_DIR/ns-flakes"
             mkdir -p "$cache_base"
 
             if (( is_pkgs == 1 )); then
