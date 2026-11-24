@@ -140,11 +140,11 @@ if command -v manage-running-prefix >/dev/null 2>&1; then
   fi
 fi
 
-# 3. Guard against legacy / polluted prefix folders (only upper, .work and sandbox allowed)
+# 3. Guard against legacy / polluted prefix folders (only upper, .work, sandbox and logs allowed)
 if [[ -d "$PREFIX_DIR" ]]; then
-  unexpected_items=$(find "$PREFIX_DIR" -mindepth 1 -maxdepth 1 ! -name "upper" ! -name ".work" ! -name "sandbox" ! -name ".*" 2>/dev/null)
+  unexpected_items=$(find "$PREFIX_DIR" -mindepth 1 -maxdepth 1 ! -name "upper" ! -name ".work" ! -name "sandbox" ! -name "logs" ! -name ".*" 2>/dev/null)
   if [[ -n "$unexpected_items" ]]; then
-    %{{{pkgs.libnotify}}}/bin/notify-send -u critical "UMU Prefix Error" "Directory '$PREFIX_DIR' contains non-overlay files! Overlay prefix must only contain 'upper', '.work' and 'sandbox'."
+    %{{{pkgs.libnotify}}}/bin/notify-send -u critical "UMU Prefix Error" "Directory '$PREFIX_DIR' contains non-overlay files! Overlay prefix must only contain 'upper', '.work', 'sandbox' and 'logs'."
     echo "ERROR: Prefix '$PREFIX_DIR' is not a valid overlay prefix directory!" >&2
     echo "Found non-overlay files:" >&2
     echo "$unexpected_items" >&2

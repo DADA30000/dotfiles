@@ -338,6 +338,7 @@ let
           "modify_ldt"
           "personality"
           "userfaultfd"
+          "socketcall"
         ];
         dbus = {
           owns = [ "com.steampowered.*" ];
