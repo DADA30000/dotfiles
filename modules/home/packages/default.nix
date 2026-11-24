@@ -1192,9 +1192,10 @@ let
   };
 
   myHomePackages = [
-    (lib.hiPrio pkgs.clang)
-    (lib.hiPrio pkgs.gnutar)
-    (lib.hiPrio pkgs.procps)
+    pkgs.mokutil
+    pkgs.clang
+    pkgs.gnutar
+    pkgs.procps
     pkgs.seahorse
     pkgs.vista-fonts
     pkgs.corefonts
