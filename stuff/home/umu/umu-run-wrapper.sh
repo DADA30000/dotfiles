@@ -408,8 +408,19 @@ if [[ "${UMU_SB_GPU:-1}" == "0" ]]; then
 else
   EXTRA_SB_ARGS+=(--gpu)
 fi
-if [[ -n "${UMU_WEBCAM:-}" && "${UMU_WEBCAM}" != "0" ]]; then
-  EXTRA_SB_ARGS+=(--webcam "$UMU_WEBCAM")
+if [[ -n "${UMU_WEBCAM:-}" && "${UMU_WEBCAM}" != "off" && "${UMU_WEBCAM}" != "0" ]]; then
+  if [[ "${UMU_WEBCAM}" == "portal" || "${UMU_WEBCAM}" == "auto" ]]; then
+    EXTRA_SB_ARGS+=(--webcam "$UMU_WEBCAM")
+  else
+    EXTRA_SB_ARGS+=(--webcam off)
+    IFS=',' read -ra CAM_NODES <<< "$UMU_WEBCAM"
+    for node in "${CAM_NODES[@]}"; do
+      node="$(echo "$node" | tr -d ' ')"
+      [[ -n "$node" ]] && EXTRA_SB_ARGS+=(--dev "/dev/video$node")
+    done
+  fi
+else
+  EXTRA_SB_ARGS+=(--webcam off)
 fi
 [[ -n "${UMU_DBUS_MODE:-}" ]] && EXTRA_SB_ARGS+=(--dbus "$UMU_DBUS_MODE")
 [[ -n "${UMU_SHM_MODE:-}" ]] && EXTRA_SB_ARGS+=(--shm "$UMU_SHM_MODE")

@@ -1,0 +1,50 @@
+diff --git a/run0edit_inner.py b/run0edit_inner.py
+index 84a8b94..37efbaf 100644
+--- a/run0edit_inner.py
++++ b/run0edit_inner.py
+@@ -519,7 +519,7 @@ def editor_environment(uid: int) -> dict[str, str]:
+         if value := os.environ.get(key):
+             env[key] = value
+ 
+-    env["PATH"] = "/usr/local/bin:/bin:/usr/bin"
++    env["PATH"] = f"/etc/profiles/per-user/{pw.pw_name}/bin:/run/current-system/sw/bin:/usr/local/bin:/bin:/usr/bin"
+     # Read PATH from /etc/login.defs if it sets ENV_PATH
+     env_path_pattern = re.compile(r"\s*ENV_PATH\s+(?:PATH=)?(.*\S)\s*")
+     try:
+diff --git a/run0edit_main.py b/run0edit_main.py
+index e9f52a9..58ab22a 100644
+--- a/run0edit_main.py
++++ b/run0edit_main.py
+@@ -26,7 +26,7 @@ from typing import Final
+ 
+ __version__: Final[str] = "@VERSION@"
+ INNER_SCRIPT_PATH: Final[str] = "@LIBEXECDIR@/run0edit/run0edit_inner.py"
+-INNER_SCRIPT_B2: Final[str] = "31f05cb9b00dcf1dbe4342ca0085b1ce114828a262b9715758e913181d248406"
++INNER_SCRIPT_B2: Final[str] = "3da6a8045bb1988b50c1fe0d76d6e2766a51655fd8102eabf578e92949c9728f"
+ DEFAULT_CONF_PATH: Final[str] = "@SYSCONFDIR@/run0edit/editor.conf"
+ 
+ CAPABILITY_BOUNDING_SET: Final[list[str]] = [
+@@ -56,8 +56,7 @@ SYSTEMD_SANDBOX_PROPERTIES: Final[list[str]] = [
+     "DevicePolicy=closed",
+     "InaccessiblePaths=/run/dbus /run/user",
+     "LockPersonality=yes",
+-    "MemoryDenyWriteExecute=yes",
+-    "PrivateDevices=yes",
++    "PrivateDevices=yes",
+     "PrivateIPC=yes",
+     "PrivateNetwork=yes",
+     "ProcSubset=pid",
+@@ -103,7 +102,12 @@ class CommandNotFoundError(Exception):
+ 
+ def find_command(command: str) -> str:
+     """Search for command using a default path."""
+-    cmd_path = shutil.which(command, path="/usr/bin:/bin:/usr/sbin:/sbin")
++    if command == "python3":
++        return sys.executable
++    cmd_path = shutil.which(command)
++    if cmd_path is None:
++        nix_path = f"{os.environ.get('PATH', '')}:/run/current-system/sw/bin:/usr/bin:/bin"
++        cmd_path = shutil.which(command, path=nix_path)
+     if cmd_path is None:
+         raise CommandNotFoundError(command)
+     return cmd_path

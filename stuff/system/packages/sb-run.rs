@@ -350,15 +350,6 @@ impl JsonValue {
         }
     }
 
-    fn req_usize(&self, key: &str, ctx: &str) -> usize {
-        match self.get_req(key, ctx) {
-            Self::Int(n) if *n >= 0 => {
-                usize::try_from(*n).unwrap_or_else(|_| fail_exit(&format!("bad '{ctx}.{key}'")))
-            }
-            _ => fail_exit(&format!("missing non-negative integer '{ctx}.{key}'")),
-        }
-    }
-
     fn req_str_list(&self, key: &str, ctx: &str) -> Vec<String> {
         match self.get_req(key, ctx) {
             Self::Array(arr) => arr
@@ -386,9 +377,16 @@ struct DeclDefaults {
     dbus: String,
     shm: String,
     tmp: String,
-    webcam: usize,
+    webcam: String,
     flags: u32,
     subsystems: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WebcamMode {
+    Off,
+    Portal,
+    Auto,
 }
 
 struct DeclConfig {
@@ -415,6 +413,13 @@ impl DeclConfig {
             || fail_exit(&format!("missing required binary 'bins.{name}' in config")),
             PathBuf::from,
         )
+    }
+
+    fn bin_opt(&self, name: &str) -> Option<&str> {
+        self.bins
+            .get(name)
+            .map(String::as_str)
+            .filter(|s| !s.is_empty())
     }
 }
 
@@ -553,7 +558,10 @@ fn build_decl_config(root: &JsonValue) -> DeclConfig {
         dbus: dbus_mode,
         shm: def_v.req_str("shm", "defaults"),
         tmp: def_v.req_str("tmp", "defaults"),
-        webcam: def_v.req_usize("webcam", "defaults"),
+        webcam: match def_v.as_obj("defaults").get("webcam") {
+            Some(JsonValue::Str(s)) if !s.is_empty() => s.clone(),
+            _ => "off".into(),
+        },
         flags,
         subsystems,
     };
@@ -868,7 +876,8 @@ struct SandboxConfig {
     bridges: Vec<BridgeRule>,
     subsystems: u32,
     flags: u32,
-    webcam_count: usize,
+    webcam: WebcamMode,
+    pw_v4l2_bin: PathBuf,
     executor_path: Option<PathBuf>,
     dbus_talk: Vec<String>,
     dbus_own: Vec<String>,
@@ -927,7 +936,15 @@ impl SandboxConfig {
             bridges: Vec::new(),
             subsystems: decl.defaults.subsystems,
             flags,
-            webcam_count: decl.defaults.webcam,
+            webcam: match decl.defaults.webcam.as_str() {
+                "auto" => WebcamMode::Auto,
+                "portal" | "pw-v4l2" => WebcamMode::Portal,
+                _ => WebcamMode::Off,
+            },
+            pw_v4l2_bin: PathBuf::from(
+                decl.bin_opt("pw_v4l2")
+                    .unwrap_or("/run/current-system/sw/bin/pw-v4l2"),
+            ),
             executor_path: Some(decl.bin("sb_executor")),
             dbus_talk: Vec::new(),
             dbus_own: Vec::new(),
@@ -1499,14 +1516,15 @@ fn parse_misc_arg(
             *i += 2;
         }
         "--webcam" if has_next => {
-            cfg.webcam_count = args[*i + 1]
-                .parse()
-                .unwrap_or_else(|_| fail_exit(&format!("invalid --webcam '{}'", args[*i + 1])));
+            match args[*i + 1].as_str() {
+                "auto" => cfg.webcam = WebcamMode::Auto,
+                "portal" | "pw-v4l2" => cfg.webcam = WebcamMode::Portal,
+                "off" => cfg.webcam = WebcamMode::Off,
+                other => fail_exit(&format!(
+                    "invalid --webcam mode '{other}' (expected: auto, portal, off)"
+                )),
+            }
             *i += 2;
-        }
-        "--no-webcam" => {
-            cfg.webcam_count = 0;
-            *i += 1;
         }
         _ => return false,
     }
@@ -1652,6 +1670,9 @@ fn validate_required_binaries(cfg: &SandboxConfig) {
     }
     if (cfg.flags & CFG_USE_VPNIFY) != 0 {
         require_binary(&cfg.vpnify_bin, "vpnify");
+    }
+    if cfg.webcam == WebcamMode::Portal {
+        require_binary(&cfg.pw_v4l2_bin, "pw-v4l2");
     }
     if (cfg.flags & CFG_SCOPE) != 0 {
         require_binary(&cfg.app2unit_bin, "app2unit");
@@ -2459,7 +2480,7 @@ fn print_help_and_exit() -> ! {
           --pipewire <MODE>          PipeWire: sandboxed | passthrough | off\n\
           --wayland <MODE>           Wayland: sandboxed | passthrough | off\n\
           --x11 <MODE>               X11: sandboxed | passthrough | off\n\
-          --webcam <COUNT>           Number of webcam video nodes\n\
+          --webcam <MODE>            Webcam: auto | portal | off\n\
           --dbus <MODE>              D-Bus: sandboxed | passthrough | off\n\
           --dbus-talk/own/see <NAME> D-Bus session policy rules\n\
           --landlock / --no-landlock Toggle Landlock signal scoping\n\
@@ -2645,10 +2666,19 @@ fn add_subsystem_binds(
                 .arg("/dev/uinput");
         }
     }
-    for idx in 0..cfg.webcam_count {
-        let dev_node = format!("/dev/video{idx}");
-        if Path::new(&dev_node).exists() {
-            cmd.arg("--dev-bind-try").arg(&dev_node).arg(&dev_node);
+    if cfg.webcam == WebcamMode::Auto {
+        let sys_v4l = Path::new("/sys/class/video4linux");
+        if let Ok(entries) = fs::read_dir(sys_v4l) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with("video") {
+                    let dev_node = format!("/dev/{name_str}");
+                    if Path::new(&dev_node).exists() {
+                        cmd.arg("--dev-bind-try").arg(&dev_node).arg(&dev_node);
+                    }
+                }
+            }
         }
     }
 }
@@ -3223,7 +3253,8 @@ impl SandboxConfig {
             bridges: Vec::new(),
             subsystems: 0,
             flags: CFG_HELPER_REQ | (parent.flags & CFG_VERBOSE),
-            webcam_count: 0,
+            webcam: WebcamMode::Off,
+            pw_v4l2_bin: parent.pw_v4l2_bin.clone(),
             executor_path: None,
             dbus_talk: Vec::new(),
             dbus_own: Vec::new(),
@@ -4258,9 +4289,7 @@ fn migrate_first_process(listener: Option<&UnixListener>) {
     }
 }
 
-fn main() {
-    ensure_start_time();
-    let raw_args: Vec<String> = env::args().collect();
+fn init_config(raw_args: &[String]) -> (DeclConfig, SandboxConfig) {
     for arg in raw_args.iter().skip(1) {
         if arg == "--" {
             break;
@@ -4275,6 +4304,21 @@ fn main() {
         eprintln!("[sb-run] Flags: {}", raw_args[1..].join(" "));
     }
     validate_required_binaries(&cfg);
+
+    if cfg.webcam == WebcamMode::Portal {
+        if cfg.pipewire_mode == "off" {
+            cfg.pipewire_mode = "sandboxed".into();
+        }
+        cfg.command
+            .insert(0, cfg.pw_v4l2_bin.to_string_lossy().into_owned());
+    }
+    (decl, cfg)
+}
+
+fn main() {
+    ensure_start_time();
+    let raw_args: Vec<String> = env::args().collect();
+    let (decl, mut cfg) = init_config(&raw_args);
 
     let paths = prepare_sandbox_paths(&cfg);
     let syscall_table = Arc::new(SyscallTable::load(&decl.syscalls_file));

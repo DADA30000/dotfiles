@@ -1585,6 +1585,7 @@
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "rom": "rom",
+        "run0edit": "run0edit",
         "rust-helpers": "rust-helpers",
         "sine": "sine",
         "sine-bootloader": "sine-bootloader",
@@ -1600,6 +1601,22 @@
         "zapret-flowseal": "zapret-flowseal",
         "zen-browser": "zen-browser",
         "zfs": "zfs"
+      }
+    },
+    "run0edit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1795453338,
+        "narHash": "sha256-ZhAqRmB76a2OwJGZ0T5kYTb52hSTQN1vP6gPZCb1Z78=",
+        "owner": "HastD",
+        "repo": "run0edit",
+        "rev": "051bee760dc829b082a93f81cc0d5edca7e0e7a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "HastD",
+        "repo": "run0edit",
+        "type": "github"
       }
     },
     "rust-analyzer-src": {

@@ -125,7 +125,10 @@ let
   # ---------------------------------------------------------------------------
   listDirs = listFiles;
   targetDirs = [ ../../../stuff/system/packages ];
-  excludeList = [ "translate-zapret-nixos.sh" ];
+  excludeList = [
+    "translate-zapret-nixos.sh"
+    "pw-portal-shim.c"
+  ];
 
   handlers = {
     sh =
@@ -238,19 +241,24 @@ let
     !builtins.elem name excludeList
   ) allPaths;
 
-  processedResults = map (
-    path:
-    let
-      name = baseNameOf path;
-      ext = getExtension name;
-    in
-    if builtins.hasAttr ext handlers then
-      (builtins.getAttr ext handlers) path
-    else
-      throw "Error: No extension handler matched for '${name}' (extension: '${ext}') at path '${toString path}'."
-  ) filteredPaths;
+  scripts = builtins.listToAttrs (
+    map (
+      path:
+      let
+        name = baseNameOf path;
+        ext = getExtension name;
+      in
+      if builtins.hasAttr ext handlers then
+        {
+          inherit name;
+          value = (builtins.getAttr ext handlers) path;
+        }
+      else
+        throw "Error: No extension handler matched for '${name}' (extension: '${ext}') at path '${toString path}'."
+    ) filteredPaths
+  );
 
-  system-package-list = processedResults;
+  system-package-list = builtins.attrValues scripts;
 
   extra-paths = [
     "/share/waywallen"
@@ -260,28 +268,46 @@ let
   ];
 in
 {
-  nixpkgs.config.permittedInsecurePackages = [
-    pkgs.ventoy-full-gtk.name
-  ];
-
-  _module.args = {
-    inherit evalAndSubstitute mkPyApp;
+  options.scripts = lib.mkOption {
+    type = lib.types.attrsOf lib.types.package;
+    default = scripts;
+    description = "Compiled script packages from stuff/system/packages keyed by filename.";
   };
 
-  # Export helpers to Home Manager
-  home-manager.sharedModules = [
-    {
-      config._module.args = { inherit evalAndSubstitute mkPyApp; };
-    }
-  ];
+  config = {
+    nixpkgs.config.permittedInsecurePackages = [
+      pkgs.ventoy-full-gtk.name
+    ];
 
-  environment = {
-    defaultPackages = [ ];
-    pathsToLink = extra-paths;
-    systemPackages = system-package-list ++ [ pkgs.xdg-dbus-proxy ];
+    _module.args = {
+      inherit
+        evalAndSubstitute
+        mkPyApp
+        scripts
+        ;
+    };
+
+    # Export helpers to Home Manager
+    home-manager.sharedModules = [
+      {
+        config._module.args = {
+          inherit
+            evalAndSubstitute
+            mkPyApp
+            scripts
+            ;
+        };
+      }
+    ];
+
+    environment = {
+      defaultPackages = [ ];
+      pathsToLink = extra-paths;
+      systemPackages = system-package-list ++ [ pkgs.xdg-dbus-proxy ];
+    };
+
+    boot.extraModulePackages = [
+      gigabyte-laptop-wmi
+    ];
   };
-
-  boot.extraModulePackages = [
-    gigabyte-laptop-wmi
-  ];
 }

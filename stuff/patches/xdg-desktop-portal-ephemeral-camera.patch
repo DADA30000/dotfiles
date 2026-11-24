@@ -1,0 +1,200 @@
+diff --git a/src/camera.c b/src/camera.c
+index f16de89..a7e3d9e 100644
+--- a/src/camera.c
++++ b/src/camera.c
+@@ -77,88 +77,74 @@ static gboolean
+ query_permission_sync (Camera     *camera,
+                        XdpRequest *request)
+ {
+-  XdpPermission permission;
+   XdpAppInfo *app_info = request->app_info;
+   gboolean allowed;
++  g_auto(GVariantBuilder) opt_builder =
++    G_VARIANT_BUILDER_INIT (G_VARIANT_TYPE_VARDICT);
++  g_autofree char *title = NULL;
++  g_autofree char *subtitle = NULL;
++  const char *body;
++  guint32 response = 2;
++  g_autoptr(GVariant) results = NULL;
++  g_autoptr(GError) error = NULL;
++  g_autoptr(XdpDbusImplRequest) impl_request = NULL;
++  const char *app_id = xdp_app_info_get_id (app_info);
++  const char *app_name = xdp_app_info_get_app_display_name (app_info);
+ 
+-  permission = xdp_get_permission_sync (app_info,
+-                                        CAMERA_PERMISSION_TABLE,
+-                                        CAMERA_PERMISSION_DEVICE_CAMERA);
+-  if (permission == XDP_PERMISSION_ASK || permission == XDP_PERMISSION_UNSET)
++  g_variant_builder_add (&opt_builder, "{sv}", "icon", g_variant_new_string ("camera-web-symbolic"));
++
++  if (app_name)
+     {
+-      g_auto(GVariantBuilder) opt_builder =
+-        G_VARIANT_BUILDER_INIT (G_VARIANT_TYPE_VARDICT);
+-      g_autofree char *title = NULL;
+-      g_autofree char *subtitle = NULL;
+-      const char *body;
+-      guint32 response = 2;
+-      g_autoptr(GVariant) results = NULL;
+-      g_autoptr(GError) error = NULL;
+-      g_autoptr(XdpDbusImplRequest) impl_request = NULL;
+-      const char *app_id = xdp_app_info_get_id (app_info);
+-      const char *app_name = xdp_app_info_get_app_display_name (app_info);
+-
+-      g_variant_builder_add (&opt_builder, "{sv}", "icon", g_variant_new_string ("camera-web-symbolic"));
+-
+-      if (app_name)
+-        {
+-          title = g_strdup_printf (_("Allow %s to Use the Camera?"), app_name);
+-          subtitle = g_strdup_printf (_("%s wants to access the camera"), app_name);
+-        }
+-      else
+-        {
+-          title = g_strdup (_("Allow Apps to Use the Camera?"));
+-          subtitle = g_strdup (_("An app wants to access the camera"));
+-        }
+-
+-      body = _("This permission can be changed at any time from the privacy settings");
+-
+-      impl_request = xdp_dbus_impl_request_proxy_new_sync (
+-        g_dbus_proxy_get_connection (G_DBUS_PROXY (camera->access_impl)),
+-        G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+-        g_dbus_proxy_get_name (G_DBUS_PROXY (camera->access_impl)),
+-        request->id,
+-        NULL, &error);
+-
+-      if (!impl_request)
+-        return FALSE;
+-
+-      xdp_request_set_impl_request (request, impl_request);
+-
+-      g_debug ("Calling backend for device access to camera");
+-
+-      if (!xdp_dbus_impl_access_call_access_dialog_sync (camera->access_impl,
+-                                                         request->id,
+-                                                         app_id,
+-                                                         "",
+-                                                         title,
+-                                                         subtitle,
+-                                                         body,
+-                                                         g_variant_builder_end (&opt_builder),
+-                                                         &response,
+-                                                         &results,
+-                                                         NULL,
+-                                                         &error))
+-        {
+-          g_warning ("A backend call failed: %s", error->message);
+-          /* We do not want to set the permission if there was an error and the
+-           * permission was UNSET. Setting a permission should only be done from
+-           * user input. */
+-          return FALSE;
+-        }
+-
+-      allowed = response == 0;
+-
+-      if (permission == XDP_PERMISSION_UNSET)
+-        {
+-          xdp_set_permission_sync (app_info,
+-                                   CAMERA_PERMISSION_TABLE,
+-                                   CAMERA_PERMISSION_DEVICE_CAMERA,
+-                                   allowed ? XDP_PERMISSION_YES : XDP_PERMISSION_NO);
+-        }
++      title = g_strdup_printf (_("Allow %s to Use the Camera?"), app_name);
++      subtitle = g_strdup_printf (_("%s wants to access the camera"), app_name);
+     }
+   else
+-    allowed = permission == XDP_PERMISSION_YES ? TRUE : FALSE;
++    {
++      title = g_strdup (_("Allow Apps to Use the Camera?"));
++      subtitle = g_strdup (_("An app wants to access the camera"));
++    }
++
++  body = _("This permission can be changed at any time from the privacy settings");
++
++  impl_request = xdp_dbus_impl_request_proxy_new_sync (
++    g_dbus_proxy_get_connection (G_DBUS_PROXY (camera->access_impl)),
++    G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
++    g_dbus_proxy_get_name (G_DBUS_PROXY (camera->access_impl)),
++    request->id,
++    NULL, &error);
++
++  if (!impl_request)
++    return FALSE;
++
++  xdp_request_set_impl_request (request, impl_request);
++
++  g_debug ("Calling backend for device access to camera");
++
++  if (!xdp_dbus_impl_access_call_access_dialog_sync (camera->access_impl,
++                                                     request->id,
++                                                     app_id,
++                                                     "",
++                                                     title,
++                                                     subtitle,
++                                                     body,
++                                                     g_variant_builder_end (&opt_builder),
++                                                     &response,
++                                                     &results,
++                                                     NULL,
++                                                     &error))
++    {
++      g_warning ("A backend call failed: %s", error->message);
++      return FALSE;
++    }
++
++  allowed = response == 0;
++
++  /* Ephemeral: update permission store so PipeWire/WirePlumber sees current decision,
++   * but never skip this dialog on future requests. */
++  xdp_set_permission_sync (app_info,
++                           CAMERA_PERMISSION_TABLE,
++                           CAMERA_PERMISSION_DEVICE_CAMERA,
++                           allowed ? XDP_PERMISSION_YES : XDP_PERMISSION_NO);
+ 
+   return allowed;
+ }
+@@ -261,6 +247,28 @@ open_pipewire_camera_remote (const char *app_id,
+   return remote;
+ }
+ 
++static void
++on_camera_client_vanished (GDBusConnection *connection,
++                           const gchar     *name,
++                           gpointer         user_data)
++{
++  XdpAppInfo *app_info = user_data;
++  XdpDbusImplPermissionStore *store = xdp_get_permission_store ();
++  g_debug ("Camera client %s vanished, clearing camera permission for %s",
++           name, xdp_app_info_get_id (app_info));
++  if (store)
++    {
++      xdp_dbus_impl_permission_store_call_delete_permission_sync (
++        store,
++        CAMERA_PERMISSION_TABLE,
++        CAMERA_PERMISSION_DEVICE_CAMERA,
++        xdp_app_info_get_id (app_info),
++        NULL,
++        NULL);
++    }
++  g_object_unref (app_info);
++}
++
+ static gboolean
+ handle_open_pipewire_remote (XdpDbusCamera *object,
+                              GDBusMethodInvocation *invocation,
+@@ -310,6 +318,15 @@ handle_open_pipewire_remote (XdpDbusCamera *object,
+       return G_DBUS_METHOD_INVOCATION_HANDLED;
+     }
+ 
++  const char *sender = g_dbus_method_invocation_get_sender (invocation);
++  g_bus_watch_name_on_connection (g_dbus_method_invocation_get_connection (invocation),
++                                  sender,
++                                  G_BUS_NAME_WATCHER_FLAGS_NONE,
++                                  NULL,
++                                  on_camera_client_vanished,
++                                  g_object_ref (app_info),
++                                  NULL);
++
+   out_fd_list = g_unix_fd_list_new ();
+   fd = pw_core_steal_fd (remote->core);
+   fd_id = g_unix_fd_list_append (out_fd_list, fd, &error);

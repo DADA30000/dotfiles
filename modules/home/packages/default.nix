@@ -195,7 +195,7 @@ let
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    webcam = 5;
+    webcam = "portal";
     seccomp_allow = fhsSeccompAllow;
     additional_args =
       { sloth, ... }:
@@ -222,7 +222,7 @@ let
     audio_pipewire = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    webcam = 5;
+    webcam = "portal";
     additional_args =
       { sloth, ... }:
       {
@@ -265,7 +265,7 @@ let
     audio_pulse = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    webcam = 5;
+    webcam = "portal";
     additional_args.dbus = {
       enable = true;
       policies = {
@@ -334,7 +334,7 @@ let
     let
       overriddenSteam = pkgs.steam.override {
         privateTmp = false;
-        extraPkgs = _: steamExtraPackages;
+        extraPkgs = _: allSteamExtraPackages;
       };
 
       sandboxed = mkSandbox rec {
@@ -1163,261 +1163,435 @@ let
     ];
   });
 
-in
-{
-  home.extraOutputsToInstall = osConfig.environment.extraOutputsToInstall; # ++ [ "lib" ];
+  run0editPkg = pkgs.stdenv.mkDerivation rec {
+    pname = "run0edit";
+    version = "0.7.2";
+    src = inputs.run0edit;
 
-  home.packages =
-    osConfig.environment.systemPackages
-    ++ [
-      (lib.hiPrio pkgs.clang)
-      (lib.hiPrio pkgs.gnutar)
-      (lib.hiPrio pkgs.procps)
-      pkgs.seahorse
-      pkgs.vista-fonts
-      pkgs.corefonts
-      pkgs.noto-fonts
-      pkgs.noto-fonts-monochrome-emoji
-      pkgs.liberation_ttf
-      pkgs.nerd-fonts.jetbrains-mono
-      pkgs.usbguard-notifier
-      pkgs.dnsutils
-      pkgs.nmap
-      pkgs.podman-compose
-      pkgs.cmatrix
-      pkgs.dpkg
-      pkgs.libinput
-      pkgs.nftables
-      pkgs.wev
-      pkgs.binwalk
-      pkgs.iperf3
-      pkgs.wireshark
-      pkgs.gh
-      pkgs.git-repo
-      pkgs.gpu-screen-recorder-gtk
-      pkgs.qdiskinfo
-      pkgs.blender
-      pkgs.krita
-      pkgs.mindustry
-      pkgs.dash
-      pkgs.openrgb-with-all-plugins
-      pkgs.stress-ng
-      pkgs.furmark
-      pkgs.xrdb
-      pkgs.nix-tree
-      pkgs.n-m3u8dl-re
-      pkgs.yt-dlp
-      pkgs.pi-coding-agent
+    patches = [
+      ../../../stuff/patches/run0edit.patch
+    ];
+
+    nativeBuildInputs = [ pkgs.python3 ];
+    buildInputs = [ pkgs.python3 ];
+
+    postPatch = ''
+      substituteInPlace run0edit_main.py \
+        --replace-fail '@VERSION@' '${version}' \
+        --replace-fail '@LIBEXECDIR@' "$out/libexec" \
+        --replace-fail '@SYSCONFDIR@' "/etc"
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin $out/libexec/run0edit $out/share/run0edit
+      install -m 0755 run0edit_main.py $out/bin/run0edit
+      install -m 0644 run0edit_inner.py $out/libexec/run0edit/run0edit_inner.py
+      install -m 0644 data/editor.conf $out/share/run0edit/editor.conf
+      patchShebangs $out/bin/run0edit $out/libexec/run0edit/run0edit_inner.py
+    '';
+  };
+
+  myHomePackages = [
+    (lib.hiPrio pkgs.clang)
+    (lib.hiPrio pkgs.gnutar)
+    (lib.hiPrio pkgs.procps)
+    pkgs.seahorse
+    pkgs.vista-fonts
+    pkgs.corefonts
+    pkgs.noto-fonts
+    pkgs.noto-fonts-monochrome-emoji
+    pkgs.liberation_ttf
+    pkgs.nerd-fonts.jetbrains-mono
+    pkgs.usbguard-notifier
+    pkgs.dnsutils
+    pkgs.nmap
+    pkgs.podman-compose
+    pkgs.cmatrix
+    pkgs.dpkg
+    pkgs.libinput
+    pkgs.nftables
+    pkgs.wev
+    pkgs.binwalk
+    pkgs.iperf3
+    pkgs.wireshark
+    pkgs.gh
+    pkgs.git-repo
+    pkgs.gpu-screen-recorder-gtk
+    pkgs.qdiskinfo
+    pkgs.blender
+    pkgs.krita
+    pkgs.mindustry
+    pkgs.dash
+    pkgs.openrgb-with-all-plugins
+    pkgs.stress-ng
+    pkgs.furmark
+    pkgs.xrdb
+    pkgs.nix-tree
+    pkgs.n-m3u8dl-re
+    pkgs.yt-dlp
+    pkgs.pi-coding-agent
+    pkgs.gcc
+    pkgs.libcap-text-verifier
+    pkgs.curl
+    pkgs.libxkbcommon
+    pkgs.sbsigntool
+    pkgs.slurp
+    pkgs.w3m-nographics
+    pkgs.testdisk
+    pkgs.ms-sys
+    pkgs.efivar
+    pkgs.parted
+    pkgs.gptfdisk
+    pkgs.ccrypt
+    pkgs.cryptsetup
+    pkgs.fuse
+    pkgs.fuse3
+    pkgs.sshfs-fuse
+    pkgs.screen
+    pkgs.tcpdump
+    pkgs.sdparm
+    pkgs.hdparm
+    pkgs.pciutils
+    pkgs.innoextract
+    pkgs.btrfs-progs
+    pkgs.unzip
+    pkgs.dosfstools
+    pkgs.gum
+    pkgs.tpm2-tools
+    pkgs.uefi-firmware-parser
+    pkgs.uefitool
+    pkgs.flashrom
+    pkgs.acpica-tools
+    pkgs.lolcat
+    pkgs.openssl
+    pkgs.gparted
+    pkgs.neovim-remote
+    pkgs.stylua
+    pkgs.rustup
+    pkgs.vscode-extensions.ms-vscode.cpptools
+    pkgs.hexpatch
+    pkgs.tinyxxd
+    pkgs.bash-language-server
+    pkgs.vscode-langservers-extracted
+    pkgs.jdt-language-server
+    pkgs.lua-language-server
+    pkgs.taplo
+    pkgs.yaml-language-server
+    pkgs.shellcheck
+    pkgs.shfmt
+    pkgs.tmux
+    pkgs.tree-sitter
+    pkgs.ripgrep
+    pkgs.ruff
+    pkgs.basedpyright
+    pkgs.cmake-lint
+    pkgs.clang-tools
+    pkgs.cmake-language-server
+    pkgs.flatpak
+    pkgs.duperemove
+    pkgs.psmisc
+    pkgs.woeusb-ng
+    pkgs.wimlib
+    pkgs.lsof
+    pkgs.ddrescue
+    pkgs.smartmontools
+    pkgs.uv
+    pkgs.bindfs
+    pkgs.imagemagick
+    pkgs.tonelib-gfx
+    pkgs.sbctl
+    pkgs.virt-manager
+    pkgs.jq
+    pkgs.wayvr
+    pkgs.xhost
+    pkgs.dante
+    pkgs.patchelf
+    pkgs.file
+    pkgs.gnome-boxes
+    pkgs.lsd
+    pkgs.e2fsprogs
+    pkgs.efitools
+    pkgs.efibootmgr
+    pkgs.kdiskmark
+    pkgs.nixfmt
+    pkgs.sshfs
+    pkgs.gdu
+    pkgs.nixd
+    pkgs.go
+    pkgs.gopls
+    pkgs.delve
+    pkgs.gotools
+    pkgs.wget
+    pkgs.zenity
+    pkgs.linuxConsoleTools
+    pkgs.evtest
+    pkgs.bat
+    pkgs.nvme-cli
+    pkgs.ethtool
+    pkgs.killall
+    pkgs.unrar
+    pkgs.zip
+    pkgs.dmidecode
+    pkgs.usbutils
+    pkgs.adwaita-icon-theme
+    pkgs.vmpk
+    pkgs.socat
+    pkgs.neovide
+    pkgs._7zz-rar
+    pkgs.crudini
+    pkgs.lndir
+    pkgs.texinfoInteractive
+    pkgs.xkbcomp
+    pkgs.nvtopPackages.full
+    pkgs.xkeyboard-config
+    pkgs.libX11
+    pkgs.scanmem
+    pkgs.comma
+    pkgs.remmina
+    pkgs.mangohud
+    pkgs.jdk25
+    pkgs.moonlight-qt
+    pkgs.osu-lazer-bin
+    pkgs.xonotic
+    pkgs.supertux
+    pkgs.supertuxkart
+    pkgs.pavucontrol
+    pkgs.qalculate-gtk
+    pkgs.distrobox
+    pkgs.qbittorrent
+    pkgs.gdb
+    pkgs.wiggle
+    pkgs.nodejs
+    pkgs.libreoffice
+    pkgs.protonplus
+    pkgs.gimp3-with-plugins
+    pkgs.gamescope
+    pkgs.android-tools
+    pkgs.compsize
+    pkgs.erofs-utils
+    pkgs.gsettings-desktop-schemas
+    pkgs.resources
+    pkgs.quickshell
+    pkgs.hunspell
+    pkgs.hunspellDicts.en_US-large
+    pkgs.hunspellDicts.ru_RU
+    pkgs.libsForQt5.qt5ct
+    pkgs.libsForQt5.qtstyleplugin-kvantum
+    pkgs.kdePackages.qtstyleplugin-kvantum
+    pkgs.kdePackages.qtdeclarative
+    pkgs.kdePackages.kdenlive
+    pkgs.yad
+    pkgs.rsync
+    pkgs.strace
+    pkgs.nix-diff
+    pkgs.migrate-to-uv
+    pkgs.ssdeep
+    pkgs.gtk3
+    pkgs.kdePackages.kservice
+    pkgs.libsForQt5.qtsvg
+    pkgs.kdePackages.qtsvg
+    pkgs.kdePackages.dolphin
+    pkgs.kdePackages.ark
+    pkgs.pulseaudio
+    pkgs.nautilus
+    pkgs.file-roller
+    pkgs.libnotify
+    pkgs.brightnessctl
+    pkgs.qimgv
+    pkgs.myxer
+    pkgs.ffmpeg-full
+    pkgs.ffmpegthumbnailer
+    pkgs.hyprpicker
+    pkgs.wttrbar
+    pkgs.makeWrapper
+    pkgs.makeBinaryWrapper
+    pkgs.dieHook
+    pkgs.shellcheck.doc
+    pkgs.python3Packages.xmltodict
+
+    valentPkg
+    aero-control-center
+    rustHelpersPkg
+    json2xPkg
+    diskoPkg
+    ventoyFullGtkPkg
+    translateZapretNixosPkg
+    nhPkg
+    app2unitPkg
+    run0editPkg
+    pythonPkg
+    nixSearchPkg
+    heliumPkg
+    qt6ctPkg
+    aria2Pkg
+    gtkshutdownPkg
+    anicliRuPkg
+
+    aistudio2apiSandbox
+    geminiWeb2ApiSandbox
+    antigravity2apiSandbox
+    romSandbox
+    sounduxSandbox
+    prismLauncherSandbox
+    discordSandbox
+    vesktopSandbox
+    ayugramDesktopSandbox
+    enteAuthSandbox
+  ];
+
+  steamExcludedPackages = [
+    osConfig.boot.kernelPackages.ryzen-smu
+    pkgs.kmod
+    pkgs.libreoffice
+    pkgs.obs-studio
+    pkgs.obs-studio-plugins.obs-vaapi
+    pkgs.jdk25
+    pkgs.jdt-language-server
+  ];
+
+  isExcludedFromSteam =
+    p:
+    let
+      pName = p.pname or (p.name or (lib.getName p));
+    in
+    lib.any (
+      ex:
+      let
+        exName = ex.pname or (ex.name or (lib.getName ex));
+      in
+      ex == p || exName == pName || lib.hasInfix exName pName
+    ) steamExcludedPackages;
+
+  allSteamExtraPackages = lib.filter (p: !isExcludedFromSteam p) (
+    lib.unique (myHomePackages ++ steamExtraPackages ++ (osConfig.environment.systemPackages or [ ]))
+  );
+
+  processMergedPackage =
+    entry:
+    let
+      winner = builtins.elemAt entry 0;
+      loser = builtins.elemAt entry 1;
+      name1 = winner.pname or (lib.getName winner);
+      name2 = loser.pname or (lib.getName loser);
+      name =
+        if builtins.length entry > 2 && builtins.elemAt entry 2 != null then
+          builtins.elemAt entry 2
+        else
+          "${name1}-${name2}-merged";
+      prio =
+        if builtins.length entry > 3 && builtins.elemAt entry 3 != null then
+          builtins.elemAt entry 3
+        else
+          lib.meta.defaultPriority;
+      merged = pkgs.buildEnv {
+        inherit name;
+        paths = [
+          (lib.hiPrio winner)
+          (lib.lowPrio loser)
+        ];
+        extraOutputsToInstall = osConfig.environment.extraOutputsToInstall or [ ] ++ [ "lib" ];
+      };
+    in
+    lib.setPrio prio merged;
+
+  mergedPackages = [
+    [
+      pkgs.clang
       pkgs.gcc
-      pkgs.libcap-text-verifier
-      pkgs.curl
-      pkgs.libxkbcommon
-      pkgs.sbsigntool
-      pkgs.slurp
-      pkgs.w3m-nographics
-      pkgs.testdisk
-      pkgs.ms-sys
-      pkgs.efivar
-      pkgs.parted
-      pkgs.gptfdisk
-      pkgs.ccrypt
-      pkgs.cryptsetup
-      pkgs.fuse
-      pkgs.fuse3
-      pkgs.sshfs-fuse
-      pkgs.screen
-      pkgs.tcpdump
-      pkgs.sdparm
-      pkgs.hdparm
-      pkgs.pciutils
-      pkgs.innoextract
-      pkgs.btrfs-progs
-      pkgs.unzip
-      pkgs.dosfstools
-      pkgs.gum
-      pkgs.tpm2-tools
-      pkgs.uefi-firmware-parser
-      pkgs.uefitool
-      pkgs.flashrom
-      pkgs.acpica-tools
-      pkgs.lolcat
-      pkgs.openssl
-      pkgs.gparted
-      pkgs.neovim-remote
-      pkgs.stylua
-      pkgs.rustup
-      pkgs.vscode-extensions.ms-vscode.cpptools
-      pkgs.hexpatch
+    ]
+    [
+      pkgs.dconf
+      pkgs.gvfs
+    ]
+    [
       pkgs.tinyxxd
-      pkgs.bash-language-server
-      pkgs.vscode-langservers-extracted
-      pkgs.jdt-language-server
-      pkgs.lua-language-server
-      pkgs.taplo
-      pkgs.yaml-language-server
-      pkgs.shellcheck
-      pkgs.shfmt
-      pkgs.tmux
-      pkgs.tree-sitter
-      pkgs.ripgrep
-      pkgs.ruff
-      pkgs.basedpyright
-      pkgs.cmake-lint
-      pkgs.clang-tools
-      pkgs.cmake-language-server
-      pkgs.flatpak
-      pkgs.duperemove
-      pkgs.psmisc
-      pkgs.woeusb-ng
-      pkgs.wimlib
-      pkgs.lsof
-      pkgs.ddrescue
-      pkgs.smartmontools
-      pkgs.uv
-      pkgs.bindfs
-      pkgs.imagemagick
-      pkgs.tonelib-gfx
-      pkgs.sbctl
-      pkgs.virt-manager
-      pkgs.jq
-      pkgs.wayvr
-      pkgs.xhost
-      pkgs.dante
-      pkgs.patchelf
-      pkgs.file
-      pkgs.gnome-boxes
-      pkgs.lsd
-      pkgs.e2fsprogs
-      pkgs.efitools
-      pkgs.efibootmgr
-      pkgs.kdiskmark
-      pkgs.nixfmt
-      pkgs.sshfs
-      pkgs.gdu
-      pkgs.nixd
-      pkgs.go
-      pkgs.gopls
-      pkgs.delve
-      pkgs.gotools
-      pkgs.wget
-      pkgs.zenity
-      pkgs.linuxConsoleTools
-      pkgs.evtest
-      pkgs.bat
-      pkgs.nvme-cli
-      pkgs.ethtool
-      pkgs.killall
-      pkgs.unrar
-      pkgs.zip
-      pkgs.dmidecode
-      pkgs.usbutils
-      pkgs.adwaita-icon-theme
-      pkgs.vmpk
-      pkgs.socat
-      pkgs.neovide
-      pkgs._7zz-rar
-      pkgs.crudini
-      pkgs.lndir
-      pkgs.texinfoInteractive
-      pkgs.xkbcomp
-      pkgs.nvtopPackages.full
-      pkgs.xkeyboard-config
-      pkgs.libX11
-      pkgs.scanmem
-      pkgs.comma
-      pkgs.remmina
-      pkgs.mangohud
-      pkgs.jdk25
-      pkgs.moonlight-qt
-      pkgs.osu-lazer-bin
-      pkgs.xonotic
-      pkgs.supertux
-      pkgs.supertuxkart
-      pkgs.pavucontrol
-      pkgs.qalculate-gtk
-      pkgs.distrobox
-      pkgs.qbittorrent
-      pkgs.gdb
-      pkgs.wiggle
-      pkgs.nodejs
-      pkgs.libreoffice
-      pkgs.protonplus
-      pkgs.gimp3-with-plugins
-      pkgs.gamescope
-      pkgs.android-tools
-      pkgs.compsize
-      pkgs.erofs-utils
-      pkgs.gsettings-desktop-schemas
-      pkgs.resources
-      pkgs.quickshell
-      pkgs.hunspell
-      pkgs.hunspellDicts.en_US-large
-      pkgs.hunspellDicts.ru_RU
-      pkgs.libsForQt5.qt5ct
-      pkgs.libsForQt5.qtstyleplugin-kvantum
-      pkgs.kdePackages.qtstyleplugin-kvantum
-      pkgs.kdePackages.qtdeclarative
-      pkgs.kdePackages.kdenlive
-      pkgs.yad
-      pkgs.rsync
-      pkgs.strace
-      pkgs.nix-diff
-      pkgs.migrate-to-uv
-      pkgs.ssdeep
-      pkgs.gtk3
-      pkgs.kdePackages.kservice
-      pkgs.libsForQt5.qtsvg
-      pkgs.kdePackages.qtsvg
-      pkgs.kdePackages.dolphin
-      pkgs.kdePackages.ark
-      pkgs.pulseaudio
-      pkgs.nautilus
-      pkgs.file-roller
-      pkgs.libnotify
-      pkgs.brightnessctl
-      pkgs.qimgv
-      pkgs.myxer
-      pkgs.ffmpeg-full
-      pkgs.ffmpegthumbnailer
-      pkgs.hyprpicker
-      pkgs.wttrbar
-      pkgs.makeWrapper
-      pkgs.makeBinaryWrapper
-      pkgs.dieHook
-      pkgs.shellcheck.doc
-      pkgs.python3Packages.xmltodict
+      pkgs.neovim
+    ]
+    [
+      pkgs.gnutar
+      pkgs.cpio
+    ]
+    [
+      osConfig.scripts."pkexec.rs"
+      pkgs.polkit
+    ]
+    [
+      osConfig.scripts."run0.rs"
+      (processMergedPackage [
+        pkgs.systemd
+        pkgs.openresolv
+      ])
+    ]
+    [
+      pkgs.procps
+      (processMergedPackage [
+        (processMergedPackage [
+          pkgs.shadow
+          pkgs.util-linux
+        ])
+        pkgs.coreutils
+      ])
+      "core-unix-tools-merged"
+    ]
+  ];
 
-      valentPkg
-      aero-control-center
-      rustHelpersPkg
-      json2xPkg
-      diskoPkg
-      ventoyFullGtkPkg
-      translateZapretNixosPkg
-      nhPkg
-      app2unitPkg
-      pythonPkg
-      nixSearchPkg
-      heliumPkg
-      qt6ctPkg
-      aria2Pkg
-      gtkshutdownPkg
-      anicliRuPkg
+  mergedPairs = map processMergedPackage mergedPackages;
 
-      aistudio2apiSandbox
-      geminiWeb2ApiSandbox
-      antigravity2apiSandbox
-      romSandbox
-      sounduxSandbox
-      prismLauncherSandbox
-      discordSandbox
-      vesktopSandbox
-      ayugramDesktopSandbox
-      enteAuthSandbox
+  isPaired =
+    p:
+    let
+      name = p.pname or (lib.getName p);
+    in
+    lib.any (n: lib.hasPrefix n name) [
+      "clang"
+      "gcc"
+      "shadow"
+      "util-linux"
+      "dconf"
+      "gvfs"
+      "tinyxxd"
+      "neovim"
+      "procps"
+      "coreutils"
+      "gnutar"
+      "cpio"
+      "pkexec"
+      "polkit"
+      "run0"
+      "systemd"
+      "openresolv"
+    ];
+
+  allHomePackages = lib.unique (
+    (lib.filter (p: !isPaired p) myHomePackages)
+    ++ (lib.filter (p: !isPaired p) (osConfig.environment.systemPackages or [ ]))
+    ++ steamExtraPackages
+    ++ mergedPairs
+    ++ [
       steamSandbox
       steamSandbox.run
     ]
-    ++ steamExtraPackages;
+  );
+
+  strictHomeEnv = pkgs.buildEnv {
+    name = "strict-home-env";
+    paths = map (lib.setPrio lib.meta.defaultPriority) allHomePackages;
+    inherit (config.home) extraOutputsToInstall;
+    ignoreCollisions = false;
+    checkCollisionContents = true;
+  };
+
+in
+{
+  home.extraOutputsToInstall = osConfig.environment.extraOutputsToInstall ++ [ "lib" ];
+
+  home.packages = allHomePackages;
+
+  home.sessionVariables = {
+    NIX_LD_LIBRARY_PATH = "${strictHomeEnv}/lib";
+  };
+
+  xdg.dataFile."home-env".source = strictHomeEnv;
 
   systemd.user.services.valent = {
     Install.WantedBy = [ "graphical-session.target" ];

@@ -41,6 +41,10 @@
       url = "sourcehut:~whynothugo/way-secure";
       flake = false;
     };
+    run0edit = {
+      url = "github:HastD/run0edit";
+      flake = false;
+    };
     zapret-flowseal = {
       url = "github:Flowseal/zapret-discord-youtube";
       flake = false;

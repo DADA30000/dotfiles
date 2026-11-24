@@ -155,6 +155,39 @@ let
     cargoLock.lockFile = "${inputs.way-secure}/Cargo.lock";
   };
 
+  pw-portal-shim-pkg = pkgs.stdenv.mkDerivation {
+    pname = "pw-portal-shim";
+    version = "1.0.0";
+    src = ../../../stuff/system/packages/pw-portal-shim.c;
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [
+      pkgs.dbus
+      pkgs.pipewire
+    ];
+    buildPhase = ''
+      $CC -shared -fPIC -O2 -Wall \
+        $(pkg-config --cflags --libs dbus-1 libpipewire-0.3) \
+        -ldl $src -o libpw-portal-shim.so
+    '';
+    installPhase = ''
+      mkdir -p $out/lib $out/bin
+      cp libpw-portal-shim.so $out/lib/
+      cat << EOF > $out/bin/pw-portal-v4l2
+      #!/bin/sh
+      LIBPW_V4L2='${pkgs.pipewire}/\''${LIB}/pipewire-0.3/v4l2/libpw-v4l2.so'
+      SHIM="$out/lib/libpw-portal-shim.so"
+      if [ -z "\$LD_PRELOAD" ]; then
+        export LD_PRELOAD="\$SHIM \$LIBPW_V4L2"
+      else
+        export LD_PRELOAD="\$SHIM \$LIBPW_V4L2 \$LD_PRELOAD"
+      fi
+      exec "\$@"
+      EOF
+      chmod +x $out/bin/pw-portal-v4l2
+    '';
+  };
+
   syscallsJson = pkgs.runCommand "sb-syscalls.json" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     python3 - "${pkgs.linuxHeaders}/include/asm/unistd_64.h" "${pkgs.linuxHeaders}/include/asm/unistd_32.h" "$out" << 'EOF'
     import json, re, sys
@@ -187,7 +220,7 @@ let
       dbus = "sandboxed";
       shm = "sandboxed";
       tmp = "sandboxed";
-      webcam = 0;
+      webcam = "off";
       gpu = false;
       gamepad = false;
       landlock = true;
@@ -214,6 +247,7 @@ let
       vpnify = "/run/wrappers/bin/vpnify";
       notify_send = "${pkgs.libnotify}/bin/notify-send";
       neovide = "neovide";
+      pw_v4l2 = "${pw-portal-shim-pkg}/bin/pw-portal-v4l2";
     };
     singbox_config = "/etc/sb-run/sing-box.json";
     syscalls_file = "/etc/sb-run/syscalls.json";
@@ -614,6 +648,7 @@ let
         "org.freedesktop.portal.Desktop"
         "org.freedesktop.portal.Documents"
         "org.freedesktop.portal.Secret"
+        "org.freedesktop.portal.Camera"
         "org.freedesktop.Notifications"
         "org.freedesktop.FileManager1"
         "org.freedesktop.ScreenSaver"
@@ -765,7 +800,7 @@ let
       package,
       gpu ? false,
       network ? "off", # "off" | "sandboxed" | "singbox" | "passthrough"
-      webcam ? 0,
+      webcam ? "off", # "off" | "portal" | "auto" | [ 0 1 ... ]
       audio_pulse ? "off", # "off" | "sandboxed" | "passthrough"
       audio_pipewire ? "off", # "off" | "sandboxed" | "passthrough"
       wayland ? "off", # "off" | "sandboxed" | "passthrough"
@@ -882,10 +917,20 @@ let
         ])
         portalsFlag
         portalEnvFlags
-        (lib.optional (webcam != 0) [
-          "--webcam"
-          (toString webcam)
-        ])
+        (
+          if webcam == "auto" then
+            [ "--webcam" "auto" ]
+          else if webcam == "portal" || webcam == "pw-v4l2" then
+            [ "--webcam" "portal" ]
+          else if builtins.isList webcam then
+            (lib.optional (webcam != [ ]) [ "--webcam" "off" ])
+            ++ (lib.concatMap (n: [ "--dev" "/dev/video${toString n}" ]) webcam)
+          else if builtins.isInt webcam && webcam > 0 then
+            [ "--webcam" "off" ]
+            ++ (lib.concatMap (n: [ "--dev" "/dev/video${toString n}" ]) (lib.range 0 (webcam - 1)))
+          else
+            [ "--webcam" "off" ]
+        )
         (
           if dbusEnabled then
             [
@@ -1116,10 +1161,12 @@ let
         rules = [
           {
             matches = [
-              { "device.name" = "~.*"; }
-              { "node.name" = "~.*"; }
+              { "media.class" = "~Video/.*"; }
+              { "media.role" = "Camera"; }
+              { "device.api" = "v4l2"; }
+              { "device.api" = "libcamera"; }
             ];
-            actions.set-permissions = "rx";
+            actions.set-permissions = "-";
           }
         ];
       }
@@ -1127,8 +1174,9 @@ let
     "access.rules" = [
       {
         matches = [
-          { "pipewire.client.access" = "restricted"; }
-          { "pipewire.client.access" = "flatpak"; }
+          { "pipewire.access" = "restricted"; }
+          { "pipewire.access" = "flatpak"; }
+          { "pipewire.sec.socket" = "pipewire-0-restricted"; }
         ];
         actions.update-props.permission_manager_name = "sandbox-restricted";
       }
@@ -1148,6 +1196,7 @@ in
         staticBwrap
         pasta-pkg
         way-secure-pkg
+        pw-portal-shim-pkg
       ];
       file.".not-a-sandbox".text = "not a sandbox";
     };
@@ -1173,6 +1222,7 @@ in
         staticBwrap
         pasta-pkg
         way-secure-pkg
+        pw-portal-shim-pkg
       ];
       etc = {
         ".not-a-sandbox".text = "not a sandbox";

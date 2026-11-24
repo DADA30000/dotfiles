@@ -225,7 +225,7 @@ in
             ProtectHome = "read-only";
             PrivateNetwork = true;
             ReadWritePaths = [
-              "-%D/flatpak"
+              "-%h/.local/share/flatpak"
               "%t"
             ];
             RestrictAddressFamilies = [ "AF_UNIX" ];

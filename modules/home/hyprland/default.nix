@@ -88,6 +88,13 @@ let
         '';
       });
 
+  xdgDesktopPortalPatched = pkgs.xdg-desktop-portal.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ../../../stuff/patches/xdg-desktop-portal-ephemeral-camera.patch
+    ];
+    doCheck = false;
+  });
+
   plugin-loader =
     pkg:
     let
@@ -800,6 +807,13 @@ in
         own = [ "org.freedesktop.impl.portal.desktop.oo7" ];
         talk = [ "org.freedesktop.secrets" ];
       };
+    };
+
+    systemd.user.serviceDropins.xdg-desktop-portal.Service = {
+      ExecStart = [
+        ""
+        "${xdgDesktopPortalPatched}/libexec/xdg-desktop-portal"
+      ];
     };
 
     systemd.user.services = {
