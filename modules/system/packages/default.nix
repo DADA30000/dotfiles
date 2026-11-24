@@ -128,6 +128,8 @@ let
   excludeList = [
     "translate-zapret-nixos.sh"
     "pw-portal-shim.c"
+    "wp-mic-portal.c"
+    "wp-mic-portal.lua"
   ];
 
   handlers = {

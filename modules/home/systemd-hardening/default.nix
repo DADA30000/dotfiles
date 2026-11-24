@@ -466,6 +466,7 @@ in
           ];
           talk = [
             "org.freedesktop.impl.portal.PermissionStore"
+            "org.freedesktop.impl.portal.desktop.gtk"
             "org.mpris.MediaPlayer2.*"
             "org.freedesktop.Notifications"
           ];

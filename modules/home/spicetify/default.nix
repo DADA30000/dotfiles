@@ -52,15 +52,18 @@ in
       (mkSandbox {
         appId = "com.spotify.Client";
         network = "singbox";
-        audio_pulse = "sandboxed";
+        pulse = "sandboxed";
         gpu = true;
         wayland = "sandboxed";
         x11 = "sandboxed";
-        portals_for_files = false;
-        additional_args.dbus = {
-          enable = true;
-          policies."org.mpris.MediaPlayer2.spotify" = "own";
-        };
+        portals = false;
+        seccomp.allow = [
+          "@10:unshare"
+          "@10:setns"
+          "@10:clone"
+          "capset"
+        ];
+        dbus.owns = [ "org.mpris.MediaPlayer2.spotify" ];
         package = config.programs.spicetify.spicedSpotify.overrideAttrs {
           fixupPhase = ''
             runHook preFixup

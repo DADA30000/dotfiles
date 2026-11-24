@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::env;
 use std::ffi::{CString, c_void};
 use std::fs;
@@ -344,10 +345,6 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
     if bpf_bytes.is_empty() {
         return;
     }
-    if seccomp_socket.is_empty() {
-        eprintln!("[sb-executor] Seccomp filter requested but --seccomp-socket is missing");
-        exit(1);
-    }
     let Ok(insn_count) = u16::try_from(bpf_bytes.len() / 8) else {
         eprintln!("[sb-executor] Seccomp BPF exceeds maximum instruction count");
         exit(1);
@@ -355,14 +352,6 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
     if insn_count == 0 {
         return;
     }
-
-    let mut stream = match UnixStream::connect(seccomp_socket) {
-        Ok(s) => s,
-        Err(err) => {
-            eprintln!("[sb-executor] Failed to connect seccomp socket '{seccomp_socket}': {err}");
-            exit(1);
-        }
-    };
 
     if unsafe { prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
         eprintln!(
@@ -376,6 +365,34 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
         len: insn_count,
         filter: bpf_bytes.as_ptr(),
     };
+
+    if seccomp_socket.is_empty() {
+        let res = unsafe {
+            syscall(
+                SYS_SECCOMP,
+                SECCOMP_SET_MODE_FILTER,
+                0usize,
+                (&raw const prog).cast::<c_void>(),
+            )
+        };
+        if res < 0 {
+            eprintln!(
+                "[sb-executor] seccomp(SECCOMP_SET_MODE_FILTER) failed: {}",
+                std::io::Error::last_os_error()
+            );
+            exit(1);
+        }
+        return;
+    }
+
+    let mut stream = match UnixStream::connect(seccomp_socket) {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("[sb-executor] Failed to connect seccomp socket '{seccomp_socket}': {err}");
+            exit(1);
+        }
+    };
+
     let flags = SECCOMP_FILTER_FLAG_NEW_LISTENER | SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV;
     let res = unsafe {
         syscall(
@@ -612,6 +629,7 @@ fn handle_connection(
     auth_token: Option<[u8; 16]>,
     migrator_socket: &str,
     seccomp_socket: &str,
+    gui_roots: &mut BTreeSet<i32>,
 ) {
     let (header, fds) = match recv_header_with_fds(&stream) {
         Ok(res) => res,
@@ -688,6 +706,8 @@ fn handle_connection(
 
     if is_cli {
         monitor_cli_child(stream, child_pid);
+    } else if !is_helper {
+        gui_roots.insert(child_pid);
     }
 }
 
@@ -948,6 +968,7 @@ fn main() {
         revents: 0,
     }];
 
+    let mut gui_roots = BTreeSet::new();
     loop {
         let res = unsafe { poll(poll_fds.as_mut_ptr(), 1, 500) };
         if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
@@ -959,6 +980,7 @@ fn main() {
                         cli.auth_token,
                         &cli.migrator_socket,
                         &cli.seccomp_socket,
+                        &mut gui_roots,
                     );
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -969,6 +991,14 @@ fn main() {
         }
 
         let mut status: i32 = 0;
-        while unsafe { waitpid(-1, &raw mut status, 1) } > 0 {}
+        loop {
+            let pid = unsafe { waitpid(-1, &raw mut status, 1) };
+            if pid <= 0 {
+                break;
+            }
+            if gui_roots.remove(&pid) && status != 0 {
+                unsafe { kill(-pid, 9) };
+            }
+        }
     }
 }

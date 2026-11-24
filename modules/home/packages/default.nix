@@ -33,8 +33,10 @@ let
     };
 
   fhsSeccompAllow = [
-    "unshare"
-    "setns"
+    "@10:unshare"
+    "@10:setns"
+    "@10:clone"
+    "capset"
     "mount"
     "umount"
     "umount2"
@@ -47,7 +49,6 @@ let
     "fsmount"
     "fspick"
     "mount_setattr"
-    "clone_newuser"
   ];
 
   # ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ let
     network = "sandboxed";
     gpu = true;
     wayland = "sandboxed";
-    seccomp_allow = fhsSeccompAllow;
+    seccomp.allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
       rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
@@ -99,8 +100,8 @@ let
     gpu = true;
     wayland = "sandboxed";
     x11 = "sandboxed";
-    seccomp_allow = fhsSeccompAllow;
-    additional_args.dbus.policies."com.mag1cfall.gemini-web2api.*" = "own";
+    seccomp.allow = fhsSeccompAllow;
+    dbus.owns = [ "com.mag1cfall.gemini-web2api.*" ];
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8007 -s "$SANDBOXED_RUNTIME_DIR/gemini-web2api" &
       rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
@@ -132,7 +133,7 @@ let
     gpu = true;
     wayland = "sandboxed";
     x11 = "sandboxed";
-    seccomp_allow = fhsSeccompAllow;
+    seccomp.allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8017 -s "$SANDBOXED_RUNTIME_DIR/antigravity2api" &
       rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
@@ -160,23 +161,23 @@ let
   prismLauncherSandbox = mkSandbox rec {
     appId = "org.prismlauncher.PrismLauncher";
     network = "singbox";
-    audio_pulse = "sandboxed";
+    pulse = "sandboxed";
     wayland = "sandboxed";
     x11 = "sandboxed";
     gpu = true;
-    additional_args =
-      { sloth, ... }:
-      {
-        dbus = {
-          enable = true;
-          policies."com.feralinteractive.GameMode" = "talk";
-        };
-        bubblewrap.bind.ro = [
-          (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
-          (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
-          (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
-        ];
-      };
+    dbus.talks = [ "com.feralinteractive.GameMode" ];
+    binds = {
+      mkdir = [
+        "$XDG_CONFIG_HOME/openvr"
+        "$XDG_CONFIG_HOME/openxr"
+        "$XDG_RUNTIME_DIR/wivrn"
+      ];
+      ro = [
+        "$XDG_CONFIG_HOME/openvr"
+        "$XDG_CONFIG_HOME/openxr"
+        "$XDG_RUNTIME_DIR/wivrn"
+      ];
+    };
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/PrismLauncher" "$XDG_DATA_HOME/PrismLauncher"
     '';
@@ -192,20 +193,14 @@ let
   discordSandbox = mkSandbox rec {
     appId = "com.discordapp.Discord";
     network = "singbox";
-    audio_pulse = "sandboxed";
+    pulse = "sandboxed";
+    microphone = "portal";
     wayland = "sandboxed";
     gpu = true;
     webcam = "portal";
-    seccomp_allow = fhsSeccompAllow;
-    additional_args =
-      { sloth, ... }:
-      {
-        dbus.enable = true;
-        bubblewrap = {
-          sharePid = true;
-          bind.rw = [ (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord") ];
-        };
-      };
+    share_pid = true;
+    seccomp.allow = fhsSeccompAllow;
+    binds.rw = [ "$XDG_CONFIG_HOME/Vencord" ];
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/discord" "$XDG_CONFIG_HOME/discord"
       ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
@@ -218,24 +213,19 @@ let
   vesktopSandbox = mkSandbox rec {
     appId = "dev.vencord.Vesktop";
     network = "singbox";
-    audio_pulse = "sandboxed";
-    audio_pipewire = "sandboxed";
+    pulse = "sandboxed";
+    pipewire = "sandboxed";
+    microphone = "portal";
     wayland = "sandboxed";
     gpu = true;
     webcam = "portal";
-    additional_args =
-      { sloth, ... }:
-      {
-        dbus.enable = true;
-        bubblewrap = {
-          sharePid = true;
-          bind.rw = [
-            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/Vencord")
-            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings.json")
-            (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/vesktop/settings/settings.json")
-          ];
-        };
-      };
+    share_pid = true;
+    seccomp.allow = fhsSeccompAllow;
+    binds.rw = [
+      "$XDG_CONFIG_HOME/Vencord"
+      "$XDG_CONFIG_HOME/vesktop/settings.json"
+      "$XDG_CONFIG_HOME/vesktop/settings/settings.json"
+    ];
     additional_outside_commands = ''
       mkdir -p "$XDG_CONFIG_HOME/Vencord" "$XDG_CONFIG_HOME/vesktop/settings"
       touch "$XDG_CONFIG_HOME/vesktop/settings.json" "$XDG_CONFIG_HOME/vesktop/settings/settings.json"
@@ -247,32 +237,29 @@ let
   sounduxSandbox = mkSandbox {
     appId = "io.github.Soundux";
     network = "sandboxed";
-    audio_pulse = "passthrough";
-    audio_pipewire = "passthrough";
+    pulse = "passthrough";
+    pipewire = "passthrough";
     wayland = "sandboxed";
     gpu = true;
     package = sounduxPkg;
-    additional_args =
-      { sloth, ... }:
-      {
-        bubblewrap.bind.rw = [ (sloth.mkdir (sloth.concat' (sloth.env "HOME") "/Music/Soundux")) ];
-      };
+    binds = {
+      mkdir = [ "$HOME/Music/Soundux" ];
+      rw = [ "$HOME/Music/Soundux" ];
+    };
   };
 
   ayugramDesktopSandbox = mkSandbox rec {
     appId = "com.ayugram.desktop";
     network = "singbox";
-    audio_pulse = "sandboxed";
+    pulse = "sandboxed";
+    microphone = "portal";
     wayland = "sandboxed";
     gpu = true;
     webcam = "portal";
-    additional_args.dbus = {
-      enable = true;
-      policies = {
-        "com.ayugram.desktop" = "own";
-        "com.ayugram.desktop.*" = "own";
-      };
-    };
+    dbus.owns = [
+      "com.ayugram.desktop"
+      "com.ayugram.desktop.*"
+    ];
     additional_outside_commands = ''
       ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_DATA_HOME#"$HOME/"}/AyuGramDesktop" "$XDG_DATA_HOME/AyuGramDesktop"
     '';
@@ -294,10 +281,7 @@ let
     network = "sandboxed";
     wayland = "sandboxed";
     gpu = true;
-    additional_args.dbus = {
-      enable = true;
-      policies."io.ente.auth" = "own";
-    };
+    dbus.owns = [ "io.ente.auth" ];
     package = pkgs.ente-auth;
   };
 
@@ -334,26 +318,56 @@ let
     let
       overriddenSteam = pkgs.steam.override {
         privateTmp = false;
-        extraPkgs = _: allSteamExtraPackages;
+        extraPkgs = _: steamExtraPackages;
       };
 
       sandboxed = mkSandbox rec {
         appId = "com.valvesoftware.Steam";
         network = "sandboxed";
-        audio_pulse = "sandboxed";
+        pulse = "sandboxed";
         gpu = true;
         wayland = "sandboxed";
-        use_landlock = false;
-        sandbox_tmp = false;
-        sandbox_shm = false;
-        seccomp_allow = fhsSeccompAllow ++ [
-          "ptrace"
-          "process_vm_readv"
-          "process_vm_writev"
-          "modify_ldt"
-          "personality"
-          "userfaultfd"
-        ];
+        landlock = false;
+        tmp = "passthrough";
+        shm = "passthrough";
+        share_pid = true;
+        seccomp = {
+          allow = fhsSeccompAllow ++ [
+            "@10:ptrace"
+            "process_vm_readv"
+            "process_vm_writev"
+            "modify_ldt"
+            "personality"
+            "userfaultfd"
+          ];
+          deny.none.eperm = [ "mknodat" ];
+        };
+        dbus = {
+          owns = [ "com.steampowered.*" ];
+          talks = [ "com.feralinteractive.GameMode" ];
+        };
+        binds = {
+          dev = [ "/dev" ];
+          mkdir = [
+            "$XDG_CONFIG_HOME/openvr"
+            "$XDG_CONFIG_HOME/openxr"
+            "$XDG_RUNTIME_DIR/wivrn"
+          ];
+          ro = [
+            "$XDG_CONFIG_HOME/openvr"
+            "$XDG_CONFIG_HOME/openxr"
+            "$XDG_RUNTIME_DIR/wivrn"
+          ];
+          rw = steamExtraLibraries ++ [
+            "/tmp"
+            "/sys/class"
+            "/sys/bus"
+            "/sys/dev"
+            "/sys/devices"
+            "/sys/block"
+            "/run/udev"
+          ];
+        };
         additional_outside_commands = ''
           rust-bridge -r listen --address 127.0.0.1:[57343,27060] -s "$SANDBOXED_RUNTIME_DIR/steam" &
           mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_DATA_HOME/vulkan"
@@ -366,40 +380,6 @@ let
         additional_inside_commands = ''
           rust-bridge -r pass --address 127.0.0.1:[57343,27060] -s "$XDG_RUNTIME_DIR/steam" -d
         '';
-        additional_args =
-          { sloth, ... }:
-          {
-            dbus = {
-              enable = true;
-              policies = {
-                "com.steampowered.*" = "own";
-                "com.feralinteractive.GameMode" = "talk";
-              };
-            };
-            bubblewrap = {
-              sharePid = true;
-              bind = {
-                dev = [ "/dev" ];
-                ro = [
-                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openvr"))
-                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_CONFIG_HOME") "/openxr"))
-                  (sloth.mkdir (sloth.concat' (sloth.env "XDG_RUNTIME_DIR") "/wivrn"))
-                ];
-                rw = lib.mkAfter (
-                  steamExtraLibraries
-                  ++ [
-                    "/tmp"
-                    "/sys/class"
-                    "/sys/bus"
-                    "/sys/dev"
-                    "/sys/devices"
-                    "/sys/block"
-                    "/run/udev"
-                  ]
-                );
-              };
-            };
-          };
         package = overriddenSteam;
       };
     in
@@ -1467,6 +1447,16 @@ let
     lib.unique (myHomePackages ++ steamExtraPackages ++ (osConfig.environment.systemPackages or [ ]))
   );
 
+  collectPairedPackages =
+    pkg:
+    if pkg ? passthru.pairedPackages then
+      pkg.passthru.pairedPackages
+    else
+      lib.unique (
+        [ pkg ]
+        ++ (map (outName: pkg.${outName} or pkg) (pkg.outputs or [ ]))
+      );
+
   processMergedPackage =
     entry:
     let
@@ -1484,6 +1474,7 @@ let
           builtins.elemAt entry 3
         else
           lib.meta.defaultPriority;
+      pairedPackages = lib.unique (collectPairedPackages winner ++ collectPairedPackages loser);
       merged = pkgs.buildEnv {
         inherit name;
         paths = [
@@ -1493,7 +1484,12 @@ let
         extraOutputsToInstall = osConfig.environment.extraOutputsToInstall or [ ] ++ [ "lib" ];
       };
     in
-    lib.setPrio prio merged;
+    (lib.setPrio prio merged)
+    // {
+      passthru = (merged.passthru or { }) // {
+        inherit pairedPackages;
+      };
+    };
 
   mergedPackages = [
     [
@@ -1502,7 +1498,7 @@ let
     ]
     [
       pkgs.dconf
-      pkgs.gvfs
+      osConfig.services.gvfs.package
     ]
     [
       pkgs.tinyxxd
@@ -1530,7 +1526,7 @@ let
           pkgs.shadow
           pkgs.util-linux
         ])
-        pkgs.coreutils
+        pkgs.coreutils-full
       ])
       "core-unix-tools-merged"
     ]
@@ -1538,30 +1534,22 @@ let
 
   mergedPairs = map processMergedPackage mergedPackages;
 
+  allPairedPackages = lib.unique (lib.concatMap (m: m.passthru.pairedPackages) mergedPairs);
+
   isPaired =
     p:
     let
-      name = p.pname or (lib.getName p);
+      pName = p.pname or (lib.getName p);
     in
-    lib.any (n: lib.hasPrefix n name) [
-      "clang"
-      "gcc"
-      "shadow"
-      "util-linux"
-      "dconf"
-      "gvfs"
-      "tinyxxd"
-      "neovim"
-      "procps"
-      "coreutils"
-      "gnutar"
-      "cpio"
-      "pkexec"
-      "polkit"
-      "run0"
-      "systemd"
-      "openresolv"
-    ];
+    lib.any (
+      paired:
+      let
+        pairedName = paired.pname or (lib.getName paired);
+      in
+      p == paired
+      || (p ? outPath && paired ? outPath && p.outPath == paired.outPath)
+      || pName == pairedName
+    ) allPairedPackages;
 
   allHomePackages = lib.unique (
     (lib.filter (p: !isPaired p) myHomePackages)

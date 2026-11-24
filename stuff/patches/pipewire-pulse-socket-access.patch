@@ -1,0 +1,12 @@
+--- a/src/modules/module-protocol-pulse/server.c
++++ b/src/modules/module-protocol-pulse/server.c
+@@ -468,7 +468,8 @@
+ 			 * as the session manager does not check any permission store
+ 			 * for it.
+ 			 */
+-			client_access = "flatpak";
++			if (client_access == NULL)
++				client_access = "flatpak";
+ 			pw_properties_set(client->props, "pipewire.access.portal.app_id",
+ 					app_id);
+ 			pw_properties_set(client->props, "pipewire.access.portal.instance_id",

@@ -30,7 +30,6 @@ let
         ${pkgs.nukeReferences}/bin/nuke-refs $out/bin/xdg-dbus-proxy
         chmod +x $out/bin/xdg-dbus-proxy
       '';
-  sloth = import ./sloth.nix { inherit lib; };
 
   processes_to_proxy =
     if (args ? osConfig) && (args.osConfig ? sing-box.processes_to_proxy) then
@@ -188,6 +187,30 @@ let
     '';
   };
 
+  wp-mic-portal-pkg = pkgs.stdenv.mkDerivation {
+    pname = "wp-mic-portal";
+    version = "1.0.0";
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [
+      pkgs.wireplumber
+      pkgs.glib
+      pkgs.pipewire
+    ];
+    buildPhase = ''
+      $CC -shared -fPIC -O2 -Wall -Wextra -Werror \
+        $(pkg-config --cflags --libs wireplumber-0.5 gio-2.0) \
+        ${../../../stuff/system/packages/wp-mic-portal.c} \
+        -o libwireplumber-module-mic-portal.so
+    '';
+    installPhase = ''
+      mkdir -p $out/lib/wireplumber-0.5 $out/share/wireplumber/scripts/linking
+      cp libwireplumber-module-mic-portal.so $out/lib/wireplumber-0.5/
+      cp ${../../../stuff/system/packages/wp-mic-portal.lua} \
+        $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
+    '';
+  };
+
   syscallsJson = pkgs.runCommand "sb-syscalls.json" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     python3 - "${pkgs.linuxHeaders}/include/asm/unistd_64.h" "${pkgs.linuxHeaders}/include/asm/unistd_32.h" "$out" << 'EOF'
     import json, re, sys
@@ -210,29 +233,524 @@ let
     EOF
   '';
 
-  sbRunConfigData = {
-    defaults = {
-      network = "sandboxed";
-      wayland = "sandboxed";
-      x11 = "off";
-      pulse = "sandboxed";
-      pipewire = "sandboxed";
-      dbus = "sandboxed";
-      shm = "sandboxed";
-      tmp = "sandboxed";
-      webcam = "off";
-      gpu = false;
-      gamepad = false;
-      landlock = true;
-      seccomp = true;
-      portals = true;
-      tmpfs = false;
-      share_pid = false;
-      share_ipc = false;
-      vpnify = false;
-      flatpak_info = true;
-      scope = true;
+  portal-xdg-open = pkgs.writeShellScriptBin "xdg-open" ''
+    exec ${pkgs.systemd}/bin/busctl --user call \
+      org.freedesktop.portal.Desktop \
+      /org/freedesktop/portal/desktop \
+      org.freedesktop.portal.OpenURI \
+      OpenURI \
+      ssa{sv} "" "$1" 0
+  '';
+
+  portal-files = pkgs.runCommand "portal-files" { } ''
+    mkdir -p $out/applications
+
+    cat > $out/applications/nixpak-portal.desktop <<EOF
+    [Desktop Entry]
+    Type=Application
+    Name=Nixpak Portal
+    Exec=${portal-xdg-open}/bin/xdg-open %u
+    MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/about;x-scheme-handler/unknown;
+    EOF
+
+    cat > $out/mimeapps.list <<EOF
+    [Default Applications]
+    text/html=nixpak-portal.desktop
+    x-scheme-handler/http=nixpak-portal.desktop
+    x-scheme-handler/https=nixpak-portal.desktop
+    x-scheme-handler/about=nixpak-portal.desktop
+    x-scheme-handler/unknown=nixpak-portal.desktop
+    EOF
+  '';
+
+  seccompActionType = lib.types.enum [
+    "eperm"
+    "enosys"
+    "eacces"
+    "einval"
+    "enotsup"
+    "kill"
+    "trap"
+  ];
+
+  mkDenyBucketType =
+    notifyName:
+    lib.types.submodule {
+      options = {
+        # Return EPERM (1) for matching rules in this notification bucket.
+        eperm = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules failing with EPERM under notify=${notifyName}.";
+        };
+        # Return ENOSYS (38) for matching rules in this notification bucket.
+        enosys = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules failing with ENOSYS under notify=${notifyName}.";
+        };
+        # Return EACCES (13) for matching rules in this notification bucket.
+        eacces = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules failing with EACCES under notify=${notifyName}.";
+        };
+        # Return EINVAL (22) for matching rules in this notification bucket.
+        einval = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules failing with EINVAL under notify=${notifyName}.";
+        };
+        # Return ENOTSUP (95) for matching rules in this notification bucket.
+        enotsup = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules failing with ENOTSUP under notify=${notifyName}.";
+        };
+        # Terminate the offending process with SIGKILL.
+        kill = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules terminating the process with SIGKILL under notify=${notifyName}.";
+        };
+        # Terminate the offending process with SIGSYS.
+        trap = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Syscall rules trapping the process with SIGSYS under notify=${notifyName}.";
+        };
+      };
     };
+
+  mkDbusPolicyOptions = kind: {
+    # D-Bus names allowed to talk with (e.g. "org.freedesktop.Notifications").
+    talks = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "${kind} D-Bus names allowed for --talk.";
+    };
+    # D-Bus names allowed to own on the bus.
+    owns = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "${kind} D-Bus names allowed for --own.";
+    };
+    # D-Bus names visible via --see without full talk access.
+    sees = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "${kind} D-Bus names allowed for --see.";
+    };
+    # D-Bus method call filter rules passed as --call=<rule> to xdg-dbus-proxy.
+    calls = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "${kind} D-Bus --call filter rules.";
+    };
+    # Extra raw arguments appended to xdg-dbus-proxy invocation.
+    extra_args = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Extra raw arguments passed to xdg-dbus-proxy for ${kind} bus.";
+    };
+  };
+
+  sandboxConfigModule =
+    { config, ... }:
+    {
+      options = {
+        # Network mode: "off" (unshared), "sandboxed" (pasta), "singbox" (VPN), or "passthrough" (host).
+        network = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "sandboxed"
+            "singbox"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "Network isolation mode.";
+        };
+        # Wayland display mode: "off", "sandboxed" (way-secure proxy), or "passthrough" (host socket).
+        wayland = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "Wayland display access mode.";
+        };
+        # X11 display mode: "off", "sandboxed" (xwayland-satellite), or "passthrough" (/tmp/.X11-unix).
+        x11 = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "off";
+          description = "X11 display access mode.";
+        };
+        # PulseAudio access mode: "off", "sandboxed" (restricted socket), or "passthrough" (host native).
+        pulse = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "PulseAudio access mode.";
+        };
+        # PipeWire access mode: "off", "sandboxed" (restricted socket), or "passthrough" (host pipewire-0).
+        pipewire = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "PipeWire access mode.";
+        };
+        # Microphone policy for sandboxed audio: "off" (blocked), "portal" (AccessDialog), or "allow" (unprompted capture).
+        microphone = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "portal"
+            "allow"
+          ];
+          default = "off";
+          description = "Microphone capture policy for sandboxed PulseAudio/PipeWire.";
+        };
+        # Webcam policy: "off", "portal" (pw-portal-v4l2 LD_PRELOAD), or "auto" (all /dev/video* nodes).
+        webcam = lib.mkOption {
+          type = lib.types.enum [
+            "off"
+            "portal"
+            "auto"
+          ];
+          default = "off";
+          description = "Webcam access mode.";
+        };
+        # Shared memory (/dev/shm) mode: "sandboxed" (per-sandbox dir) or "passthrough" (host /dev/shm).
+        shm = lib.mkOption {
+          type = lib.types.enum [
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "/dev/shm isolation mode.";
+        };
+        # Temporary directory (/tmp) mode: "sandboxed" (per-sandbox dir) or "passthrough" (host /tmp).
+        tmp = lib.mkOption {
+          type = lib.types.enum [
+            "sandboxed"
+            "passthrough"
+          ];
+          default = "sandboxed";
+          description = "/tmp isolation mode.";
+        };
+        # Whether to expose /dev/dri and NVIDIA device nodes inside the sandbox.
+        gpu = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable GPU / 3D hardware acceleration binds.";
+        };
+        # Whether to bind /dev/input and /dev/uinput for gamepads and controllers.
+        gamepad = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable /dev/input and /dev/uinput gamepad binds.";
+        };
+        # Whether to apply Landlock signal scoping across sandboxed processes.
+        landlock = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Enable Landlock signal scoping.";
+        };
+        # Whether to configure XDG portal opener env vars and mimeapps.list bind.
+        portals = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Enable XDG portal integration (xdg-open shim and mimeapps.list).";
+        };
+        # Whether to store sandbox home in ephemeral runtime storage (cleaned on exit).
+        tmpfs = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Use ephemeral runtime home directory cleaned up on exit.";
+        };
+        # Whether to share the host PID namespace instead of unsharing PIDs.
+        share_pid = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Share host PID namespace.";
+        };
+        # Whether to share the host IPC namespace instead of unsharing IPC.
+        share_ipc = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Share host IPC namespace.";
+        };
+        # Whether to wrap bwrap execution with vpnify.
+        vpnify = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Wrap sandbox execution inside vpnify.";
+        };
+        # Whether to generate and bind /.flatpak-info inside the sandbox.
+        flatpak_info = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Mount /.flatpak-info metadata for portal/PipeWire client identification.";
+        };
+        # Whether to isolate the sandbox inside a dedicated app2unit systemd scope and cgroup tree.
+        scope = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Run inside a dedicated app2unit systemd scope with cgroup migration.";
+        };
+        # Whether invocations default to CLI TTY forwarding and exit status propagation.
+        cli = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Default to CLI mode (foreground stdio/TTY forwarding).";
+        };
+
+        # Session D-Bus proxy configuration and policy rules.
+        dbus = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              # Session D-Bus mode: "off", "sandboxed" (xdg-dbus-proxy), or "passthrough".
+              mode = lib.mkOption {
+                type = lib.types.enum [
+                  "off"
+                  "sandboxed"
+                  "passthrough"
+                ];
+                default = "sandboxed";
+                description = "Session D-Bus access mode.";
+              };
+            }
+            // mkDbusPolicyOptions "Session";
+          };
+          default = { };
+          description = "Session D-Bus proxy configuration.";
+        };
+
+        # System D-Bus proxy configuration and policy rules.
+        system_dbus = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              # Whether to run an xdg-dbus-proxy instance for the system bus.
+              enable = lib.mkOption {
+                type = lib.types.bool;
+                default = false;
+                description = "Enable filtered system D-Bus proxy.";
+              };
+            }
+            // mkDbusPolicyOptions "System";
+          };
+          default = { };
+          description = "System D-Bus proxy configuration.";
+        };
+
+        # Seccomp BPF filter configuration, allow/deny rule lists, and notification policy.
+        seccomp = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              # Whether to compile and install the seccomp BPF filter.
+              enable = lib.mkOption {
+                type = lib.types.bool;
+                default = true;
+                description = "Enable seccomp syscall filtering.";
+              };
+              # Default denial action when an unmatched syscall is blocked in allowlist mode.
+              action = lib.mkOption {
+                type = seccompActionType;
+                default = "eperm";
+                description = "Default action for blocked syscalls.";
+              };
+              # Default notification channel for blocked syscalls: "none", "log", or "notify".
+              notify = lib.mkOption {
+                type = lib.types.enum [
+                  "none"
+                  "log"
+                  "notify"
+                ];
+                default = "notify";
+                description = "Default reporting mode for blocked syscalls.";
+              };
+              # Allowed syscall rules ([@prio:]syscall[:cond[&&cond...]]). Empty enables denylist mode.
+              allow = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Seccomp allow rules; empty list switches to denylist mode.";
+              };
+              # Explicit deny rule buckets grouped by notification mode and denial action.
+              deny = lib.mkOption {
+                type = lib.types.submodule {
+                  options = {
+                    # Silent in-kernel denials (never forwarded to supervisor).
+                    none = lib.mkOption {
+                      type = mkDenyBucketType "none";
+                      default = { };
+                      description = "In-BPF silent deny rules.";
+                    };
+                    # Denials logged exclusively to <sandbox_dir>/logs/seccomp.log.
+                    log = lib.mkOption {
+                      type = mkDenyBucketType "log";
+                      default = { };
+                      description = "Log-only deny rules.";
+                    };
+                    # Denials reported exclusively via desktop notification (notify-send).
+                    notify = lib.mkOption {
+                      type = mkDenyBucketType "notify";
+                      default = { };
+                      description = "Desktop-notification deny rules.";
+                    };
+                  };
+                };
+                default = { };
+                description = "Explicit seccomp deny rules grouped by notify and action.";
+              };
+            };
+          };
+          default = { };
+          description = "Seccomp filter configuration.";
+        };
+
+        # Extra bind mounts and directories created inside the sandbox.
+        binds = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              # Read-write bind mounts ("path" or "src:dst"; supports allowed env vars).
+              rw = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Read-write bind mounts.";
+              };
+              # Read-only bind mounts ("path" or "src:dst"; supports allowed env vars).
+              ro = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Read-only bind mounts.";
+              };
+              # Device bind mounts ("path" or "src:dst"; supports allowed env vars).
+              dev = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Device bind mounts (--dev-bind-try).";
+              };
+              # Directories created inside the sandbox before bind mounts are applied.
+              mkdir = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Directories created inside the sandbox (--dir).";
+              };
+            };
+          };
+          default = { };
+          description = "Custom bind mounts and directories.";
+        };
+
+        # Environment variables set inside the sandbox (--setenv).
+        env = lib.mkOption {
+          type = lib.types.attrsOf lib.types.str;
+          default = { };
+          description = "Environment variables injected into the sandbox.";
+        };
+        # TCP bridge specifications ("from:addr:ports" or "to:addr:ports") via rust-bridge.
+        bridges = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "TCP socket bridge rules for rust-bridge.";
+        };
+        # Extra raw arguments appended to the bwrap command line.
+        bwrap_args = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Raw extra arguments passed to bwrap.";
+        };
+        # Paths to helper executables used by sb-run and the GUI.
+        bins = lib.mkOption {
+          type = lib.types.attrsOf lib.types.str;
+          default = { };
+          description = "Helper binary paths map.";
+        };
+        # Host path lists and allowed environment variable names for path expansion.
+        paths = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              # Environment variable names expanded in binds and env strings.
+              allowed_env_vars = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Allowed environment variable names for path expansion.";
+              };
+              # Host system paths mounted read-only into every sandbox.
+              ro_system_paths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "System paths mounted read-only.";
+              };
+              # Subpaths under $HOME mounted read-only for theming/profiles.
+              user_theme_subpaths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Home subpaths mounted read-only.";
+              };
+              # Subpaths under $XDG_CONFIG_HOME mounted read-only for theming/VR configs.
+              xdg_config_subpaths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "XDG_CONFIG_HOME subpaths mounted read-only.";
+              };
+              # Subpaths under $XDG_DATA_HOME mounted read-only for icons/themes/shell data.
+              xdg_data_subpaths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "XDG_DATA_HOME subpaths mounted read-only.";
+              };
+              # NVIDIA device nodes mounted when gpu = true.
+              nvidia_nodes = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "NVIDIA device nodes bound when gpu is enabled.";
+              };
+            };
+          };
+          default = { };
+          description = "Base host paths and expansion rules.";
+        };
+        # Arguments passed to pasta when network = "sandboxed".
+        pasta_args = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Arguments passed to pasta in sandboxed network mode.";
+        };
+        # Default sing-box JSON configuration path used when network = "singbox".
+        singbox_config = lib.mkOption {
+          type = lib.types.str;
+          default = "/etc/sb-run/sing-box.json";
+          description = "Default sing-box configuration file path.";
+        };
+        # Syscall number table JSON path used by seccomp compiler and supervisor.
+        syscalls_file = lib.mkOption {
+          type = lib.types.str;
+          default = "/etc/sb-run/syscalls.json";
+          description = "Path to the syscall number table JSON.";
+        };
+      };
+
+      config = lib.mkIf config.portals {
+        env = {
+          PATH = lib.mkDefault "${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin";
+          XDG_DATA_DIRS = lib.mkDefault "${portal-files}:/usr/share:/run/current-system/sw/share";
+          XDG_CONFIG_DIRS = lib.mkDefault "${portal-files}:/etc/xdg";
+        };
+      };
+    };
+
+  baseSandboxConfig = {
     bins = {
       bwrap = "${staticBwrap}/bin/bwrap";
       sb_executor = "/run/current-system/sw/bin/sb-executor";
@@ -249,17 +767,14 @@ let
       neovide = "neovide";
       pw_v4l2 = "${pw-portal-shim-pkg}/bin/pw-portal-v4l2";
     };
-    singbox_config = "/etc/sb-run/sing-box.json";
-    syscalls_file = "/etc/sb-run/syscalls.json";
+
     seccomp = {
-      default_allowed = [
-        # Process / thread / runtime / scheduling
+      allow = [
         "exit"
         "exit_group"
         "fork"
         "vfork"
-        "clone"
-        "clone3"
+        "clone:arg0!&0x7e020080"
         "execve"
         "execveat"
         "wait4"
@@ -280,15 +795,6 @@ let
         "getresuid"
         "getresgid"
         "getgroups"
-        "setuid"
-        "setgid"
-        "setreuid"
-        "setregid"
-        "setresuid"
-        "setresgid"
-        "setfsuid"
-        "setfsgid"
-        "setgroups"
         "getuid32"
         "geteuid32"
         "getgid32"
@@ -296,17 +802,7 @@ let
         "getresuid32"
         "getresgid32"
         "getgroups32"
-        "setuid32"
-        "setgid32"
-        "setreuid32"
-        "setregid32"
-        "setresuid32"
-        "setresgid32"
-        "setfsuid32"
-        "setfsgid32"
-        "setgroups32"
         "capget"
-        "capset"
         "prctl"
         "arch_prctl"
         "seccomp"
@@ -316,8 +812,8 @@ let
         "lsm_get_self_attr"
         "lsm_list_modules"
         "getrlimit"
-        "setrlimit"
         "ugetrlimit"
+        "setrlimit"
         "prlimit64"
         "getrusage"
         "times"
@@ -326,7 +822,6 @@ let
         "umask"
         "getpriority"
         "setpriority"
-        "nice"
         "sched_yield"
         "sched_getaffinity"
         "sched_setaffinity"
@@ -350,8 +845,8 @@ let
         "rseq"
         "rseq_slice_yield"
         "pidfd_open"
-        "pidfd_getfd"
         "pidfd_send_signal"
+        "kcmp:arg2==0"
 
         # Signals / timers / clocks (read-only)
         "rt_sigaction"
@@ -369,8 +864,6 @@ let
         "sigprocmask"
         "sigreturn"
         "sigsuspend"
-        "sgetmask"
-        "ssetmask"
         "sigaltstack"
         "restart_syscall"
         "kill"
@@ -415,8 +908,6 @@ let
         "mlock"
         "mlock2"
         "munlock"
-        "mlockall"
-        "munlockall"
         "membarrier"
         "memfd_create"
         "mseal"
@@ -424,10 +915,6 @@ let
         "pkey_alloc"
         "pkey_free"
         "pkey_mprotect"
-        "cachestat"
-        "mbind"
-        "get_mempolicy"
-        "set_mempolicy"
         "futex"
         "futex_time64"
         "futex_wait"
@@ -458,19 +945,18 @@ let
         "pwritev2"
         "readahead"
         "stat"
-        "fstat"
-        "lstat"
         "stat64"
+        "fstat"
         "fstat64"
+        "lstat"
         "lstat64"
         "newfstatat"
         "fstatat64"
         "statx"
         "statfs"
-        "fstatfs"
         "statfs64"
+        "fstatfs"
         "fstatfs64"
-        "ustat"
         "access"
         "faccessat"
         "faccessat2"
@@ -493,30 +979,19 @@ let
         "mkdir"
         "mkdirat"
         "rmdir"
-        "mknod"
-        "mknodat"
         "chmod"
         "fchmod"
         "fchmodat"
         "fchmodat2"
-        "chown"
-        "fchown"
-        "lchown"
-        "fchownat"
-        "chown32"
-        "fchown32"
-        "lchown32"
         "truncate"
-        "ftruncate"
         "truncate64"
+        "ftruncate"
         "ftruncate64"
         "fallocate"
         "fadvise64"
         "fadvise64_64"
         "fsync"
         "fdatasync"
-        "sync"
-        "syncfs"
         "sync_file_range"
         "utime"
         "utimes"
@@ -533,29 +1008,16 @@ let
         "getxattr"
         "lgetxattr"
         "fgetxattr"
-        "getxattrat"
-        "setxattr"
-        "lsetxattr"
-        "fsetxattr"
-        "setxattrat"
         "listxattr"
         "llistxattr"
         "flistxattr"
-        "listxattrat"
-        "removexattr"
-        "lremovexattr"
-        "fremovexattr"
-        "removexattrat"
-        "file_getattr"
-        "file_setattr"
         "copy_file_range"
         "sendfile"
         "sendfile64"
         "splice"
-        "vmsplice"
         "tee"
 
-        # Event loops / pipes / async I/O / IPC
+        # Event loops / pipes / IPC
         "pipe"
         "pipe2"
         "poll"
@@ -568,9 +1030,7 @@ let
         "epoll_create"
         "epoll_create1"
         "epoll_ctl"
-        "epoll_ctl_old"
         "epoll_wait"
-        "epoll_wait_old"
         "epoll_pwait"
         "epoll_pwait2"
         "eventfd"
@@ -581,43 +1041,20 @@ let
         "inotify_init1"
         "inotify_add_watch"
         "inotify_rm_watch"
-        "io_setup"
-        "io_destroy"
-        "io_submit"
-        "io_cancel"
-        "io_getevents"
-        "io_pgetevents"
-        "io_pgetevents_time64"
-        "io_uring_setup"
-        "io_uring_enter"
-        "io_uring_register"
-        "mq_open"
-        "mq_unlink"
-        "mq_timedsend"
-        "mq_timedsend_time64"
-        "mq_timedreceive"
-        "mq_timedreceive_time64"
-        "mq_notify"
-        "mq_getsetattr"
+        "ipc"
         "shmget"
         "shmat"
         "shmdt"
         "shmctl"
-        "semget"
-        "semop"
-        "semtimedop"
-        "semtimedop_time64"
-        "semctl"
-        "msgget"
-        "msgsnd"
-        "msgrcv"
-        "msgctl"
-        "ipc"
 
         # Networking & sockets
-        "socket"
-        "socketpair"
+        "socket:arg0==1"
+        "socket:arg0==2"
+        "socket:arg0==10"
+        "socket:arg0==16&&arg2==0"
+        "socket:arg0==16&&arg2==15"
         "socketcall"
+        "socketpair"
         "bind"
         "listen"
         "accept"
@@ -636,15 +1073,26 @@ let
         "recvmmsg"
         "recvmmsg_time64"
       ];
-      silent_errno = [
-        "clone_newuser"
-        "unshare"
-        "setns"
-        "ptrace"
-      ];
+      deny = {
+        none = {
+          enosys = [ "clone3" ];
+          eperm = [
+            "clone"
+            "unshare"
+            "setns"
+            "ptrace"
+            "io_uring_setup"
+          ];
+        };
+        notify.eperm = [
+          "@10:ioctl:arg1_u32==0x5412"
+          "@10:ioctl:arg1_u32==0x541c"
+        ];
+      };
     };
+
     dbus = {
-      default_talks = [
+      talks = [
         "org.freedesktop.portal.Desktop"
         "org.freedesktop.portal.Documents"
         "org.freedesktop.portal.Secret"
@@ -658,12 +1106,13 @@ let
         "com.canonical.AppMenu.Registrar"
         "org.mpris.MediaPlayer2.Player"
       ];
-      default_owns = [
+      owns = [
         "org.kde.StatusNotifierItem.*"
         "org.kde.StatusNotifierItem"
         "org.mpris.MediaPlayer2.*"
       ];
     };
+
     pasta_args = [
       "--config-net"
       "--no-dhcp"
@@ -691,6 +1140,7 @@ let
       "--search"
       "none"
     ];
+
     paths = {
       allowed_env_vars = [
         "HOME"
@@ -762,196 +1212,42 @@ let
     };
   };
 
-  sbRunConfigFile = (pkgs.formats.json { }).generate "sb-run-config.json" sbRunConfigData;
+  evalSandboxConfig =
+    extraModules:
+    builtins.removeAttrs
+      (lib.evalModules {
+        modules = [
+          sandboxConfigModule
+          baseSandboxConfig
+        ]
+        ++ extraModules;
+      }).config
+      [ "_module" ];
 
-  portal-xdg-open = pkgs.writeShellScriptBin "xdg-open" ''
-    exec ${pkgs.systemd}/bin/busctl --user call \
-      org.freedesktop.portal.Desktop \
-      /org/freedesktop/portal/desktop \
-      org.freedesktop.portal.OpenURI \
-      OpenURI \
-      ssa{sv} "" "$1" 0
-  '';
-
-  portal-files = pkgs.runCommand "portal-files" { } ''
-    mkdir -p $out/applications
-
-    cat > $out/applications/nixpak-portal.desktop <<EOF
-    [Desktop Entry]
-    Type=Application
-    Name=Nixpak Portal
-    Exec=${portal-xdg-open}/bin/xdg-open %u
-    MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/about;x-scheme-handler/unknown;
-    EOF
-
-    cat > $out/mimeapps.list <<EOF
-    [Default Applications]
-    text/html=nixpak-portal.desktop
-    x-scheme-handler/http=nixpak-portal.desktop
-    x-scheme-handler/https=nixpak-portal.desktop
-    x-scheme-handler/about=nixpak-portal.desktop
-    x-scheme-handler/unknown=nixpak-portal.desktop
-    EOF
-  '';
+  sbRunConfigFile = (pkgs.formats.json { }).generate "sb-run-config.json" (evalSandboxConfig [ ]);
 
   mkSandbox =
     args@{
       appId,
       package,
-      gpu ? false,
-      network ? "off", # "off" | "sandboxed" | "singbox" | "passthrough"
-      webcam ? "off", # "off" | "portal" | "auto" | [ 0 1 ... ]
-      audio_pulse ? "off", # "off" | "sandboxed" | "passthrough"
-      audio_pipewire ? "off", # "off" | "sandboxed" | "passthrough"
-      wayland ? "off", # "off" | "sandboxed" | "passthrough"
-      x11 ? "off", # "off" | "sandboxed" | "passthrough"
-      use_landlock ? true,
-      use_seccomp ? true,
-      seccomp_allow ? [ ],
-      seccomp_block ? [ ],
-      portals_for_files ? true,
-      sandbox_shm ? true,
-      sandbox_tmp ? true,
       main_desktop_file ? "none",
-      additional_args ? { },
-      additional_inside_commands ? "",
       additional_outside_commands ? "",
+      additional_inside_commands ? "",
       extraAttrs ? [ ],
+      ...
     }:
     let
-      rawArgs =
-        if builtins.isFunction additional_args then
-          additional_args { inherit sloth lib pkgs; }
-        else
-          additional_args;
-
-      dbusCfg = rawArgs.dbus or { };
-      systemDbusCfg = rawArgs.system_dbus or (rawArgs.system-dbus or { });
-      bwrapCfg = rawArgs.bubblewrap or { };
-
-      dbusEnabled = dbusCfg.enable or true;
-      dbusPolicies = dbusCfg.policies or { };
-
-      dbusFlags = lib.concatLists (
-        lib.mapAttrsToList (name: policy: [ "--dbus-${policy}=${name}" ]) dbusPolicies
-      );
-
-      systemDbusEnabled = systemDbusCfg.enable or (dbusCfg.system or false);
-      systemDbusPolicies = systemDbusCfg.policies or { };
-
-      systemDbusFlags = lib.optionals systemDbusEnabled (
-        [ "--system-dbus" ]
-        ++ lib.concatLists (
-          lib.mapAttrsToList (name: policy: [ "--system-dbus-${policy}=${name}" ]) systemDbusPolicies
-        )
-      );
-
-      extractList =
-        val:
-        if builtins.isList val then
-          val
-        else if builtins.isAttrs val && val ? content then
-          extractList val.content
-        else
-          [ ];
-
-      rwFlags = map (
-        p: "--rw=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-      ) (extractList (bwrapCfg.bind.rw or [ ]));
-
-      roFlags = map (
-        p: "--ro=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-      ) (extractList (bwrapCfg.bind.ro or [ ]));
-
-      devFlags = map (
-        p: "--dev=${if builtins.isList p then "${builtins.head p}:${builtins.elemAt p 1}" else toString p}"
-      ) (extractList (bwrapCfg.bind.dev or [ ]));
-
-      sharePidFlag = lib.optional (bwrapCfg.sharePid or false) "--share-pid";
-      landlockFlag = lib.optional (!use_landlock) "--no-landlock";
-      portalsFlag = lib.optional (!portals_for_files) "--no-portals";
-      portalEnvFlags = lib.optionals portals_for_files [
-        "--env"
-        "PATH=${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin"
-        "--env"
-        "XDG_DATA_DIRS=${portal-files}:/usr/share:/run/current-system/sw/share"
-        "--env"
-        "XDG_CONFIG_DIRS=${portal-files}:/etc/xdg"
+      sandboxModuleArgs = removeAttrs args [
+        "appId"
+        "package"
+        "main_desktop_file"
+        "additional_outside_commands"
+        "additional_inside_commands"
+        "extraAttrs"
       ];
-      envFlags = lib.concatLists (
-        lib.mapAttrsToList (k: v: [
-          "--env"
-          "${k}=${v}"
-        ]) (bwrapCfg.env or { })
-      );
 
-      sbRunFlags = lib.flatten [
-        "--id"
-        appId
-        "--net"
-        network
-        (if gpu then "--gpu" else "--no-gpu")
-        [
-          "--pulse"
-          audio_pulse
-          "--pipewire"
-          audio_pipewire
-          "--wayland"
-          wayland
-          "--x11"
-          x11
-          "--shm"
-          (if sandbox_shm then "sandboxed" else "passthrough")
-          "--tmp"
-          (if sandbox_tmp then "sandboxed" else "passthrough")
-        ]
-        landlockFlag
-        (if use_seccomp then "--seccomp" else "--no-seccomp")
-        (lib.optionals (seccomp_allow != [ ]) [
-          "--seccomp-allow"
-          (lib.concatStringsSep "," seccomp_allow)
-        ])
-        (lib.optionals (seccomp_block != [ ]) [
-          "--seccomp-block"
-          (lib.concatStringsSep "," seccomp_block)
-        ])
-        portalsFlag
-        portalEnvFlags
-        (
-          if webcam == "auto" then
-            [ "--webcam" "auto" ]
-          else if webcam == "portal" || webcam == "pw-v4l2" then
-            [ "--webcam" "portal" ]
-          else if builtins.isList webcam then
-            (lib.optional (webcam != [ ]) [ "--webcam" "off" ])
-            ++ (lib.concatMap (n: [ "--dev" "/dev/video${toString n}" ]) webcam)
-          else if builtins.isInt webcam && webcam > 0 then
-            [ "--webcam" "off" ]
-            ++ (lib.concatMap (n: [ "--dev" "/dev/video${toString n}" ]) (lib.range 0 (webcam - 1)))
-          else
-            [ "--webcam" "off" ]
-        )
-        (
-          if dbusEnabled then
-            [
-              "--dbus"
-              "sandboxed"
-            ]
-          else
-            [
-              "--dbus"
-              "off"
-            ]
-        )
-        systemDbusFlags
-        dbusFlags
-        rwFlags
-        roFlags
-        devFlags
-        envFlags
-        sharePidFlag
-        (if (args.cli or false) then "--cli" else "--gui")
-      ];
+      evaluatedConfig = evalSandboxConfig [ sandboxModuleArgs ];
+      appConfigJson = (pkgs.formats.json { }).generate "sb-run-${appId}.json" evaluatedConfig;
 
       wrapperScript = pkgs.writeShellScript "sandbox-launcher-${appId}" ''
         if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
@@ -980,7 +1276,7 @@ let
           mkdir -p "$SANDBOXED_RUNTIME_DIR"
 
           ${additional_outside_commands}
-          exec sb-run ${lib.escapeShellArgs sbRunFlags} \
+          exec sb-run --config ${appConfigJson} --id ${lib.escapeShellArg appId} \
             ${
               lib.optionalString (
                 additional_inside_commands != ""
@@ -1122,12 +1418,32 @@ let
       { name = "pipewire-0"; }
       { name = "pipewire-0-manager"; }
       { name = "pipewire-0-restricted"; }
+      { name = "pipewire-0-restricted-nomic"; }
+      { name = "pipewire-0-restricted-mic-portal"; }
     ];
     "module.access.args"."access.socket" = {
       "pipewire-0" = "unrestricted";
       "pipewire-0-manager" = "unrestricted";
-      "pipewire-0-restricted" = "flatpak";
+      "pipewire-0-restricted" = "restricted";
+      "pipewire-0-restricted-nomic" = "restricted-nomic";
+      "pipewire-0-restricted-mic-portal" = "restricted-mic-portal";
     };
+    "context.objects" = [
+      {
+        factory = "adapter";
+        args = {
+          "factory.name" = "support.null-audio-sink";
+          "media.class" = "Audio/Source/Virtual";
+          "node.name" = "sandbox-null-mic";
+          "node.description" = "Silent Microphone (Denied)";
+          "audio.position" = [
+            "FL"
+            "FR"
+          ];
+          "priority.session" = 0;
+        };
+      }
+    ];
   };
 
   pipewirePulseRestrictedSocketConfig = {
@@ -1137,16 +1453,35 @@ let
         address = "unix:restricted";
         "client.access" = "restricted";
       }
+      {
+        address = "unix:restricted-nomic";
+        "client.access" = "restricted-nomic";
+      }
+      {
+        address = "unix:restricted-mic-portal";
+        "client.access" = "restricted-mic-portal";
+      }
     ];
     "pulse.rules" = [
       {
         matches = [
           { "pipewire.client.access" = "restricted"; }
+          { "pipewire.client.access" = "restricted-mic-portal"; }
           { "pipewire.client.access" = "flatpak"; }
         ];
         actions.quirks = [
           "block-source-volume"
           "block-sink-volume"
+        ];
+      }
+      {
+        matches = [
+          { "pipewire.client.access" = "restricted-nomic"; }
+        ];
+        actions.quirks = [
+          "block-source-volume"
+          "block-sink-volume"
+          "block-record-stream"
         ];
       }
     ];
@@ -1170,18 +1505,72 @@ let
           }
         ];
       }
+      {
+        name = "sandbox-restricted-nomic";
+        default_permissions = "rx";
+        core_permissions = "rx";
+        rules = [
+          {
+            matches = [
+              { "media.class" = "~Video/.*"; }
+              { "media.role" = "Camera"; }
+              { "device.api" = "v4l2"; }
+              { "device.api" = "libcamera"; }
+              { "media.class" = "~Audio/Source.*"; }
+            ];
+            actions.set-permissions = "-";
+          }
+        ];
+      }
     ];
     "access.rules" = [
       {
         matches = [
           { "pipewire.access" = "restricted"; }
+          { "pipewire.access" = "restricted-mic-portal"; }
           { "pipewire.access" = "flatpak"; }
           { "pipewire.sec.socket" = "pipewire-0-restricted"; }
+          { "pipewire.sec.socket" = "pipewire-0-restricted-mic-portal"; }
         ];
         actions.update-props.permission_manager_name = "sandbox-restricted";
       }
+      {
+        matches = [
+          { "pipewire.access" = "restricted-nomic"; }
+          { "pipewire.sec.socket" = "pipewire-0-restricted-nomic"; }
+        ];
+        actions.update-props.permission_manager_name = "sandbox-restricted-nomic";
+      }
     ];
   };
+
+  wireplumberRestrictedPermissionsText = ''
+    access.permission-managers = ${
+      builtins.toJSON wireplumberRestrictedPermissionsConfig."access.permission-managers"
+    }
+    access.rules = ${builtins.toJSON wireplumberRestrictedPermissionsConfig."access.rules"}
+    wireplumber.components = [
+      {
+        name = libwireplumber-module-mic-portal
+        type = module
+        provides = api.mic-portal
+        requires = [ support.dbus ]
+      }
+      {
+        name = linking/wp-mic-portal.lua
+        type = script/lua
+        provides = hooks.linking.mic-portal
+        requires = [ api.mic-portal ]
+      }
+    ]
+    wireplumber.profiles = {
+      main = {
+        hooks.linking.mic-portal = required
+      }
+    }
+  '';
+
+  wireplumberRestrictedPermissionsPkg = pkgs.writeTextDir "share/wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" wireplumberRestrictedPermissionsText;
 in
 {
   options.sandboxing.enable = lib.mkEnableOption "app sandboxing";
@@ -1201,13 +1590,13 @@ in
       file.".not-a-sandbox".text = "not a sandbox";
     };
     xdg = {
-      configFile = {
+      configFile = lib.optionalAttrs (!(args ? osConfig)) {
         "pipewire/pipewire.conf.d/99-restricted-socket.conf".text =
           builtins.toJSON pipewireRestrictedSocketConfig;
         "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf".text =
           builtins.toJSON pipewirePulseRestrictedSocketConfig;
         "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf".text =
-          builtins.toJSON wireplumberRestrictedPermissionsConfig;
+          wireplumberRestrictedPermissionsText;
       };
       dataFile = {
         "sb-run/config.json".source = sbRunConfigFile;
@@ -1235,9 +1624,21 @@ in
       package = pkgs.pipewire.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
           ../../../stuff/patches/pipewire-quirk-block-mute.patch
+          ../../../stuff/patches/pipewire-pulse-socket-access.patch
         ];
       });
-      wireplumber.extraConfig."99-restricted-permissions" = wireplumberRestrictedPermissionsConfig;
+      wireplumber = {
+        package = pkgs.wireplumber.overrideAttrs (old: {
+          postInstall = (old.postInstall or "") + ''
+            ln -s ${wp-mic-portal-pkg}/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so \
+              $out/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so
+            mkdir -p $out/share/wireplumber/scripts/linking
+            ln -s ${wp-mic-portal-pkg}/share/wireplumber/scripts/linking/wp-mic-portal.lua \
+              $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
+          '';
+        });
+        configPackages = [ wireplumberRestrictedPermissionsPkg ];
+      };
       extraConfig = {
         pipewire."99-restricted-socket" = pipewireRestrictedSocketConfig;
         pipewire-pulse."99-restricted-socket" = pipewirePulseRestrictedSocketConfig;

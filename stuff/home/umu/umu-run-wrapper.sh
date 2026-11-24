@@ -34,6 +34,7 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   export UMU_SINGBOX_CONFIG="$(get_dprop 'X-UMU-Singbox-Config')"
   export UMU_PULSE_MODE="$(get_dprop 'X-UMU-Pulse')"
   export UMU_PIPEWIRE_MODE="$(get_dprop 'X-UMU-Pipewire')"
+  export UMU_MICROPHONE="$(get_dprop 'X-UMU-Microphone')"
   export UMU_SB_GPU="$(get_dprop 'X-UMU-GPU')"
   export UMU_WEBCAM="$(get_dprop 'X-UMU-Webcam')"
   export UMU_DBUS_MODE="$(get_dprop 'X-UMU-DBus')"
@@ -42,8 +43,11 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   export UMU_TMP_MODE="$(get_dprop 'X-UMU-Tmp')"
   export UMU_LANDLOCK="$(get_dprop 'X-UMU-Landlock')"
   export UMU_SECCOMP="$(get_dprop 'X-UMU-Seccomp')"
+  export UMU_SECCOMP_ACTION="$(get_dprop 'X-UMU-Seccomp-Action')"
+  export UMU_SECCOMP_NOTIFY="$(get_dprop 'X-UMU-Seccomp-Notify')"
   export UMU_SECCOMP_ALLOW="$(get_dprop 'X-UMU-Seccomp-Allow')"
   export UMU_SECCOMP_BLOCK="$(get_dprop 'X-UMU-Seccomp-Block')"
+  export UMU_SECCOMP_DENY="$(get_dprop 'X-UMU-Seccomp-Deny')"
   export UMU_SHARE_PID="$(get_dprop 'X-UMU-Share-Pid')"
   export UMU_PORTALS="$(get_dprop 'X-UMU-Portals')"
   export UMU_TMPFS="$(get_dprop 'X-UMU-Tmpfs')"
@@ -403,6 +407,7 @@ fi
 EXTRA_SB_ARGS=()
 [[ -n "${UMU_PULSE_MODE:-}" ]] && EXTRA_SB_ARGS+=(--pulse "$UMU_PULSE_MODE")
 [[ -n "${UMU_PIPEWIRE_MODE:-}" ]] && EXTRA_SB_ARGS+=(--pipewire "$UMU_PIPEWIRE_MODE")
+[[ -n "${UMU_MICROPHONE:-}" ]] && EXTRA_SB_ARGS+=(--microphone "$UMU_MICROPHONE")
 if [[ "${UMU_SB_GPU:-1}" == "0" ]]; then
   EXTRA_SB_ARGS+=(--no-gpu)
 else
@@ -434,8 +439,16 @@ if [[ "${UMU_SECCOMP:-1}" == "0" ]]; then
   EXTRA_SB_ARGS+=(--no-seccomp)
 else
   EXTRA_SB_ARGS+=(--seccomp)
+  [[ -n "${UMU_SECCOMP_ACTION:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-action "$UMU_SECCOMP_ACTION")
+  [[ -n "${UMU_SECCOMP_NOTIFY:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-notify "$UMU_SECCOMP_NOTIFY")
   [[ -n "${UMU_SECCOMP_ALLOW:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-allow "$UMU_SECCOMP_ALLOW")
   [[ -n "${UMU_SECCOMP_BLOCK:-}" ]] && EXTRA_SB_ARGS+=(--seccomp-block "$UMU_SECCOMP_BLOCK")
+  if [[ -n "${UMU_SECCOMP_DENY:-}" ]]; then
+    IFS=';' read -ra DENY_ENTRIES <<< "$UMU_SECCOMP_DENY"
+    for entry in "${DENY_ENTRIES[@]}"; do
+      [[ -n "$entry" ]] && EXTRA_SB_ARGS+=(--seccomp-deny "$entry")
+    done
+  fi
 fi
 [[ "${UMU_SHARE_PID:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--share-pid)
 [[ "${UMU_PORTALS:-1}" == "0" ]] && EXTRA_SB_ARGS+=(--no-portals)
