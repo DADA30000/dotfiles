@@ -1078,7 +1078,7 @@ let
         "recvmmsg_time64"
       ];
       deny = {
-        none = {
+        log = {
           enosys = [ "clone3" ];
           eperm = [
             "clone"
