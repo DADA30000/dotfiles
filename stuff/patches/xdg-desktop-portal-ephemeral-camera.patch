@@ -153,48 +153,4 @@ index f16de89..a7e3d9e 100644
  
    return allowed;
  }
-@@ -261,6 +247,28 @@ open_pipewire_camera_remote (const char *app_id,
-   return remote;
- }
- 
-+static void
-+on_camera_client_vanished (GDBusConnection *connection,
-+                           const gchar     *name,
-+                           gpointer         user_data)
-+{
-+  XdpAppInfo *app_info = user_data;
-+  XdpDbusImplPermissionStore *store = xdp_get_permission_store ();
-+  g_debug ("Camera client %s vanished, clearing camera permission for %s",
-+           name, xdp_app_info_get_id (app_info));
-+  if (store)
-+    {
-+      xdp_dbus_impl_permission_store_call_delete_permission_sync (
-+        store,
-+        CAMERA_PERMISSION_TABLE,
-+        CAMERA_PERMISSION_DEVICE_CAMERA,
-+        xdp_app_info_get_id (app_info),
-+        NULL,
-+        NULL);
-+    }
-+  g_object_unref (app_info);
-+}
-+
- static gboolean
- handle_open_pipewire_remote (XdpDbusCamera *object,
-                              GDBusMethodInvocation *invocation,
-@@ -310,6 +318,15 @@ handle_open_pipewire_remote (XdpDbusCamera *object,
-       return G_DBUS_METHOD_INVOCATION_HANDLED;
-     }
- 
-+  const char *sender = g_dbus_method_invocation_get_sender (invocation);
-+  g_bus_watch_name_on_connection (g_dbus_method_invocation_get_connection (invocation),
-+                                  sender,
-+                                  G_BUS_NAME_WATCHER_FLAGS_NONE,
-+                                  NULL,
-+                                  on_camera_client_vanished,
-+                                  g_object_ref (app_info),
-+                                  NULL);
-+
-   out_fd_list = g_unix_fd_list_new ();
-   fd = pw_core_steal_fd (remote->core);
-   fd_id = g_unix_fd_list_append (out_fd_list, fd, &error);
+
