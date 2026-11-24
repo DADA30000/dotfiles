@@ -2666,6 +2666,11 @@ fn add_subsystem_binds(
                 .arg("/dev/uinput");
         }
     }
+    if cfg.webcam != WebcamMode::Off {
+        cmd.arg("--ro-bind-try")
+            .arg("/sys/class/video4linux")
+            .arg("/sys/class/video4linux");
+    }
     if cfg.webcam == WebcamMode::Auto {
         let sys_v4l = Path::new("/sys/class/video4linux");
         if let Ok(entries) = fs::read_dir(sys_v4l) {
