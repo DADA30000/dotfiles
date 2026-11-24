@@ -210,30 +210,6 @@ let
     };
   };
 
-  vesktopSandbox = mkSandbox rec {
-    appId = "dev.vencord.Vesktop";
-    network = "singbox";
-    pulse = "sandboxed";
-    pipewire = "sandboxed";
-    microphone = "portal";
-    wayland = "sandboxed";
-    gpu = true;
-    webcam = "portal";
-    share_pid = true;
-    seccomp.allow = fhsSeccompAllow;
-    binds.rw = [
-      "$XDG_CONFIG_HOME/Vencord"
-      "$XDG_CONFIG_HOME/vesktop/settings.json"
-      "$XDG_CONFIG_HOME/vesktop/settings/settings.json"
-    ];
-    additional_outside_commands = ''
-      mkdir -p "$XDG_CONFIG_HOME/Vencord" "$XDG_CONFIG_HOME/vesktop/settings"
-      touch "$XDG_CONFIG_HOME/vesktop/settings.json" "$XDG_CONFIG_HOME/vesktop/settings/settings.json"
-      ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
-    '';
-    package = pkgs.vesktop;
-  };
-
   sounduxSandbox = mkSandbox {
     appId = "io.github.Soundux";
     network = "sandboxed";
@@ -1413,47 +1389,43 @@ let
     sounduxSandbox
     prismLauncherSandbox
     discordSandbox
-    vesktopSandbox
     ayugramDesktopSandbox
     enteAuthSandbox
   ];
 
-  steamExcludedPackages = [
-    osConfig.boot.kernelPackages.ryzen-smu
-    pkgs.kmod
-    pkgs.libreoffice
-    pkgs.obs-studio
-    pkgs.obs-studio-plugins.obs-vaapi
-    pkgs.jdk25
-    pkgs.jdt-language-server
-  ];
+  #steamExcludedPackages = [
+  #  osConfig.boot.kernelPackages.ryzen-smu
+  #  pkgs.kmod
+  #  pkgs.libreoffice
+  #  pkgs.obs-studio
+  #  pkgs.obs-studio-plugins.obs-vaapi
+  #  pkgs.jdk25
+  #  pkgs.jdt-language-server
+  #];
 
-  isExcludedFromSteam =
-    p:
-    let
-      pName = p.pname or (p.name or (lib.getName p));
-    in
-    lib.any (
-      ex:
-      let
-        exName = ex.pname or (ex.name or (lib.getName ex));
-      in
-      ex == p || exName == pName || lib.hasInfix exName pName
-    ) steamExcludedPackages;
+  #isExcludedFromSteam =
+  #  p:
+  #  let
+  #    pName = p.pname or (p.name or (lib.getName p));
+  #  in
+  #  lib.any (
+  #    ex:
+  #    let
+  #      exName = ex.pname or (ex.name or (lib.getName ex));
+  #    in
+  #    ex == p || exName == pName || lib.hasInfix exName pName
+  #  ) steamExcludedPackages;
 
-  allSteamExtraPackages = lib.filter (p: !isExcludedFromSteam p) (
-    lib.unique (myHomePackages ++ steamExtraPackages ++ (osConfig.environment.systemPackages or [ ]))
-  );
+  #allSteamExtraPackages = lib.filter (p: !isExcludedFromSteam p) (
+  #  lib.unique (myHomePackages ++ steamExtraPackages ++ (osConfig.environment.systemPackages or [ ]))
+  #);
 
   collectPairedPackages =
     pkg:
     if pkg ? passthru.pairedPackages then
       pkg.passthru.pairedPackages
     else
-      lib.unique (
-        [ pkg ]
-        ++ (map (outName: pkg.${outName} or pkg) (pkg.outputs or [ ]))
-      );
+      lib.unique ([ pkg ] ++ (map (outName: pkg.${outName} or pkg) (pkg.outputs or [ ])));
 
   processMergedPackage =
     entry:

@@ -1190,10 +1190,12 @@ let
         ".local/state/nix/profile"
         ".icons"
         ".themes"
+        ".fonts"
       ];
       xdg_config_subpaths = [
         "user-dirs.dirs"
         "user-dirs.conf"
+        "fontconfig"
         "gtk-4.0"
         "gtk-3.0"
         "qt6ct"
@@ -1209,6 +1211,8 @@ let
         "zsh/.zshrc"
         "icons"
         "themes"
+        "color-schemes"
+        "fonts"
       ];
       nvidia_nodes = [
         "/dev/nvidia0"
