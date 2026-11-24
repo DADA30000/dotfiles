@@ -1046,6 +1046,12 @@ let
         "shmat"
         "shmdt"
         "shmctl"
+        "semget"
+        "semop"
+        "semtimedop"
+        "semtimedop_time64"
+        "semctl"
+        "mknodat:arg2_u32&0x1000&&arg2_u32!&0xe000"
 
         # Networking & sockets
         "socket:arg0==1"
@@ -1082,6 +1088,10 @@ let
             "setns"
             "ptrace"
             "io_uring_setup"
+            "get_mempolicy"
+            "mbind"
+            "fremovexattr"
+            "sync"
           ];
         };
         notify.eperm = [

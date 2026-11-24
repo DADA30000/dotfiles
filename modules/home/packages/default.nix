@@ -331,17 +331,14 @@ let
         tmp = "passthrough";
         shm = "passthrough";
         share_pid = true;
-        seccomp = {
-          allow = fhsSeccompAllow ++ [
-            "@10:ptrace"
-            "process_vm_readv"
-            "process_vm_writev"
-            "modify_ldt"
-            "personality"
-            "userfaultfd"
-          ];
-          deny.none.eperm = [ "mknodat" ];
-        };
+        seccomp.allow = fhsSeccompAllow ++ [
+          "@10:ptrace"
+          "process_vm_readv"
+          "process_vm_writev"
+          "modify_ldt"
+          "personality"
+          "userfaultfd"
+        ];
         dbus = {
           owns = [ "com.steampowered.*" ];
           talks = [ "com.feralinteractive.GameMode" ];
