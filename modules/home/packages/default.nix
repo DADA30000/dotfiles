@@ -166,6 +166,7 @@ let
     x11 = "sandboxed";
     gpu = true;
     dbus.talks = [ "com.feralinteractive.GameMode" ];
+    seccomp.deny.log.eperm = [ "fchown" ];
     binds = {
       mkdir = [
         "$XDG_CONFIG_HOME/openvr"
