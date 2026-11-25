@@ -730,6 +730,21 @@ in
       };
     };
 
+    actkbd = {
+      enable = true;
+      bindings = [
+        {
+          keys = [
+            14
+            29
+            56
+          ];
+          events = [ "key" ];
+          command = "${pkgs.kbd}/bin/chvt 2";
+        }
+      ];
+    };
+
     chrony = {
       enable = true;
       enableNTS = true;
