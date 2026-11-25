@@ -57,6 +57,12 @@ let
         ]
         (prev.postPatch or "");
   };
+  zfsSched = pkgs.writeShellScript "zfs-sched" ''
+    for f in /sys/block/$1/slaves/*/queue/scheduler /sys/block/$1/slaves/*/../queue/scheduler; do
+      [ -w "$f" ] && echo none > "$f"
+    done
+    exit 0
+  '';
   commonUserPersistence = {
     files = [ ];
     directories = [
@@ -193,10 +199,15 @@ in
       ];
     };
 
-    services.udev.extraRules = lib.mkIf cfg.autoScanZfs ''
-      ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
-      ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="zfs_member", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
-    '';
+    services.udev.extraRules =
+      lib.optionalString cfg.autoScanZfs ''
+        ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="crypto_LUKS", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
+        ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="zfs_member", RUN+="${pkgs.systemd}/bin/systemctl --no-block restart zfs-automount.service"
+      ''
+      + ''
+        ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ENV{ID_FS_TYPE}=="zfs_member", ATTR{queue/scheduler}="none"
+        ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="dm-*", ENV{ID_FS_TYPE}=="zfs_member", RUN+="${zfsSched} %k"
+      '';
 
     systemd.services.zfs-automount = lib.mkIf cfg.autoScanZfs {
       description = "Universal LUKS & ZFS Auto-Mount Engine";
