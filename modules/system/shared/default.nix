@@ -688,12 +688,6 @@ in
       RuntimeMaxUse = "1G";
     };
 
-    scx = {
-      enable = true;
-      scheduler = "scx_lavd";
-      extraArgs = [ "--autopower" ];
-    };
-
     udev.packages = [
       (pkgs.runCommand "70-opentabletdriver-sanitized.rules" { } ''
         mkdir -p $out/lib/udev/rules.d
@@ -720,6 +714,19 @@ in
         PasswordAuthentication = false;
         KbdInteractiveAuthentication = false;
         PermitRootLogin = "no";
+      };
+    };
+
+    scx-loader = {
+      enable = true;
+      config = {
+        default_sched = "scx_lavd";
+        default_mode = "Auto";
+        scheds.scx_lavd.auto_mode = [
+          "--autopower"
+          "--pinned-slice-us"
+          "500"
+        ];
       };
     };
 
