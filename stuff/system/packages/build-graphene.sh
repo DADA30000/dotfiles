@@ -148,7 +148,7 @@ vendor_blobs() {
 kernel_build() {
   if [ ! -d "$KERNEL_DIR/.git" ]; then
     rm -rf "$KERNEL_DIR"
-    until git clone https://gitlab.com/grapheneos/kernel_pixel_6.1.git -b 17 --depth 1 "$KERNEL_DIR"; do
+    until git clone https://gitlab.com/grapheneos/kernel_pixel_6.1.git -b 17-qpr2 --depth 1 "$KERNEL_DIR"; do
       echo "Kernel clone dropped, retrying in 3s..." && rm -rf "$KERNEL_DIR" && sleep 3
     done
   fi && cd "$KERNEL_DIR" && until git submodule update --init --recursive --depth 1 --progress; do
