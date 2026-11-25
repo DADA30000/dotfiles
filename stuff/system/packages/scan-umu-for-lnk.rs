@@ -204,16 +204,14 @@ fn resolve_actual_exe(prefix: &Path, win_path: &str) -> Option<PathBuf> {
         return Some(direct);
     }
 
-    // 4. drive_c in upper or base prefix
-    for check_root in ["upper/drive_c", "drive_c"] {
-        let root = prefix.join(check_root);
-        let cand = root.join(path_rel);
-        if cand.is_file() {
-            return Some(cand);
-        }
-        if let Some(ci) = resolve_case_insensitive(&root, path_rel) {
-            return Some(ci);
-        }
+    // 4. drive_c inside prefix root
+    let root = prefix.join("drive_c");
+    let cand = root.join(path_rel);
+    if cand.is_file() {
+        return Some(cand);
+    }
+    if let Some(ci) = resolve_case_insensitive(&root, path_rel) {
+        return Some(ci);
     }
 
     None
@@ -275,7 +273,10 @@ fn main() {
     let prefix_name = env::var("UMU_PREFIX_NAME").unwrap_or_else(|_| "default".to_string());
     let prefix_path = match env::var("WINEPREFIX") {
         Ok(val) if !val.is_empty() => PathBuf::from(val),
-        _ => PathBuf::from(&home).join(".umu").join(&prefix_name),
+        _ => PathBuf::from(&home)
+            .join(".umu")
+            .join(&prefix_name)
+            .join("upper"),
     };
 
     // Clean up dead/stale shortcuts first
@@ -287,33 +288,29 @@ fn main() {
 
     let existing_lnks = collect_existing_lnk_paths(&desktop_dir);
 
-    // Identify search roots across prefix and overlay upper
     let mut search_roots = Vec::new();
-    for sub in ["drive_c", "upper/drive_c"] {
-        let base_users = prefix_path.join(sub).join("users");
-        if let Ok(entries) = fs::read_dir(&base_users) {
-            for entry in entries.flatten() {
-                let user_dir = entry.path();
-                if user_dir.is_dir() {
-                    let desk = user_dir.join("Desktop");
-                    if desk.is_dir() {
-                        search_roots.push(desk);
-                    }
-                    let start_menu =
-                        user_dir.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
-                    if start_menu.is_dir() {
-                        search_roots.push(start_menu);
-                    }
+    let drive_c = prefix_path.join("drive_c");
+    let base_users = drive_c.join("users");
+    if let Ok(entries) = fs::read_dir(&base_users) {
+        for entry in entries.flatten() {
+            let user_dir = entry.path();
+            if user_dir.is_dir() {
+                let desk = user_dir.join("Desktop");
+                if desk.is_dir() {
+                    search_roots.push(desk);
+                }
+                let start_menu =
+                    user_dir.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs");
+                if start_menu.is_dir() {
+                    search_roots.push(start_menu);
                 }
             }
         }
+    }
 
-        let pdata = prefix_path
-            .join(sub)
-            .join("ProgramData/Microsoft/Windows/Start Menu/Programs");
-        if pdata.is_dir() {
-            search_roots.push(pdata);
-        }
+    let pdata = drive_c.join("ProgramData/Microsoft/Windows/Start Menu/Programs");
+    if pdata.is_dir() {
+        search_roots.push(pdata);
     }
 
     if search_roots.is_empty() {

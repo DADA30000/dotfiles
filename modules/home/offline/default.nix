@@ -2,7 +2,7 @@
   lib,
   inputs,
   pkgs,
-  options,
+  osConfig,
   config,
   ...
 }:
@@ -72,42 +72,23 @@ let
     ]
   );
 
-  # Extract system packages safely
-  sysPkgs =
-    if options ? environment.systemPackages then lib.flatten config.environment.systemPackages else [ ];
+  allPkgs = lib.unique (
+    lib.filter (p: p != null) (
+      lib.flatten (config.home.packages ++ osConfig.environment.systemPackages)
+    )
+  );
 
-  systemPkgsFarm = pkgs.linkFarm "system-pkgs-farm" (
+  pkgsFarm = pkgs.linkFarm "pkgs-farm" (
     lib.imap0 (idx: pkg: {
       name = "${pkg.name or "pkg"}-${toString idx}";
       path = pkg;
-    }) (lib.filter (p: p != null) sysPkgs)
+    }) allPkgs
   );
-
-  # Extract home packages safely
-  hmPkgs = if options ? home.packages then lib.flatten config.home.packages else [ ];
-
-  homePkgsFarm = pkgs.linkFarm "home-pkgs-farm" (
-    lib.imap0 (idx: pkg: {
-      name = "${pkg.name or "pkg"}-${toString idx}";
-      path = pkg;
-    }) (lib.filter (p: p != null) hmPkgs)
-  );
-
 in
 {
-  config =
-    lib.optionalAttrs (options ? environment.etc) {
-      environment.etc = {
-        inputs.source = inputsFarm;
-        offline-python.source = offline-python;
-        pkgsFarm.source = systemPkgsFarm;
-      };
-    }
-    // lib.optionalAttrs (options ? xdg.dataFile) {
-      xdg.dataFile = {
-        inputs.source = inputsFarm;
-        offline-python.source = offline-python;
-        pkgsFarm.source = homePkgsFarm;
-      };
-    };
+  xdg.dataFile = {
+    inputs.source = inputsFarm;
+    offline-python.source = offline-python;
+    pkgsFarm.source = pkgsFarm;
+  };
 }

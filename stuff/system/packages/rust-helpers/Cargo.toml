@@ -1,0 +1,56 @@
+[package]
+name = "system-ui-helpers"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+gtk4 = "0.11"
+glib = "0.22"
+gio = "0.22"
+gdk-pixbuf = "0.22"
+cairo-rs = "0.22"
+pango = "0.22"
+pangocairo = "0.22"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = { version = "2.12", features = ["json"] }
+
+[lib]
+name = "system_ui_helpers"
+path = "src/lib.rs"
+
+[[bin]]
+name = "run-exe"
+path = "src/bin/run_exe.rs"
+
+[[bin]]
+name = "sb-gui"
+path = "src/bin/sb_gui.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = true
+
+[[bin]]
+name = "manage-umu-shortcuts"
+path = "src/bin/manage_shortcuts.rs"
+
+[[bin]]
+name = "manage-umu-prefixes"
+path = "src/bin/manage_prefixes.rs"
+
+[[bin]]
+name = "fix-umu-path"
+path = "src/bin/fix_path.rs"
+
+[[bin]]
+name = "notify-trunc"
+path = "src/bin/notify_trunc.rs"
+
+[[bin]]
+name = "manage-running-prefix"
+path = "src/bin/manage_running_prefix.rs"

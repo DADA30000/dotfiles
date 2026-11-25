@@ -1,9 +1,9 @@
-args@{
+{
   lib,
-  options,
   pkgs,
   inputs,
   config,
+  osConfig,
   ...
 }:
 let
@@ -31,11 +31,7 @@ let
         chmod +x $out/bin/xdg-dbus-proxy
       '';
 
-  processes_to_proxy =
-    if (args ? osConfig) && (args.osConfig ? sing-box.processes_to_proxy) then
-      args.osConfig.sing-box.processes_to_proxy
-    else
-      config.sing-box.processes_to_proxy;
+  processes_to_proxy = osConfig.sing-box.processes_to_proxy;
 
   sing-box-sandbox-config = (pkgs.formats.json { }).generate "sing-box-sandbox-config" {
     log.level = "info";
@@ -157,7 +153,7 @@ let
   pw-portal-shim-pkg = pkgs.stdenv.mkDerivation {
     pname = "pw-portal-shim";
     version = "1.0.0";
-    src = ../../../stuff/system/packages/pw-portal-shim.c;
+    src = ../../../stuff/home/sandbox/pw-portal-shim.c;
     dontUnpack = true;
     nativeBuildInputs = [ pkgs.pkg-config ];
     buildInputs = [
@@ -184,30 +180,6 @@ let
       exec "\$@"
       EOF
       chmod +x $out/bin/pw-portal-v4l2
-    '';
-  };
-
-  wp-mic-portal-pkg = pkgs.stdenv.mkDerivation {
-    pname = "wp-mic-portal";
-    version = "1.0.0";
-    dontUnpack = true;
-    nativeBuildInputs = [ pkgs.pkg-config ];
-    buildInputs = [
-      pkgs.wireplumber
-      pkgs.glib
-      pkgs.pipewire
-    ];
-    buildPhase = ''
-      $CC -shared -fPIC -O2 -Wall -Wextra -Werror \
-        $(pkg-config --cflags --libs wireplumber-0.5 gio-2.0) \
-        ${../../../stuff/system/packages/wp-mic-portal.c} \
-        -o libwireplumber-module-mic-portal.so
-    '';
-    installPhase = ''
-      mkdir -p $out/lib/wireplumber-0.5 $out/share/wireplumber/scripts/linking
-      cp libwireplumber-module-mic-portal.so $out/lib/wireplumber-0.5/
-      cp ${../../../stuff/system/packages/wp-mic-portal.lua} \
-        $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
     '';
   };
 
@@ -730,13 +702,13 @@ let
         # Default sing-box JSON configuration path used when network = "singbox".
         singbox_config = lib.mkOption {
           type = lib.types.str;
-          default = "/etc/sb-run/sing-box.json";
+          default = "$XDG_DATA_HOME/sb-run/sing-box.json";
           description = "Default sing-box configuration file path.";
         };
         # Syscall number table JSON path used by seccomp compiler and supervisor.
         syscalls_file = lib.mkOption {
           type = lib.types.str;
-          default = "/etc/sb-run/syscalls.json";
+          default = "$XDG_DATA_HOME/sb-run/syscalls.json";
           description = "Path to the syscall number table JSON.";
         };
       };
@@ -751,6 +723,8 @@ let
     };
 
   baseSandboxConfig = {
+    singbox_config = "${config.xdg.dataHome}/sb-run/sing-box.json";
+    syscalls_file = "${config.xdg.dataHome}/sb-run/syscalls.json";
     bins = {
       bwrap = "${staticBwrap}/bin/bwrap";
       sb_executor = "/run/current-system/sw/bin/sb-executor";
@@ -1226,7 +1200,7 @@ let
 
   evalSandboxConfig =
     extraModules:
-    builtins.removeAttrs
+    removeAttrs
       (lib.evalModules {
         modules = [
           sandboxConfigModule
@@ -1262,7 +1236,7 @@ let
       appConfigJson = (pkgs.formats.json { }).generate "sb-run-${appId}.json" evaluatedConfig;
 
       wrapperScript = pkgs.writeShellScript "sandbox-launcher-${appId}" ''
-        if [ -e "/etc/.not-a-sandbox" ] || [ -e "$HOME/.not-a-sandbox" ]; then
+        if [ ! -e "/.sb-sandbox" ] && [ -z "''${SB_SANDBOX:-}" ]; then
           MY_CGROUP="/sys/fs/cgroup$(cat /proc/self/cgroup | cut -d: -f3)"
           MY_SCOPE="$(basename "$MY_CGROUP" 2>/dev/null)"
           case "$MY_SCOPE" in
@@ -1425,236 +1399,29 @@ let
         );
     });
 
-  pipewireRestrictedSocketConfig = {
-    "module.protocol-native.args".sockets = [
-      { name = "pipewire-0"; }
-      { name = "pipewire-0-manager"; }
-      { name = "pipewire-0-restricted"; }
-      { name = "pipewire-0-restricted-nomic"; }
-      { name = "pipewire-0-restricted-mic-portal"; }
-    ];
-    "module.access.args"."access.socket" = {
-      "pipewire-0" = "unrestricted";
-      "pipewire-0-manager" = "unrestricted";
-      "pipewire-0-restricted" = "restricted";
-      "pipewire-0-restricted-nomic" = "restricted-nomic";
-      "pipewire-0-restricted-mic-portal" = "restricted-mic-portal";
-    };
-    "context.objects" = [
-      {
-        factory = "adapter";
-        args = {
-          "factory.name" = "support.null-audio-sink";
-          "media.class" = "Audio/Source/Virtual";
-          "node.name" = "sandbox-null-mic";
-          "node.description" = "Silent Microphone (Denied)";
-          "audio.position" = [
-            "FL"
-            "FR"
-          ];
-          "priority.session" = 0;
-        };
-      }
-    ];
-  };
-
-  pipewirePulseRestrictedSocketConfig = {
-    "pulse.properties"."server.address" = [
-      "unix:native"
-      {
-        address = "unix:restricted";
-        "client.access" = "restricted";
-      }
-      {
-        address = "unix:restricted-nomic";
-        "client.access" = "restricted-nomic";
-      }
-      {
-        address = "unix:restricted-mic-portal";
-        "client.access" = "restricted-mic-portal";
-      }
-    ];
-    "pulse.rules" = [
-      {
-        matches = [
-          { "pipewire.client.access" = "restricted"; }
-          { "pipewire.client.access" = "restricted-mic-portal"; }
-          { "pipewire.client.access" = "flatpak"; }
-        ];
-        actions.quirks = [
-          "block-source-volume"
-          "block-sink-volume"
-        ];
-      }
-      {
-        matches = [
-          { "pipewire.client.access" = "restricted-nomic"; }
-        ];
-        actions.quirks = [
-          "block-source-volume"
-          "block-sink-volume"
-          "block-record-stream"
-        ];
-      }
-    ];
-  };
-
-  wireplumberRestrictedPermissionsConfig = {
-    "access.permission-managers" = [
-      {
-        name = "sandbox-restricted";
-        default_permissions = "rx";
-        core_permissions = "rx";
-        rules = [
-          {
-            matches = [
-              { "media.class" = "~Video/.*"; }
-              { "media.role" = "Camera"; }
-              { "device.api" = "v4l2"; }
-              { "device.api" = "libcamera"; }
-            ];
-            actions.set-permissions = "-";
-          }
-        ];
-      }
-      {
-        name = "sandbox-restricted-nomic";
-        default_permissions = "rx";
-        core_permissions = "rx";
-        rules = [
-          {
-            matches = [
-              { "media.class" = "~Video/.*"; }
-              { "media.role" = "Camera"; }
-              { "device.api" = "v4l2"; }
-              { "device.api" = "libcamera"; }
-              { "media.class" = "~Audio/Source.*"; }
-            ];
-            actions.set-permissions = "-";
-          }
-        ];
-      }
-    ];
-    "access.rules" = [
-      {
-        matches = [
-          { "pipewire.access" = "restricted"; }
-          { "pipewire.access" = "restricted-mic-portal"; }
-          { "pipewire.access" = "flatpak"; }
-          { "pipewire.sec.socket" = "pipewire-0-restricted"; }
-          { "pipewire.sec.socket" = "pipewire-0-restricted-mic-portal"; }
-        ];
-        actions.update-props.permission_manager_name = "sandbox-restricted";
-      }
-      {
-        matches = [
-          { "pipewire.access" = "restricted-nomic"; }
-          { "pipewire.sec.socket" = "pipewire-0-restricted-nomic"; }
-        ];
-        actions.update-props.permission_manager_name = "sandbox-restricted-nomic";
-      }
-    ];
-  };
-
-  wireplumberRestrictedPermissionsText = ''
-    access.permission-managers = ${
-      builtins.toJSON wireplumberRestrictedPermissionsConfig."access.permission-managers"
-    }
-    access.rules = ${builtins.toJSON wireplumberRestrictedPermissionsConfig."access.rules"}
-    wireplumber.components = [
-      {
-        name = libwireplumber-module-mic-portal
-        type = module
-        provides = api.mic-portal
-        requires = [ support.dbus ]
-      }
-      {
-        name = linking/wp-mic-portal.lua
-        type = script/lua
-        provides = hooks.linking.mic-portal
-        requires = [ api.mic-portal ]
-      }
-    ]
-    wireplumber.profiles = {
-      main = {
-        hooks.linking.mic-portal = required
-      }
-    }
-  '';
-
-  wireplumberRestrictedPermissionsPkg = pkgs.writeTextDir "share/wireplumber/wireplumber.conf.d/99-restricted-permissions.conf" wireplumberRestrictedPermissionsText;
+  cfg = config.sandboxing;
 in
 {
   options.sandboxing.enable = lib.mkEnableOption "app sandboxing";
-  config = {
-    _module.args = {
-      inherit staticBwrap mkSandbox;
-    };
-  }
-  // lib.optionalAttrs (options ? home.file) {
-    home = {
-      packages = [
+
+  config = lib.mkMerge [
+    {
+      _module.args = {
+        inherit staticBwrap mkSandbox;
+      };
+    }
+    (lib.mkIf cfg.enable {
+      home.packages = [
         staticBwrap
         pasta-pkg
         way-secure-pkg
         pw-portal-shim-pkg
       ];
-      file.".not-a-sandbox".text = "not a sandbox";
-    };
-    xdg = {
-      configFile = lib.optionalAttrs (!(args ? osConfig)) {
-        "pipewire/pipewire.conf.d/99-restricted-socket.conf".text =
-          builtins.toJSON pipewireRestrictedSocketConfig;
-        "pipewire/pipewire-pulse.conf.d/99-restricted-socket.conf".text =
-          builtins.toJSON pipewirePulseRestrictedSocketConfig;
-        "wireplumber/wireplumber.conf.d/99-restricted-permissions.conf".text =
-          wireplumberRestrictedPermissionsText;
-      };
-      dataFile = {
+      xdg.dataFile = {
         "sb-run/config.json".source = sbRunConfigFile;
         "sb-run/syscalls.json".source = syscallsJson;
         "sb-run/sing-box.json".source = sing-box-sandbox-config;
       };
-    };
-  }
-  // lib.optionalAttrs (options ? environment.etc) {
-    environment = {
-      systemPackages = [
-        staticBwrap
-        pasta-pkg
-        way-secure-pkg
-        pw-portal-shim-pkg
-      ];
-      etc = {
-        ".not-a-sandbox".text = "not a sandbox";
-        "sb-run/config.json".source = sbRunConfigFile;
-        "sb-run/syscalls.json".source = syscallsJson;
-        "sb-run/sing-box.json".source = sing-box-sandbox-config;
-      };
-    };
-    services.pipewire = {
-      package = pkgs.pipewire.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [
-          ../../../stuff/patches/pipewire-quirk-block-mute.patch
-          ../../../stuff/patches/pipewire-pulse-socket-access.patch
-        ];
-      });
-      wireplumber = {
-        package = pkgs.wireplumber.overrideAttrs (old: {
-          postInstall = (old.postInstall or "") + ''
-            ln -s ${wp-mic-portal-pkg}/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so \
-              $out/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so
-            mkdir -p $out/share/wireplumber/scripts/linking
-            ln -s ${wp-mic-portal-pkg}/share/wireplumber/scripts/linking/wp-mic-portal.lua \
-              $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
-          '';
-        });
-        configPackages = [ wireplumberRestrictedPermissionsPkg ];
-      };
-      extraConfig = {
-        pipewire."99-restricted-socket" = pipewireRestrictedSocketConfig;
-        pipewire-pulse."99-restricted-socket" = pipewirePulseRestrictedSocketConfig;
-      };
-    };
-  };
+    })
+  ];
 }

@@ -7,6 +7,7 @@
   config,
   inputs,
   evalAndSubstitute,
+  rustHelpersPkg,
   ...
 }:
 let
@@ -288,9 +289,7 @@ in
 
     binfmt.registrations.exe = {
       magicOrExtension = "MZ";
-      interpreter = "${
-        inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default
-      }/bin/run-exe";
+      interpreter = "${rustHelpersPkg}/bin/run-exe";
       recognitionType = "magic";
     };
 
@@ -509,6 +508,14 @@ in
           ];
           UMask = "0077";
         };
+      };
+
+      avahi-daemon.serviceConfig = {
+        # Allow root pre-drop_root cleanup of stale avahi-owned /run/avahi-daemon/pid;
+        # avahi_caps_reduce() immediately drops CAP_DAC_OVERRIDE before drop_root().
+        CapabilityBoundingSet = [ "CAP_DAC_OVERRIDE" ];
+        # Send SIGTERM only to main avahi-daemon so avahi_chroot_helper stays alive to unlink /run/avahi-daemon/pid on stop.
+        KillMode = "mixed";
       };
 
       "sunshine@" =

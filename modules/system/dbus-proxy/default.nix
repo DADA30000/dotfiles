@@ -14,19 +14,6 @@ let
     ];
   });
 
-  dbusProxyLaunch = pkgs.stdenv.mkDerivation {
-    pname = "dbus-proxy-launch";
-    version = "1.0";
-    dontUnpack = true;
-    buildPhase = ''
-      $CC -O2 -Wall -Wextra -Werror ${../../../stuff/system/packages/dbus-proxy-launch.c} -o dbus-proxy-launch
-    '';
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 0755 dbus-proxy-launch $out/bin/dbus-proxy-launch
-    '';
-  };
-
   serviceSubmodule = lib.types.submodule {
     options = {
       enable = lib.mkOption {
@@ -95,7 +82,7 @@ let
 
   execCommand = lib.concatMapStringsSep " " quoteSystemdArg (
     [
-      "${dbusProxyLaunch}/bin/dbus-proxy-launch"
+      "${config.scripts."dbus-proxy-launch.c"}/bin/dbus-proxy-launch"
       "${patchedDbusProxy}/bin/xdg-dbus-proxy"
     ]
     ++ allProxyArgs

@@ -22,7 +22,7 @@ let
         -C codegen-units=1 \
         -C panic=abort \
         -C strip=symbols \
-        -O ${../../../stuff/system/packages/mount-umu.rs} -o mount-umu
+        -O ${../../../stuff/system/umu/mount-umu.rs} -o mount-umu
     '';
     installPhase = ''
       mkdir -p $out/bin

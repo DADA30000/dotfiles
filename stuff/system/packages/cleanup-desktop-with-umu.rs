@@ -21,14 +21,6 @@ struct DesktopEntry {
     actual_exe: String,
     game_name: String,
     icon_path: String,
-    raw_args: String,
-    prefix: String,
-    gpu: String,
-    steam: String,
-    overlay: String,
-    proton: String,
-    vpn: String,
-    gameid: String,
 }
 
 fn parse_desktop_entry(content: &str) -> DesktopEntry {
@@ -43,40 +35,10 @@ fn parse_desktop_entry(content: &str) -> DesktopEntry {
             if entry.game_name.is_empty() {
                 entry.game_name = v.trim().to_string();
             }
-        } else if let Some(v) = line.strip_prefix("Icon=") {
-            if entry.icon_path.is_empty() {
-                entry.icon_path = v.trim().to_string();
-            }
-        } else if let Some(v) = line.strip_prefix("X-UMU-Raw-Args=") {
-            entry.raw_args = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-Prefix-Name=") {
-            entry.prefix = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-GPU-Select=") {
-            entry.gpu = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-Steam-Integration=") {
-            entry.steam = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-Steam-Overlay=") {
-            entry.overlay = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-Proton-Type=") {
-            entry.proton = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-VPN=") {
-            entry.vpn = v.trim().to_string();
-        } else if let Some(v) = line.strip_prefix("X-UMU-Game-ID=") {
-            entry.gameid = v.trim().to_string();
-        }
-    }
-
-    if entry.actual_exe.is_empty() {
-        for line in content.lines() {
-            if let Some(rest) = line.strip_prefix("Exec=")
-                && let Some(start) = rest.find("umu-run-wrapper \"")
-            {
-                let sub = &rest[start + 17..];
-                if let Some(end) = sub.find('"') {
-                    entry.actual_exe = sub[..end].to_string();
-                    break;
-                }
-            }
+        } else if let Some(v) = line.strip_prefix("Icon=")
+            && entry.icon_path.is_empty()
+        {
+            entry.icon_path = v.trim().to_string();
         }
     }
 
@@ -116,57 +78,7 @@ fn restore_active(d_file: &Path, content: &str, entry: &DesktopEntry) {
         .game_name
         .strip_suffix(" (Inactive)")
         .unwrap_or(&entry.game_name);
-
-    let prefix_val = if entry.prefix.is_empty() {
-        "default"
-    } else {
-        &entry.prefix
-    };
-    let gpu_val = if entry.gpu.is_empty() {
-        "Автоматически"
-    } else {
-        &entry.gpu
-    };
-    let steam_val = if entry.steam.is_empty() {
-        "0"
-    } else {
-        &entry.steam
-    };
-    let overlay_val = if entry.overlay.is_empty() {
-        "0"
-    } else {
-        &entry.overlay
-    };
-    let proton_val = if entry.proton.is_empty() {
-        "Proton Experimental"
-    } else {
-        &entry.proton
-    };
-    let vpn_val = if entry.vpn.is_empty() {
-        "0"
-    } else {
-        &entry.vpn
-    };
-
-    let env_base = format!(
-        "env GAMEID={} USE_GAMEMODE=1 USE_MANGOHUD=1 PROTON_ENABLE_WAYLAND=1 UMU_PREFIX_NAME={} UMU_PROTON_TYPE=\"{}\" USE_STEAM_INTEGRATION={} USE_STEAM_OVERLAY={} USE_VPN={} UMU_GPU_SELECT=\"{}\"",
-        entry.gameid, prefix_val, proton_val, steam_val, overlay_val, vpn_val, gpu_val
-    );
-
-    let exec_cmd = if entry.raw_args.contains("%command%") {
-        let mut parts = entry.raw_args.splitn(2, "%command%");
-        let p_args = parts.next().unwrap_or("").trim();
-        let s_args = parts.next().unwrap_or("").trim();
-        format!(
-            "{env_base} {p_args} umu-run-wrapper \"{}\" {s_args}",
-            entry.actual_exe
-        )
-    } else {
-        format!(
-            "{env_base} umu-run-wrapper \"{}\" {}",
-            entry.actual_exe, entry.raw_args
-        )
-    };
+    let exec_cmd = format!("umu-run-wrapper \"{}\"", d_file.display());
 
     let mut new_lines = Vec::new();
     for line in content.lines() {

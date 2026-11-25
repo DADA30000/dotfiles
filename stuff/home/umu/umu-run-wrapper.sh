@@ -304,9 +304,9 @@ fi
 
 NET_MODE="sandboxed"
 SINGBOX_CFG_ARGS=()
-if [[ "$USE_NETWORK" == "0" || "$USE_NETWORK" == "off" ]]; then
+if [[ "$USE_NETWORK" == "off" ]]; then
   NET_MODE="off"
-elif [[ "$USE_NETWORK" == "passthrough" || "$USE_NETWORK" == "1" ]]; then
+elif [[ "$USE_NETWORK" == "passthrough" ]]; then
   NET_MODE="passthrough"
 elif [[ "$USE_NETWORK" == "singbox" || "$USE_VPN" == "1" ]]; then
   NET_MODE="singbox"

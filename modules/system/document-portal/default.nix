@@ -18,7 +18,7 @@ let
     version = "1.0";
     dontUnpack = true;
     buildPhase = ''
-      $CC -O2 -Wall -Wextra -Werror ${../../../stuff/system/packages/xdp-document-portal-launch.c} -o xdp-document-portal-launch
+      $CC -O2 -Wall -Wextra -Werror ${../../../stuff/system/document-portal/xdp-document-portal-launch.c} -o xdp-document-portal-launch
     '';
     installPhase = ''
       mkdir -p $out/bin

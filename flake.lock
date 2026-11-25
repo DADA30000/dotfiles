@@ -1586,7 +1586,6 @@
         "pyproject-nix": "pyproject-nix",
         "rom": "rom",
         "run0edit": "run0edit",
-        "rust-helpers": "rust-helpers",
         "sine": "sine",
         "sine-bootloader": "sine-bootloader",
         "sing-box-extended": "sing-box-extended",
@@ -1633,26 +1632,6 @@
         "owner": "rust-lang",
         "ref": "nightly",
         "repo": "rust-analyzer",
-        "type": "github"
-      }
-    },
-    "rust-helpers": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1795551275,
-        "narHash": "sha256-kzlSAQYbeuQdkggcKWfCWQBtfiaAo3NpVSUBtxzHT50=",
-        "owner": "DADA30000",
-        "repo": "rust-helpers",
-        "rev": "f8c5b4f3ed0de7c91d0c441251a99065f28d49c8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "DADA30000",
-        "repo": "rust-helpers",
         "type": "github"
       }
     },

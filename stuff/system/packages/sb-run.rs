@@ -635,7 +635,6 @@ fn load_single_source_config_json() -> Option<JsonValue> {
     let candidates = [
         xdg_config_path("XDG_CONFIG_HOME", ".config/sb-run/config.json", &home),
         xdg_config_path("XDG_DATA_HOME", ".local/share/sb-run/config.json", &home),
-        Some(PathBuf::from("/etc/sb-run/config.json")),
     ];
 
     for path in candidates.into_iter().flatten() {
@@ -1270,6 +1269,24 @@ impl SandboxConfig {
         cfg.apply_json_dbus(root);
         cfg.apply_json_seccomp(root);
         cfg.apply_json_bins_and_paths(root);
+
+        let expand_cfg_path = |p: &Path| -> PathBuf {
+            let raw = p.to_string_lossy();
+            if raw.is_empty() {
+                return p.to_path_buf();
+            }
+            let vars: Vec<String> = if cfg.allowed_env_vars.is_empty() {
+                ["HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect()
+            } else {
+                cfg.allowed_env_vars.clone()
+            };
+            PathBuf::from(expand_env_path(&raw, &vars))
+        };
+        cfg.singbox_config = expand_cfg_path(&cfg.singbox_config);
+        cfg.syscalls_file = expand_cfg_path(&cfg.syscalls_file);
 
         for raw in root.opt_str_list("bridges", "config") {
             if let Some(rule) = parse_bridge_arg(&raw) {
@@ -4049,6 +4066,13 @@ fn build_bwrap_command(
     add_base_and_theme_binds(&mut cmd, cfg, &home, &xdg_config, &xdg_data);
     add_subsystem_binds(&mut cmd, cfg, &runtime, sandbox_runtime);
     add_ipc_and_dbus_binds(&mut cmd, cfg, &runtime, sandbox_runtime);
+
+    let sandbox_marker = sandbox_runtime.join(".sb-sandbox");
+    let _ = fs::write(&sandbox_marker, format!("{}\n", cfg.app_id));
+    cmd.arg("--ro-bind")
+        .arg(&sandbox_marker)
+        .arg("/.sb-sandbox");
+    cmd.arg("--setenv").arg("SB_SANDBOX").arg(&cfg.app_id);
 
     if (cfg.flags & CFG_FLATPAK_INFO) != 0 {
         let flatpak_info_path = create_flatpak_info(sandbox_runtime, cfg);

@@ -178,7 +178,7 @@
         Restart = "on-failure";
         RestartSec = "3s";
         ExecStartPre = pkgs.writeShellScript "sunshine-env-forward" (
-          builtins.readFile ../../../stuff/system/shared/sunshine-env-forward.sh
+          builtins.readFile ../../../stuff/home/shared/sunshine-env-forward.sh
         );
         ExecStart = "${pkgs.systemd}/bin/systemctl start --wait sunshine@%u.service";
         ExecStop = "${pkgs.systemd}/bin/systemctl stop sunshine@%u.service";
@@ -304,6 +304,8 @@
   systemd-hardening.enable = true;
 
   sandboxing.enable = true;
+
+  rust-helpers.enable = true;
 
   umu.enable = true;
 

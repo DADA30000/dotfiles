@@ -949,7 +949,6 @@ let
         ];
       });
 
-  rustHelpersPkg = inputs.rust-helpers.packages.${pkgs.stdenv.hostPlatform.system}.default;
   json2xPkg = pkgs.callPackage "${inputs.nixpkgs}/pkgs/pkgs-lib/formats/json2x/package.nix" { };
   app2unitPkg = pkgs.app2unit.overrideAttrs (oldAttrs: {
     postPatch = (oldAttrs.postPatch or "") + ''
@@ -1003,7 +1002,7 @@ let
   heliumPkg = inputs.helium.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   translateZapretNixosPkg = pkgs.writeShellScriptBin "translate-zapret-nixos" (
-    builtins.readFile ../../../stuff/system/packages/translate-zapret-nixos.sh
+    builtins.readFile ../../../stuff/home/packages/translate-zapret-nixos.sh
   );
 
   qt6ctPkg = pkgs.kdePackages.qt6ct.overrideAttrs (prev: {
@@ -1367,7 +1366,6 @@ let
 
     valentPkg
     aero-control-center
-    rustHelpersPkg
     json2xPkg
     diskoPkg
     ventoyFullGtkPkg

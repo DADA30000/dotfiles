@@ -72,15 +72,14 @@ if [[ -f "$actual_exe" ]]; then
         fi
 
         ICON_SOURCE=""
-        for pfx_root in "$PREFIX_DIR/upper" "$PREFIX_DIR"; do
-          if [[ -n "$icon_drive" && -d "$pfx_root/dosdevices/$icon_drive:" ]]; then
-            cand=$(realpath -m "$pfx_root/dosdevices/$icon_drive:$icon_path_no_drive" 2>/dev/null)
-            [[ -f "$cand" ]] && ICON_SOURCE="$cand" && break
-          fi
-          if [[ -z "$ICON_SOURCE" && -n "$icon_path_no_drive" && -f "$pfx_root/drive_c$icon_path_no_drive" ]]; then
-            ICON_SOURCE="$pfx_root/drive_c$icon_path_no_drive" && break
-          fi
-        done
+        pfx_upper="$PREFIX_DIR/upper"
+        if [[ -n "$icon_drive" && -d "$pfx_upper/dosdevices/$icon_drive:" ]]; then
+          cand=$(realpath -m "$pfx_upper/dosdevices/$icon_drive:$path_no_drive" 2>/dev/null)
+          [[ -f "$cand" ]] && ICON_SOURCE="$cand"
+        fi
+        if [[ -z "$ICON_SOURCE" && -n "$path_no_drive" && -f "$pfx_upper/drive_c$path_no_drive" ]]; then
+          ICON_SOURCE="$pfx_upper/drive_c$path_no_drive"
+        fi
         if [[ -z "$ICON_SOURCE" ]]; then
           ICON_SOURCE="$actual_exe"
         fi
@@ -116,11 +115,6 @@ if [[ -f "$actual_exe" ]]; then
     fi
   fi
 
-  ENV_BASE="env GAMEID=$env_gameid USE_GAMEMODE=$env_gamemode USE_MANGOHUD=$env_mangohud PROTON_ENABLE_WAYLAND=$env_wayland UMU_PREFIX_NAME=$env_prefix_name UMU_PROTON_TYPE=\"$env_proton_type\" USE_STEAM_INTEGRATION=$env_steam USE_STEAM_OVERLAY=$env_overlay USE_VPN=$env_vpn UMU_GPU_SELECT=\"$env_gpu_select\" USE_SANDBOX=$env_sandbox USE_GAMEPAD=$env_gamepad USE_NETWORK=${env_network:-1} USE_STEAM_PORTS=${env_steam_ports:-$env_steam}"
-  if [[ -n "$env_extra_paths" ]]; then
-    ENV_BASE="$ENV_BASE UMU_EXTRA_PATHS=\"$env_extra_paths\""
-  fi
-
   cat <<EOF >"$DESKTOP_FILE"
 [Desktop Entry]
 Type=Application
@@ -147,7 +141,7 @@ X-UMU-VPN=$env_vpn
 X-UMU-Game-ID=$env_gameid
 X-UMU-Sandbox=$env_sandbox
 X-UMU-Gamepad=$env_gamepad
-X-UMU-Network=${env_network:-1}
+X-UMU-Network=${env_network:-sandboxed}
 X-UMU-Extra-Paths=$env_extra_paths
 X-UMU-Lnk-Path=$lnk
 EOF

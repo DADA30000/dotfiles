@@ -153,10 +153,6 @@
       url = "github:DADA30000/rom";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    rust-helpers = {
-      url = "github:DADA30000/rust-helpers";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -329,18 +325,11 @@
         builtins.concatMap listSingleDir paths;
 
       # Modules for NixOS
-      system-modules = listFiles [
-        ./modules/system
-        # Modules that do same exact thing in HM and NixOS
-        ./modules/universal
-      ];
+      system-modules = listFiles [ ./modules/system ];
 
       # Modules for home-manager
       home-modules =
-        listFiles [
-          ./modules/home
-          ./modules/universal
-        ]
+        listFiles [ ./modules/home ]
         ++ [
           inputs.nix-index-database.homeModules.nix-index
           inputs.zen-browser.homeModules.twilight
