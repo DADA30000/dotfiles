@@ -17,21 +17,27 @@ CLIENTS=$(hyprctl clients -j)
 
 # 3. Hit-test top-most visible window under (X, Y)
 TARGET=$(jq -n --argjson x "$X" --argjson y "$Y" --argjson mons "$MONS" --argjson clients "$CLIENTS" '
-  ([ $mons[] | .specialWorkspace | select(.id != 0) | .id ] + [ $mons[] | .activeWorkspace.id ]) as $vis_ws |
+  ($mons | map({key: (.id | tostring), value: [
+    (.activeWorkspace.address // ""),
+    (.specialWorkspace.address // "")
+  ] | map(select(. != ""))}) | from_entries) as $mon_vis |
   [
     $clients[] |
-    select(.workspace.id as $w | $vis_ws | index($w)) |
+    select(.mapped and (.hidden | not)) |
+    ($mon_vis[(.monitor | tostring)] // []) as $vis_ws |
+    select(.pinned or ((.workspace.address // "") as $w | $w != "" and ($vis_ws | index($w) != null))) |
     select(.at[0] <= $x and $x <= (.at[0] + .size[0]) and .at[1] <= $y and $y <= (.at[1] + .size[1])) |
     {
       pid: .pid,
       class: .class,
       title: .title,
       floating: .floating,
-      special: (.workspace.id < 0),
+      fullscreen: (.fullscreen // 0),
+      special: (.workspace.type == "special"),
       focus: .focusHistoryID
     }
   ] |
-  sort_by([ (if .special then 0 else 1 end), (if .floating then 0 else 1 end), .focus ]) |
+  sort_by([ (if .special then 0 else 1 end), (if .fullscreen > 0 then 0 else 1 end), (if .floating then 0 else 1 end), .focus ]) |
   first // empty
 ')
 
