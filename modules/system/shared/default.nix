@@ -5,7 +5,6 @@
   user,
   lib,
   config,
-  inputs,
   evalAndSubstitute,
   rustHelpersPkg,
   ...
@@ -665,15 +664,6 @@ in
 
   services = {
 
-    udev.packages = [
-      (pkgs.runCommand "70-opentabletdriver-sanitized.rules" { } ''
-        mkdir -p $out/lib/udev/rules.d
-        substitute ${pkgs.opentabletdriver}/lib/udev/rules.d/70-opentabletdriver.rules \
-          $out/lib/udev/rules.d/70-opentabletdriver.rules \
-          --replace-fail 'KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", TAG+="uaccess", TAG+="udev-acl"' ""
-      '')
-    ];
-
     fwupd.enable = true;
 
     lact.enable = true;
@@ -698,21 +688,20 @@ in
       RuntimeMaxUse = "1G";
     };
 
-    chrony = {
+    scx = {
       enable = true;
-      enableNTS = true;
-      extraConfig = ''
-        minsources 2
-        authselectmode require
-        cmdport 0
-      '';
-      servers = [
-        "://cloudflare.com"
-        "nts.netnod.se"
-        "ptbtime1.ptb.de"
-        "ntppool1.time.nl"
-      ];
+      scheduler = "scx_lavd";
+      extraArgs = [ "--autopower" ];
     };
+
+    udev.packages = [
+      (pkgs.runCommand "70-opentabletdriver-sanitized.rules" { } ''
+        mkdir -p $out/lib/udev/rules.d
+        substitute ${pkgs.opentabletdriver}/lib/udev/rules.d/70-opentabletdriver.rules \
+          $out/lib/udev/rules.d/70-opentabletdriver.rules \
+          --replace-fail 'KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", TAG+="uaccess", TAG+="udev-acl"' ""
+      '')
+    ];
 
     usbguard = {
       enable = true;
@@ -732,6 +721,22 @@ in
         KbdInteractiveAuthentication = false;
         PermitRootLogin = "no";
       };
+    };
+
+    chrony = {
+      enable = true;
+      enableNTS = true;
+      extraConfig = ''
+        minsources 2
+        authselectmode require
+        cmdport 0
+      '';
+      servers = [
+        "://cloudflare.com"
+        "nts.netnod.se"
+        "ptbtime1.ptb.de"
+        "ntppool1.time.nl"
+      ];
     };
 
     greetd =

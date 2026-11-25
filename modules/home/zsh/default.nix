@@ -90,18 +90,67 @@ in
             in
               nixpkgs // { inherit (flake) inputs; }
           )"
+          _ns_handle_meta() {
+            local subcmd="$1"
+            shift
+            local arg
+            for arg in "$@"; do
+              if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+                nix "$subcmd" --help
+                return 0
+              elif [[ "$arg" == "--version" ]]; then
+                nix "$subcmd" --version
+                return 0
+              fi
+            done
+            return 1
+          }
+
           _ns_parse_args() {
-            flags=() pkgs=() pkgs_raw=()
+            local mode="$1"
+            shift
+            flags=() eval_flags=() pkgs=() pkgs_raw=()
             while (( $# > 0 )); do
               if [[ "$1" == -*\ * ]]; then
-                flags+=(''${=1})
-                shift 1
+                set -- ''${=1} "''${@:2}"
                 continue
               fi
               case "$1" in
-                --max-jobs|-j|--cores|--builders|--substituters|--impure-env|-I|--override-input|--arg|--argstr|-o|--output)
+                --option|--arg|--argstr|--arg-from-file|--override-flake|--override-input)
+                  flags+=("$1" "$2" "$3")
+                  eval_flags+=("$1" "$2" "$3")
+                  shift 3
+                  ;;
+                --set-env-var|-s)
+                  flags+=("$1" "$2" "$3")
+                  shift 3
+                  ;;
+                --max-jobs|-j|--cores|--builders|--substituters|--impure-env|-I|--include|--eval-store|--inputs-from|--output-lock-file|--reference-lock-file|--update-input|--log-format|--arg-from-stdin)
+                  flags+=("$1" "$2")
+                  eval_flags+=("$1" "$2")
+                  shift 2
+                  ;;
+                -o|--out-link|--output|--profile|--keep-env-var|--unset-env-var|-u|--apply|--write-to|--json-format)
                   flags+=("$1" "$2")
                   shift 2
+                  ;;
+                -k)
+                  if [[ "$mode" == "shell" ]]; then
+                    flags+=("$1" "$2")
+                    shift 2
+                  else
+                    flags+=("$1")
+                    shift 1
+                  fi
+                  ;;
+                -c|--command)
+                  flags+=("$@")
+                  break
+                  ;;
+                --impure|--refresh|--offline|--repair|--debug|-v|--verbose|-q|--quiet|--no-eval-cache|--fallback|--print-build-logs|-L)
+                  flags+=("$1")
+                  eval_flags+=("$1")
+                  shift 1
                   ;;
                 -*)
                   flags+=("$1")
@@ -357,7 +406,9 @@ in
           }
 
           ns-dev () {
-            _ns_parse_args "$@"
+            _ns_handle_meta print-dev-env "$@" && return 0
+            _ns_parse_args develop "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix print-dev-env --help; return 1; }
             _nix-develop "''${flags[@]}" --expr "mkShell rec { 
               buildInputs = let p = [ ''${pkgs[*]} ]; d = builtins.map (x: if (x ? dev) then x.dev else x) p; in p ++ d;
               name = builtins.substring 0 100 \"ns_dev_\''${builtins.concatStringsSep \"-\" (lib.lists.uniqueStrings (builtins.map (x: builtins.elemAt (lib.splitString \"-\" x.name) 0) buildInputs))}\";
@@ -369,12 +420,16 @@ in
           }
 
           ns-build-env () {
-            _ns_parse_args "$@"
+            _ns_handle_meta print-dev-env "$@" && return 0
+            _ns_parse_args develop "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix print-dev-env --help; return 1; }
             _nix-develop "''${flags[@]}" --expr "''${pkgs[*]}"
           }
 
           ns-py () {
-            _ns_parse_args "$@"
+            _ns_handle_meta print-dev-env "$@" && return 0
+            _ns_parse_args develop "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix print-dev-env --help; return 1; }
             local py_pkgs=()
             local pkgs_new=()
             for p in "''${pkgs_raw[@]}"; do py_pkgs+=("(ps.$p)"); pkgs_new+=("(python3Packages.$p)"); done
@@ -391,27 +446,43 @@ in
             }"
           }
 
-          ns-old () { 
-            _ns_parse_args "$@"
+          ns-old () {
+            _ns_handle_meta shell "$@" && return 0
+            _ns_parse_args shell "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix shell --help; return 1; }
             local -a drvs
-            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}" --derivation)"}) || return $?
+            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${eval_flags[@]}" --derivation)"}) || return $?
             (( ''${#drvs[@]} > 0 )) || return 1
             nix shell "''${flags[@]}" "''${drvs[@]/%/^*}"
           }
 
           ns-build () {
-            _ns_parse_args "$@" 
+            _ns_handle_meta build "$@" && return 0
+            _ns_parse_args build "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix build --help; return 1; }
             local -a drvs
-            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${flags[@]}" --derivation)"}) || return $?
+            drvs=(''${(f)"$(_ns_eval_flake --pkgs "''${pkgs[@]}" -- "''${eval_flags[@]}" --derivation)"}) || return $?
             (( ''${#drvs[@]} > 0 )) || return 1
+            local -a build_cmd_flags=("''${flags[@]}")
+            local has_link_flag=0
+            local f
+            for f in "''${flags[@]}"; do
+              if [[ "$f" == "-o" || "$f" == "--out-link" || "$f" == "--out-link="* || "$f" == "--no-link" ]]; then
+                has_link_flag=1
+                break
+              fi
+            done
+            (( has_link_flag == 0 )) && build_cmd_flags+=(--no-link)
             local OUT_PATH
-            OUT_PATH="$(nix build "''${flags[@]}" --log-format internal-json -v --no-link --print-out-paths "''${drvs[@]/%/^*}" 2> >(rom))"
-            printf "$OUT_PATH" | wl-copy
-            echo "$OUT_PATH"
+            OUT_PATH="$(nix build "''${build_cmd_flags[@]}" --log-format internal-json -v --print-out-paths "''${drvs[@]/%/^*}" 2> >(rom))" || return $?
+            printf '%s' "$OUT_PATH" | wl-copy
+            printf '%s\n' "$OUT_PATH"
           }
 
           ns-eval () {
-            _ns_parse_args "$@"
+            _ns_handle_meta eval "$@" && return 0
+            _ns_parse_args eval "$@"
+            (( ''${#pkgs[@]} > 0 )) || { nix eval --help; return 1; }
             local -a out_paths
             out_paths=(''${(f)"$(_ns_eval_flake --eval --pkgs "''${pkgs[@]}" -- "''${flags[@]}")"}) || return $?
             (( ''${#out_paths[@]} > 0 )) || return 1
