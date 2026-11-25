@@ -15,6 +15,7 @@ let
   zapret-qnum = "210";
   MTU = 1480;
   CREDENTIAL_DIR = "/etc/credstore";
+  CACHE_DIR = "/var/lib/private/sing-box";
   zapret-flags = evalAndSubstitute {
     string = builtins.readFile ../../../stuff/system/sing-box/zapret-flags;
     scope = { inherit pkgs inputs; };
@@ -215,7 +216,13 @@ let
 
   # Host-only overlay merged with sing-box-shared-config in Nix
   sing-box-host-config = {
-    experimental.clash_api.external_controller = "127.0.0.1:9090";
+    experimental = {
+      clash_api.external_controller = "127.0.0.1:9090";
+      cache_file = {
+        enabled = true;
+        path = "/var/lib/sing-box-daemon/cache.db";
+      };
+    };
 
     inbounds = [
       {
@@ -565,8 +572,23 @@ let
       inherit
         pkgs
         setup_script
+        CACHE_DIR
+        patched-sing-box
+        sing-box-config-file
+        sub-output-path
+        ;
+    };
+  });
+
+  merge_script = pkgs.writeShellScript "sing-box-merge" (evalAndSubstitute {
+    string = builtins.readFile ../../../stuff/system/sing-box/sing-box-merge.sh;
+    scope = {
+      inherit
+        pkgs
         CREDENTIAL_DIR
+        CACHE_DIR
         build-config-py
+        patched-sing-box
         sing-box-config-file
         sing-box-shared-config-file
         sub-output-path
@@ -707,10 +729,9 @@ in
       };
 
       sing-box-init = {
-        description = "Sing-box Initialization and Configuration Generator";
+        description = "Sing-box Initialization and Cache Seeder";
         wants = [ "sing-box-core.service" ];
         before = [ "sing-box-core.service" ];
-        partOf = [ "sing-box-core.service" ];
         path = with pkgs; [
           bash
           iproute2
@@ -719,10 +740,6 @@ in
           gnugrep
           gawk
           systemd
-          python3
-          xray-to-singbox
-          curl
-          cacert
           coreutils
         ];
         serviceConfig = {
@@ -732,7 +749,35 @@ in
           RuntimeDirectory = "sing-box";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${init_script}";
+          ExecStartPost = "${pkgs.systemd}/bin/systemctl start --no-block sing-box-merge.service";
           ExecStop = "${stop_script}";
+        };
+      };
+
+      sing-box-merge = {
+        description = "Sing-box Asynchronous Configuration Merger";
+        bindsTo = [ "sing-box-init.service" ];
+        after = [
+          "sing-box-init.service"
+          "sing-box-core.service"
+        ];
+        path = with pkgs; [
+          bash
+          jq
+          gnugrep
+          gawk
+          systemd
+          python3
+          xray-to-singbox
+          curl
+          cacert
+          coreutils
+          diffutils
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "root";
+          ExecStart = "${merge_script}";
         };
       };
 
@@ -750,6 +795,7 @@ in
 
           DynamicUser = true;
           RuntimeDirectory = "sing-box-daemon";
+          StateDirectory = "sing-box-daemon";
           WorkingDirectory = "/run/sing-box-daemon";
           PrivateDevices = false;
           NoNewPrivileges = true;

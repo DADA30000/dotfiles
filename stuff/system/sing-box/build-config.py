@@ -1,5 +1,4 @@
 import json
-import os
 import sys
 
 # Arguments:
@@ -122,11 +121,16 @@ def extract_tags(cfg):
 loaded_extra_configs = []
 all_removed_tags = set()
 for path in extra_config_paths:
-    if not path or path.lower() == "none" or not os.path.isfile(path):
+    if not path or path.lower() == "none":
         continue
     try:
         with open(path, "r") as f:
-            extra_cfg = json.load(f)
+            raw = f.read()
+        if not raw.strip():
+            continue
+        extra_cfg = json.loads(raw)
+        if not isinstance(extra_cfg, dict):
+            raise ValueError("top-level JSON value must be an object")
         if sfa_mode:
             extra_cfg, removed = adapt_for_sfa(extra_cfg)
             all_removed_tags.update(removed)
@@ -134,9 +138,10 @@ for path in extra_config_paths:
         loaded_extra_configs.append(extra_cfg)
     except Exception as e:
         print(
-            f"Warning: Failed to read or merge {path}: {e}",
+            f"Error: Failed to read or merge {path}: {e}",
             file=sys.stderr,
         )
+        sys.exit(1)
 
 if "outbounds" not in config or not isinstance(config["outbounds"], list):
     config["outbounds"] = []

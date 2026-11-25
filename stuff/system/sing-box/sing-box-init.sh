@@ -3,46 +3,29 @@ set -e
 echo "Initializing base network policies..."
 %{{{setup_script}}}
 
-CRED_CONF="%{{{CREDENTIAL_DIR}}}/config.json"
-SUB_SCRIPT="%{{{CREDENTIAL_DIR}}}/config.sh"
-EXTRA_CONFIGS=()
+CACHE_DIR="%{{{CACHE_DIR}}}"
+CACHED_CONF="$CACHE_DIR/cached_config.json"
+CACHED_SUB_CONF="$CACHE_DIR/cached_sub_config.json"
+RUN_CONF="/run/sing-box/config.json"
 
-if [[ -f "$SUB_SCRIPT" ]]; then
-  echo "Executing subscription script $SUB_SCRIPT..."
-  SUB_CONF="/run/sing-box/sub_config.json"
-  if %{{{pkgs.bash}}}/bin/bash "$SUB_SCRIPT" > "$SUB_CONF" && jq empty "$SUB_CONF" 2>/dev/null; then
-    echo "Subscription config generated successfully."
-    EXTRA_CONFIGS+=("$SUB_CONF")
-  else
-    echo "Warning: $SUB_SCRIPT failed or output invalid JSON, skipping." >&2
-    rm -f "$SUB_CONF"
-  fi
+install -d -m 700 "$CACHE_DIR"
+
+if [[ -s "$CACHED_CONF" ]] && %{{{patched-sing-box}}}/bin/sing-box check -c "$CACHED_CONF" >/dev/null 2>&1; then
+  echo "Using cached sing-box config from $CACHED_CONF..."
+  install -m 600 "$CACHED_CONF" "${RUN_CONF}.tmp"
+else
+  echo "No valid cached config; bootstrapping from base sing-box config..."
+  install -m 600 "%{{{sing-box-config-file}}}" "${RUN_CONF}.tmp"
 fi
-
-if [[ -f "$CRED_CONF" ]]; then
-  EXTRA_CONFIGS+=("$CRED_CONF")
-fi
-
-echo "Assembling unified sing-box config..."
-python3 %{{{build-config-py}}} \
-  "%{{{sing-box-config-file}}}" \
-  "/run/sing-box/config.json" \
-  "${EXTRA_CONFIGS[@]}"
-
-chmod 600 /run/sing-box/config.json
+mv -f "${RUN_CONF}.tmp" "$RUN_CONF"
 
 SUB_OUT="%{{{sub-output-path}}}"
-if [[ -n "$SUB_OUT" ]]; then
-  echo "Assembling SFA subscription config at $SUB_OUT..."
+if [[ -n "$SUB_OUT" ]] && [[ -s "$CACHED_SUB_CONF" ]] && jq -e 'type == "object"' "$CACHED_SUB_CONF" >/dev/null 2>&1; then
+  echo "Seeding cached SFA subscription config at $SUB_OUT..."
   SUB_DIR="$(dirname "$SUB_OUT")"
   mkdir -p "$SUB_DIR"
-  python3 %{{{build-config-py}}} \
-    --sfa \
-    "%{{{sing-box-shared-config-file}}}" \
-    "${SUB_OUT}.tmp" \
-    "${EXTRA_CONFIGS[@]}"
+  install -m 640 "$CACHED_SUB_CONF" "${SUB_OUT}.tmp"
   chown root:nginx "${SUB_OUT}.tmp" 2>/dev/null || true
-  chmod 640 "${SUB_OUT}.tmp"
   mv -f "${SUB_OUT}.tmp" "$SUB_OUT"
 fi
 
