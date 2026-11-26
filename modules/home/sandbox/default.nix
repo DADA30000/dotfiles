@@ -249,43 +249,36 @@ let
     notifyName:
     lib.types.submodule {
       options = {
-        # Return EPERM (1) for matching rules in this notification bucket.
         eperm = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules failing with EPERM under notify=${notifyName}.";
         };
-        # Return ENOSYS (38) for matching rules in this notification bucket.
         enosys = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules failing with ENOSYS under notify=${notifyName}.";
         };
-        # Return EACCES (13) for matching rules in this notification bucket.
         eacces = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules failing with EACCES under notify=${notifyName}.";
         };
-        # Return EINVAL (22) for matching rules in this notification bucket.
         einval = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules failing with EINVAL under notify=${notifyName}.";
         };
-        # Return ENOTSUP (95) for matching rules in this notification bucket.
         enotsup = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules failing with ENOTSUP under notify=${notifyName}.";
         };
-        # Terminate the offending process with SIGKILL.
         kill = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Syscall rules terminating the process with SIGKILL under notify=${notifyName}.";
         };
-        # Terminate the offending process with SIGSYS.
         trap = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
@@ -295,31 +288,26 @@ let
     };
 
   mkDbusPolicyOptions = kind: {
-    # D-Bus names allowed to talk with (e.g. "org.freedesktop.Notifications").
     talks = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "${kind} D-Bus names allowed for --talk.";
     };
-    # D-Bus names allowed to own on the bus.
     owns = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "${kind} D-Bus names allowed for --own.";
     };
-    # D-Bus names visible via --see without full talk access.
     sees = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "${kind} D-Bus names allowed for --see.";
     };
-    # D-Bus method call filter rules passed as --call=<rule> to xdg-dbus-proxy.
     calls = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "${kind} D-Bus --call filter rules.";
     };
-    # Extra raw arguments appended to xdg-dbus-proxy invocation.
     extra_args = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -331,7 +319,6 @@ let
     { config, ... }:
     {
       options = {
-        # Network mode: "off" (unshared), "sandboxed" (pasta), "singbox" (VPN), or "passthrough" (host).
         network = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -342,7 +329,6 @@ let
           default = "sandboxed";
           description = "Network isolation mode.";
         };
-        # Wayland display mode: "off", "sandboxed" (way-secure proxy), or "passthrough" (host socket).
         wayland = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -352,7 +338,6 @@ let
           default = "sandboxed";
           description = "Wayland display access mode.";
         };
-        # X11 display mode: "off", "sandboxed" (xwayland-satellite), or "passthrough" (/tmp/.X11-unix).
         x11 = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -362,7 +347,6 @@ let
           default = "off";
           description = "X11 display access mode.";
         };
-        # PulseAudio access mode: "off", "sandboxed" (restricted socket), or "passthrough" (host native).
         pulse = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -372,7 +356,6 @@ let
           default = "sandboxed";
           description = "PulseAudio access mode.";
         };
-        # PipeWire access mode: "off", "sandboxed" (restricted socket), or "passthrough" (host pipewire-0).
         pipewire = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -382,7 +365,6 @@ let
           default = "sandboxed";
           description = "PipeWire access mode.";
         };
-        # Microphone policy for sandboxed audio: "off" (blocked), "portal" (AccessDialog), or "allow" (unprompted capture).
         microphone = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -392,7 +374,6 @@ let
           default = "off";
           description = "Microphone capture policy for sandboxed PulseAudio/PipeWire.";
         };
-        # Webcam policy: "off", "portal" (pw-portal-v4l2 LD_PRELOAD), or "auto" (all /dev/video* nodes).
         webcam = lib.mkOption {
           type = lib.types.enum [
             "off"
@@ -402,7 +383,6 @@ let
           default = "off";
           description = "Webcam access mode.";
         };
-        # Shared memory (/dev/shm) mode: "sandboxed" (per-sandbox dir) or "passthrough" (host /dev/shm).
         shm = lib.mkOption {
           type = lib.types.enum [
             "sandboxed"
@@ -411,7 +391,6 @@ let
           default = "sandboxed";
           description = "/dev/shm isolation mode.";
         };
-        # Temporary directory (/tmp) mode: "sandboxed" (per-sandbox dir) or "passthrough" (host /tmp).
         tmp = lib.mkOption {
           type = lib.types.enum [
             "sandboxed"
@@ -420,78 +399,65 @@ let
           default = "sandboxed";
           description = "/tmp isolation mode.";
         };
-        # Whether to expose /dev/dri and NVIDIA device nodes inside the sandbox.
         gpu = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Enable GPU / 3D hardware acceleration binds.";
         };
-        # Whether to bind /dev/input and /dev/uinput for gamepads and controllers.
         gamepad = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Enable /dev/input and /dev/uinput gamepad binds.";
         };
-        # Whether to apply Landlock signal scoping across sandboxed processes.
         landlock = lib.mkOption {
           type = lib.types.bool;
           default = true;
           description = "Enable Landlock signal scoping.";
         };
-        # Whether to configure XDG portal opener env vars and mimeapps.list bind.
         portals = lib.mkOption {
           type = lib.types.bool;
           default = true;
           description = "Enable XDG portal integration (xdg-open shim and mimeapps.list).";
         };
-        # Whether to store sandbox home in ephemeral runtime storage (cleaned on exit).
         tmpfs = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Use ephemeral runtime home directory cleaned up on exit.";
         };
-        # Whether to share the host PID namespace instead of unsharing PIDs.
         share_pid = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Share host PID namespace.";
         };
-        # Whether to share the host IPC namespace instead of unsharing IPC.
         share_ipc = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Share host IPC namespace.";
         };
-        # Whether to wrap bwrap execution with vpnify.
         vpnify = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Wrap sandbox execution inside vpnify.";
         };
-        # Whether to generate and bind /.flatpak-info inside the sandbox.
         flatpak_info = lib.mkOption {
           type = lib.types.bool;
           default = true;
           description = "Mount /.flatpak-info metadata for portal/PipeWire client identification.";
         };
-        # Whether to isolate the sandbox inside a dedicated app2unit systemd scope and cgroup tree.
         scope = lib.mkOption {
           type = lib.types.bool;
           default = true;
           description = "Run inside a dedicated app2unit systemd scope with cgroup migration.";
         };
-        # Whether invocations default to CLI TTY forwarding and exit status propagation.
         cli = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = "Default to CLI mode (foreground stdio/TTY forwarding).";
         };
 
-        # Session D-Bus proxy configuration and policy rules.
         dbus = lib.mkOption {
           type = lib.types.submodule {
             options = {
-              # Session D-Bus mode: "off", "sandboxed" (xdg-dbus-proxy), or "passthrough".
               mode = lib.mkOption {
                 type = lib.types.enum [
                   "off"
@@ -508,11 +474,9 @@ let
           description = "Session D-Bus proxy configuration.";
         };
 
-        # System D-Bus proxy configuration and policy rules.
         system_dbus = lib.mkOption {
           type = lib.types.submodule {
             options = {
-              # Whether to run an xdg-dbus-proxy instance for the system bus.
               enable = lib.mkOption {
                 type = lib.types.bool;
                 default = false;
@@ -525,23 +489,19 @@ let
           description = "System D-Bus proxy configuration.";
         };
 
-        # Seccomp BPF filter configuration, allow/deny rule lists, and notification policy.
         seccomp = lib.mkOption {
           type = lib.types.submodule {
             options = {
-              # Whether to compile and install the seccomp BPF filter.
               enable = lib.mkOption {
                 type = lib.types.bool;
                 default = true;
                 description = "Enable seccomp syscall filtering.";
               };
-              # Default denial action when an unmatched syscall is blocked in allowlist mode.
               action = lib.mkOption {
                 type = seccompActionType;
                 default = "eperm";
                 description = "Default action for blocked syscalls.";
               };
-              # Default notification channel for blocked syscalls: "none", "log", or "notify".
               notify = lib.mkOption {
                 type = lib.types.enum [
                   "none"
@@ -551,29 +511,24 @@ let
                 default = "notify";
                 description = "Default reporting mode for blocked syscalls.";
               };
-              # Allowed syscall rules ([@prio:]syscall[:cond[&&cond...]]). Empty enables denylist mode.
               allow = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Seccomp allow rules; empty list switches to denylist mode.";
               };
-              # Explicit deny rule buckets grouped by notification mode and denial action.
               deny = lib.mkOption {
                 type = lib.types.submodule {
                   options = {
-                    # Silent in-kernel denials (never forwarded to supervisor).
                     none = lib.mkOption {
                       type = mkDenyBucketType "none";
                       default = { };
                       description = "In-BPF silent deny rules.";
                     };
-                    # Denials logged exclusively to <sandbox_dir>/logs/seccomp.log.
                     log = lib.mkOption {
                       type = mkDenyBucketType "log";
                       default = { };
                       description = "Log-only deny rules.";
                     };
-                    # Denials reported exclusively via desktop notification (notify-send).
                     notify = lib.mkOption {
                       type = mkDenyBucketType "notify";
                       default = { };
@@ -590,29 +545,24 @@ let
           description = "Seccomp filter configuration.";
         };
 
-        # Extra bind mounts and directories created inside the sandbox.
         binds = lib.mkOption {
           type = lib.types.submodule {
             options = {
-              # Read-write bind mounts ("path" or "src:dst"; supports allowed env vars).
               rw = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Read-write bind mounts.";
               };
-              # Read-only bind mounts ("path" or "src:dst"; supports allowed env vars).
               ro = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Read-only bind mounts.";
               };
-              # Device bind mounts ("path" or "src:dst"; supports allowed env vars).
               dev = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Device bind mounts (--dev-bind-try).";
               };
-              # Directories created inside the sandbox before bind mounts are applied.
               mkdir = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
@@ -624,65 +574,54 @@ let
           description = "Custom bind mounts and directories.";
         };
 
-        # Environment variables set inside the sandbox (--setenv).
         env = lib.mkOption {
           type = lib.types.attrsOf lib.types.str;
           default = { };
           description = "Environment variables injected into the sandbox.";
         };
-        # TCP bridge specifications ("from:addr:ports" or "to:addr:ports") via rust-bridge.
         bridges = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "TCP socket bridge rules for rust-bridge.";
         };
-        # Extra raw arguments appended to the bwrap command line.
         bwrap_args = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Raw extra arguments passed to bwrap.";
         };
-        # Paths to helper executables used by sb-run and the GUI.
         bins = lib.mkOption {
           type = lib.types.attrsOf lib.types.str;
           default = { };
           description = "Helper binary paths map.";
         };
-        # Host path lists and allowed environment variable names for path expansion.
         paths = lib.mkOption {
           type = lib.types.submodule {
             options = {
-              # Environment variable names expanded in binds and env strings.
               allowed_env_vars = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Allowed environment variable names for path expansion.";
               };
-              # Host system paths mounted read-only into every sandbox.
               ro_system_paths = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "System paths mounted read-only.";
               };
-              # Subpaths under $HOME mounted read-only for theming/profiles.
               user_theme_subpaths = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "Home subpaths mounted read-only.";
               };
-              # Subpaths under $XDG_CONFIG_HOME mounted read-only for theming/VR configs.
               xdg_config_subpaths = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "XDG_CONFIG_HOME subpaths mounted read-only.";
               };
-              # Subpaths under $XDG_DATA_HOME mounted read-only for icons/themes/shell data.
               xdg_data_subpaths = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
                 description = "XDG_DATA_HOME subpaths mounted read-only.";
               };
-              # NVIDIA device nodes mounted when gpu = true.
               nvidia_nodes = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ ];
@@ -693,19 +632,16 @@ let
           default = { };
           description = "Base host paths and expansion rules.";
         };
-        # Arguments passed to pasta when network = "sandboxed".
         pasta_args = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Arguments passed to pasta in sandboxed network mode.";
         };
-        # Default sing-box JSON configuration path used when network = "singbox".
         singbox_config = lib.mkOption {
           type = lib.types.str;
           default = "$XDG_DATA_HOME/sb-run/sing-box.json";
           description = "Default sing-box configuration file path.";
         };
-        # Syscall number table JSON path used by seccomp compiler and supervisor.
         syscalls_file = lib.mkOption {
           type = lib.types.str;
           default = "$XDG_DATA_HOME/sb-run/syscalls.json";
