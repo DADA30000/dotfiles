@@ -4,6 +4,7 @@
   lib,
   inputs,
   evalAndSubstitute,
+  mkFhsEnvSpec,
   ...
 }:
 let
@@ -415,6 +416,8 @@ let
     '';
   };
 
+  umuFhsSpec = mkFhsEnvSpec umu;
+
   # ---------------------------------------------------------------------------
   # Helper Tools & Scripts
   # ---------------------------------------------------------------------------
@@ -430,6 +433,7 @@ let
         protonCaseBranches
         defaultProtonCode
         umu
+        umuFhsSpec
         ;
     };
   });

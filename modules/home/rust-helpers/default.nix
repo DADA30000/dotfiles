@@ -199,16 +199,6 @@ let
               default = "umu-pfx/{prefix}";
               description = "Relative runtime mount path template for active prefixes.";
             };
-            stop_timeout_ms = lib.mkOption {
-              type = lib.types.int;
-              default = 3000;
-              description = "Maximum milliseconds to wait for a stopped prefix unit.";
-            };
-            stop_poll_ms = lib.mkOption {
-              type = lib.types.int;
-              default = 100;
-              description = "Poll interval in milliseconds when waiting on prefix shutdown.";
-            };
           };
         };
         default = { };
@@ -414,25 +404,14 @@ let
                     default = false;
                     description = "Default tmpfs toggle in UMU sandbox preset.";
                   };
+                  flatpak_portal = lib.mkOption {
+                    type = lib.types.bool;
+                    default = true;
+                    description = "Default org.freedesktop.portal.Flatpak toggle in UMU sandbox preset.";
+                  };
                   seccomp_allow = lib.mkOption {
                     type = lib.types.listOf lib.types.str;
                     default = [
-                      "@10:unshare"
-                      "@10:setns"
-                      "@10:clone"
-                      "capset"
-                      "mount"
-                      "umount"
-                      "umount2"
-                      "pivot_root"
-                      "chroot"
-                      "open_tree"
-                      "move_mount"
-                      "fsopen"
-                      "fsconfig"
-                      "fsmount"
-                      "fspick"
-                      "mount_setattr"
                       "@10:ptrace"
                       "process_vm_readv"
                       "process_vm_writev"

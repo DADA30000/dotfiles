@@ -162,6 +162,7 @@ let
     ];
     buildPhase = ''
       $CC -shared -fPIC -O2 -Wall \
+        -DPW_V4L2_PATH=\"${pkgs.pipewire}/lib/pipewire-0.3/v4l2/libpw-v4l2.so\" \
         $(pkg-config --cflags --libs dbus-1 libpipewire-0.3) \
         -ldl $src -o libpw-portal-shim.so
     '';
@@ -170,17 +171,42 @@ let
       cp libpw-portal-shim.so $out/lib/
       cat << EOF > $out/bin/pw-portal-v4l2
       #!/bin/sh
-      LIBPW_V4L2='${pkgs.pipewire}/\''${LIB}/pipewire-0.3/v4l2/libpw-v4l2.so'
       SHIM="$out/lib/libpw-portal-shim.so"
-      if [ -z "\$LD_PRELOAD" ]; then
-        export LD_PRELOAD="\$SHIM \$LIBPW_V4L2"
-      else
-        export LD_PRELOAD="\$SHIM \$LIBPW_V4L2 \$LD_PRELOAD"
-      fi
+      export LD_PRELOAD="\$SHIM\''${LD_PRELOAD:+:\$LD_PRELOAD}"
+      export ZYPAK_LD_PRELOAD="\$SHIM\''${ZYPAK_LD_PRELOAD:+:\$ZYPAK_LD_PRELOAD}"
       exec "\$@"
       EOF
       chmod +x $out/bin/pw-portal-v4l2
     '';
+  };
+
+  zypakPkg = pkgs.stdenv.mkDerivation {
+    pname = "zypak";
+    version = "2025.09";
+    src = pkgs.fetchFromGitHub {
+      owner = "refi64";
+      repo = "zypak";
+      rev = "v2025.09";
+      fetchSubmodules = true;
+      hash = "sha256-j0QjbwRnUDx4GDkzA/A9+usAwZzzS0caQnPti/x8vEU=";
+    };
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [
+      pkgs.systemdLibs
+      pkgs.dbus
+    ];
+    postPatch = ''
+      substituteInPlace Makefile \
+        --replace-fail '$(shell git describe --tags --dirty)' 'v2025.09'
+      substituteInPlace zypak-wrapper.sh \
+        --replace-fail '#!/usr/bin/bash' '#!${pkgs.bash}/bin/bash'
+      for f in src/preload/host/spawn_strategy/initialize.cc src/preload/host/mimic_strategy/initialize.cc; do
+        substituteInPlace "$f" \
+          --replace-fail 'Env::Clear("LD_PRELOAD");' \
+            'if (auto p = Env::Get(Env::kZypakSettingLdPreload); p && !p->empty()) { Env::Set("LD_PRELOAD", *p); } else { Env::Clear("LD_PRELOAD"); }'
+      done
+    '';
+    makeFlags = [ "FLATPAK_DEST=$(out)" ];
   };
 
   syscallsJson = pkgs.runCommand "sb-syscalls.json" { nativeBuildInputs = [ pkgs.python3 ]; } ''
@@ -444,6 +470,11 @@ let
           default = true;
           description = "Mount /.flatpak-info metadata for portal/PipeWire client identification.";
         };
+        flatpak_portal = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable org.freedesktop.portal.Flatpak sub-sandbox portal support.";
+        };
         scope = lib.mkOption {
           type = lib.types.bool;
           default = true;
@@ -627,6 +658,36 @@ let
                 default = [ ];
                 description = "NVIDIA device nodes bound when gpu is enabled.";
               };
+              gpu_dev_nodes = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Core GPU device nodes bound when gpu is enabled.";
+              };
+              gpu_ro_paths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Read-only driver and sysfs GPU paths bound when gpu is enabled.";
+              };
+              gamepad_dev_nodes = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Input device nodes bound when gamepad is enabled.";
+              };
+              webcam_sys_path = lib.mkOption {
+                type = lib.types.str;
+                default = "";
+                description = "Sysfs class directory scanned for webcam nodes.";
+              };
+              portal_etc_paths = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Host /etc paths bound into portal usr-fd containers.";
+              };
+              extra_runtime_ro_binds = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+                description = "Subpaths under XDG_RUNTIME_DIR mounted read-only if present.";
+              };
             };
           };
           default = { };
@@ -636,6 +697,16 @@ let
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = "Arguments passed to pasta in sandboxed network mode.";
+        };
+        pasta_dns = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          description = "Nameserver IP written to sandboxed /etc/resolv.conf in pasta mode.";
+        };
+        singbox_bridge = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          description = "Local TCP bridge address spec forwarded by sb-executor in singbox mode.";
         };
         singbox_config = lib.mkOption {
           type = lib.types.str;
@@ -647,15 +718,25 @@ let
           default = "$XDG_DATA_HOME/sb-run/syscalls.json";
           description = "Path to the syscall number table JSON.";
         };
-      };
-
-      config = lib.mkIf config.portals {
-        env = {
-          PATH = lib.mkDefault "${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin";
-          XDG_DATA_DIRS = lib.mkDefault "${portal-files}:/usr/share:/run/current-system/sw/share";
-          XDG_CONFIG_DIRS = lib.mkDefault "${portal-files}:/etc/xdg";
+        fhs_env = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = "Optional buildFHSEnv spec JSON path for host-side FHS mounting without inner userns.";
         };
       };
+
+      config = lib.mkMerge [
+        (lib.mkIf config.portals {
+          env = {
+            PATH = lib.mkDefault "${portal-xdg-open}/bin:/run/current-system/sw/bin:/bin:/usr/bin";
+            XDG_DATA_DIRS = lib.mkDefault "${portal-files}:/usr/share:/run/current-system/sw/share";
+            XDG_CONFIG_DIRS = lib.mkDefault "${portal-files}:/etc/xdg";
+          };
+        })
+        (lib.mkIf config.flatpak_portal {
+          dbus.talks = [ "org.freedesktop.portal.Flatpak" ];
+        })
+      ];
     };
 
   baseSandboxConfig = {
@@ -968,6 +1049,7 @@ let
         "socket:arg0==10"
         "socket:arg0==16&&arg2==0"
         "socket:arg0==16&&arg2==15"
+        "socketcall"
         "socketpair:arg0==1"
         "bind"
         "listen"
@@ -1031,6 +1113,8 @@ let
       ];
     };
 
+    pasta_dns = "192.168.1.1";
+    singbox_bridge = "127.0.0.1:[1919,2121]";
     pasta_args = [
       "--config-net"
       "--no-dhcp"
@@ -1131,6 +1215,36 @@ let
         "/dev/nvidia-uvm"
         "/dev/nvidia-uvm-tools"
       ];
+      gpu_dev_nodes = [ "/dev/dri" ];
+      gpu_ro_paths = [
+        "/run/opengl-driver"
+        "/run/opengl-driver-32"
+        "/sys/dev/char"
+        "/sys/devices/pci0000:00"
+        "/sys/class/drm"
+        "/sys/devices"
+        "/sys/bus/pci"
+      ];
+      gamepad_dev_nodes = [
+        "/dev/input"
+        "/dev/uinput"
+      ];
+      webcam_sys_path = "/sys/class/video4linux";
+      portal_etc_paths = [
+        "/etc/passwd"
+        "/etc/group"
+        "/etc/hosts"
+        "/etc/resolv.conf"
+        "/etc/machine-id"
+        "/etc/os-release"
+        "/etc/localtime"
+        "/etc/zoneinfo"
+        "/etc/ssl/certs"
+        "/etc/static/ssl/certs"
+        "/etc/pki"
+        "/etc/fonts"
+      ];
+      extra_runtime_ro_binds = [ "wivrn" ];
     };
   };
 
@@ -1146,6 +1260,72 @@ let
       }).config
       [ "_module" ];
 
+  mkFhsEnvSpec =
+    fhsPkg:
+    pkgs.runCommandLocal "${fhsPkg.name or "fhs"}-spec.json"
+      {
+        nativeBuildInputs = [ pkgs.python3 ];
+        passAsFile = [ "script" ];
+        script = ''
+          import json, os, re, sys
+
+          fhs_pkg, out_path, rootfs = sys.argv[1], sys.argv[2], sys.argv[3]
+          glibc_dirs = [d for d in sys.argv[4].split(":") if d]
+
+          bin_dir = os.path.join(fhs_pkg, "bin")
+          bwrap_scripts = []
+          script_text = ""
+          for entry in sorted(os.listdir(bin_dir)):
+              target = os.path.realpath(os.path.join(bin_dir, entry))
+              if target.endswith("-bwrap") and os.path.isfile(target):
+                  bwrap_scripts.append(target)
+                  if not script_text:
+                      with open(target, "r", encoding="utf-8") as fh:
+                          script_text = fh.read()
+
+          if not script_text:
+              raise RuntimeError(f"No *-bwrap script found in {bin_dir}")
+
+          m_init = re.search(r"--symlink\s+(/nix/store/\S+-init)\s+/init", script_text)
+          m_cinit = re.search(r"(/nix/store/\S+-container-init)\b", script_text)
+          if not m_init or not m_cinit:
+              raise RuntimeError(f"Unable to extract init paths from {bwrap_scripts[0]}")
+
+          m_etc = re.search(r"for i in (/etc/\S+(?:\s+/etc/\S+)*);\s*do", script_text)
+          etc_binds = m_etc.group(1).split() if m_etc else []
+
+          spec = {
+              "rootfs": rootfs,
+              "container_init": m_cinit.group(1),
+              "real_init": m_init.group(1),
+              "bwrap_scripts": sorted(set(bwrap_scripts)),
+              "glibc_dirs": glibc_dirs,
+              "etc_binds": etc_binds,
+              "ld_so_conf": "\n".join([
+                  "/lib",
+                  "/lib/x86_64-linux-gnu",
+                  "/lib64",
+                  "/usr/lib",
+                  "/usr/lib/x86_64-linux-gnu",
+                  "/usr/lib64",
+                  "/lib/i386-linux-gnu",
+                  "/lib32",
+                  "/usr/lib/i386-linux-gnu",
+                  "/usr/lib32",
+                  "/run/opengl-driver/lib",
+                  "/run/opengl-driver-32/lib",
+              ]) + "\n",
+              "zoneinfo": "/etc/zoneinfo" in script_text and "/usr/share/zoneinfo" in script_text,
+          }
+          with open(out_path, "w", encoding="utf-8") as fh:
+              json.dump(spec, fh)
+        '';
+      }
+      ''
+        python3 "$scriptPath" "${fhsPkg}" "$out" "${fhsPkg.fhsenv}" \
+          "${pkgs.glibc}${lib.optionalString (fhsPkg.fhsenv.isMultiBuild or false) ":${pkgs.pkgsi686Linux.glibc}"}"
+      '';
+
   sbRunConfigFile = (pkgs.formats.json { }).generate "sb-run-config.json" (evalSandboxConfig [ ]);
 
   mkSandbox =
@@ -1159,14 +1339,32 @@ let
       ...
     }:
     let
-      sandboxModuleArgs = removeAttrs args [
-        "appId"
-        "package"
-        "main_desktop_file"
-        "additional_outside_commands"
-        "additional_inside_commands"
-        "extraAttrs"
-      ];
+      autoFhsPkg =
+        if args ? fhs_env then
+          args.fhs_env
+        else if package ? fhsenv then
+          package
+        else
+          null;
+      resolvedFhsSpec =
+        if autoFhsPkg == null then
+          null
+        else if lib.isDerivation autoFhsPkg && autoFhsPkg ? fhsenv then
+          mkFhsEnvSpec autoFhsPkg
+        else
+          autoFhsPkg;
+
+      sandboxModuleArgs =
+        (removeAttrs args [
+          "appId"
+          "package"
+          "main_desktop_file"
+          "additional_outside_commands"
+          "additional_inside_commands"
+          "extraAttrs"
+          "fhs_env"
+        ])
+        // lib.optionalAttrs (resolvedFhsSpec != null) { fhs_env = resolvedFhsSpec; };
 
       evaluatedConfig = evalSandboxConfig [ sandboxModuleArgs ];
       appConfigJson = (pkgs.formats.json { }).generate "sb-run-${appId}.json" evaluatedConfig;
@@ -1343,7 +1541,12 @@ in
   config = lib.mkMerge [
     {
       _module.args = {
-        inherit staticBwrap mkSandbox;
+        inherit
+          staticBwrap
+          mkSandbox
+          mkFhsEnvSpec
+          zypakPkg
+          ;
       };
     }
     (lib.mkIf cfg.enable {

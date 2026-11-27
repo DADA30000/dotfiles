@@ -1,13 +1,24 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::ffi::{CString, c_void};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, Shutdown, TcpListener, TcpStream};
 use std::os::raw::c_char;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[repr(C)]
+struct PollFd {
+    fd: i32,
+    events: i16,
+    revents: i16,
+}
 
 unsafe extern "C" {
     fn fork() -> i32;
@@ -16,7 +27,18 @@ unsafe extern "C" {
     fn close(fd: i32) -> i32;
     fn open(path: *const c_char, flags: i32, ...) -> i32;
     fn dup2(oldfd: i32, newfd: i32) -> i32;
+    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
+    fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
+    fn inotify_init1(flags: i32) -> i32;
+    fn inotify_add_watch(fd: i32, pathname: *const c_char, mask: u32) -> i32;
 }
+
+const IN_NONBLOCK: i32 = 0x800;
+const IN_CLOEXEC: i32 = 0x8_0000;
+const IN_CREATE: u32 = 0x0000_0100;
+const IN_MOVED_TO: u32 = 0x0000_0080;
+const POLLIN: i16 = 0x0001;
+const EINTR: i32 = 4;
 
 const CONTROL_COMMAND_BIND: u8 = 1;
 const CONTROL_COMMAND_UNBIND: u8 = 2;
@@ -490,6 +512,60 @@ fn perform_listen_handshake(stream: &mut UnixStream, local_config: &str) {
     log_bridge("Configuration handshake successful.");
 }
 
+fn connect_listen_socket(socket_path: &str) -> UnixStream {
+    if let Ok(s) = UnixStream::connect(socket_path) {
+        return s;
+    }
+    let path = Path::new(socket_path);
+    let ifd_opt = path
+        .parent()
+        .and_then(|p| CString::new(p.as_os_str().as_bytes()).ok())
+        .and_then(|c_dir| {
+            let raw = unsafe { inotify_init1(IN_CLOEXEC | IN_NONBLOCK) };
+            if raw < 0 {
+                return None;
+            }
+            let owned = unsafe { OwnedFd::from_raw_fd(raw) };
+            let wd = unsafe {
+                inotify_add_watch(owned.as_raw_fd(), c_dir.as_ptr(), IN_CREATE | IN_MOVED_TO)
+            };
+            if wd < 0 { None } else { Some(owned) }
+        });
+
+    let Some(ifd) = ifd_opt else {
+        loop {
+            if let Ok(s) = UnixStream::connect(socket_path) {
+                return s;
+            }
+            thread::sleep(Duration::from_millis(DEFAULT_LOOP_SLEEP_MS));
+        }
+    };
+
+    loop {
+        match UnixStream::connect(socket_path) {
+            Ok(s) => return s,
+            Err(ref e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
+                thread::yield_now();
+                if let Ok(s) = UnixStream::connect(socket_path) {
+                    return s;
+                }
+            }
+            Err(_) => {}
+        }
+        let mut pfd = PollFd {
+            fd: ifd.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        };
+        let res = unsafe { poll(&raw mut pfd, 1, -1) };
+        if res < 0 && std::io::Error::last_os_error().raw_os_error() != Some(EINTR) {
+            std::process::exit(1);
+        }
+        let mut buf = [0u8; 1024];
+        while unsafe { read(ifd.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+    }
+}
+
 fn run_listen_role(
     socket_path: &str,
     static_addresses: &HashMap<String, Vec<u16>>,
@@ -503,12 +579,7 @@ fn run_listen_role(
         "Starting LISTEN role. Seeking UNIX socket at {socket_path}"
     ));
 
-    let mut stream = loop {
-        match UnixStream::connect(socket_path) {
-            Ok(s) => break s,
-            Err(_) => thread::sleep(Duration::from_millis(DEFAULT_LOOP_SLEEP_MS)),
-        }
-    };
+    let mut stream = connect_listen_socket(socket_path);
 
     log_bridge("Connected to PASS role control socket. Exchanging configurations...");
     perform_listen_handshake(&mut stream, &local_config);

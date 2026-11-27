@@ -4,6 +4,7 @@
   pkgs,
   inputs,
   mkSandbox,
+  zypakPkg,
   ...
 }:
 with lib;
@@ -57,12 +58,8 @@ in
         wayland = "sandboxed";
         x11 = "sandboxed";
         portals = false;
-        seccomp.allow = [
-          "@10:unshare"
-          "@10:setns"
-          "@10:clone"
-          "capset"
-        ];
+        flatpak_portal = true;
+        seccomp.allow = [ "capset" ];
         dbus.owns = [ "org.mpris.MediaPlayer2.spotify" ];
         package = config.programs.spicetify.spicedSpotify.overrideAttrs {
           fixupPhase = ''
@@ -70,8 +67,13 @@ in
 
             wrapProgramShell $out/share/spotify/spotify \
               ''${gappsWrapperArgs[@]} \
-              --prefix LD_LIBRARY_PATH : "$librarypath"
-              #--prefix LD_AUDIT : "${libcef}/patcher_lib.so"
+              --prefix LD_LIBRARY_PATH : "$librarypath" \
+              --set ZYPAK_CEF_LIBRARY_PATH "$out/share/spotify/libcef.so"
+
+            substituteInPlace $out/share/spotify/spotify \
+              --replace-fail \
+                "exec -a \"\$0\" \"$out/share/spotify/.spotify-wrapped\"" \
+                "exec ${zypakPkg}/bin/zypak-wrapper \"$out/share/spotify/.spotify-wrapped\""
 
             runHook postFixup
           '';

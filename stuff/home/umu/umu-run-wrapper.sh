@@ -50,6 +50,7 @@ if [[ "${1:-}" == *.desktop && -f "$1" ]]; then
   export UMU_SECCOMP_DENY="$(get_dprop 'X-UMU-Seccomp-Deny')"
   export UMU_SHARE_PID="$(get_dprop 'X-UMU-Share-Pid')"
   export UMU_PORTALS="$(get_dprop 'X-UMU-Portals')"
+  export UMU_FLATPAK_PORTAL="$(get_dprop 'X-UMU-Flatpak-Portal')"
   export UMU_TMPFS="$(get_dprop 'X-UMU-Tmpfs')"
   export UMU_VPNIFY="$(get_dprop 'X-UMU-Vpnify')"
   export UMU_BRIDGES="$(get_dprop 'X-UMU-Bridges')"
@@ -452,6 +453,11 @@ else
 fi
 [[ "${UMU_SHARE_PID:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--share-pid)
 [[ "${UMU_PORTALS:-1}" == "0" ]] && EXTRA_SB_ARGS+=(--no-portals)
+if [[ "${UMU_FLATPAK_PORTAL:-1}" == "0" ]]; then
+  EXTRA_SB_ARGS+=(--no-flatpak-portal)
+else
+  EXTRA_SB_ARGS+=(--flatpak-portal)
+fi
 [[ "${UMU_TMPFS:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--tmpfs)
 [[ "${UMU_VPNIFY:-0}" == "1" ]] && EXTRA_SB_ARGS+=(--vpnify)
 if [[ -n "${UMU_BRIDGES:-}" ]]; then
@@ -480,6 +486,7 @@ if [[ "${USE_SANDBOX:-0}" != "0" ]]; then
   mkdir -p "$PREFIX_DIR/sandbox"
   OVERLAY_EXEC_CMD=(
     sb-run
+    --fhs-env %{{{umuFhsSpec}}}
     --uid "$ORIG_UID"
     --gid "$ORIG_GID"
     --id "umu-$prefix_name"

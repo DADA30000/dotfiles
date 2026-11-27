@@ -57,8 +57,6 @@ pub struct SteamConfig {
 pub struct SystemdConfig {
     pub prefix_scope_template: String,
     pub prefix_mount_rel: String,
-    pub stop_timeout_ms: u64,
-    pub stop_poll_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -102,12 +100,19 @@ pub struct ShortcutDefaultsConfig {
     pub isolation: ShortcutIsolationDefaults,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct UmuPortalDefault {
+    pub flatpak_portal: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct UmuSandboxDefaults {
     pub x11: String,
     pub gpu: bool,
     pub landlock: bool,
     pub tmpfs: bool,
+    #[serde(flatten)]
+    pub portal: UmuPortalDefault,
     pub seccomp_allow: Vec<String>,
 }
 

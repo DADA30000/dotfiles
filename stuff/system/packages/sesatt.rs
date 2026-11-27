@@ -1,16 +1,17 @@
 use std::collections::BTreeMap;
 use std::env;
+use std::ffi::CString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::Shutdown;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 type CInt = i32;
 type CLong = i64;
@@ -59,6 +60,17 @@ impl Winsize {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SigSet([u64; 16]);
+
+#[repr(C)]
+struct PollFd {
+    fd: CInt,
+    events: i16,
+    revents: i16,
+}
+
 #[link(name = "util")]
 unsafe extern "C" {
     fn openpty(
@@ -85,6 +97,13 @@ unsafe extern "C" {
     fn open(path: *const CChar, flags: CInt, ...) -> CInt;
     fn dup2(oldfd: CInt, newfd: CInt) -> CInt;
     fn isatty(fd: CInt) -> CInt;
+    fn poll(fds: *mut PollFd, nfds: usize, timeout: CInt) -> CInt;
+    fn inotify_init1(flags: CInt) -> CInt;
+    fn inotify_add_watch(fd: CInt, pathname: *const CChar, mask: u32) -> CInt;
+    fn sigemptyset(set: *mut SigSet) -> CInt;
+    fn sigaddset(set: *mut SigSet, signum: CInt) -> CInt;
+    fn sigprocmask(how: CInt, set: *const SigSet, oldset: *mut SigSet) -> CInt;
+    fn signalfd(fd: CInt, mask: *const SigSet, flags: CInt) -> CInt;
 }
 
 const TCSANOW: CInt = 0;
@@ -93,12 +112,23 @@ const TIOCSWINSZ: CLong = 0x5414;
 const SIGHUP: CInt = 1;
 const SIGWINCH: CInt = 28;
 const SIG_IGN: usize = 1;
+const SIG_BLOCK: CInt = 0;
+const SIG_SETMASK: CInt = 2;
+const SFD_CLOEXEC: CInt = 0x8_0000;
+const IN_NONBLOCK: CInt = 0x800;
+const IN_CLOEXEC: CInt = 0x8_0000;
+const IN_CREATE: u32 = 0x0000_0100;
+const IN_MOVED_TO: u32 = 0x0000_0080;
+const POLLIN: i16 = 0x0001;
+const EINTR: CInt = 4;
 const O_RDWR: CInt = 2;
 
-static WINCH_RECEIVED: AtomicBool = AtomicBool::new(false);
+struct SigMaskGuard(SigSet);
 
-extern "C" fn sigwinch_handler(_: CInt) {
-    WINCH_RECEIVED.store(true, Ordering::SeqCst);
+impl Drop for SigMaskGuard {
+    fn drop(&mut self) {
+        unsafe { sigprocmask(SIG_SETMASK, &raw const self.0, std::ptr::null_mut()) };
+    }
 }
 
 fn ffi_get_terminal_size() -> Winsize {
@@ -229,14 +259,67 @@ fn get_log_path(session: &str) -> PathBuf {
     get_session_dir(session).join("sesatt.log")
 }
 
-fn connect_with_retry(sock_path: &Path, retries: u32, delay: Duration) -> io::Result<UnixStream> {
-    for _ in 0..retries {
-        if let Ok(stream) = UnixStream::connect(sock_path) {
-            return Ok(stream);
-        }
-        thread::sleep(delay);
+fn connect_with_inotify(sock_path: &Path, timeout_ms: CInt) -> io::Result<UnixStream> {
+    if let Ok(s) = UnixStream::connect(sock_path) {
+        return Ok(s);
     }
-    UnixStream::connect(sock_path)
+    let Some(parent) = sock_path.parent() else {
+        return UnixStream::connect(sock_path);
+    };
+    let Ok(c_dir) = CString::new(parent.as_os_str().as_bytes()) else {
+        return UnixStream::connect(sock_path);
+    };
+    let ifd_raw = unsafe { inotify_init1(IN_CLOEXEC | IN_NONBLOCK) };
+    if ifd_raw < 0 {
+        return UnixStream::connect(sock_path);
+    }
+    let ifd = unsafe { OwnedFd::from_raw_fd(ifd_raw) };
+    let wd = unsafe { inotify_add_watch(ifd.as_raw_fd(), c_dir.as_ptr(), IN_CREATE | IN_MOVED_TO) };
+    if wd < 0 {
+        return UnixStream::connect(sock_path);
+    }
+
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_millis(u64::try_from(timeout_ms).unwrap_or(0));
+    loop {
+        match UnixStream::connect(sock_path) {
+            Ok(s) => return Ok(s),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {
+                thread::yield_now();
+                if let Ok(s) = UnixStream::connect(sock_path) {
+                    return Ok(s);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+
+        let rem_ms = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_millis();
+        let rem_i32 = i32::try_from(rem_ms).unwrap_or(i32::MAX);
+        if rem_i32 <= 0 {
+            return UnixStream::connect(sock_path);
+        }
+
+        let mut pfd = PollFd {
+            fd: ifd.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        };
+        let res = unsafe { poll(&raw mut pfd, 1, rem_i32) };
+        if res < 0 {
+            if io::Error::last_os_error().raw_os_error() == Some(EINTR) {
+                continue;
+            }
+            return UnixStream::connect(sock_path);
+        }
+        if res == 0 {
+            return UnixStream::connect(sock_path);
+        }
+        let mut buf = [0u8; 1024];
+        while unsafe { read(ifd.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+    }
 }
 
 fn has_active_scope(session: &str) -> bool {
@@ -653,8 +736,49 @@ fn send_nvim_pkt(stream: &mut UnixStream) -> io::Result<()> {
     Ok(())
 }
 
+fn spawn_winch_watcher(mut stream_winch: UnixStream, initial_ws: Winsize) -> Option<SigMaskGuard> {
+    let mut mask = SigSet([0u64; 16]);
+    let mut old_mask = SigSet([0u64; 16]);
+    unsafe {
+        sigemptyset(&raw mut mask);
+        sigaddset(&raw mut mask, SIGWINCH);
+        if sigprocmask(SIG_BLOCK, &raw const mask, &raw mut old_mask) != 0 {
+            return None;
+        }
+    }
+    let guard = SigMaskGuard(old_mask);
+    let sfd_raw = unsafe { signalfd(-1, &raw const mask, SFD_CLOEXEC) };
+    if sfd_raw < 0 {
+        return Some(guard);
+    }
+    let sig_fd = unsafe { OwnedFd::from_raw_fd(sfd_raw) };
+
+    thread::spawn(move || {
+        let mut last_ws = initial_ws;
+        let mut buf = [0u8; 128];
+        loop {
+            let n = unsafe { read(sig_fd.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len()) };
+            if n <= 0 {
+                if n < 0 && io::Error::last_os_error().raw_os_error() == Some(EINTR) {
+                    continue;
+                }
+                break;
+            }
+            let cur_ws = ffi_get_terminal_size();
+            if cur_ws != last_ws {
+                last_ws = cur_ws;
+                if send_resize_pkt(&mut stream_winch, cur_ws).is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    Some(guard)
+}
+
 fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
-    let mut stream = match connect_with_retry(sock_path, 250, Duration::from_millis(10)) {
+    let mut stream = match connect_with_inotify(sock_path, 2500) {
         Ok(s) => s,
         Err(e) => {
             if log_path.exists() {
@@ -670,29 +794,10 @@ fn attach_session(sock_path: &Path, log_path: &Path) -> io::Result<()> {
     send_nvim_pkt(&mut stream)?;
 
     let mut stream_stdin = stream.try_clone()?;
-    let mut stream_winch = stream.try_clone()?;
+    let stream_winch = stream.try_clone()?;
 
     let orig_termios = ffi_set_raw_mode()?;
-
-    unsafe {
-        signal(SIGWINCH, sigwinch_handler as *const () as usize);
-    }
-
-    thread::spawn(move || {
-        let mut last_ws = ws;
-        loop {
-            thread::sleep(Duration::from_millis(100));
-            if WINCH_RECEIVED.swap(false, Ordering::SeqCst) {
-                let cur_ws = ffi_get_terminal_size();
-                if cur_ws != last_ws {
-                    last_ws = cur_ws;
-                    if send_resize_pkt(&mut stream_winch, cur_ws).is_err() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
+    let _winch_guard = spawn_winch_watcher(stream_winch, ws);
 
     thread::spawn(move || {
         let mut stdin = io::stdin();

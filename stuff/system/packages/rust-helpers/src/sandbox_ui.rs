@@ -79,6 +79,7 @@ pub struct SbRunConfig {
     pub hw: SandboxHwFlags,
     pub sec: SandboxSecurityFlags,
     pub runtime: SandboxRuntimeFlags,
+    pub flatpak_portal: bool,
     pub seccomp: SbSeccompConfig,
     pub singbox_config: String,
     pub neovide_bin: String,
@@ -260,6 +261,7 @@ impl SbRunConfig {
                 share_pid: bool_flag("share_pid")?,
                 vpnify: bool_flag("vpnify")?,
             },
+            flatpak_portal: bool_flag("flatpak_portal")?,
             seccomp: SbSeccompConfig {
                 enable: parsed.seccomp.enable,
                 action: parsed.seccomp.action,
@@ -366,6 +368,7 @@ pub struct SandboxFormData {
     pub hw: SandboxHwFlags,
     pub sec: SandboxSecurityFlags,
     pub runtime: SandboxRuntimeFlags,
+    pub flatpak_portal: bool,
     pub seccomp_action: String,
     pub seccomp_notify: String,
     pub seccomp_allowed: Vec<String>,
@@ -395,6 +398,7 @@ impl SandboxFormData {
             hw: decl.hw,
             sec: decl.sec,
             runtime: decl.runtime,
+            flatpak_portal: decl.flatpak_portal,
             seccomp_action: decl.seccomp.action.clone(),
             seccomp_notify: decl.seccomp.notify.clone(),
             seccomp_allowed: decl.seccomp.allow.clone(),
@@ -413,6 +417,7 @@ impl SandboxFormData {
         data.x11.clone_from(&umu_def.x11);
         data.hw.gpu = umu_def.gpu;
         data.sec.landlock = umu_def.landlock;
+        data.flatpak_portal = umu_def.portal.flatpak_portal;
         data.runtime.tmpfs = umu_def.tmpfs;
         for s in &umu_def.seccomp_allow {
             if !data.seccomp_allowed.iter().any(|x| x == s) {
@@ -1534,6 +1539,7 @@ pub struct SandboxOptionsWidget {
     pub paths_widget: PathsListWidget,
     pub combo_dbus: gtk4::ComboBoxText,
     pub toggle_portals: gtk4::CheckButton,
+    pub toggle_flatpak_portal: gtk4::CheckButton,
     pub toggle_landlock: gtk4::CheckButton,
     pub toggle_seccomp: gtk4::CheckButton,
     pub btn_seccomp_edit: gtk4::Button,
@@ -1824,6 +1830,7 @@ struct AdvWidgets {
     expander: gtk4::Expander,
     combo_dbus: gtk4::ComboBoxText,
     toggle_portals: gtk4::CheckButton,
+    toggle_flatpak_portal: gtk4::CheckButton,
     toggle_landlock: gtk4::CheckButton,
     toggle_seccomp: gtk4::CheckButton,
     btn_seccomp_edit: gtk4::Button,
@@ -1921,6 +1928,7 @@ struct AdvGridControls {
     grid: gtk4::Grid,
     combo_dbus: gtk4::ComboBoxText,
     toggle_portals: gtk4::CheckButton,
+    toggle_flatpak_portal: gtk4::CheckButton,
     toggle_landlock: gtk4::CheckButton,
     toggle_tmpfs: gtk4::CheckButton,
     toggle_share_pid: gtk4::CheckButton,
@@ -1990,10 +1998,15 @@ fn build_adv_toggles_grid(mode: SandboxUiMode, init: &SandboxFormData) -> AdvGri
     );
     grid.attach(&tmp_box, 1, 3, 1, 1);
 
+    let toggle_flatpak_portal = gtk4::CheckButton::with_label("Flatpak Portal (Zypak/PV)");
+    toggle_flatpak_portal.set_active(init.flatpak_portal);
+    grid.attach(&toggle_flatpak_portal, 0, 4, 2, 1);
+
     AdvGridControls {
         grid,
         combo_dbus,
         toggle_portals,
+        toggle_flatpak_portal,
         toggle_landlock,
         toggle_tmpfs,
         toggle_share_pid,
@@ -2056,6 +2069,7 @@ fn build_adv_section(
         expander,
         combo_dbus: g.combo_dbus,
         toggle_portals: g.toggle_portals,
+        toggle_flatpak_portal: g.toggle_flatpak_portal,
         toggle_landlock: g.toggle_landlock,
         toggle_seccomp: chk_seccomp,
         btn_seccomp_edit,
@@ -2194,6 +2208,7 @@ impl SandboxOptionsWidget {
             paths_widget,
             combo_dbus: adv.combo_dbus,
             toggle_portals: adv.toggle_portals,
+            toggle_flatpak_portal: adv.toggle_flatpak_portal,
             toggle_landlock: adv.toggle_landlock,
             toggle_seccomp: adv.toggle_seccomp,
             btn_seccomp_edit: adv.btn_seccomp_edit,
@@ -2275,6 +2290,7 @@ impl SandboxOptionsWidget {
                 share_pid: self.toggle_share_pid.is_active(),
                 vpnify: self.toggle_vpnify.is_active(),
             },
+            flatpak_portal: self.toggle_flatpak_portal.is_active(),
             seccomp_action: self.seccomp_action.borrow().clone(),
             seccomp_notify: self.seccomp_notify.borrow().clone(),
             seccomp_allowed: self.seccomp_allowed.borrow().clone(),
@@ -2324,6 +2340,7 @@ impl SandboxOptionsWidget {
         }
         self.combo_dbus.set_active_id(Some(&data.dbus));
         self.toggle_portals.set_active(data.sec.portals);
+        self.toggle_flatpak_portal.set_active(data.flatpak_portal);
         self.toggle_landlock.set_active(data.sec.landlock);
         self.toggle_seccomp.set_active(data.sec.seccomp);
         (*self.seccomp_action.borrow_mut()).clone_from(&data.seccomp_action);
@@ -2397,6 +2414,11 @@ impl SandboxOptionsWidget {
         );
         if !d.sec.portals {
             args.push("--no-portals".into());
+        }
+        if d.flatpak_portal {
+            args.push("--flatpak-portal".into());
+        } else {
+            args.push("--no-flatpak-portal".into());
         }
         if d.runtime.tmpfs {
             args.push("--tmpfs".into());

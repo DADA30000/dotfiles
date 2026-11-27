@@ -28,8 +28,36 @@ static void *(*real_mmap)(void *, size_t, int, int, int, off_t) = NULL;
 static void *(*real_mmap64)(void *, size_t, int, int, int, off_t) = NULL;
 static int (*real_munmap)(void *, size_t) = NULL;
 static struct pw_core *(*real_connect_fd)(struct pw_context *, int, struct pw_properties *, size_t) = NULL;
+static void *g_v4l2_handle = NULL;
+static int (*v4l2_open)(const char *, int, ...) = NULL;
+static int (*v4l2_close)(int) = NULL;
+static int (*v4l2_ioctl)(int, unsigned long, ...) = NULL;
+static void *(*v4l2_mmap)(void *, size_t, int, int, int, off_t) = NULL;
+static void *(*v4l2_mmap64)(void *, size_t, int, int, int, off64_t) = NULL;
+static int (*v4l2_munmap)(void *, size_t) = NULL;
 
 static int g_current_portal_fd = -1;
+
+static int ensure_v4l2_loaded(void) {
+    if (g_v4l2_handle) return 1;
+    const char *path = getenv("PW_V4L2_PATH");
+#ifdef PW_V4L2_PATH
+    if (!path || !*path) path = PW_V4L2_PATH;
+#endif
+    if (!path || !*path) return 0;
+    g_v4l2_handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL);
+    if (!g_v4l2_handle) {
+        fprintf(stderr, "[pw-portal-shim] dlopen(%s) failed: %s\n", path, dlerror());
+        return 0;
+    }
+    v4l2_open = dlsym(g_v4l2_handle, "open");
+    v4l2_close = dlsym(g_v4l2_handle, "close");
+    v4l2_ioctl = dlsym(g_v4l2_handle, "ioctl");
+    v4l2_mmap = dlsym(g_v4l2_handle, "mmap");
+    v4l2_mmap64 = dlsym(g_v4l2_handle, "mmap64");
+    v4l2_munmap = dlsym(g_v4l2_handle, "munmap");
+    return v4l2_open && v4l2_close && v4l2_ioctl && v4l2_mmap && v4l2_munmap;
+}
 
 #define DUMMY_WIDTH 1280
 #define DUMMY_HEIGHT 720
@@ -341,7 +369,8 @@ int close(int fd) {
             }
         }
         if (cam->real_fd >= 0) {
-            real_close(cam->real_fd);
+            if (v4l2_close) v4l2_close(cam->real_fd);
+            else real_close(cam->real_fd);
             cam->real_fd = -1;
         }
     }
@@ -360,6 +389,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
             return MAP_FAILED;
         }
         if (cam->real_fd >= 0) {
+            if (v4l2_mmap) return v4l2_mmap(addr, length, prot, flags, cam->real_fd, offset);
             return real_mmap(addr, length, prot, flags, cam->real_fd, offset);
         }
     }
@@ -378,6 +408,8 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, off_t offse
             return MAP_FAILED;
         }
         if (cam->real_fd >= 0) {
+            if (v4l2_mmap64) return v4l2_mmap64(addr, length, prot, flags, cam->real_fd, offset);
+            if (v4l2_mmap) return v4l2_mmap(addr, length, prot, flags, cam->real_fd, offset);
             return real_mmap64(addr, length, prot, flags, cam->real_fd, offset);
         }
     }
@@ -394,6 +426,7 @@ int munmap(void *addr, size_t length) {
             }
         }
     }
+    if (v4l2_munmap) return v4l2_munmap(addr, length);
     return real_munmap ? real_munmap(addr, length) : -1;
 }
 
@@ -432,7 +465,7 @@ int ioctl(int fd, unsigned long request, ...) {
 
     // If live PipeWire stream is active, delegate directly to real fd!
     if (cam->real_fd >= 0) {
-        return real_ioctl(cam->real_fd, request, arg);
+        return v4l2_ioctl ? v4l2_ioctl(cam->real_fd, request, arg) : real_ioctl(cam->real_fd, request, arg);
     }
 
     // If dummy stream is active:
@@ -612,30 +645,30 @@ int ioctl(int fd, unsigned long request, ...) {
         // User allowed: connect libpw-v4l2 to PipeWire using this fresh portal remote fd!
         g_current_portal_fd = portal_fd;
         int real_cam_fd = -1;
-        void *handle = dlopen("libpw-v4l2.so", RTLD_LAZY | RTLD_NOLOAD);
-        if (handle) {
-            int (*v4l2_open)(const char *, int, ...) = dlsym(handle, "open");
-            if (v4l2_open) real_cam_fd = v4l2_open(cam->path, O_RDWR);
-            dlclose(handle);
-        }
-        if (real_cam_fd < 0 && real_open) {
-            real_cam_fd = real_open(cam->path, O_RDWR);
+        if (ensure_v4l2_loaded() && v4l2_open) {
+            real_cam_fd = v4l2_open(cam->path, O_RDWR);
         }
 
         if (real_cam_fd < 0) {
+            if (g_current_portal_fd >= 0) {
+                if (real_close) real_close(g_current_portal_fd);
+                else close(g_current_portal_fd);
+                g_current_portal_fd = -1;
+            }
             fprintf(stderr, "[pw-portal-shim] Failed to open libpw-v4l2 stream\n");
             activate_dummy_mode(cam);
             return ioctl(cam->app_fd, request, arg);
         }
 
         // Apply saved format
-        real_ioctl(real_cam_fd, VIDIOC_S_FMT, &cam->fmt);
+        if (v4l2_ioctl) v4l2_ioctl(real_cam_fd, VIDIOC_S_FMT, &cam->fmt);
+        else real_ioctl(real_cam_fd, VIDIOC_S_FMT, &cam->fmt);
 
         // Replace dummy eventfd with the real stream eventfd in the kernel table
         dup2(real_cam_fd, cam->app_fd);
         cam->real_fd = real_cam_fd;
 
-        return real_ioctl(cam->real_fd, request, arg);
+        return v4l2_ioctl ? v4l2_ioctl(cam->real_fd, request, arg) : real_ioctl(cam->real_fd, request, arg);
     }
     default:
         return 0;

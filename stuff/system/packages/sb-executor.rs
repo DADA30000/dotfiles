@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::process::CommandExt;
 use std::process::{Command, exit};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -114,12 +115,26 @@ const POLLHUP: i16 = 0x0010;
 const POLLERR: i16 = 0x0008;
 
 const WNOHANG: i32 = 1;
+const EINTR: i32 = 4;
 const TIOCSWINSZ: usize = 0x5414;
+const PR_SET_CHILD_SUBREAPER: i32 = 36;
+const SYS_PIDFD_OPEN: i64 = 434;
+
+const SIG_BLOCK: i32 = 0;
+const SIG_UNBLOCK: i32 = 1;
+const SIGCHLD: i32 = 17;
+const SFD_CLOEXEC: i32 = 0x8_0000;
+const SFD_NONBLOCK: i32 = 0x800;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SigSet([u64; 16]);
 
 unsafe extern "C" {
     fn syscall(number: i64, ...) -> i64;
     fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     fn close(fd: i32) -> i32;
+    fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
     fn fork() -> i32;
     fn execvp(file: *const i8, argv: *const *const i8) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
@@ -133,6 +148,10 @@ unsafe extern "C" {
     fn recvmsg(sockfd: i32, msg: *mut LibcMsghdr, flags: i32) -> isize;
     fn sendmsg(sockfd: i32, msg: *const LibcMsghdr, flags: i32) -> isize;
     fn unshare(flags: i32) -> i32;
+    fn sigemptyset(set: *mut SigSet) -> i32;
+    fn sigaddset(set: *mut SigSet, signum: i32) -> i32;
+    fn sigprocmask(how: i32, set: *const SigSet, oldset: *mut SigSet) -> i32;
+    fn signalfd(fd: i32, mask: *const SigSet, flags: i32) -> i32;
 }
 
 #[repr(C)]
@@ -341,10 +360,7 @@ fn send_fd_with_byte(sock: &UnixStream, fd_to_send: RawFd) -> std::io::Result<()
     }
 }
 
-fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
-    if bpf_bytes.is_empty() {
-        return;
-    }
+fn install_seccomp_with_stream(bpf_bytes: &[u8], stream: &mut UnixStream) {
     let Ok(insn_count) = u16::try_from(bpf_bytes.len() / 8) else {
         eprintln!("[sb-executor] Seccomp BPF exceeds maximum instruction count");
         exit(1);
@@ -364,33 +380,6 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
     let prog = SockFprog {
         len: insn_count,
         filter: bpf_bytes.as_ptr(),
-    };
-
-    if seccomp_socket.is_empty() {
-        let res = unsafe {
-            syscall(
-                SYS_SECCOMP,
-                SECCOMP_SET_MODE_FILTER,
-                0usize,
-                (&raw const prog).cast::<c_void>(),
-            )
-        };
-        if res < 0 {
-            eprintln!(
-                "[sb-executor] seccomp(SECCOMP_SET_MODE_FILTER) failed: {}",
-                std::io::Error::last_os_error()
-            );
-            exit(1);
-        }
-        return;
-    }
-
-    let mut stream = match UnixStream::connect(seccomp_socket) {
-        Ok(s) => s,
-        Err(err) => {
-            eprintln!("[sb-executor] Failed to connect seccomp socket '{seccomp_socket}': {err}");
-            exit(1);
-        }
     };
 
     let flags = SECCOMP_FILTER_FLAG_NEW_LISTENER | SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV;
@@ -417,7 +406,7 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
         exit(1);
     }
 
-    if let Err(err) = send_fd_with_byte(&stream, notif_fd) {
+    if let Err(err) = send_fd_with_byte(stream, notif_fd) {
         unsafe { close(notif_fd) };
         eprintln!("[sb-executor] Failed to hand off seccomp listener fd: {err}");
         exit(1);
@@ -429,6 +418,111 @@ fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
         eprintln!("[sb-executor] Failed waiting for seccomp supervisor ack: {err}");
         exit(1);
     }
+}
+
+fn install_seccomp_and_handoff(bpf_bytes: &[u8], seccomp_socket: &str) {
+    if bpf_bytes.is_empty() {
+        return;
+    }
+    if seccomp_socket.is_empty() {
+        let Ok(insn_count) = u16::try_from(bpf_bytes.len() / 8) else {
+            eprintln!("[sb-executor] Seccomp BPF exceeds maximum instruction count");
+            exit(1);
+        };
+        if insn_count == 0 {
+            return;
+        }
+        if unsafe { prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+            eprintln!(
+                "[sb-executor] prctl(PR_SET_NO_NEW_PRIVS) failed: {}",
+                std::io::Error::last_os_error()
+            );
+            exit(1);
+        }
+        let prog = SockFprog {
+            len: insn_count,
+            filter: bpf_bytes.as_ptr(),
+        };
+        let res = unsafe {
+            syscall(
+                SYS_SECCOMP,
+                SECCOMP_SET_MODE_FILTER,
+                0usize,
+                (&raw const prog).cast::<c_void>(),
+            )
+        };
+        if res < 0 {
+            eprintln!(
+                "[sb-executor] seccomp(SECCOMP_SET_MODE_FILTER) failed: {}",
+                std::io::Error::last_os_error()
+            );
+            exit(1);
+        }
+        return;
+    }
+
+    let mut stream = match UnixStream::connect(seccomp_socket) {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("[sb-executor] Failed to connect seccomp socket '{seccomp_socket}': {err}");
+            exit(1);
+        }
+    };
+    install_seccomp_with_stream(bpf_bytes, &mut stream);
+}
+
+fn execvp_argv(args: &[String]) -> ! {
+    let Ok(c_argv) = args
+        .iter()
+        .map(|arg| CString::new(arg.as_bytes()))
+        .collect::<Result<Vec<CString>, _>>()
+    else {
+        eprintln!("[sb-executor] Argument contains invalid null byte");
+        exit(1);
+    };
+    let mut c_ptrs: Vec<*const i8> = c_argv.iter().map(|cs| cs.as_ptr()).collect();
+    c_ptrs.push(std::ptr::null());
+
+    if let Some(first) = c_argv.first() {
+        unsafe {
+            execvp(first.as_ptr(), c_ptrs.as_ptr());
+        }
+    }
+
+    let cmd_name = args.first().map_or("unknown", |s| s.as_str());
+    eprintln!(
+        "[sb-executor] execvp failed for '{cmd_name}': {}",
+        std::io::Error::last_os_error()
+    );
+    exit(127);
+}
+
+fn run_seccomp_exec(args: &[String]) -> ! {
+    if args.len() < 4 || args[2] != "--" {
+        eprintln!("[sb-executor] Usage: --seccomp-exec <bpf-fd> <sock-fd> -- <cmd...>");
+        exit(1);
+    }
+    let Ok(bpf_fd) = args[0].parse::<i32>() else {
+        eprintln!("[sb-executor] Invalid seccomp bpf fd '{}'", args[0]);
+        exit(1);
+    };
+    let Ok(sock_fd) = args[1].parse::<i32>() else {
+        eprintln!("[sb-executor] Invalid seccomp socket fd '{}'", args[1]);
+        exit(1);
+    };
+    let mut bpf_file = unsafe { fs::File::from_raw_fd(bpf_fd) };
+    let mut bpf_bytes = Vec::new();
+    if let Err(err) = bpf_file.read_to_end(&mut bpf_bytes) {
+        eprintln!("[sb-executor] Failed to read seccomp bpf fd: {err}");
+        exit(1);
+    }
+    drop(bpf_file);
+
+    let mut stream = unsafe { UnixStream::from_raw_fd(sock_fd) };
+    install_seccomp_with_stream(&bpf_bytes, &mut stream);
+    drop(stream);
+
+    execvp_argv(&args[3..]);
 }
 
 fn run_child_process(
@@ -472,30 +566,78 @@ fn run_child_process(
         install_seccomp_and_handoff(&payload.seccomp_bpf, seccomp_socket);
     }
 
-    let Ok(c_argv) = payload
-        .args
-        .iter()
-        .map(|arg| CString::new(arg.as_bytes()))
-        .collect::<Result<Vec<CString>, _>>()
-    else {
-        eprintln!("[sb-executor] Argument contains invalid null byte");
-        exit(1);
-    };
-    let mut c_ptrs: Vec<*const i8> = c_argv.iter().map(|cs| cs.as_ptr()).collect();
-    c_ptrs.push(std::ptr::null());
+    unblock_sigchld();
+    execvp_argv(&payload.args);
+}
 
-    if let Some(first) = c_argv.first() {
-        unsafe {
-            execvp(first.as_ptr(), c_ptrs.as_ptr());
+fn make_sigchld_set() -> SigSet {
+    let mut set = SigSet([0u64; 16]);
+    unsafe {
+        sigemptyset(&raw mut set);
+        sigaddset(&raw mut set, SIGCHLD);
+    }
+    set
+}
+
+fn unblock_sigchld() {
+    let set = make_sigchld_set();
+    unsafe { sigprocmask(SIG_UNBLOCK, &raw const set, std::ptr::null_mut()) };
+}
+
+fn setup_sigchld_fd() -> OwnedFd {
+    let set = make_sigchld_set();
+    if unsafe { sigprocmask(SIG_BLOCK, &raw const set, std::ptr::null_mut()) } != 0 {
+        eprintln!(
+            "[sb-executor] Failed to block SIGCHLD: {}",
+            std::io::Error::last_os_error()
+        );
+        exit(1);
+    }
+    let fd = unsafe { signalfd(-1, &raw const set, SFD_CLOEXEC | SFD_NONBLOCK) };
+    if fd < 0 {
+        eprintln!(
+            "[sb-executor] Failed to create signalfd: {}",
+            std::io::Error::last_os_error()
+        );
+        exit(1);
+    }
+    unsafe { OwnedFd::from_raw_fd(fd) }
+}
+
+fn drain_signalfd(sig_fd: RawFd) {
+    let mut buf = [0u8; 128];
+    loop {
+        let n = unsafe { read(sig_fd, buf.as_mut_ptr().cast(), buf.len()) };
+        if n <= 0 {
+            break;
         }
     }
+}
 
-    let cmd_name = payload.args.first().map_or("unknown", |s| s.as_str());
-    eprintln!(
-        "[sb-executor] execvp failed for '{cmd_name}': {}",
-        std::io::Error::last_os_error()
-    );
-    exit(127);
+fn pidfd_open(pid: i32) -> Option<OwnedFd> {
+    if pid <= 0 {
+        return None;
+    }
+    let res = unsafe { syscall(SYS_PIDFD_OPEN, i64::from(pid), 0) };
+    let fd = i32::try_from(res).ok()?;
+    if fd >= 0 {
+        Some(unsafe { OwnedFd::from_raw_fd(fd) })
+    } else {
+        None
+    }
+}
+
+fn reap_children(gui_roots: &mut BTreeSet<i32>) {
+    let mut status: i32 = 0;
+    loop {
+        let pid = unsafe { waitpid(-1, &raw mut status, WNOHANG) };
+        if pid <= 0 {
+            break;
+        }
+        if gui_roots.remove(&pid) && status != 0 {
+            unsafe { kill(-pid, 9) };
+        }
+    }
 }
 
 fn kill_process_tree(root_pid: i32, sig: i32) {
@@ -522,64 +664,98 @@ fn kill_process_tree(root_pid: i32, sig: i32) {
     }
 }
 
-fn monitor_cli_child(mut stream: UnixStream, child_pid: i32) {
-    let mut status: i32 = 0;
-    let stream_fd = stream.as_raw_fd();
+fn send_cli_exit_response(stream: &mut UnixStream, status: i32) {
+    if let Ok(len_u32) = u32::try_from(size_of::<i32>()) {
+        let resp_header = IpcHeader::new(MSG_EXIT_RESPONSE, len_u32, 0);
+        let _ = stream.write_all(&resp_header.to_bytes());
+        let _ = stream.write_all(&status.to_le_bytes());
+        let _ = stream.flush();
+    }
+}
 
-    loop {
-        let mut poll_fds = [PollFd {
-            fd: stream_fd,
-            events: POLLIN | POLLHUP | POLLERR,
-            revents: 0,
-        }];
-
-        let n = unsafe { poll(poll_fds.as_mut_ptr(), 1, 100) };
-
-        let res = unsafe { waitpid(child_pid, &raw mut status, WNOHANG) };
-        if res == child_pid {
-            let Ok(len_u32) = u32::try_from(size_of::<i32>()) else {
-                break;
-            };
-            let resp_header = IpcHeader::new(MSG_EXIT_RESPONSE, len_u32, 0);
-            let _ = stream.write_all(&resp_header.to_bytes());
-            let _ = stream.write_all(&status.to_le_bytes());
-            let _ = stream.flush();
-            break;
-        }
-        if res < 0 {
-            break;
-        }
-
-        if n > 0 {
-            let rev = poll_fds[0].revents;
-            if (rev & POLLIN) != 0 {
-                let mut ctl_buf = [0u8; size_of::<IpcHeader>()];
-                if stream.read_exact(&mut ctl_buf).is_ok()
-                    && let Some(ctl_hdr) = IpcHeader::from_bytes(&ctl_buf)
-                {
-                    match ctl_hdr.msg_type {
-                        MSG_SIGNAL => {
-                            let mut sig_bytes = [0u8; 4];
-                            if stream.read_exact(&mut sig_bytes).is_ok() {
-                                let sig = i32::from_le_bytes(sig_bytes);
-                                kill_process_tree(child_pid, sig);
-                            }
-                        }
-                        MSG_WINSIZE => {
-                            let mut ws_bytes = [0u8; size_of::<WinSizePayload>()];
-                            if stream.read_exact(&mut ws_bytes).is_ok() {
-                                unsafe { ioctl(0, TIOCSWINSZ, ws_bytes.as_ptr().cast::<c_void>()) };
-                            }
-                        }
-                        _ => {}
-                    }
+fn handle_cli_stream_readable(stream: &mut UnixStream, child_pid: i32) -> bool {
+    let mut ctl_buf = [0u8; size_of::<IpcHeader>()];
+    let Ok(()) = stream.read_exact(&mut ctl_buf) else {
+        return false;
+    };
+    if let Some(ctl_hdr) = IpcHeader::from_bytes(&ctl_buf) {
+        match ctl_hdr.msg_type {
+            MSG_SIGNAL => {
+                let mut sig_bytes = [0u8; 4];
+                if stream.read_exact(&mut sig_bytes).is_ok() {
+                    let sig = i32::from_le_bytes(sig_bytes);
+                    kill_process_tree(child_pid, sig);
                 }
             }
-            if (rev & (POLLHUP | POLLERR)) != 0 {
-                kill_process_tree(child_pid, SIGTERM);
-                let _ = unsafe { waitpid(child_pid, &raw mut status, 0) };
+            MSG_WINSIZE => {
+                let mut ws_bytes = [0u8; size_of::<WinSizePayload>()];
+                if stream.read_exact(&mut ws_bytes).is_ok() {
+                    unsafe { ioctl(0, TIOCSWINSZ, ws_bytes.as_ptr().cast::<c_void>()) };
+                }
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
+fn monitor_cli_child(mut stream: UnixStream, child_pid: i32, sig_fd: RawFd) {
+    let mut status: i32 = 0;
+    let stream_fd = stream.as_raw_fd();
+    let pid_fd = pidfd_open(child_pid);
+    let wait_fd = pid_fd.as_ref().map_or(sig_fd, AsRawFd::as_raw_fd);
+
+    if pid_fd.is_none() && unsafe { waitpid(child_pid, &raw mut status, WNOHANG) } == child_pid {
+        send_cli_exit_response(&mut stream, status);
+        return;
+    }
+
+    loop {
+        let mut poll_fds = [
+            PollFd {
+                fd: stream_fd,
+                events: POLLIN,
+                revents: 0,
+            },
+            PollFd {
+                fd: wait_fd,
+                events: POLLIN,
+                revents: 0,
+            },
+        ];
+
+        let n = unsafe { poll(poll_fds.as_mut_ptr(), 2, -1) };
+        if n < 0 {
+            if std::io::Error::last_os_error().raw_os_error() == Some(EINTR) {
+                continue;
+            }
+            break;
+        }
+
+        if poll_fds[1].revents != 0 {
+            if pid_fd.is_none() {
+                drain_signalfd(sig_fd);
+            }
+            let res = unsafe { waitpid(child_pid, &raw mut status, WNOHANG) };
+            if res == child_pid {
+                send_cli_exit_response(&mut stream, status);
                 break;
             }
+            if res < 0 {
+                break;
+            }
+        }
+
+        let rev = poll_fds[0].revents;
+        if (rev & POLLIN) != 0 && !handle_cli_stream_readable(&mut stream, child_pid) {
+            kill_process_tree(child_pid, SIGTERM);
+            let _ = unsafe { waitpid(child_pid, &raw mut status, 0) };
+            break;
+        }
+        if (rev & POLLIN) == 0 && (rev & (POLLHUP | POLLERR)) != 0 {
+            kill_process_tree(child_pid, SIGTERM);
+            let _ = unsafe { waitpid(child_pid, &raw mut status, 0) };
+            break;
         }
     }
 }
@@ -626,6 +802,7 @@ fn print_startup_timing(payload: &ExecPayload) {
 fn handle_connection(
     mut stream: UnixStream,
     listener_fd: RawFd,
+    sig_fd: RawFd,
     auth_token: Option<[u8; 16]>,
     migrator_socket: &str,
     seccomp_socket: &str,
@@ -692,7 +869,10 @@ fn handle_connection(
     }
 
     if child_pid == 0 {
-        unsafe { close(listener_fd) };
+        unsafe {
+            close(listener_fd);
+            close(sig_fd);
+        }
         drop(stream);
         if !is_helper && !migrator_socket.is_empty() {
             migrate_to_inside(migrator_socket);
@@ -705,7 +885,7 @@ fn handle_connection(
     print_startup_timing(&payload);
 
     if is_cli {
-        monitor_cli_child(stream, child_pid);
+        monitor_cli_child(stream, child_pid, sig_fd);
     } else if !is_helper {
         gui_roots.insert(child_pid);
     }
@@ -725,21 +905,27 @@ fn signal_pipe(pipe_path: &str, msg: &str) {
     }
 }
 
-fn start_singbox_services(bin_path: &str, config_path: &str, sock_path: &str) {
-    if !sock_path.is_empty()
-        && let Err(err) = Command::new("rust-bridge")
-            .args([
-                "-r",
-                "listen",
-                "-s",
-                sock_path,
-                "--address",
-                "127.0.0.1:[1919,2121]",
-                "-d",
-            ])
-            .spawn()
-    {
-        eprintln!("[sb-executor] Failed to spawn rust-bridge: {err}");
+fn start_singbox_services(bin_path: &str, config_path: &str, sock_path: &str, bridge_addr: &str) {
+    if !sock_path.is_empty() && !bridge_addr.is_empty() {
+        let mut bridge_cmd = Command::new("rust-bridge");
+        bridge_cmd.args([
+            "-r",
+            "listen",
+            "-s",
+            sock_path,
+            "--address",
+            bridge_addr,
+            "-d",
+        ]);
+        unsafe {
+            bridge_cmd.pre_exec(|| {
+                unblock_sigchld();
+                Ok(())
+            });
+        }
+        if let Err(err) = bridge_cmd.spawn() {
+            eprintln!("[sb-executor] Failed to spawn rust-bridge: {err}");
+        }
     }
 
     let mut sb_cmd = Command::new(bin_path);
@@ -748,6 +934,12 @@ fn start_singbox_services(bin_path: &str, config_path: &str, sock_path: &str) {
     sb_cmd.env("GOMEMLIMIT", "16MiB");
     sb_cmd.env("GOGC", "15");
     sb_cmd.env("GODEBUG", "madvdontneed=1");
+    unsafe {
+        sb_cmd.pre_exec(|| {
+            unblock_sigchld();
+            Ok(())
+        });
+    }
     if let Err(err) = sb_cmd.spawn() {
         eprintln!("[sb-executor] Failed to spawn sing-box: {err}");
     }
@@ -803,6 +995,7 @@ struct ExecutorCli {
     singbox_bin: String,
     singbox_config: String,
     singbox_sock: String,
+    singbox_bridge: String,
     x11_mode: String,
     xwayland_bin: String,
     user_id: u32,
@@ -820,6 +1013,7 @@ fn parse_executor_cli() -> ExecutorCli {
     let mut singbox_bin = String::new();
     let mut singbox_config = String::new();
     let mut singbox_sock = String::new();
+    let mut singbox_bridge = String::new();
     let mut x11_mode = String::new();
     let mut xwayland_bin = String::new();
     let mut user_id = 0u32;
@@ -866,6 +1060,10 @@ fn parse_executor_cli() -> ExecutorCli {
                 singbox_sock.clone_from(&args[i + 1]);
                 i += 2;
             }
+            "--singbox-bridge" if i + 1 < args.len() => {
+                singbox_bridge.clone_from(&args[i + 1]);
+                i += 2;
+            }
             "--x11-mode" if i + 1 < args.len() => {
                 x11_mode.clone_from(&args[i + 1]);
                 i += 2;
@@ -900,6 +1098,7 @@ fn parse_executor_cli() -> ExecutorCli {
         singbox_bin,
         singbox_config,
         singbox_sock,
+        singbox_bridge,
         x11_mode,
         xwayland_bin,
         user_id,
@@ -907,7 +1106,110 @@ fn parse_executor_cli() -> ExecutorCli {
     }
 }
 
+fn start_initial_services(cli: &ExecutorCli) {
+    for init_cmd in &cli.inside_init {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", init_cmd]);
+        unsafe {
+            cmd.pre_exec(|| {
+                unblock_sigchld();
+                Ok(())
+            });
+        }
+        let _ = cmd.status();
+    }
+
+    if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
+        start_singbox_services(
+            &cli.singbox_bin,
+            &cli.singbox_config,
+            &cli.singbox_sock,
+            &cli.singbox_bridge,
+        );
+    }
+
+    if cli.x11_mode == "sandboxed" {
+        let x_bin = if cli.xwayland_bin.is_empty() {
+            "xwayland-satellite"
+        } else {
+            &cli.xwayland_bin
+        };
+        let mut x_cmd = Command::new(x_bin);
+        x_cmd.args(["-nolisten", "local"]);
+        unsafe {
+            x_cmd.pre_exec(|| {
+                unblock_sigchld();
+                Ok(())
+            });
+        }
+        let _ = x_cmd.spawn();
+    }
+}
+
+fn run_event_loop(listener: &UnixListener, sig_raw_fd: RawFd, cli: &ExecutorCli) {
+    let listener_fd = listener.as_raw_fd();
+    let _ = listener.set_nonblocking(true);
+    let mut poll_fds = [
+        PollFd {
+            fd: listener_fd,
+            events: POLLIN,
+            revents: 0,
+        },
+        PollFd {
+            fd: sig_raw_fd,
+            events: POLLIN,
+            revents: 0,
+        },
+    ];
+
+    let mut gui_roots = BTreeSet::new();
+    loop {
+        reap_children(&mut gui_roots);
+        poll_fds[0].revents = 0;
+        poll_fds[1].revents = 0;
+
+        let res = unsafe { poll(poll_fds.as_mut_ptr(), 2, -1) };
+        if res < 0 {
+            if std::io::Error::last_os_error().raw_os_error() == Some(EINTR) {
+                continue;
+            }
+            break;
+        }
+        if (poll_fds[1].revents & POLLIN) != 0 {
+            drain_signalfd(sig_raw_fd);
+            reap_children(&mut gui_roots);
+        }
+        if (poll_fds[0].revents & POLLIN) != 0 {
+            loop {
+                match listener.accept() {
+                    Ok((s, _)) => {
+                        handle_connection(
+                            s,
+                            listener_fd,
+                            sig_raw_fd,
+                            cli.auth_token,
+                            &cli.migrator_socket,
+                            &cli.seccomp_socket,
+                            &mut gui_roots,
+                        );
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(err) => {
+                        eprintln!("[sb-executor] Error accepting connection: {err}");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
+    let raw_args: Vec<String> = env::args().collect();
+    if raw_args.get(1).map(String::as_str) == Some("--seccomp-exec") {
+        run_seccomp_exec(&raw_args[2..]);
+    }
+
     let now_ms = u64::try_from(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -917,28 +1219,13 @@ fn main() {
     FALLBACK_START_TIME.store(now_ms, Ordering::Relaxed);
 
     let cli = parse_executor_cli();
+    let sig_fd = setup_sigchld_fd();
 
     unsafe {
-        prctl(36, 1, 0, 0, 0); // PR_SET_CHILD_SUBREAPER = 36
+        prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
     }
 
-    for init_cmd in &cli.inside_init {
-        let _ = Command::new("sh").args(["-c", init_cmd]).status();
-    }
-
-    if !cli.singbox_bin.is_empty() && !cli.singbox_config.is_empty() {
-        start_singbox_services(&cli.singbox_bin, &cli.singbox_config, &cli.singbox_sock);
-    }
-
-    if cli.x11_mode == "sandboxed" {
-        let x_bin = if cli.xwayland_bin.is_empty() {
-            "xwayland-satellite"
-        } else {
-            &cli.xwayland_bin
-        };
-        let _ = Command::new(x_bin).args(["-nolisten", "local"]).spawn();
-    }
-
+    start_initial_services(&cli);
     enter_user_namespace(cli.user_id, cli.group_id);
 
     let _ = fs::remove_file(&cli.socket_path);
@@ -953,7 +1240,6 @@ fn main() {
         }
     };
 
-    let listener_fd = listener.as_raw_fd();
     let _ = fs::set_permissions(&cli.socket_path, fs::Permissions::from_mode(0o600));
 
     // Notify host runner that socket is listening and ready
@@ -961,44 +1247,5 @@ fn main() {
         signal_pipe(&cli.ready_pipe, "ready\n");
     }
 
-    let _ = listener.set_nonblocking(true);
-    let mut poll_fds = [PollFd {
-        fd: listener_fd,
-        events: POLLIN,
-        revents: 0,
-    }];
-
-    let mut gui_roots = BTreeSet::new();
-    loop {
-        let res = unsafe { poll(poll_fds.as_mut_ptr(), 1, 500) };
-        if res > 0 && (poll_fds[0].revents & POLLIN) != 0 {
-            match listener.accept() {
-                Ok((s, _)) => {
-                    handle_connection(
-                        s,
-                        listener_fd,
-                        cli.auth_token,
-                        &cli.migrator_socket,
-                        &cli.seccomp_socket,
-                        &mut gui_roots,
-                    );
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                Err(err) => {
-                    eprintln!("[sb-executor] Error accepting connection: {err}");
-                }
-            }
-        }
-
-        let mut status: i32 = 0;
-        loop {
-            let pid = unsafe { waitpid(-1, &raw mut status, 1) };
-            if pid <= 0 {
-                break;
-            }
-            if gui_roots.remove(&pid) && status != 0 {
-                unsafe { kill(-pid, 9) };
-            }
-        }
-    }
+    run_event_loop(&listener, sig_fd.as_raw_fd(), &cli);
 }

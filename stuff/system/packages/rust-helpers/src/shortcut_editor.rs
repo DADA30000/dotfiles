@@ -154,6 +154,7 @@ fn load_sandbox_from_desktop(
     sb.sec.landlock = read_bool("X-UMU-Landlock", sb.sec.landlock);
     sb.sec.seccomp = read_bool("X-UMU-Seccomp", sb.sec.seccomp);
     sb.sec.portals = read_bool("X-UMU-Portals", sb.sec.portals);
+    sb.flatpak_portal = read_bool("X-UMU-Flatpak-Portal", sb.flatpak_portal);
     sb.runtime.share_pid = read_bool("X-UMU-Share-Pid", sb.runtime.share_pid);
     sb.runtime.tmpfs = read_bool("X-UMU-Tmpfs", sb.runtime.tmpfs);
     sb.runtime.vpnify = read_bool("X-UMU-Vpnify", sb.runtime.vpnify);
@@ -463,6 +464,7 @@ fn write_shortcut_desktop_file(ctx: &DesktopEntryWrite<'_>) -> io::Result<()> {
         ("X-UMU-Seccomp-Deny", sec_deny_str.as_str()),
         ("X-UMU-Share-Pid", bool_str(sb.runtime.share_pid)),
         ("X-UMU-Portals", bool_str(sb.sec.portals)),
+        ("X-UMU-Flatpak-Portal", bool_str(sb.flatpak_portal)),
         ("X-UMU-Tmpfs", bool_str(sb.runtime.tmpfs)),
         ("X-UMU-Vpnify", bool_str(sb.runtime.vpnify)),
         ("X-UMU-Bridges", bridges_str.as_str()),
@@ -1191,6 +1193,10 @@ impl UmuOptionsWidget {
             bool_str(sb.runtime.share_pid).into(),
         );
         envs.insert("UMU_PORTALS".into(), bool_str(sb.sec.portals).into());
+        envs.insert(
+            "UMU_FLATPAK_PORTAL".into(),
+            bool_str(sb.flatpak_portal).into(),
+        );
         envs.insert("UMU_TMPFS".into(), bool_str(sb.runtime.tmpfs).into());
         envs.insert("UMU_VPNIFY".into(), bool_str(sb.runtime.vpnify).into());
         envs.insert("UMU_BRIDGES".into(), sb.bridges.join(" "));

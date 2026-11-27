@@ -1,8 +1,6 @@
 use gtk4::prelude::*;
 use std::env;
 use std::process::{Command, Stdio};
-use std::thread;
-use std::time::Duration;
 use system_ui_helpers::{RustHelpersConfig, apply_clean_theme};
 
 unsafe extern "C" {
@@ -44,23 +42,21 @@ fn stop_prefix(cfg: &RustHelpersConfig, prefix: &str) {
         .status()
         .ok();
 
-    let poll_ms = cfg.systemd.stop_poll_ms.max(10);
-    let iterations = cfg.systemd.stop_timeout_ms / poll_ms;
-    for _ in 0..iterations {
-        if !is_prefix_running(cfg, prefix) {
-            break;
-        }
-        thread::sleep(Duration::from_millis(poll_ms));
-    }
-
     let pfx_mount = cfg.prefix_mount_path(&runtime_dir(), prefix);
-    Command::new(&cfg.bins.umount)
-        .arg("-l")
+    if let Ok(status) = Command::new(&cfg.bins.mountpoint)
+        .arg("-q")
         .arg(&pfx_mount)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .status()
-        .ok();
+        && status.success()
+    {
+        Command::new(&cfg.bins.umount)
+            .arg("-l")
+            .arg(&pfx_mount)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok();
+    }
 }
 
 fn main() {

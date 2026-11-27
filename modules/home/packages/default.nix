@@ -6,6 +6,7 @@
   config,
   mkSandbox,
   staticBwrap,
+  zypakPkg,
   ...
 }:
 let
@@ -32,25 +33,6 @@ let
       '';
     };
 
-  fhsSeccompAllow = [
-    "@10:unshare"
-    "@10:setns"
-    "@10:clone"
-    "capset"
-    "mount"
-    "umount"
-    "umount2"
-    "pivot_root"
-    "chroot"
-    "open_tree"
-    "move_mount"
-    "fsopen"
-    "fsconfig"
-    "fsmount"
-    "fspick"
-    "mount_setattr"
-  ];
-
   # ---------------------------------------------------------------------------
   # Sandboxed Applications
   # ---------------------------------------------------------------------------
@@ -60,7 +42,6 @@ let
     network = "sandboxed";
     gpu = true;
     wayland = "sandboxed";
-    seccomp.allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:2048 -s "$SANDBOXED_RUNTIME_DIR/aistudio" &
       rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
@@ -100,7 +81,6 @@ let
     gpu = true;
     wayland = "sandboxed";
     x11 = "sandboxed";
-    seccomp.allow = fhsSeccompAllow;
     dbus.owns = [ "com.mag1cfall.gemini-web2api.*" ];
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8007 -s "$SANDBOXED_RUNTIME_DIR/gemini-web2api" &
@@ -133,7 +113,6 @@ let
     gpu = true;
     wayland = "sandboxed";
     x11 = "sandboxed";
-    seccomp.allow = fhsSeccompAllow;
     additional_outside_commands = ''
       rust-bridge -r listen --address 127.0.0.1:8017 -s "$SANDBOXED_RUNTIME_DIR/antigravity2api" &
       rust-bridge -r pass --address 127.0.0.1:2080 -s "$SANDBOXED_RUNTIME_DIR/aistudio_proxy" &
@@ -191,25 +170,38 @@ let
     );
   };
 
-  discordSandbox = mkSandbox rec {
-    appId = "com.discordapp.Discord";
-    network = "singbox";
-    pulse = "sandboxed";
-    microphone = "portal";
-    wayland = "sandboxed";
-    gpu = true;
-    webcam = "portal";
-    share_pid = true;
-    seccomp.allow = fhsSeccompAllow;
-    binds.rw = [ "$XDG_CONFIG_HOME/Vencord" ];
-    additional_outside_commands = ''
-      ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/discord" "$XDG_CONFIG_HOME/discord"
-      ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
-    '';
-    package = pkgs.discord.override {
-      withVencord = true;
+  discordSandbox =
+    let
+      baseDiscord = pkgs.discord.override { withVencord = true; };
+      zypakDiscordUnwrapped = baseDiscord.unwrappedDiscord.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          substituteInPlace $out/opt/Discord/Discord \
+            --replace-fail \
+              "exec -a \"\$0\" \"$out/opt/Discord/.Discord-wrapped\"" \
+              "exec ${zypakPkg}/bin/zypak-wrapper \"$out/opt/Discord/.Discord-wrapped\""
+        '';
+      });
+    in
+    mkSandbox rec {
+      appId = "com.discordapp.Discord";
+      network = "singbox";
+      pulse = "sandboxed";
+      microphone = "portal";
+      wayland = "sandboxed";
+      gpu = true;
+      webcam = "portal";
+      share_pid = true;
+      flatpak_portal = true;
+      seccomp.allow = [ "capset" ];
+      binds.rw = [ "$XDG_CONFIG_HOME/Vencord" ];
+      additional_outside_commands = ''
+        ln -sf "$HOME/.nixpak/${appId}/home/''${XDG_CONFIG_HOME#"$HOME/"}/discord" "$XDG_CONFIG_HOME/discord"
+        ln -sf "$XDG_RUNTIME_DIR/.nixpak/${appId}/runtime/discord-ipc-0" "$XDG_RUNTIME_DIR/discord-ipc-0"
+      '';
+      package = baseDiscord.override {
+        unwrappedDiscord = zypakDiscordUnwrapped;
+      };
     };
-  };
 
   sounduxSandbox = mkSandbox {
     appId = "io.github.Soundux";
@@ -308,14 +300,15 @@ let
         tmp = "passthrough";
         shm = "passthrough";
         share_pid = true;
-        seccomp.allow = fhsSeccompAllow ++ [
+        flatpak_portal = true;
+        seccomp.allow = [
+          "capset"
           "@10:ptrace"
           "process_vm_readv"
           "process_vm_writev"
           "modify_ldt"
           "personality"
           "userfaultfd"
-          "socketcall"
         ];
         dbus = {
           owns = [ "com.steampowered.*" ];
@@ -526,12 +519,15 @@ let
         cp -r ${aistudio2apiBin}/share/* $out/share/
       '';
     in
-    pkgs.symlinkJoin {
+    (pkgs.symlinkJoin {
       name = "aistudio2api-${version}";
       paths = [
         aistudio2apiFhs
         aistudio2apiAssets
       ];
+    })
+    // {
+      inherit (aistudio2apiFhs) fhsenv;
     };
 
   geminiWeb2ApiPkg =
@@ -681,12 +677,15 @@ let
         cp -r ${geminiWeb2ApiBin}/share/* $out/share/
       '';
     in
-    pkgs.symlinkJoin {
+    (pkgs.symlinkJoin {
       name = "gemini-web2api-${version}";
       paths = [
         geminiFhs
         geminiAssets
       ];
+    })
+    // {
+      inherit (geminiFhs) fhsenv;
     };
 
   antigravity2apiPkg =
@@ -835,12 +834,15 @@ let
         cp -r ${antigravity2apiBin}/share/* $out/share/
       '';
     in
-    pkgs.symlinkJoin {
+    (pkgs.symlinkJoin {
       name = "antigravity2api-${version}";
       paths = [
         antigravityFhs
         antigravityAssets
       ];
+    })
+    // {
+      inherit (antigravityFhs) fhsenv;
     };
 
   sounduxPkg = pkgs.stdenv.mkDerivation {
@@ -1242,7 +1244,6 @@ let
     pkgs.cmake-lint
     pkgs.clang-tools
     pkgs.cmake-language-server
-    pkgs.flatpak
     pkgs.duperemove
     pkgs.psmisc
     pkgs.woeusb-ng

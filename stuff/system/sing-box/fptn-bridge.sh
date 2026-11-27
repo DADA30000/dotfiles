@@ -100,15 +100,18 @@ EOF
 
   echo "[*] Waiting for tun0 interface..."
   if ! ip link show tun0 >/dev/null 2>&1; then
-    ip monitor link | grep -m 1 -E "tun[0-9]+" >/dev/null &
+    MON_PIPE="$WORK_DIR/tun.fifo"
+    mkfifo "$MON_PIPE"
+    ip monitor link >"$MON_PIPE" &
+    IP_MON_PID=$!
+    grep -m 1 -E "tun[0-9]+" <"$MON_PIPE" >/dev/null &
     MON_PID=$!
-    while kill -0 "$FPTN_PID" 2>/dev/null && kill -0 "$MON_PID" 2>/dev/null; do
-      if ip link show tun0 >/dev/null 2>&1; then
-        kill "$MON_PID" 2>/dev/null || true
-        break
-      fi
-      read -t 1 -u 0 2>/dev/null || true
-    done
+    if ! ip link show tun0 >/dev/null 2>&1; then
+      wait -n "$FPTN_PID" "$MON_PID" || true
+    fi
+    kill "$MON_PID" "$IP_MON_PID" 2>/dev/null || true
+    wait "$MON_PID" "$IP_MON_PID" 2>/dev/null || true
+    rm -f "$MON_PIPE"
     if ! kill -0 "$FPTN_PID" 2>/dev/null; then
       echo "Error: fptn-client-cli failed to connect." >&2
       cat "$WORK_DIR/fptn.log" >&2

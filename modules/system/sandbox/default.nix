@@ -7,6 +7,30 @@
 let
   cfg = config.sandboxing;
 
+  sb-flatpak-portal-pkg = pkgs.stdenv.mkDerivation {
+    pname = "sb-flatpak-portal";
+    version = "1.0.0";
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [ pkgs.glib ];
+    buildPhase = ''
+      $CC -O2 -Wall -Wextra -Werror \
+        $(pkg-config --cflags --libs gio-2.0 gio-unix-2.0) \
+        ${../../../stuff/system/sandbox/sb-flatpak-portal.c} \
+        -o sb-flatpak-portal
+    '';
+    installPhase = ''
+      mkdir -p $out/libexec $out/share/dbus-1/services
+      install -m 0755 sb-flatpak-portal $out/libexec/sb-flatpak-portal
+      cat > $out/share/dbus-1/services/org.freedesktop.portal.Flatpak.service <<EOF
+      [D-BUS Service]
+      Name=org.freedesktop.portal.Flatpak
+      Exec=$out/libexec/sb-flatpak-portal
+      SystemdService=sb-flatpak-portal.service
+      EOF
+    '';
+  };
+
   wp-mic-portal-pkg = pkgs.stdenv.mkDerivation {
     pname = "wp-mic-portal";
     version = "1.0.0";
@@ -194,28 +218,64 @@ in
   options.sandboxing.enable = lib.mkEnableOption "app sandboxing (PipeWire & WirePlumber audio portals)";
 
   config = lib.mkIf cfg.enable {
-    services.pipewire = {
-      package = pkgs.pipewire.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [
-          ../../../stuff/patches/pipewire-quirk-block-mute.patch
-          ../../../stuff/patches/pipewire-pulse-socket-access.patch
-        ];
-      });
-      wireplumber = {
-        package = pkgs.wireplumber.overrideAttrs (old: {
-          postInstall = (old.postInstall or "") + ''
-            ln -s ${wp-mic-portal-pkg}/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so \
-              $out/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so
-            mkdir -p $out/share/wireplumber/scripts/linking
-            ln -s ${wp-mic-portal-pkg}/share/wireplumber/scripts/linking/wp-mic-portal.lua \
-              $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
-          '';
+    services = {
+      dbus.packages = [ sb-flatpak-portal-pkg ];
+      pipewire = {
+        package = pkgs.pipewire.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ../../../stuff/patches/pipewire-quirk-block-mute.patch
+            ../../../stuff/patches/pipewire-pulse-socket-access.patch
+          ];
         });
-        configPackages = [ wireplumberRestrictedPermissionsPkg ];
+        wireplumber = {
+          package = pkgs.wireplumber.overrideAttrs (old: {
+            postInstall = (old.postInstall or "") + ''
+              ln -s ${wp-mic-portal-pkg}/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so \
+                $out/lib/wireplumber-0.5/libwireplumber-module-mic-portal.so
+              mkdir -p $out/share/wireplumber/scripts/linking
+              ln -s ${wp-mic-portal-pkg}/share/wireplumber/scripts/linking/wp-mic-portal.lua \
+                $out/share/wireplumber/scripts/linking/wp-mic-portal.lua
+            '';
+          });
+          configPackages = [ wireplumberRestrictedPermissionsPkg ];
+        };
+        extraConfig = {
+          pipewire."99-restricted-socket" = pipewireRestrictedSocketConfig;
+          pipewire-pulse."99-restricted-socket" = pipewirePulseRestrictedSocketConfig;
+        };
       };
-      extraConfig = {
-        pipewire."99-restricted-socket" = pipewireRestrictedSocketConfig;
-        pipewire-pulse."99-restricted-socket" = pipewirePulseRestrictedSocketConfig;
+    };
+
+    systemd.user.services.sb-flatpak-portal = {
+      description = "sb-run Flatpak Portal Relay";
+      partOf = [ "graphical-session.target" ];
+      requires = [ "dbus.service" ];
+      after = [ "dbus.service" ];
+      serviceConfig = {
+        Type = "dbus";
+        BusName = "org.freedesktop.portal.Flatpak";
+        ExecStart = "${sb-flatpak-portal-pkg}/libexec/sb-flatpak-portal";
+        Restart = "on-failure";
+        RestartSec = "1s";
+
+        # Keep in the host user namespace (no PrivateTmp/Protect* mount isolation)
+        # so reading /proc/<pid>/root/.sb-sandbox of sibling user processes is permitted.
+        NoNewPrivileges = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        KeyringMode = "private";
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+        SystemCallErrorNumber = "EPERM";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
+        ];
+        UMask = "0077";
       };
     };
   };
