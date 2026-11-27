@@ -8,7 +8,6 @@
 {
   graphics.nvidia.enable = true;
   amd-ai.enable = false;
-  nix-mineral.settings.kernel.intel-iommu = false;
 
   home-manager.users.${user} = import ./home.nix;
 

@@ -254,28 +254,30 @@ let
     package = pkgs.ente-auth;
   };
 
-  steamExtraPackages = with pkgs; [
-    libgdiplus
-    fontconfig
-    attr
-    libXcursor
-    libXinerama
-    libXScrnSaver
-    libXi
-    nss
-    nspr
-    atk
-    at-spi2-atk
-    libdrm
-    libGL
-    libXcomposite
-    libXdamage
-    libXrandr
-    libXext
-    libXfixes
-    mesa
-    libva
-    protontricks
+  steamExtraPackages = [
+    pkgs.gtk3
+    pkgs.libX11
+    pkgs.libgdiplus
+    pkgs.fontconfig
+    pkgs.attr
+    pkgs.libXcursor
+    pkgs.libXinerama
+    pkgs.libXScrnSaver
+    pkgs.libXi
+    pkgs.nss
+    pkgs.nspr
+    pkgs.atk
+    pkgs.at-spi2-atk
+    pkgs.libdrm
+    pkgs.libGL
+    pkgs.libXcomposite
+    pkgs.libXdamage
+    pkgs.libXrandr
+    pkgs.libXext
+    pkgs.libXfixes
+    pkgs.mesa
+    pkgs.libva
+    pkgs.protontricks
   ];
 
   steamExtraLibraries = [
@@ -1300,7 +1302,6 @@ let
     pkgs.xkbcomp
     pkgs.nvtopPackages.full
     pkgs.xkeyboard-config
-    pkgs.libX11
     pkgs.scanmem
     pkgs.comma
     pkgs.remmina
@@ -1342,7 +1343,6 @@ let
     pkgs.nix-diff
     pkgs.migrate-to-uv
     pkgs.ssdeep
-    pkgs.gtk3
     pkgs.kdePackages.kservice
     pkgs.libsForQt5.qtsvg
     pkgs.kdePackages.qtsvg
@@ -1392,33 +1392,6 @@ let
     ayugramDesktopSandbox
     enteAuthSandbox
   ];
-
-  #steamExcludedPackages = [
-  #  osConfig.boot.kernelPackages.ryzen-smu
-  #  pkgs.kmod
-  #  pkgs.libreoffice
-  #  pkgs.obs-studio
-  #  pkgs.obs-studio-plugins.obs-vaapi
-  #  pkgs.jdk25
-  #  pkgs.jdt-language-server
-  #];
-
-  #isExcludedFromSteam =
-  #  p:
-  #  let
-  #    pName = p.pname or (p.name or (lib.getName p));
-  #  in
-  #  lib.any (
-  #    ex:
-  #    let
-  #      exName = ex.pname or (ex.name or (lib.getName ex));
-  #    in
-  #    ex == p || exName == pName || lib.hasInfix exName pName
-  #  ) steamExcludedPackages;
-
-  #allSteamExtraPackages = lib.filter (p: !isExcludedFromSteam p) (
-  #  lib.unique (myHomePackages ++ steamExtraPackages ++ (osConfig.environment.systemPackages or [ ]))
-  #);
 
   collectPairedPackages =
     pkg:
