@@ -134,6 +134,7 @@ in
         icmp.ignore-all = false;
       };
       kernel = {
+        busmaster-bit = true;
         cpu-mitigations = "smt-on";
         slab-debug = false;
         binfmt-misc = true;
