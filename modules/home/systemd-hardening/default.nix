@@ -162,6 +162,10 @@ in
     xdg.configFile."systemd/user/pulseaudio.service".source =
       config.lib.file.mkOutOfStoreSymlink "/dev/null";
 
+    systemd.user.tmpfiles.rules = [
+      "d %h/.local/share/flatpak/db 0700 - - -"
+    ];
+
     # System / Package-Provided User Units (via highest-priority drop-ins)
     systemd.user.serviceDropins = {
       dconf = {
@@ -251,12 +255,14 @@ in
         );
       };
 
-      # Portals must stay in host userns so /proc/<pid>/root opens succeed
+      # Portals must stay in host userns so /proc/<pid>/root opens succeed;
+      # xdg-desktop-portal also spawns bwrap for xdg-desktop-portal-validate-icon --sandbox
       xdg-desktop-portal.Service = mkDefaults (
         hostUserns
         // {
+          RestrictNamespaces = "user mnt ipc net pid";
           RestrictAddressFamilies = netAF;
-          SystemCallFilter = safeSyscalls;
+          SystemCallFilter = [ "@mount" ] ++ lib.remove "~@mount" safeSyscalls;
         }
       );
 
