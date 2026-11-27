@@ -50,44 +50,6 @@ let
   };
   plugins = [ hypr-session-lock-blur ];
 
-  cargoDeps = pkgs.rustPlatform.importCargoLock {
-    lockFile = "${inputs.oo7}/Cargo.lock";
-    allowBuiltinFetchGit = true;
-  };
-
-  oo7 = pkgs.oo7.overrideAttrs (_: {
-    src = inputs.oo7;
-    inherit cargoDeps;
-    sourceRoot = "source";
-  });
-
-  oo7-server =
-    (pkgs.oo7-server.override {
-      inherit oo7;
-      useWrappedDaemon = false;
-    }).overrideAttrs
-      (_: {
-        src = inputs.oo7;
-        inherit cargoDeps;
-        sourceRoot = "source/server";
-        cargoRoot = "..";
-      });
-
-  oo7-portal =
-    (pkgs.oo7-portal.override {
-      inherit oo7;
-    }).overrideAttrs
-      (old: {
-        src = inputs.oo7;
-        inherit cargoDeps;
-        sourceRoot = "source/portal";
-        cargoRoot = "..";
-        postInstall = (old.postInstall or "") + ''
-          substituteInPlace $out/share/xdg-desktop-portal/portals/oo7-portal.portal \
-            --replace-fail "UseIn=gnome" "UseIn=gnome;Hyprland;hyprland;"
-        '';
-      });
-
   xdgDesktopPortalPatched = pkgs.xdg-desktop-portal.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
       ../../../stuff/patches/xdg-desktop-portal-ephemeral-camera.patch
@@ -131,7 +93,7 @@ in
     home = {
       sessionVariables.NAUTILUS_4_EXTENSION_DIR = "${pkgs.nautilus-python}/lib/nautilus/extensions-4";
       packages = [
-        oo7
+        pkgs.oo7
         hyprlandPreviewSharePickerPkg
       ];
     };
@@ -796,7 +758,7 @@ in
         };
         extraPortals = [
           pkgs.xdg-desktop-portal-gtk
-          oo7-portal
+          pkgs.oo7-portal
         ];
       };
     };
@@ -806,6 +768,7 @@ in
       oo7-portal = {
         own = [ "org.freedesktop.impl.portal.desktop.oo7" ];
         talk = [ "org.freedesktop.secrets" ];
+        see = [ "org.freedesktop.portal.Desktop" ];
       };
     };
 
@@ -825,7 +788,7 @@ in
           PartOf = [ "graphical-session.target" ];
         };
         Service = {
-          ExecStart = "${oo7-server}/libexec/oo7-daemon";
+          ExecStart = "${pkgs.oo7-server}/libexec/oo7-daemon";
           Restart = "on-failure";
           SetCredential = "oo7.keyring-encryption-password:c2a60a099384a9ef625feeae876819cb2e64e9e25787a72b60a55bd6a1be6e8e";
           BusName = "org.freedesktop.secrets";
@@ -879,7 +842,7 @@ in
         Service = {
           Type = "dbus";
           BusName = "org.freedesktop.impl.portal.desktop.oo7";
-          ExecStart = "${oo7-portal}/libexec/oo7-portal";
+          ExecStart = "${pkgs.oo7-portal}/libexec/oo7-portal";
 
           NoNewPrivileges = true;
           ProtectSystem = "strict";

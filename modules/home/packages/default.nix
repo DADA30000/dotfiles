@@ -424,7 +424,7 @@ let
         pname = "aistudio2api";
         inherit version src;
 
-        vendorHash = "sha256-+s01NxdjtDDY7adYIe86XwXqNaHlugXeo6128swjuaw=";
+        vendorHash = "sha256-FpPsVi1YiYcHmFUavA42SRF9ODdogltdYvX5FX8qLl8=";
         overrideModAttrs = _: {
           name = "aistudio2api-go-modules-${
             builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
@@ -557,7 +557,7 @@ let
           src = "${src}/web";
           pnpm = pkgs.pnpm_11;
           fetcherVersion = 5;
-          hash = "sha256-rVhlRT1OAlJy+exu8NR/meb5S81p10R1D0dy0ldL6ro=";
+          hash = "sha256-EEUElV1920w3ETC+wxN2kadZqx/qTLwZEWjOKRZly7M=";
         };
 
         buildPhase = ''
@@ -572,65 +572,75 @@ let
           runHook postInstall
         '';
       };
-      geminiWeb2ApiBin = pkgs.buildGoModule {
-        pname = "gemini-web2api";
-        inherit version src;
+      geminiWeb2ApiBin =
+        (pkgs.buildGoModule.override {
+          go = pkgs.go.overrideAttrs (_: rec {
+            version = "1.27.4";
+            src = pkgs.fetchurl {
+              url = "https://go.dev/dl/go${version}.src.tar.gz";
+              sha256 = "73cfb8571aec0c01177687db87163d46aa20e9779672772891aa17654d9a6099";
+            };
+          });
+        })
+          {
+            pname = "gemini-web2api";
+            inherit version src;
 
-        patches = [ ../../../stuff/patches/gemini-web2api-chunk-long-prompt.patch ];
+            patches = [ ../../../stuff/patches/gemini-web2api-chunk-long-prompt.patch ];
 
-        vendorHash = "sha256-9qH33RD7DnIBoh5Cg9/c2jvl1X8nhSE+8n2H9RCbdwQ=";
-        overrideModAttrs = _: {
-          name = "gemini-web2api-go-modules-${
-            builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
-          }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
-        };
+            vendorHash = "sha256-7jMTRpOvnVnQPBaBSHnysrUdXjTaV1JOC156mLpom70=";
+            overrideModAttrs = _: {
+              name = "gemini-web2api-go-modules-${
+                builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.mod")
+              }-${builtins.substring 0 12 (builtins.hashFile "sha256" "${src}/go.sum")}";
+            };
 
-        subPackages = [ "cmd/gemini-web2api" ];
-        tags = [
-          "desktop"
-          "production"
-          "gtk3"
-          "nomsgpack"
-        ];
-        ldflags = [
-          "-s"
-          "-w"
-          "-X github.com/Mag1cFall/Gemini-Web2API/internal/app.version=${version}"
-        ];
-        doCheck = false;
+            subPackages = [ "cmd/gemini-web2api" ];
+            tags = [
+              "desktop"
+              "production"
+              "gtk3"
+              "nomsgpack"
+            ];
+            ldflags = [
+              "-s"
+              "-w"
+              "-X github.com/Mag1cFall/Gemini-Web2API/internal/app.version=${version}"
+            ];
+            doCheck = false;
 
-        nativeBuildInputs = [
-          pkgs.pkg-config
-          pkgs.wrapGAppsHook3
-        ];
+            nativeBuildInputs = [
+              pkgs.pkg-config
+              pkgs.wrapGAppsHook3
+            ];
 
-        buildInputs = [
-          pkgs.gtk3
-          pkgs.webkitgtk_4_1
-        ];
+            buildInputs = [
+              pkgs.gtk3
+              pkgs.webkitgtk_4_1
+            ];
 
-        postConfigure = ''
-          rm -rf internal/webui/dist
-          cp -r ${webDist} internal/webui/dist
-        '';
+            postConfigure = ''
+              rm -rf internal/webui/dist
+              cp -r ${webDist} internal/webui/dist
+            '';
 
-        postInstall = ''
-          install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
-          mkdir -p $out/share/applications
-          cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
-          [Desktop Entry]
-          Version=1.0
-          Name=Gemini-Web2API
-          Comment=Gemini Web to OpenAI, Anthropic and Gemini compatible API
-          Exec=gemini-web2api
-          Terminal=false
-          Type=Application
-          Icon=gemini-web2api
-          Categories=Network;Development;
-          StartupWMClass=gemini-web2api
-          DESKTOP
-        '';
-      };
+            postInstall = ''
+              install -Dm644 internal/desktop/icon.png $out/share/icons/hicolor/256x256/apps/gemini-web2api.png
+              mkdir -p $out/share/applications
+              cat << 'DESKTOP' > $out/share/applications/gemini-web2api.desktop
+              [Desktop Entry]
+              Version=1.0
+              Name=Gemini-Web2API
+              Comment=Gemini Web to OpenAI, Anthropic and Gemini compatible API
+              Exec=gemini-web2api
+              Terminal=false
+              Type=Application
+              Icon=gemini-web2api
+              Categories=Network;Development;
+              StartupWMClass=gemini-web2api
+              DESKTOP
+            '';
+          };
 
       geminiFhs = pkgs.buildFHSEnv {
         name = "gemini-web2api";
